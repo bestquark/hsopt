@@ -1,13 +1,14 @@
 import cupynumeric as np
 from src.simulate_quantization import matmul_mixed, quantize_any, dequantize_any, NATIVE
 
+
 def _choose_target_dtype(fmt_or_dtype, is_complex):
     if isinstance(fmt_or_dtype, str) and fmt_or_dtype in NATIVE:
         base = NATIVE[fmt_or_dtype]
-    elif hasattr(fmt_or_dtype, "kind"): 
+    elif hasattr(fmt_or_dtype, "kind"):
         base = fmt_or_dtype
     else:
-        return None  
+        return None
 
     if is_complex:
         if base == np.float64:
@@ -17,6 +18,7 @@ def _choose_target_dtype(fmt_or_dtype, is_complex):
         if base in (np.complex64, np.complex128):
             return np.float64 if base == np.complex128 else np.float32
         return base
+
 
 def cast_matrix_and_vector_mixed(H, psi, fmt_or_dtype, compute_dtype=np.float16):
     """
@@ -34,7 +36,10 @@ def cast_matrix_and_vector_mixed(H, psi, fmt_or_dtype, compute_dtype=np.float16)
     psi_d = dequantize_any(psi_q, fmt, compute_dtype)
     return H_d, psi_d
 
-def expmv_hermitian(H, v, dt, work_dtype=np.float64, out_dtype=np.complex128, normalize=False):
+
+def expmv_hermitian(
+    H, v, dt, work_dtype=np.float64, out_dtype=np.complex128, normalize=False
+):
     """
     Stable expmv for Hermitian H: use eigh. If H is complex, solve in complex dtype.
     """
@@ -47,7 +52,7 @@ def expmv_hermitian(H, v, dt, work_dtype=np.float64, out_dtype=np.complex128, no
     Hh = H.astype(work_dtype, copy=False)
     vh = v.astype(out_dtype, copy=False)
 
-    w, Q = np.linalg.eigh(Hh) 
+    w, Q = np.linalg.eigh(Hh)
     phase = np.exp((-1j * dt) * w.astype(out_dtype))
     y = Q.conj().T @ vh
     y *= phase
@@ -59,9 +64,19 @@ def expmv_hermitian(H, v, dt, work_dtype=np.float64, out_dtype=np.complex128, no
             out /= n
     return out
 
-def lie_trotter_step(H_terms, psi, dt, fmt_list, step_idx,
-                     compute_dtype=np.float16, work_dtype=np.float32, out_dtype=np.complex64,
-                     verbose=True, normalize=False):
+
+def lie_trotter_step(
+    H_terms,
+    psi,
+    dt,
+    fmt_list,
+    step_idx,
+    compute_dtype=np.float16,
+    work_dtype=np.float32,
+    out_dtype=np.complex64,
+    verbose=True,
+    normalize=False,
+):
     """
     Apply exp(-i H_j dt) in sequence. Each term uses a format selected from fmt_list,
     rotating per (step_idx + j). Each format can be:
@@ -76,13 +91,32 @@ def lie_trotter_step(H_terms, psi, dt, fmt_list, step_idx,
 
     for j, H in enumerate(H_terms):
         fmt = fmt_list[(step_idx + j) % len(fmt_list)]
-        Hc, psic = cast_matrix_and_vector_mixed(H, psi_new, fmt, compute_dtype=compute_dtype)
-        psi_new = expmv_hermitian(Hc, psic, dt, work_dtype=work_dtype, out_dtype=out_dtype, normalize=normalize)
+        Hc, psic = cast_matrix_and_vector_mixed(
+            H, psi_new, fmt, compute_dtype=compute_dtype
+        )
+        psi_new = expmv_hermitian(
+            Hc,
+            psic,
+            dt,
+            work_dtype=work_dtype,
+            out_dtype=out_dtype,
+            normalize=normalize,
+        )
     return psi_new
 
-def simulate_hamiltonian(H_terms, psi0, t, r, fmt_list,
-                         compute_dtype=np.float16, work_dtype=np.float32, out_dtype=np.complex64,
-                         verbose=True, normalize=False):
+
+def simulate_hamiltonian(
+    H_terms,
+    psi0,
+    t,
+    r,
+    fmt_list,
+    compute_dtype=np.float16,
+    work_dtype=np.float32,
+    out_dtype=np.complex64,
+    verbose=True,
+    normalize=False,
+):
     """
     First-order Lie–Trotter: (∏_j e^{-i H_j Δt})^r ψ0
     """
@@ -90,8 +124,15 @@ def simulate_hamiltonian(H_terms, psi0, t, r, fmt_list,
     psi = psi0
     for step in range(r):
         psi = lie_trotter_step(
-            H_terms, psi, dt, fmt_list, step,
-            compute_dtype=compute_dtype, work_dtype=work_dtype, out_dtype=out_dtype,
-            verbose=verbose, normalize=normalize
+            H_terms,
+            psi,
+            dt,
+            fmt_list,
+            step,
+            compute_dtype=compute_dtype,
+            work_dtype=work_dtype,
+            out_dtype=out_dtype,
+            verbose=verbose,
+            normalize=normalize,
         )
     return psi

@@ -13,7 +13,10 @@ FMT = {
 }
 NATIVE = {"fp16": np.float16, "fp32": np.float32, "fp64": np.float64}
 
-def _quantize_fp(x32: np.ndarray, exp_bits: int, man_bits: int, bias: int) -> np.ndarray:
+
+def _quantize_fp(
+    x32: np.ndarray, exp_bits: int, man_bits: int, bias: int
+) -> np.ndarray:
     x = x32.astype(np.float32, copy=False)
     sign = (x < 0).astype(np.uint8)
     ax = np.abs(x)
@@ -32,13 +35,20 @@ def _quantize_fp(x32: np.ndarray, exp_bits: int, man_bits: int, bias: int) -> np
     over = exp_stored >= exp_max
     exp_stored = np.where(over, exp_max - 1, exp_stored)
     mant = np.where(over, (1 << man_bits) - 1, mant)
-    code = (sign << (exp_bits + man_bits)) | (exp_stored.astype(np.uint8) << man_bits) | mant.astype(np.uint8)
+    code = (
+        (sign << (exp_bits + man_bits))
+        | (exp_stored.astype(np.uint8) << man_bits)
+        | mant.astype(np.uint8)
+    )
     return code.astype(np.uint8)
 
-def _dequantize_fp(code: np.ndarray, exp_bits: int, man_bits: int, bias: int) -> np.ndarray:
+
+def _dequantize_fp(
+    code: np.ndarray, exp_bits: int, man_bits: int, bias: int
+) -> np.ndarray:
     c = code.astype(np.uint8, copy=False)
     sign = (c >> (exp_bits + man_bits)) & 0x1
-    exp  = (c >> man_bits) & ((1 << exp_bits) - 1)
+    exp = (c >> man_bits) & ((1 << exp_bits) - 1)
     mant = c & ((1 << man_bits) - 1)
     is_zero = exp == 0
     frac = mant.astype(np.float32) / (1 << man_bits)
@@ -48,17 +58,20 @@ def _dequantize_fp(code: np.ndarray, exp_bits: int, man_bits: int, bias: int) ->
     val = np.where(sign > 0, -val, val)
     return val
 
+
 def quantize_real(x: np.ndarray, fmt: str):
     if fmt in NATIVE:  # passthrough
         return x.astype(NATIVE[fmt], copy=False)
     spec = FMT[fmt]
     return _quantize_fp(x, **spec)
 
+
 def dequantize_real(code: np.ndarray, fmt: str) -> np.ndarray:
-    if fmt in NATIVE:  
+    if fmt in NATIVE:
         return code.astype(np.float32, copy=False)
     spec = FMT[fmt]
     return _dequantize_fp(code, **spec)
+
 
 def quantize_any(x: np.ndarray, fmt: str):
     if np.iscomplexobj(x):
@@ -66,16 +79,24 @@ def quantize_any(x: np.ndarray, fmt: str):
     else:
         return quantize_real(x, fmt)
 
+
 def dequantize_any(code, fmt: str, dtype):
-    if isinstance(code, tuple): 
+    if isinstance(code, tuple):
         re = dequantize_real(code[0], fmt).astype(dtype, copy=False)
         im = dequantize_real(code[1], fmt).astype(dtype, copy=False)
         return re + 1j * im
     else:
         return dequantize_real(code, fmt).astype(dtype, copy=False)
 
-def matmul_mixed(A: np.ndarray, fmtA: str, B: np.ndarray, fmtB: str,
-                 compute_dtype=np.float16, out_dtype=None):
+
+def matmul_mixed(
+    A: np.ndarray,
+    fmtA: str,
+    B: np.ndarray,
+    fmtB: str,
+    compute_dtype=np.float16,
+    out_dtype=None,
+):
     A_q = quantize_any(A, fmtA)
     B_q = quantize_any(B, fmtB)
     is_cplx = np.iscomplexobj(A) or np.iscomplexobj(B)
