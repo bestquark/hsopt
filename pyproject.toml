@@ -11,3 +11,9 @@ dependencies = [
     "nvidia-cupynumeric>=25.8.0",
     "openevolve>=0.2.14",
 ]
+
+[dependency-groups]
+dev = [
+    "black>=25.1.0",
+    "pre-commit>=4.3.0",
+]
