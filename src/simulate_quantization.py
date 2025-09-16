@@ -1,6 +1,5 @@
 import cupynumeric as np
 
-# ≤8-bit tiny formats + native passthroughs
 FMT = {
     "fp4_e2m1": dict(exp_bits=2, man_bits=1, bias=1),
     "fp5_e2m2": dict(exp_bits=2, man_bits=2, bias=1),
@@ -8,14 +7,12 @@ FMT = {
     "fp7_e3m3": dict(exp_bits=3, man_bits=3, bias=3),
     "fp8_e4m3": dict(exp_bits=4, man_bits=3, bias=7),
     "fp8_e5m2": dict(exp_bits=5, man_bits=2, bias=15),
-    # native (passthrough; no quantization)
     "fp16": {"native": np.float16},
     "fp32": {"native": np.float32},
     "fp64": {"native": np.float64},
 }
 NATIVE = {"fp16": np.float16, "fp32": np.float32, "fp64": np.float64}
 
-# ----- quant/dequant for REAL arrays -----
 def _quantize_fp(x32: np.ndarray, exp_bits: int, man_bits: int, bias: int) -> np.ndarray:
     x = x32.astype(np.float32, copy=False)
     sign = (x < 0).astype(np.uint8)
@@ -58,13 +55,11 @@ def quantize_real(x: np.ndarray, fmt: str):
     return _quantize_fp(x, **spec)
 
 def dequantize_real(code: np.ndarray, fmt: str) -> np.ndarray:
-    if fmt in NATIVE:  # passthrough
-        # return in float32 baseline; compute cast happens later
+    if fmt in NATIVE:  
         return code.astype(np.float32, copy=False)
     spec = FMT[fmt]
     return _dequantize_fp(code, **spec)
 
-# ----- complex-aware wrappers -----
 def quantize_any(x: np.ndarray, fmt: str):
     if np.iscomplexobj(x):
         return (quantize_real(x.real, fmt), quantize_real(x.imag, fmt))
@@ -72,14 +67,13 @@ def quantize_any(x: np.ndarray, fmt: str):
         return quantize_real(x, fmt)
 
 def dequantize_any(code, fmt: str, dtype):
-    if isinstance(code, tuple):  # complex path
+    if isinstance(code, tuple): 
         re = dequantize_real(code[0], fmt).astype(dtype, copy=False)
         im = dequantize_real(code[1], fmt).astype(dtype, copy=False)
         return re + 1j * im
     else:
         return dequantize_real(code, fmt).astype(dtype, copy=False)
 
-# ----- Mixed-precision matmul (FP16 compute, FP32/complex64 out) -----
 def matmul_mixed(A: np.ndarray, fmtA: str, B: np.ndarray, fmtB: str,
                  compute_dtype=np.float16, out_dtype=None):
     A_q = quantize_any(A, fmtA)
