@@ -1,7 +1,12 @@
-# Mixed-precision QM/MM
+# Evolutionary low-precision QM/MM
 
 This repository contains code for simulating quantum systems using mixed-precision arithmetic, embedded in a classical environment.
 The main idea is to use this technique for speeding up free-energy calculations (e.g. FEP) while maintaining accuracy.
+
+<p style="text-align:center;">
+<img src="docs/assets/traj.gif" alt="QM/MM Trajectory" width="40%">
+</p>
+
 
 ## Usage
 
