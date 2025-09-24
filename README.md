@@ -10,11 +10,16 @@ Make sure you have an API key for OpenEvolve and have it set in your environment
 export OPENAI_API_KEY="your_key_here"  
 ```
 
-Then, clone the repository and sync the environment:
+If you are only running only the QM simulations, clone the repository and sync the environment:
 
 ```bash
-git clone https://github.com/bestquark/gordonEPR.git
-cd gordonEPR
+git clone https://github.com/bestquark/evolutionary-qmmm.git
+cd evolutionary-qmmm
 uv sync
+```
+
+If you are running MD simulations, you need conda to install 
+```bash
+conda install openmmforcefields
 ```
 

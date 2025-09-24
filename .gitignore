@@ -1,5 +1,6 @@
 openevolve_output/
 cupynum_test.ipynb
+sims/
 
 # Byte-compiled / optimized / DLL files
 __pycache__/

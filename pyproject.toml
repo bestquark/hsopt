@@ -1,15 +1,20 @@
 [project]
-name = "gordonepr"
+name = "evolutionary-qmmm"
 version = "0.1.0"
 description = "Mixed-precision QM/MM"
 readme = "README.md"
 requires-python = ">=3.11"
 dependencies = [
     "black>=25.1.0",
+    "imageio>=2.37.0",
     "matplotlib>=3.10.6",
+    "mdtraj>=1.11.0",
     "numpy>=2.3.3",
     "nvidia-cupynumeric>=25.8.0",
     "openevolve>=0.2.14",
+    "openmm>=8.3.1",
+    "openmmforcefields",
+    "rdkit>=2025.3.6",
 ]
 
 [dependency-groups]
@@ -17,3 +22,6 @@ dev = [
     "black>=25.1.0",
     "pre-commit>=4.3.0",
 ]
+
+[tool.uv.sources]
+openmmforcefields = { git = "https://github.com/openmm/openmmforcefields" }
