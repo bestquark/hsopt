@@ -48,16 +48,26 @@ def run(H_terms, psi0, t):
     )
     return psi_final, {"r": r, "fmts": fmts}
 
+
 if __name__ == "__main__":
-    import time, argparse, sys, runpy
+    import time
+    import argparse
 
     parser = argparse.ArgumentParser(description="Run the initial program.")
-    parser.add_argument("-n", "--n", "--terms", type=int, default=4,
-                        help="Number of Trotter terms (default: 4)")
-    parser.add_argument("-t", "--time", type=float, default=0.5,
-                        help="Time parameter t (default: 0.5)")
-    parser.add_argument("--seed", type=int, default=123,
-                        help="Random seed (default: 123)")
+    parser.add_argument(
+        "-n",
+        "--n",
+        "--terms",
+        type=int,
+        default=4,
+        help="Number of Trotter terms (default: 4)",
+    )
+    parser.add_argument(
+        "-t", "--time", type=float, default=0.5, help="Time parameter t (default: 0.5)"
+    )
+    parser.add_argument(
+        "--seed", type=int, default=123, help="Random seed (default: 123)"
+    )
     args = parser.parse_args()
 
     n = args.n
@@ -70,5 +80,5 @@ if __name__ == "__main__":
     elapsed = time.perf_counter() - t0
 
     print(f"Result norm: {np.linalg.norm(psi_final):.6f}")
-    print(f"Elapsed time: {elapsed*1000:.1f} ms")
+    print(f"Elapsed time: {elapsed * 1000:.1f} ms")
     print(f"Meta: {meta}")

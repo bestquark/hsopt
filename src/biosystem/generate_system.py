@@ -17,6 +17,7 @@ def generate_sdf(smiles: str, sdf_filename: str):
     writer.write(mol)
     writer.close()
 
+
 if __name__ == "__main__":
     smiles = "C(CS)S"
     sdf_filename = "biocomplex/C2H6S2.sdf"

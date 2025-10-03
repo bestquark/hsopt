@@ -23,6 +23,7 @@ If you are only running only the QM simulations, clone the repository and sync t
 git clone https://github.com/bestquark/evolutionary-qmmm.git
 cd evolutionary-qmmm
 uv sync
+uv run pre-commit install
 ```
 
 If you are running MD simulations, you need conda to install 

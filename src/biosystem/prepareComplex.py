@@ -3,7 +3,7 @@ from simtk.openmm import *
 from pdbfixer import PDBFixer
 
 if len(sys.argv) != 4:
-    print('Usage: python prepareComplex.py input.pdb ligand.mol system')
+    print("Usage: python prepareComplex.py input.pdb ligand.mol system")
     exit(1)
 
 pdb_in = sys.argv[1]
@@ -21,10 +21,10 @@ fixer = PDBFixer(filename=pdb_in)
 fixer.findMissingResidues()
 fixer.findMissingAtoms()
 fixer.findNonstandardResidues()
-print('Residues:', fixer.missingResidues)
-print('Atoms:', fixer.missingAtoms)
-print('Terminals:', fixer.missingTerminals)
-print('Non-standard:', fixer.nonstandardResidues)
+print("Residues:", fixer.missingResidues)
+print("Atoms:", fixer.missingAtoms)
+print("Terminals:", fixer.missingTerminals)
+print("Non-standard:", fixer.nonstandardResidues)
 
 fixer.addMissingAtoms()
 fixer.addMissingHydrogens(7.4)
@@ -37,13 +37,13 @@ fixer.addMissingHydrogens(7.4)
 modeller = Modeller(fixer.topology, fixer.positions)
 toDelete = []
 for res in modeller.topology.residues():
-    if res.name == 'DMS':
+    if res.name == "DMS":
         toDelete.append(res)
-        print('Deleting', res)
+        print("Deleting", res)
 modeller.delete(toDelete)
 
 
-with open(outname + '_receptor.pdb', 'w') as outfile:
+with open(outname + "_receptor.pdb", "w") as outfile:
     PDBFile.writeFile(modeller.topology, modeller.positions, file=outfile, keepIds=True)
 
 
@@ -55,11 +55,11 @@ with open(outname + '_receptor.pdb', 'w') as outfile:
 modeller = Modeller(fixer.topology, fixer.positions)
 toDelete = []
 for res in modeller.topology.residues():
-    if res.name != 'LIG':
+    if res.name != "LIG":
         toDelete.append(res)
 modeller.delete(toDelete)
 
-with open(outname + '_ligand.pdb', 'w') as outfile:
+with open(outname + "_ligand.pdb", "w") as outfile:
     PDBFile.writeFile(modeller.topology, modeller.positions, file=outfile, keepIds=True)
 
-print('Done')
+print("Done")
