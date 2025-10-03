@@ -1,5 +1,5 @@
 [build]
-  command = "uv run mkdocs build --strict"
+  command = "curl -LsSf https://astral.sh/uv/install.sh | sh && export PATH=$HOME/.local/bin:$PATH && uv sync --dev && uv run mkdocs build --strict"
   publish = "site"
 
 [[headers]]
