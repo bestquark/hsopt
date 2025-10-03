@@ -1,6 +1,6 @@
 #!/bin/bash
 
-for lam in $(seq 0 0.1 1.0); do
+for lam in $(seq 0 0.2 1.0); do
     printf "\n=== Running with OE_LAMBDA=$lam ===\n"
     OE_LAMBDA=$lam python -m code_evolution.openevolve-run \
         code_evolution/initial_program.py \

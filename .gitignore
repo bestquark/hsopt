@@ -1,3 +1,5 @@
+visualization/pareto_points.csv
+visualization/pareto_plot.png
 openevolve_output/
 code_evolution/__pycache__/
 code_evolution/openevolve_output*
