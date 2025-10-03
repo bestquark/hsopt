@@ -1,5 +1,6 @@
 # EVOLVE-BLOCK-START
 import cupynumeric as np
+from code_evolution.evaluator import _make_problem
 from src.mixed_fps.simulate_quantization import *
 from src.qm.hamsim import *
 
@@ -46,3 +47,28 @@ def run(H_terms, psi0, t):
         verbose=False,
     )
     return psi_final, {"r": r, "fmts": fmts}
+
+if __name__ == "__main__":
+    import time, argparse, sys, runpy
+
+    parser = argparse.ArgumentParser(description="Run the initial program.")
+    parser.add_argument("-n", "--n", "--terms", type=int, default=4,
+                        help="Number of Trotter terms (default: 4)")
+    parser.add_argument("-t", "--time", type=float, default=0.5,
+                        help="Time parameter t (default: 0.5)")
+    parser.add_argument("--seed", type=int, default=123,
+                        help="Random seed (default: 123)")
+    args = parser.parse_args()
+
+    n = args.n
+    t = args.time
+    seed = args.seed
+    H_terms, psi0 = _make_problem(n=n, seed=seed)
+
+    t0 = time.perf_counter()
+    psi_final, meta = run(H_terms, psi0, t)
+    elapsed = time.perf_counter() - t0
+
+    print(f"Result norm: {np.linalg.norm(psi_final):.6f}")
+    print(f"Elapsed time: {elapsed*1000:.1f} ms")
+    print(f"Meta: {meta}")

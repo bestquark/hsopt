@@ -1,5 +1,5 @@
 import cupynumeric as np
-from src.simulate_quantization import matmul_mixed, quantize_any, dequantize_any, NATIVE
+from src.mixed_fps.simulate_quantization import matmul_mixed, quantize_any, dequantize_any, NATIVE
 
 
 def _choose_target_dtype(fmt_or_dtype, is_complex):
