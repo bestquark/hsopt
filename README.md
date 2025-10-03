@@ -1,6 +1,5 @@
 # Evolutionary low-precision QM/MM
-[![Docs](https://img.shields.io/badge/docs-online-blue.svg)](https://bestquark.github.io/evolutionary-qmmm/)  
-<sub>🔑 Password: `gordonbell2026`</sub>
+> [![Docs](https://img.shields.io/badge/docs-online-blue.svg)](https://bestquark.github.io/evolutionary-qmmm/) &nbsp;&nbsp;&nbsp; 🔑 **Password**: `gordonbell2026`
 
 
 This repository contains code for simulating quantum systems using mixed-precision arithmetic, embedded in a classical environment.
