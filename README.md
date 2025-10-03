@@ -10,7 +10,7 @@ The main idea is to use this technique for speeding up free-energy calculations 
 </p>
 
 
-## Usage
+## Installation
 
 Make sure you have an API key for OpenEvolve and have it set in your environment:
 ```bash
@@ -24,6 +24,7 @@ git clone https://github.com/bestquark/evolutionary-qmmm.git
 cd evolutionary-qmmm
 uv sync
 uv run pre-commit install
+uv add 
 ```
 
 If you are running MD simulations, you need conda to install 
@@ -31,3 +32,11 @@ If you are running MD simulations, you need conda to install
 conda install openmmforcefields
 ```
 
+## Usage
+
+Code evolution takes place in the `code_evolution/` directory.
+
+To evolve a program, run:
+```bash
+python -m code_evolution.openevolve-run code_evolution/initial_program.py code_evolution/evaluator.py --config code_evolution/config.yaml --iterations 5
+```

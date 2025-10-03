@@ -5,6 +5,7 @@ description = "Mixed-precision QM/MM"
 readme = "README.md"
 requires-python = ">=3.11"
 dependencies = [
+    "ase>=3.26.0",
     "black>=25.1.0",
     "imageio>=2.37.0",
     "matplotlib>=3.10.6",
@@ -22,6 +23,7 @@ dependencies = [
 [dependency-groups]
 dev = [
     "black>=25.1.0",
+    "evolutionary-qmmm",
     "mkdocs>=1.6.1",
     "mkdocs-encryptcontent-plugin>=3.0.5",
     "mkdocs-material>=9.6.21",
@@ -31,3 +33,9 @@ dev = [
 
 [tool.uv.sources]
 openmmforcefields = { git = "https://github.com/openmm/openmmforcefields" }
+evolutionary-qmmm = { workspace = true, editable = true }
+
+[tool.uv.workspace]
+members = [
+    ".",
+]
