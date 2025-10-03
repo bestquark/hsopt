@@ -1,4 +1,6 @@
 openevolve_output/
+code_evolution/__pycache__/
+code_evolution/openevolve_output*
 cupynum_test.ipynb
 sims/
 

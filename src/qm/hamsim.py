@@ -1,6 +1,32 @@
 import cupynumeric as np
 from src.mixed_fps.simulate_quantization import quantize_any, dequantize_any, NATIVE
 
+BYTES_PER_ELT = {
+    "fp4_e2m1": 0.5,
+    "fp8_e4m3": 1.0,
+    "fp8_e5m2": 1.0,
+    "fp16": 2.0,
+    "fp32": 4.0,
+    "fp64": 8.0,
+}
+
+
+def _fmt_bpe(fmt_or_dtype) -> float:
+    """
+    Return bytes-per-element for a dtype or tiny-fp string.
+    Always a numeric float.
+    """
+    # tiny/emulated formats by name
+    if isinstance(fmt_or_dtype, str):
+        return BYTES_PER_ELT.get(fmt_or_dtype.lower(), 4.0)
+
+    # anything dtype-ish (np.float32, np.dtype('float32'), np.complex64, etc.)
+    try:
+        return float(np.dtype(fmt_or_dtype).itemsize)
+    except Exception:
+        # last resort default
+        return 4.0
+
 
 def _choose_target_dtype(fmt_or_dtype, is_complex):
     if isinstance(fmt_or_dtype, str) and fmt_or_dtype in NATIVE:
@@ -122,7 +148,21 @@ def simulate_hamiltonian(
     """
     dt = t / r
     psi = psi0
+
+    # --- memory accounting (approx bytes touched) ---
+    bytes_used = 0
+
     for step in range(r):
+        # count “active precision” for this step’s formats (rough proxy)
+        for j, H in enumerate(H_terms):
+            fmt = fmt_list[(step + j) % len(fmt_list)]
+            bpe = _fmt_bpe(fmt)
+            bytes_used += int(H.size * bpe)
+        # include vector too (before/after)
+        fmt0 = fmt_list[step % len(fmt_list)]
+        bpe_vec = _fmt_bpe(fmt0)
+        bytes_used += int(psi.size * bpe_vec)
+
         psi = lie_trotter_step(
             H_terms,
             psi,
@@ -135,4 +175,9 @@ def simulate_hamiltonian(
             verbose=verbose,
             normalize=normalize,
         )
-    return psi
+
+        # after step vector in out dtype (very rough)
+        bytes_used += psi.size * _fmt_bpe(out_dtype)
+
+    mem_mb = bytes_used / (1024.0 * 1024.0)
+    return psi, {"r": r, "fmts": fmt_list, "bytes_used": bytes_used, "mem_mb": mem_mb}
