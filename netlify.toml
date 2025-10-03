@@ -1,0 +1,8 @@
+[build]
+  command = "uv run mkdocs build --strict"
+  publish = "site"
+
+[[headers]]
+  for = "/*"
+    [headers.values]
+    Basic-Auth = "user:gordonbell2026"
