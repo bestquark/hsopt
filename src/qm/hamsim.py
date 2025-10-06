@@ -10,6 +10,16 @@ BYTES_PER_ELT = {
     "fp64": 8.0,
 }
 
+# BYTES_PER_ELT = {
+#     'fp8_e4m3': 0.375,
+#     'fp8_e5m2': 0.25,
+#     'fp8_e3m4': 0.5,
+#     'fp8_e2m5': 0.625,
+#     'fp16': 1.25,
+#     'fp32': 2.875,
+#     'fp64': 6.5,
+# }
+
 
 def _fmt_bpe(fmt_or_dtype) -> float:
     """
@@ -46,20 +56,33 @@ def _choose_target_dtype(fmt_or_dtype, is_complex):
         return base
 
 
-def cast_matrix_and_vector_mixed(H, psi, fmt_or_dtype, compute_dtype=np.float16):
-    """
-    If fmt_or_dtype is a numpy/cupynumeric dtype or 'fp16/fp32/fp64' -> cast (respecting complexness).
-    If it's a tiny-fp format string -> emulate quant/dequant, then cast to compute_dtype.
-    """
-    tgt = _choose_target_dtype(fmt_or_dtype, np.iscomplexobj(psi) or np.iscomplexobj(H))
-    if tgt is not None:
-        return H.astype(tgt, copy=False), psi.astype(tgt, copy=False)
+def _complex_of(s):
+    return np.complex128 if s == np.float64 else np.complex64
 
+
+def cast_matrix_and_vector_mixed(H, psi, fmt_or_dtype, compute_dtype=np.float32):
+    """
+    Return (Hc, psic) both cast to compute_dtype (or its complex counterpart).
+    For tiny/emulated formats: quantize->dequantize into compute_dtype.
+    For native dtypes / 'fp16/32/64': cast directly to compute_dtype.
+    """
+    is_cplx = np.iscomplexobj(psi) or np.iscomplexobj(H)
+    tgt_compute = _complex_of(compute_dtype) if is_cplx else compute_dtype
+
+    # Native dtype or 'fp16'/'fp32'/'fp64'
+    if (isinstance(fmt_or_dtype, str) and fmt_or_dtype in NATIVE) or hasattr(
+        fmt_or_dtype, "kind"
+    ):
+        Hc = H.astype(tgt_compute, copy=False)
+        psic = psi.astype(tgt_compute, copy=False)
+        return Hc, psic
+
+    # Emulated tiny formats
     fmt = str(fmt_or_dtype)
     H_q = quantize_any(H, fmt)
     psi_q = quantize_any(psi, fmt)
-    H_d = dequantize_any(H_q, fmt, compute_dtype)
-    psi_d = dequantize_any(psi_q, fmt, compute_dtype)
+    H_d = dequantize_any(H_q, fmt, tgt_compute)
+    psi_d = dequantize_any(psi_q, fmt, tgt_compute)
     return H_d, psi_d
 
 
@@ -67,23 +90,32 @@ def expmv_hermitian(
     H, v, dt, work_dtype=np.float64, out_dtype=np.complex128, normalize=False
 ):
     """
-    Stable expmv for Hermitian H: use eigh. If H is complex, solve in complex dtype.
+    Stable expmv for Hermitian H using eigh.
+    All *internal* math in work_dtype; cast to out_dtype only at the end.
     """
     H_is_cplx = np.iscomplexobj(H)
+
+    # Ensure work_dtype matches (complex if H is complex)
     if H_is_cplx and work_dtype in (np.float32, np.float64):
         work_dtype = np.complex128
-    if not H_is_cplx and work_dtype in (np.complex64, np.complex128):
+    if (not H_is_cplx) and work_dtype in (np.complex64, np.complex128):
         work_dtype = np.float64
 
-    Hh = H.astype(work_dtype, copy=False)
-    vh = v.astype(out_dtype, copy=False)
+    Hd = H.astype(work_dtype, copy=False)
+    vd = v.astype(work_dtype if H_is_cplx else work_dtype, copy=False)
 
-    w, Q = np.linalg.eigh(Hh)
-    phase = np.exp((-1j * dt) * w.astype(out_dtype))
-    y = Q.conj().T @ vh
-    y *= phase
-    out = (Q @ y).astype(out_dtype, copy=False)
+    w, Q = np.linalg.eigh(Hd)  # w: real (float), Q: work_dtype
+    # compute phase in work precision
+    phase = np.exp((-1j * dt) * w.astype(np.float64))  # exponent in high precision
+    phase = phase.astype(
+        np.complex128 if work_dtype == np.complex128 else np.complex64, copy=False
+    )
 
+    y = Q.conj().T @ vd
+    y = y.astype(phase.dtype, copy=False) * phase
+    out = Q @ y
+
+    out = out.astype(out_dtype, copy=False)
     if normalize:
         n = np.linalg.norm(out)
         if n != 0:

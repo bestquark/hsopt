@@ -6,7 +6,7 @@ for lam in $(seq 0 0.2 1.0); do
         code_evolution/initial_program.py \
         code_evolution/evaluator.py \
         --config code_evolution/config.yaml \
-        --iterations 5
+        --iterations 10
 
     out_dir="code_evolution/openevolve_output"
     new_dir="code_evolution/openevolve_output_${lam}"
