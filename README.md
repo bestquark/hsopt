@@ -24,12 +24,6 @@ git clone https://github.com/bestquark/evolutionary-qmmm.git
 cd evolutionary-qmmm
 uv sync
 uv run pre-commit install
-uv add 
-```
-
-If you are running MD simulations, you need conda to install 
-```bash
-conda install openmmforcefields
 ```
 
 ## Usage
@@ -49,14 +43,6 @@ results = compute_ground_state(mol, method="HF")
 print(f"Energy: {results['energy']:.6f} Hartree")
 ```
 
-See `examples/gpu4pyscf_example.py` for more detailed examples including QMMM calculations with external point charges.
-
-**Supported methods:**
-- Hartree-Fock (HF)
-- Density Functional Theory (DFT) with various functionals
-- Møller-Plesset 2nd order perturbation theory (MP2)
-
-All methods support QMMM external potentials for hybrid QM/MM calculations.
 
 ### Code Evolution
 

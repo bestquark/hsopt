@@ -5,45 +5,38 @@ description = "Mixed-precision QM/MM"
 readme = "README.md"
 requires-python = ">=3.11"
 dependencies = [
-    "ase>=3.26.0",
-    "black>=25.1.0",
-    "imageio>=2.37.0",
-    "matplotlib>=3.10.6",
-    "mdtraj>=1.11.0",
-    "numpy>=2.3.3",
-    "nvidia-cupynumeric>=25.8.0",
-    "openevolve>=0.2.14",
-    "openfermion>=1.7.1",
-    "openmm>=8.3.1",
-    "openmmforcefields",
-    "pre-commit>=4.3.0",
-    "pyscf>=2.5.0",
-    "rdkit>=2025.3.6",
-    "ruff>=0.13.3",
+  "ase>=3.26.0",
+  "imageio>=2.37.0",
+  "matplotlib>=3.10.6",
+  "mdtraj>=1.11.0",
+  "numpy>=2.3.3",
+  "openevolve>=0.2.14",
+  "openfermion>=1.7.1",
+  "openmm>=8.3.1",
+  "openmmforcefields",
+  "pyscf>=2.5.0",
+  "rdkit>=2025.3.6",
+  "scipy>=1.13",
 ]
 
-[project.optional-dependencies]
-gpu = [
-  "gpu4pyscf>=1.4.3; platform_system == 'Linux' and platform_machine == 'x86_64'",
-  "nvidia-cupynumeric>=25.8.0; platform_system == 'Linux' and platform_machine == 'x86_64'",
-]
 
 [dependency-groups]
 dev = [
-    "black>=25.1.0",
-    "mkdocs>=1.6.1",
-    "mkdocs-encryptcontent-plugin>=3.0.5",
-    "mkdocs-material>=9.6.21",
-    "mkdocstrings[python]>=0.30.1",
-    "pre-commit>=4.3.0",
+  "black>=25.1.0",
+  "mkdocs>=1.6.1",
+  "mkdocs-encryptcontent-plugin>=3.0.5",
+  "mkdocs-material>=9.6.21",
+  "mkdocstrings[python]>=0.30.1",
+  "pre-commit>=4.3.0",
+  "ruff>=0.13.3",
 ]
-gpu = ["evolutionary-qmmm[gpu]"]
+# cuda = [
+#   "gpu4pyscf>=1.4.3; platform_system == 'Linux' and platform_machine == 'x86_64'",
+#   "nvidia-cupynumeric>=25.8.0; platform_system == 'Linux' and platform_machine == 'x86_64'",
+# ]
 
 [tool.uv.sources]
 openmmforcefields = { git = "https://github.com/openmm/openmmforcefields" }
-evolutionary-qmmm = { workspace = true, editable = true }
 
 [tool.uv.workspace]
-members = [
-    ".",
-]
+members = ["."]
