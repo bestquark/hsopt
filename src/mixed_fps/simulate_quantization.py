@@ -10,6 +10,26 @@ FMT = {
     "fp8_e3m4": dict(exp_bits=3, man_bits=4, bias=3),
     "fp8_e2m5": dict(exp_bits=2, man_bits=5, bias=1),
 }
+
+# FMT = {
+#     # FP8 family
+#     "fp8_e4m3": dict(exp_bits=4, man_bits=3, bias=7),
+#     "fp8_e5m2": dict(exp_bits=5, man_bits=2, bias=15),
+#     "fp8_e3m4": dict(exp_bits=3, man_bits=4, bias=3),
+#     "fp8_e2m5": dict(exp_bits=2, man_bits=5, bias=1),
+
+#     # Intermediate custom formats
+#     "fp10_e5m4": dict(exp_bits=5, man_bits=4, bias=15),   # FP10 (E5M4)
+#     "fp12_e5m6": dict(exp_bits=5, man_bits=6, bias=15),   # FP12 (E5M6)
+#     "bf10_e8m1": dict(exp_bits=8, man_bits=1, bias=127),  # bfloat10-like (rare)
+#     "bf12_e8m3": dict(exp_bits=8, man_bits=3, bias=127),  # bfloat12-like
+
+#     # FP16 family
+#     "fp16_e5m10": dict(exp_bits=5, man_bits=10, bias=15), # IEEE half precision
+#     "bf16_e8m7": dict(exp_bits=8, man_bits=7, bias=127),  # bfloat16
+# }
+
+
 NATIVE = {"fp16": np.float16, "fp32": np.float32, "fp64": np.float64}
 
 

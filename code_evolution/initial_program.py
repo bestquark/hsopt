@@ -24,7 +24,7 @@ def choose_formats(n_terms):
 
     Can be any of the FMT keys above.
     """
-    return ["fp16"] * len(n_terms)  # default branch
+    return ["fp16"] * len(n_terms)  
 
 
 def choose_steps(t: float, H_terms):
