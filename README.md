@@ -34,6 +34,32 @@ conda install openmmforcefields
 
 ## Usage
 
+### GPU-Accelerated Quantum Chemistry
+
+The repository now includes GPU-accelerated ground state calculations using `gpu4pyscf`. This enables fast QM calculations with optional QMMM external potentials:
+
+```python
+from src.qm import create_molecule, compute_ground_state
+
+# Create molecule
+mol = create_molecule(atoms="H 0 0 0; H 0 0 0.74", basis="6-31g")
+
+# Compute ground state with HF, DFT, or MP2
+results = compute_ground_state(mol, method="HF")
+print(f"Energy: {results['energy']:.6f} Hartree")
+```
+
+See `examples/gpu4pyscf_example.py` for more detailed examples including QMMM calculations with external point charges.
+
+**Supported methods:**
+- Hartree-Fock (HF)
+- Density Functional Theory (DFT) with various functionals
+- Møller-Plesset 2nd order perturbation theory (MP2)
+
+All methods support QMMM external potentials for hybrid QM/MM calculations.
+
+### Code Evolution
+
 Code evolution takes place in the `code_evolution/` directory.
 
 To evolve a program, run:
