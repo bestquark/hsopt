@@ -1,4 +1,4 @@
-site_name: evolutionary-qmmm
+site_name: Evolutionary QM/MM
 theme:
   name: material
 plugins:
@@ -6,7 +6,7 @@ plugins:
   - mkdocstrings:
       handlers:
         python:
-          paths: [src]           
+          paths: [src/eqmmm]           
           options:
             show_source: false
             docstring_style: google  
