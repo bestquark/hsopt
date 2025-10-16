@@ -1,8 +1,8 @@
 import cupynumeric as np
-from code_evolution.evaluator import _make_problem
+from evaluator import _make_problem
 
 # from src.mixed_fps.simulate_quantization import *
-from src.qm.hamsim import simulate_hamiltonian
+from eqmmm.qm.hamsim import simulate_hamiltonian
 
 FMT = {
     "fp8_e5m2": dict(exp_bits=5, man_bits=2, bias=15),
