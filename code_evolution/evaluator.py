@@ -11,15 +11,19 @@ import sys
 import time
 import json
 import traceback
+import subprocess, tempfile, textwrap
+from pathlib import Path
 import numpy as np
 import scipy
 import importlib.util
 import multiprocessing as mp
 from typing import Dict, Any
+from gpu_cost import compute_gpu_metrics
 
 # -------- Global knobs (override via env) ----------
 MEM_CAP_MB = float(os.getenv("OE_MEM_CAP_MB", "32"))  # for mem_norm cap
 LAMBDA_W = float(os.getenv("OE_LAMBDA", "0.5"))  # scalarization weight
+ALPHA_GPU = float(os.getenv("OE_ALPHA_GPU", "0.1"))  # GPU time penalty weight
 TRIAL_TIMEOUT_S = float(os.getenv("OE_TRIAL_TIMEOUT_S", "30"))  # per-trial wall timeout
 PROC_MEM_LIMIT_MB = float(os.getenv("OE_PROC_MEM_MB", "4096"))  # per-trial RSS cap
 NUM_THREADS = os.getenv("OE_NUM_THREADS", "1")  # tame BLAS threads
@@ -27,6 +31,9 @@ MP_METHOD_DEFAULT = "fork" if sys.platform == "darwin" else "spawn"  # safer on 
 MP_METHOD = os.getenv(
     "OE_MP_METHOD", MP_METHOD_DEFAULT
 )  # override: fork/spawn/forkserver
+PROFILE_GPU = os.getenv("OE_PROFILE_GPU", "0") == "1"      # run Nsight Systems
+NSYS_PREFIX = os.getenv("OE_NSYS_PREFIX", "")              # e.g., "/usr/local/cuda/bin/"
+
 # ---------------------------------------------------
 
 
@@ -147,9 +154,14 @@ def _trial_worker(program_path: str, n: int, m: int, t: float, seed: int, conn):
 
 
 def _run_single_trial(
-    program_path: str, n: int, m: int, t: float, seed: int, timeout_s: float
+    program_path: str, n: int, m: int, t: float, seed: int, timeout_s: float, *,
+    profile_nsys: bool = False
 ):
-    # Use explicit context to avoid global set_start_method conflicts with OpenEvolve
+    if profile_nsys:
+        # Run the exact same trial logic under Nsight Systems
+        return _run_single_trial_nsys(program_path, n, m, t, seed, timeout_s)
+
+    # Original mp-based path
     ctx = mp.get_context(MP_METHOD)
     parent, child = ctx.Pipe(duplex=False)
     proc = ctx.Process(target=_trial_worker, args=(program_path, n, m, t, seed, child))
@@ -164,24 +176,153 @@ def _run_single_trial(
         except EOFError:
             ok, payload = False, {"error": "eof"}
     else:
-        # Timeout
-        try:
-            proc.terminate()
-        except Exception:
-            pass
+        try: proc.terminate()
+        except Exception: pass
         ok, payload = False, {"error": "timeout"}
 
     proc.join(timeout=1.0)
     if proc.is_alive():
-        try:
-            proc.kill()
-        except Exception:
-            pass
+        try: proc.kill()
+        except Exception: pass
         proc.join()
 
-    # If died by signal, annotate
     if not ok and proc.exitcode is not None and proc.exitcode < 0:
         payload.setdefault("error", f"signal_{-proc.exitcode}")
+    return ok, payload
+
+
+def _run_single_trial_nsys(program_path: str, n: int, m: int, t: float, seed: int, timeout_s: float):
+    """
+    Runs a single trial under Nsight Systems by emitting a tiny runner script,
+    executing it via `uv run legate --profile`, and parsing JSON from stdout.
+    Returns (ok, payload) with the same schema as the mp worker.
+    """
+    runner = textwrap.dedent(f"""\
+    import os, sys, time, json, traceback
+    import numpy as np, scipy.linalg, import importlib.util
+
+    PROC_MEM_LIMIT_MB = float(os.getenv("OE_PROC_MEM_MB","4096"))
+    NUM_THREADS = os.getenv("OE_NUM_THREADS","1")
+
+    def _limit():
+        try:
+            import resource
+            b = int(PROC_MEM_LIMIT_MB*1024*1024)
+            resource.setrlimit(resource.RLIMIT_AS,(b,b))
+            resource.setrlimit(resource.RLIMIT_CORE,(0,0))
+        except Exception:
+            pass
+        os.environ.setdefault("OMP_NUM_THREADS", NUM_THREADS)
+        os.environ.setdefault("OPENBLAS_NUM_THREADS", NUM_THREADS)
+        os.environ.setdefault("MKL_NUM_THREADS", NUM_THREADS)
+        os.environ.setdefault("VECLIB_MAXIMUM_THREADS", NUM_THREADS)
+        os.environ.setdefault("NUMEXPR_NUM_THREADS", NUM_THREADS)
+
+    def _load_module(path):
+        repo_root = os.path.abspath(os.getcwd())
+        if repo_root not in sys.path:
+            sys.path.insert(0, repo_root)
+        spec = importlib.util.spec_from_file_location("candidate", path)
+        mod = importlib.util.module_from_spec(spec)
+        spec.loader.exec_module(mod)
+        return mod
+
+    def _bytes_of(*objs):
+        tot=0
+        for o in objs:
+            if isinstance(o,(list,tuple)):
+                tot+=_bytes_of(*o)
+            else:
+                try: tot+=int(getattr(o,"nbytes"))
+                except Exception: pass
+        return tot
+
+    def _make_problem(n,m,seed):
+        rng = np.random.default_rng(seed)
+        H_terms=[]
+        for _ in range(m):
+            A = rng.standard_normal((n,n)) + 1j*rng.standard_normal((n,n))
+            H = (A + A.conj().T)/2.0
+            H = H*(10.0 if rng.random()<0.5 else 0.01)
+            H_terms.append(H)
+        psi0 = rng.standard_normal(n) + 1j*rng.standard_normal(n)
+        psi0 /= np.linalg.norm(psi0)
+        return H_terms, psi0
+
+    def _safe_float(x,d=0.0):
+        try:
+            v=float(x); import numpy as _np
+            return v if _np.isfinite(v) else d
+        except Exception:
+            return d
+
+    def main():
+        _limit()
+        program = os.environ["OE_PROG"]
+        n = int(os.environ["OE_N"]); m = int(os.environ["OE_M"])
+        t = float(os.environ["OE_T"]); seed = int(os.environ["OE_SEED"])
+        mod = _load_module(program)
+        if not hasattr(mod,"run"):
+            print(json.dumps((False,{{"error":"no_run_fn"}}))); return
+        H_terms, psi0 = _make_problem(n,m,seed)
+        t0 = time.perf_counter()
+        psi_final, meta = mod.run(H_terms, psi0, t)
+        wall_ms = (time.perf_counter() - t0)*1000.0
+        psi_exact = scipy.linalg.expm(-1j*t*sum(H_terms)) @ psi0
+        err = float(np.linalg.norm(psi_final - psi_exact))
+        norm_val = float(np.linalg.norm(psi_final))
+        mem_bytes = _safe_float((meta or {{}}).get("bytes_used",0.0))
+        if not mem_bytes:
+            mem_bytes = _bytes_of(psi_final, psi0, *H_terms)
+        payload = {{
+            "error": _safe_float(err,1e9),
+            "norm": _safe_float(norm_val,0.0),
+            "mem_mb": _safe_float(mem_bytes,0.0)/(1024.0*1024.0),
+            "time_ms": _safe_float(wall_ms, {timeout_s}*1000.0),
+        }}
+        print(json.dumps((True,payload)))
+    if __name__=="__main__":
+        try: main()
+        except Exception as e:
+            tb = traceback.format_exc(limit=5)
+            print(json.dumps((False,{{"error":f"runtime_error:{{type(e).__name__}}","trace":tb}})))
+    """)
+
+    env = os.environ.copy()
+    env.update({
+        "OE_PROG": os.path.abspath(program_path),
+        "OE_N": str(n), "OE_M": str(m), "OE_T": str(t), "OE_SEED": str(seed),
+    })
+
+    with tempfile.TemporaryDirectory() as td:
+        runner_path = Path(td)/"runner_trial.py"
+        runner_path.write_text(runner, encoding="utf-8")
+
+        # Prefer --export=sqlite if your nsys supports it; otherwise plain profile
+        nsys = os.getenv("OE_NSYS", "nsys")
+        base = [nsys, "profile", "-o", f"prof_trial_{seed}",
+                "--trace", "cuda,nvtx,osrt", "--sample", "none",
+                "--cpuctxsw", "none", "--force-overwrite", "true",
+                "--multiprocess", "true",
+                "uv", "run", "legate", "--profile", str(runner_path)]
+        cmd = base[:]
+        try:
+            # Fast path
+            cmd[3:3] = ["--export", "sqlite"]
+            p = subprocess.run(cmd, env=env, capture_output=True, text=True, timeout=timeout_s+5)
+        except Exception:
+            # Fallback without export flag
+            p = subprocess.run(base, env=env, capture_output=True, text=True, timeout=timeout_s+5)
+
+    # Parse JSON tuple (ok, payload) from stdout (last line)
+    out = (p.stdout.strip().splitlines() or [""])[-1]
+    try:
+        ok, payload = json.loads(out)
+        if not isinstance(payload, dict):
+            raise ValueError("bad payload")
+    except Exception:
+        ok, payload = False, {"error":"nsys_runner_parse_fail", "stdout": p.stdout[-2000:], "stderr": p.stderr[-2000:]}
+
     return ok, payload
 
 
@@ -226,14 +367,17 @@ def evaluate(
     seeds = list(seeds) if seeds else [1337 + i for i in range(trials)]
     errors, times_ms, norms, mem_mb = [], [], [], []
 
+    db_path = Path("prof.sqlite")
+
     for sd in seeds:
-        ok, res = _run_single_trial(program, n, m, t, sd, TRIAL_TIMEOUT_S)
+        ok, res = _run_single_trial(
+            program, n, m, t, sd, TRIAL_TIMEOUT_S, profile_nsys=PROFILE_GPU
+        )
         if not ok:
-            # Penalize but keep the run alive
             errors.append(1e3)
             times_ms.append(TRIAL_TIMEOUT_S * 1000.0)
             norms.append(0.0)
-            mem_mb.append(MEM_CAP_MB)  # worst-case pressure under cap
+            mem_mb.append(MEM_CAP_MB)
             continue
 
         errors.append(_safe_float(res.get("error"), 1e3))
@@ -241,14 +385,36 @@ def evaluate(
         norms.append(_safe_float(res.get("norm"), 0.0))
         mem_mb.append(_safe_float(res.get("mem_mb"), 0.0))
 
+    # ---- Aggregate ----
     err_mean = float(np.mean(errors)) if errors else 1e3
     err_min = float(np.min(errors)) if errors else 1e3
     t_mean = float(np.mean(times_ms)) if times_ms else TRIAL_TIMEOUT_S * 1000.0
     norm_dev = float(abs((np.mean(norms) if norms else 0.0) - 1.0))
     mem_mb_mean = float(np.mean(mem_mb)) if mem_mb else 0.0
 
+    # ---- If GPU profiling is enabled, override with real Nsight metrics ----
+    if PROFILE_GPU and db_path.exists():
+        try:
+            total_time, time_rows, mem_bytes = compute_gpu_metrics(db_path)
+            t_mean = total_time * 1000.0  # convert seconds → ms
+
+            # Handle both scalar and dict memory outputs
+            if isinstance(mem_bytes, dict):
+                mem_bytes = sum(mem_bytes.values())
+
+            mem_mb_mean = float(mem_bytes) / (1024.0 * 1024.0)
+            print(f"[GPU] Nsight metrics: {total_time:.3f}s total, {mem_mb_mean:.2f} MB")
+        except Exception as e:
+            print(f"[WARN] GPU metrics unavailable: {e}")
+
+    # ---- Combine ----
     mem_norm = min(mem_mb_mean, MEM_CAP_MB) / MEM_CAP_MB
-    combined = LAMBDA_W * (-err_mean) + (1.0 - LAMBDA_W) * (-mem_norm)
+    # combined = LAMBDA_W * (-err_mean) + (1.0 - LAMBDA_W) * (-mem_norm)
+    combined = (
+        LAMBDA_W * (-err_mean)
+        + (1.0 - LAMBDA_W) * (-mem_norm)
+        - ALPHA_GPU * np.log1p(t_mean / 1000.0)
+    )
 
     out = {
         "combined_score": float(combined),

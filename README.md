@@ -26,6 +26,12 @@ uv sync
 uv run pre-commit install
 ```
 
+Configure the number of GPUs to use with:
+```bash
+source ./config_gpus.sh
+echo "$CUDA_VISIBLE_DEVICES" # Check the GPUs assigned
+```
+
 ## Usage
 
 ### GPU-Accelerated Quantum Chemistry
