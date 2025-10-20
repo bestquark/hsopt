@@ -19,6 +19,7 @@ dependencies = [
   "scipy>=1.13",
   "nvidia-cupynumeric>=25.8.0",
   "legate>=25.8.0",
+  "legate-profiler>=0.0.0",
 ]
 
 

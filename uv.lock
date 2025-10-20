@@ -435,6 +435,7 @@ dependencies = [
     { name = "ase" },
     { name = "imageio" },
     { name = "legate" },
+    { name = "legate-profiler" },
     { name = "matplotlib" },
     { name = "mdtraj" },
     { name = "numpy" },
@@ -464,6 +465,7 @@ requires-dist = [
     { name = "ase", specifier = ">=3.26.0" },
     { name = "imageio", specifier = ">=2.37.0" },
     { name = "legate", specifier = ">=25.8.0" },
+    { name = "legate-profiler", specifier = ">=0.0.0" },
     { name = "matplotlib", specifier = ">=3.10.6" },
     { name = "mdtraj", specifier = ">=1.11.0" },
     { name = "numpy", specifier = ">=2.3.3" },
@@ -826,6 +828,14 @@ wheels = [
     { url = "https://files.pythonhosted.org/packages/ea/31/26b7ee0c6d7a7fb2380c6efff7fa2dc8ea72178af4c574a21b77278b2f88/legate-25.8.0-cp313-cp313-macosx_11_0_arm64.whl", hash = "sha256:a216a4a45130fa0a6dcc77266d399bbd2ae108121b6f3f905bd5cf73b3c6104c", size = 38319059, upload-time = "2025-09-04T18:50:48.045Z" },
     { url = "https://files.pythonhosted.org/packages/a8/7d/55229b684e9ce6ed939e25f0a92f0ab2b1c97ea389eb2dadc5e4d6b4ef3a/legate-25.8.0-cp313-cp313-manylinux_2_28_aarch64.whl", hash = "sha256:c15bbea1de8e547aadc5becd09fdd7efa14e4ccd7eba35d4d66ccf0262e72c1a", size = 55522087, upload-time = "2025-09-04T16:49:47.695Z" },
     { url = "https://files.pythonhosted.org/packages/49/38/5ec4c37d7de40eb5ccf1b48aa8ba32f1bb120e527a325e5ffed87d0adbeb/legate-25.8.0-cp313-cp313-manylinux_2_28_x86_64.whl", hash = "sha256:debde241dfca816150142fc544f1c3e1b289ef169681158354d1f14d01cab629", size = 60547082, upload-time = "2025-09-04T16:46:52.156Z" },
+]
+
+[[package]]
+name = "legate-profiler"
+version = "0.0.0"
+source = { registry = "https://pypi.org/simple" }
+wheels = [
+    { url = "https://files.pythonhosted.org/packages/e4/09/54ba6b488f1db96d1a14c6aee0893ae3bf1d568442494797fe6bb9c39d91/legate_profiler-0.0.0-py3-none-any.whl", hash = "sha256:0145206af19969667b866734195ba1113d772e2477d0327aa805daf578e49169", size = 5185, upload-time = "2025-02-19T20:02:58.152Z" },
 ]
 
 [[package]]
