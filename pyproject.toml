@@ -20,6 +20,8 @@ dependencies = [
   "nvidia-cupynumeric>=25.8.0",
   "legate>=25.8.0",
   "legate-profiler>=0.0.0",
+  "zstandard>=0.25.0",
+  "orjson>=3.11.3",
 ]
 
 

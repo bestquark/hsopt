@@ -4,8 +4,11 @@ openevolve_output/
 code_evolution/__pycache__/
 code_evolution/legate_*.prof
 code_evolution/openevolve_output*
+code_evolution/*.sqlite
+code_evolution/*.nsys-rep
 cupynum_test.ipynb
 sims/
+
 
 # Byte-compiled / optimized / DLL files
 __pycache__/
