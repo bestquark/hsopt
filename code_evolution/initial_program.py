@@ -1,8 +1,11 @@
+import pickle
+import sys
 import cupynumeric as np
 from evaluator import _make_problem
 
 # from src.mixed_fps.simulate_quantization import *
 from eqmmm.qm.hamsim import simulate_hamiltonian
+
 
 FMT = {
     "fp8_e5m2": dict(exp_bits=5, man_bits=2, bias=15),
@@ -64,42 +67,35 @@ def run(H_terms, psi0, t):
 
 
 if __name__ == "__main__":
-    import time
     import argparse
+    import time
+    # --- Mode 1: piped pickle input ---
+    if not sys.stdin.isatty():
+        try:
+            H_terms, psi0, t = pickle.load(sys.stdin.buffer)
+            psi_final, meta = run(H_terms, psi0, t)
+            pickle.dump((psi_final, meta), sys.stdout.buffer)
+            sys.exit(0)
+        except Exception as e:
+            print(f"[ERROR reading pickle input: {e}]", file=sys.stderr)
+            sys.exit(1)
 
-    parser = argparse.ArgumentParser(description="Run the initial program.")
-    parser.add_argument(
-        "-n", "--n", type=int, default=100, help="Size of the problem (default: 100)"
-    )
-    parser.add_argument(
-        "-m",
-        "--m",
-        "--terms",
-        type=int,
-        default=2,
-        help="Number of Trotter terms (default: 8)",
-    )
-    parser.add_argument(
-        "-t", "--time", type=float, default=0.1, help="Time parameter t (default: 0.1)"
-    )
-    parser.add_argument(
-        "--seed", type=int, default=123, help="Random seed (default: 123)"
-    )
-    args = parser.parse_args()
+    # --- Mode 2: normal CLI (n, m, t, seed) ---
+    p = argparse.ArgumentParser(description="Run simulation or accept pickled input.")
+    p.add_argument("--n", type=int, default=100)
+    p.add_argument("--m", type=int, default=2)
+    p.add_argument("--t", type=float, default=0.1)
+    p.add_argument("--seed", type=int, default=123)
+    args = p.parse_args()
 
-    n = args.n
-    m = args.m
-    t = args.time
-    seed = args.seed
-    H_terms, psi0 = _make_problem(n=n, m=m, seed=seed)
-    psi_exact = np.linalg.expm(-1j * t * sum(H_terms)) @ psi0
+    H_terms, psi0 = _make_problem(args.n, args.m, args.seed)
+    psi_exact = np.linalg.expm(-1j * args.t * sum(H_terms)) @ psi0
 
     t0 = time.perf_counter()
-    psi_final, meta = run(H_terms, psi0, t)
-    elapsed = time.perf_counter() - t0
+    psi_final, meta = run(H_terms, psi0, args.t)
+    elapsed = (time.perf_counter() - t0) * 1000
 
-    # psi exact
-
-    print(f"Result error: {np.linalg.norm(psi_final - psi_exact):.6f}")
-    print(f"Elapsed time: {elapsed * 1000:.1f} ms")
+    err = np.linalg.norm(psi_final - psi_exact)
+    print(f"Result error: {err:.6f}")
+    print(f"Elapsed time: {elapsed:.1f} ms")
     print(f"Meta: {meta}")

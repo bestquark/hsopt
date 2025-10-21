@@ -56,5 +56,5 @@ Code evolution takes place in the `code_evolution/` directory.
 
 To evolve a program, run:
 ```bash
-python -m code_evolution.openevolve-run code_evolution/initial_program.py code_evolution/evaluator.py --config code_evolution/config.yaml --iterations 5
+uv run python -m code_evolution.openevolve-run code_evolution/initial_program.py code_evolution/evaluator.py --config code_evolution/config.yaml --iterations 5
 ```
