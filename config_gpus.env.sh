@@ -39,7 +39,7 @@ if [[ -n "$K" ]]; then
 fi
 
 export CUDA_VISIBLE_DEVICES="$(IFS=,; echo "${good[*]}")"
-export OE_PROFILE_GPUS=1
+export OE_PROFILE_GPU=1
 echo "CUDA_VISIBLE_DEVICES=$CUDA_VISIBLE_DEVICES  (MIN_SM=$MIN_SM, MIN_MEM_GB=$MIN_MEM_GB, K=${K:-all})"
 echo "Selected GPUs: ${good[*]}"
-echo "OE_PROFILE_GPUS=$OE_PROFILE_GPUS"
+echo "OE_PROFILE_GPU=$OE_PROFILE_GPU"

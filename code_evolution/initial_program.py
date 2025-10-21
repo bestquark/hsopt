@@ -34,7 +34,7 @@ def choose_steps(t: float, H_terms):
     Output: r (int): The number of Trotter steps to use.
     """
     n = H_terms[0].shape[0]
-    r = 100
+    r = 1000
     return r
 
 
