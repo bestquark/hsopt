@@ -359,6 +359,12 @@ wheels = [
 ]
 
 [[package]]
+name = "cuquantum"
+version = "25.9.1"
+source = { registry = "https://pypi.org/simple" }
+sdist = { url = "https://files.pythonhosted.org/packages/50/19/a45d36809d13874e0386f4337bc115f0b40a7593d7d4332ab23906483717/cuquantum-25.9.1.tar.gz", hash = "sha256:fe875167cf7e5dd86b61fba74fc823be72d11c3764d2392d09aac948940b24f0", size = 10582, upload-time = "2025-10-13T22:06:31.486Z" }
+
+[[package]]
 name = "cutensor-cu12"
 version = "2.3.0"
 source = { registry = "https://pypi.org/simple" }
@@ -447,6 +453,7 @@ version = "0.1.0"
 source = { editable = "." }
 dependencies = [
     { name = "ase" },
+    { name = "cuquantum" },
     { name = "duckdb" },
     { name = "imageio" },
     { name = "legate" },
@@ -480,6 +487,7 @@ dev = [
 [package.metadata]
 requires-dist = [
     { name = "ase", specifier = ">=3.26.0" },
+    { name = "cuquantum", specifier = ">=25.9.1" },
     { name = "duckdb", specifier = ">=1.4.1" },
     { name = "imageio", specifier = ">=2.37.0" },
     { name = "legate", specifier = ">=25.8.0" },

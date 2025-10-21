@@ -23,6 +23,7 @@ dependencies = [
   "zstandard>=0.25.0",
   "orjson>=3.11.3",
   "duckdb>=1.4.1",
+  "cuquantum>=25.9.1",
 ]
 
 
