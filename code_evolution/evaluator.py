@@ -21,19 +21,6 @@ PROFILE_GPU       = os.getenv("OE_PROFILE_GPU", "0") == "1"
 NSYS_PREFIX       = os.getenv("OE_NSYS_PREFIX", "")
 NSYS_BIN          = os.path.join(NSYS_PREFIX, "nsys") if NSYS_PREFIX else "nsys"
 # ---------------------------------------------------
-_METRIC_ERR   = re.compile(r"Result\s+error:\s*([0-9.eE+\-]+)")
-_METRIC_TIME  = re.compile(r"Elapsed\s+time:\s*([0-9.eE+\-]+)\s*ms")
-_METRIC_MEMMB = re.compile(r"[\"']mem_mb[\"']\s*:\s*([0-9.eE+\-]+)")
-
-def _parse_stdout_metrics(s: str) -> dict:
-    out = {}
-    m = _METRIC_ERR.search(s)
-    if m: out["error"] = float(m.group(1))
-    m = _METRIC_TIME.search(s)
-    if m: out["time_ms"] = float(m.group(1))
-    m = _METRIC_MEMMB.search(s)
-    if m: out["mem_mb"] = float(m.group(1))
-    return out
 
 def _make_problem(n: int = 100, m: int = 5, seed: int = 0):
     rng = np.random.default_rng(seed)
@@ -177,60 +164,92 @@ def _run_single_trial(program_path: str, n: int, m: int, t: float, seed: int, ti
     if not ok and proc.exitcode is not None and proc.exitcode < 0:
         payload.setdefault("error", f"signal_{-proc.exitcode}")
     return ok, payload
+
 def _run_single_trial_nsys(program_path: str, n: int, m: int, t: float, seed: int, timeout_s: float):
-    base = "prof"
-    db_path = Path(f"{base}.sqlite")
-    for p in (db_path, Path(f"{base}.nsys-rep")):
+    base = f"prof_{seed}"
+    db_path  = Path(f"{base}.sqlite")
+    rep_path = Path(f"{base}.nsys-rep")
+    json_out = Path(f".trial_{seed}.json")
+    for p in (db_path, rep_path, json_out):
         try: p.unlink()
         except FileNotFoundError: pass
 
+    # resources
     n_gpus = int(os.getenv("N_GPUS", "1"))
     cpus   = int(os.getenv("OE_LEGATE_CPUS", "4"))
     fbmem  = str(os.getenv("OE_LEGATE_FBMEM", "256"))
 
     env = os.environ.copy()
-    # If your candidate reads these, pass them through; otherwise harmless.
     env.update({
-        "OE_N": str(n),
-        "OE_M": str(m),
-        "OE_T": str(t),
-        "OE_SEED": str(seed),
+        "OE_PROG": os.path.abspath(program_path),
+        "OE_N": str(n), "OE_M": str(m), "OE_T": str(t), "OE_SEED": str(seed),
+        "OE_JSON_OUT": str(json_out),
     })
-    # Let Legate use explicit flags; avoid auto-probing surprises
     env.setdefault("LEGATE_AUTO_CONFIG", "0")
+
+    # --- detect child-process capture support ---
+    capture_children_flag = []
+    try:
+        help_txt = subprocess.run(
+            [NSYS_BIN, "profile", "--help"], capture_output=True, text=True, check=True
+        ).stdout.lower()
+        if "--capture-child-processes" in help_txt:
+            # prefer "=true"; some builds accept "=all"
+            val = "true" if "=true" in help_txt else "all"
+            capture_children_flag = ["--capture-child-processes", val]
+    except Exception:
+        pass
 
     cmd = [
         NSYS_BIN, "profile",
-        "-o", base,
+        "-o", str(base),
         "--export", "sqlite",
         "--trace", "cuda,nvtx,osrt",
         "--sample", "none",
         "--cpuctxsw", "none",
         "--force-overwrite", "true",
+        "--cuda-memory-usage", "true",
+        *capture_children_flag,
         "uv", "run", "legate",
         "--gpus", str(n_gpus),
-        "--profile", os.path.abspath(program_path),
+        "--cpus", str(cpus),
+        "--fbmem", str(fbmem),
+        # IMPORTANT: do NOT pass Legion's --profile here
+        os.path.abspath(__file__), "--single-trial",
     ]
-
     print(f"[NSYS] Running command: {' '.join(cmd)}")
-    p = subprocess.run(cmd, env=env, capture_output=True, text=True, timeout=timeout_s + 120)
 
-    # Build payload from the candidate’s stdout (Result error / Elapsed time / Meta mem_mb)
-    payload = _parse_stdout_metrics(p.stdout or "")
+    p = subprocess.run(cmd, env=env, capture_output=True, text=True,
+                       timeout=timeout_s + 120)
 
-    # If profiling succeeded, we consider the trial ok=True even if we didn’t parse all fields
-    if p.returncode == 0:
-        # Ensure keys exist so downstream code doesn’t choke
-        payload.setdefault("error", 1e3)
-        payload.setdefault("time_ms", TRIAL_TIMEOUT_S * 1000.0)
-        payload.setdefault("mem_mb", MEM_CAP_MB)
-        return True, payload
+    if not json_out.exists():
+        return False, {
+            "error": "nsys_runner_parse_fail_or_timeout",
+            "stdout": (p.stdout or "")[-4000:], "stderr": (p.stderr or "")[-4000:]
+        }
 
-    return False, {
-        "error": "nsys_runner_parse_fail_or_timeout",
-        "stdout": (p.stdout or "")[-2000:],
-        "stderr": (p.stderr or "")[-2000:],
-    }
+    try:
+        ok, payload = json.loads(json_out.read_text(encoding="utf-8"))
+    except Exception:
+        return False, {
+            "error": "nsys_runner_bad_json",
+            "stdout": (p.stdout or "")[-4000:], "stderr": (p.stderr or "")[-4000:]
+        }
+
+    # Fold per-trial GPU metrics if present
+    if db_path.exists():
+        try:
+            total_time_s, _rows, mem_bytes = compute_gpu_metrics(db_path)
+            if isinstance(mem_bytes, dict): mem_bytes = sum(mem_bytes.values())
+            payload["gpu_time_ms"] = float(total_time_s) * 1000.0
+            payload["gpu_mem_mb"]  = float(mem_bytes) / (1024.0 * 1024.0)
+            payload["prof_db"] = str(db_path)
+        except Exception as e:
+            payload.setdefault("gpu_metrics_error", str(e))
+    else:
+        payload.setdefault("gpu_metrics_error", "nsys_db_missing")
+
+    return bool(ok), payload
 
 # ---------- public API ----------
 def evaluate(program: str, trials: int = 10, n: int = None, m: int = None, t: float = None, seeds=None) -> Dict[str, Any]:
@@ -239,60 +258,58 @@ def evaluate(program: str, trials: int = 10, n: int = None, m: int = None, t: fl
     if t is None: t = float(0.01 + (1.0 - 0.01) * np.random.beta(2, 5))
 
     if not isinstance(program, str) or not os.path.exists(program):
-        return {
-            "combined_score": -1e9, "err": 1e9, "mem_norm": 1.0, "mem_raw": MEM_CAP_MB,
-            "fid_mean": 1e9, "fid_min": 1e9, "time_ms_mean": TRIAL_TIMEOUT_S * 1000.0,
-            "norm_dev": 1.0, "trials": 0, "error": "program_path_invalid",
-        }
+        return {"combined_score": -1e9, "err": 1e9, "mem_norm": 1.0, "mem_raw": MEM_CAP_MB,
+                "fid_mean": 1e9, "fid_min": 1e9, "time_ms_mean": TRIAL_TIMEOUT_S * 1000.0,
+                "norm_dev": 1.0, "trials": 0, "error": "program_path_invalid"}
 
     seeds = list(seeds) if seeds else [1337 + i for i in range(trials)]
-    errors, times_ms, norms, mem_mb = [], [], [], []
-    db_path = Path("prof.sqlite")
+    errs, norms, mems_mb, times_ms = [], [], [], []
 
     for sd in seeds:
         ok, res = _run_single_trial(program, n, m, t, sd, TRIAL_TIMEOUT_S, profile_nsys=PROFILE_GPU)
         print(f"[Trial seed={sd}] ok={ok} res={res}")
+
         if not ok:
-            errors.append(1e3); times_ms.append(TRIAL_TIMEOUT_S * 1000.0)
-            norms.append(0.0); mem_mb.append(MEM_CAP_MB); continue
-        errors.append(_safe_float(res.get("error"), 1e3))
-        times_ms.append(_safe_float(res.get("time_ms"), TRIAL_TIMEOUT_S * 1000.0))
+            errs.append(1e3)
+            norms.append(0.0)
+            mems_mb.append(MEM_CAP_MB)
+            times_ms.append(TRIAL_TIMEOUT_S * 1000.0)
+            continue
+
+        # take the child’s metrics
+        errs.append(_safe_float(res.get("error"), 1e3))
         norms.append(_safe_float(res.get("norm"), 0.0))
-        mem_mb.append(_safe_float(res.get("mem_mb"), 0.0))
 
-    err_mean = float(np.mean(errors)) if errors else 1e3
-    err_min  = float(np.min(errors)) if errors else 1e3
-    t_mean   = float(np.mean(times_ms)) if times_ms else TRIAL_TIMEOUT_S * 1000.0
-    norm_dev = float(abs((np.mean(norms) if norms else 0.0) - 1.0))
-    mem_mb_mean = float(np.mean(mem_mb)) if mem_mb else 0.0
+        # prefer GPU mem/time if present; fallback to wallclock+estimated mem
+        mems_mb.append(
+            _safe_float(res.get("gpu_mem_mb"), _safe_float(res.get("mem_mb"), MEM_CAP_MB))
+        )
+        times_ms.append(
+            _safe_float(res.get("gpu_time_ms"), _safe_float(res.get("time_ms"), TRIAL_TIMEOUT_S * 1000.0))
+        )
 
-    # Nsight override if profiling and DB exists
-    if PROFILE_GPU and db_path.exists():
-        try:
-            total_time, time_rows, mem_bytes = compute_gpu_metrics(db_path)
-            t_mean = total_time * 1000.0
-            if isinstance(mem_bytes, dict): mem_bytes = sum(mem_bytes.values())
-            mem_mb_mean = float(mem_bytes) / (1024.0 * 1024.0)
-            print(f"[GPU] Nsight metrics: {total_time:.3f}s total, {mem_mb_mean:.2f} MB")
-        except Exception as e:
-            print(f"[WARN] GPU metrics unavailable: {e}")
+    err_mean  = float(np.mean(errs)) if errs else 1e3
+    err_min   = float(np.min(errs)) if errs else 1e3
+    norm_dev  = float(abs((np.mean(norms) if norms else 0.0) - 1.0))
+    mem_mean  = float(np.mean(mems_mb)) if mems_mb else MEM_CAP_MB
+    time_mean = float(np.mean(times_ms)) if times_ms else TRIAL_TIMEOUT_S * 1000.0
 
-    mem_norm = min(mem_mb_mean, MEM_CAP_MB) / MEM_CAP_MB
-    combined = (LAMBDA_W * (-err_mean) + (1.0 - LAMBDA_W) * (-mem_norm) - ALPHA_GPU * np.log1p(t_mean / 1000.0))
+    mem_norm = min(mem_mean, MEM_CAP_MB) / MEM_CAP_MB
+    combined = (LAMBDA_W * (-err_mean)
+               + (1.0 - LAMBDA_W) * (-mem_norm)
+               - ALPHA_GPU * np.log1p(time_mean / 1000.0))
 
-    out = {
+    return {
         "combined_score": float(combined),
         "err": float(err_mean),
         "mem_norm": float(mem_norm),
-        "mem_raw": float(mem_mb_mean),
+        "mem_raw": float(mem_mean),
         "fid_mean": float(err_mean),
         "fid_min": float(err_min),
-        "time_ms_mean": float(t_mean),
+        "time_ms_mean": float(time_mean),
         "norm_dev": float(norm_dev),
         "trials": int(len(seeds)),
     }
-    assert isinstance(out["combined_score"], float)
-    return out
 
 # ---------- CLI ----------
 if __name__ == "__main__":
@@ -303,9 +320,9 @@ if __name__ == "__main__":
     import argparse
     p = argparse.ArgumentParser(description="Evaluator (process-isolated)")
     p.add_argument("program", type=str, help="Path to candidate .py (must export run)")
-    p.add_argument("--n", type=int, default=100)
+    p.add_argument("--n", type=int, default=10)
     p.add_argument("--m", type=int, default=3)
     p.add_argument("--t", type=float, default=0.1)
-    p.add_argument("--trials", type=int, default=5)
+    p.add_argument("--trials", type=int, default=3)
     args = p.parse_args()
     print(json.dumps(evaluate(args.program, trials=args.trials, n=args.n, m=args.m, t=args.t), indent=2))

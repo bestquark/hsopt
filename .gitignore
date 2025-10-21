@@ -6,6 +6,7 @@ code_evolution/legate_*.prof
 code_evolution/openevolve_output*
 code_evolution/*.sqlite
 code_evolution/*.nsys-rep
+code_evolution/*.json
 cupynum_test.ipynb
 sims/
 
