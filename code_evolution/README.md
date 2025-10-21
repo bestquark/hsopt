@@ -2,8 +2,7 @@
 First, configure the number of GPUs to use with:
 ```bash
 module load cuda/12.2 # or your desired CUDA version
-source ./config_gpus.sh
-echo "$CUDA_VISIBLE_DEVICES" # Check the GPUs assigned
+source config_gpus.env.sh 
 ```
 ### Legion Profiling
 
@@ -18,7 +17,7 @@ This will generate a `legate_0.prof` file that you can analyze with `uv run legi
 However, to extract a simple number for our cost function, do the following:
 
 ```
-nsys profile -o prof --export=sqlite --trace=cuda,nvtx,osrt --sample=none uv run legate --profile initial_program.py
+nsys profile -o prof --export=sqlite --trace=cuda,nvtx,osrt --sample=none --cpuctxsw=none uv run legate --profile initial_program.py
 ``` 
 This will generate a `prof.sqlite` file that you can analyze with the command:
 ```
