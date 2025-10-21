@@ -22,6 +22,7 @@ dependencies = [
   "legate-profiler>=0.0.0",
   "zstandard>=0.25.0",
   "orjson>=3.11.3",
+  "duckdb>=1.4.1",
 ]
 
 

@@ -9,9 +9,9 @@ source config_gpus.env.sh
 
 To profile with `legion_prof` you need to install with the `config_profiler.sh` script. Then, run 
 ```
-uv run legate --profile initial_program.py
+uv run legate --profile --gpus 1 --fbmem 256 initial_program.py
 ```
-This will generate a `legate_0.prof` file that you can analyze with `uv run legion_prof view legate_*.prof `. 
+This will generate a `legate_0.prof` file that you can analyze with `uv run legion_prof duckdb legate_*.prof`. 
 
 ### Nsys Profiling
 
@@ -22,5 +22,5 @@ nsys profile -o prof --export=sqlite --trace=cuda,nvtx,osrt --sample=none --cpuc
 ``` 
 This will generate a `prof.sqlite` file that you can analyze with the command:
 ```
-uv run gpu_cost.py 
+uv run gpu_cost.py --db-path prof.sqlite
 ```
