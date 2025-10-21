@@ -5,7 +5,7 @@ from pathlib import Path
 import numpy as np, scipy
 import importlib.util, multiprocessing as mp
 from typing import Dict, Any
-from gpu_cost import compute_gpu_metrics
+from spacetime_gpu import spacetime_gpu_sqlite3
 import re
 
 # -------- Global knobs (override via env) ----------
@@ -239,7 +239,7 @@ def _run_single_trial_nsys(program_path: str, n: int, m: int, t: float, seed: in
     # Fold per-trial GPU metrics if present
     if db_path.exists():
         try:
-            total_time_s, _rows, mem_bytes = compute_gpu_metrics(db_path)
+            total_time_s, _rows, mem_bytes = spacetime_gpu_sqlite3(db_path)
             if isinstance(mem_bytes, dict): mem_bytes = sum(mem_bytes.values())
             payload["gpu_time_ms"] = float(total_time_s) * 1000.0
             payload["gpu_mem_mb"]  = float(mem_bytes) / (1024.0 * 1024.0)
