@@ -40,6 +40,8 @@ fi
 
 export CUDA_VISIBLE_DEVICES="$(IFS=,; echo "${good[*]}")"
 export OE_PROFILE_GPU=1
+export N_GPUS="${#good[@]}"
 echo "CUDA_VISIBLE_DEVICES=$CUDA_VISIBLE_DEVICES  (MIN_SM=$MIN_SM, MIN_MEM_GB=$MIN_MEM_GB, K=${K:-all})"
 echo "Selected GPUs: ${good[*]}"
 echo "OE_PROFILE_GPU=$OE_PROFILE_GPU"
+echo "N_GPUS=$N_GPUS"
