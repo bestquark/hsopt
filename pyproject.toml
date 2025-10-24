@@ -1,7 +1,7 @@
 [project]
 name = "eqmmm"
 version = "0.1.0"
-description = "Mixed-precision QM/MM"
+description = "Evolutionary quantum simulations"
 readme = "README.md"
 requires-python = ">=3.13"
 dependencies = [
@@ -17,15 +17,10 @@ dependencies = [
   "pyscf>=2.5.0",
   "rdkit>=2025.3.6",
   "scipy>=1.13",
-  "nvidia-cupynumeric>=25.8.0",
-  "legate>=25.8.0",
-  "legate-profiler>=0.0.0",
   "zstandard>=0.25.0",
   "orjson>=3.11.3",
   "duckdb>=1.4.1",
-  "cuquantum>=25.9.1",
 ]
-
 
 [dependency-groups]
 dev = [
@@ -37,9 +32,14 @@ dev = [
   "pre-commit>=4.3.0",
   "ruff>=0.13.3",
 ]
-# cuda = [
-#   "gpu4pyscf>=1.4.3; platform_system == 'Linux' and platform_machine == 'x86_64'",
-# ]
+gpu = [
+  "nvidia-cupynumeric>=25.8.0",
+  "legate>=25.8.0",
+  "legate-profiler>=0.0.0",
+  # pick one variant that matches your CUDA:
+  # or: "cuquantum-cu11>=25.9.1",
+  "cuquantum>=25.9.1",
+]
 
 [tool.uv]
 package = true
