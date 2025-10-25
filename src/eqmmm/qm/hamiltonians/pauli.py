@@ -1,39 +1,129 @@
+from __future__ import annotations
 import cupynumeric as np
-from typing import Any, Dict, Tuple, Sequence, Optional
-from eqmmm.qm.hamiltonians._hamiltonian import BaseHamiltonian
+import scipy.sparse as sp
+from typing import Any, Dict, Tuple, Sequence, Optional, List, Union
+from eqmmm.qm.hamiltonians._hamiltonian import Hamiltonian, HamiltonianEnsemble
+
 
 # ---------------------------------------------------------------------
-# Example 2: Random Pauli Hamiltonian family
-#   H = sum_i J_i P_i
-#   where P_i are tensor products of {I,X,Y,Z} on n_qubits
+# Single-qubit Pauli operators
 # ---------------------------------------------------------------------
 
-_PAULI_SINGLE = {
+_PAULI_SINGLE_DENSE = {
     "I": np.array([[1, 0], [0, 1]], dtype=complex),
     "X": np.array([[0, 1], [1, 0]], dtype=complex),
     "Y": np.array([[0, -1j], [1j, 0]], dtype=complex),
     "Z": np.array([[1, 0], [0, -1]], dtype=complex),
 }
 
+_PAULI_SINGLE_SPARSE = {k: sp.csr_matrix(v) for k, v in _PAULI_SINGLE_DENSE.items()}
 
-def kron_all(ops: Sequence[np.ndarray]) -> np.ndarray:
+
+def kron_all(
+    ops: Sequence[Union[np.ndarray, sp.spmatrix]], sparse: bool = False
+) -> Union[np.ndarray, sp.spmatrix]:
+    """Kronecker product over a list of operators."""
     out = ops[0]
-    for m in ops[1:]:
-        out = np.kron(out, m)
+    for op in ops[1:]:
+        out = sp.kron(out, op, format="csr") if sparse else np.kron(out, op)
     return out
 
 
-class RandomPauliHamiltonian(BaseHamiltonian):
+# ---------------------------------------------------------------------
+# Deterministic Pauli-sum Hamiltonian
+# ---------------------------------------------------------------------
+
+
+class PauliSumHamiltonian(Hamiltonian):
     """
-    A *distribution* over Pauli-sum Hamiltonians.
-    Example usage:
-        fam = RandomPauliHamiltonian(
-            n_qubits=4,
-            pauli_strings=["ZZII", "XXZZ", "ZIZI"],
-            coeff_dist=("normal", {"mean":0.0, "std":1.0})
-        )
-        H_sample = fam.sample()   # <- deterministic instance
-        H_mat = H_sample.to_matrix()
+    Deterministic H = Σ_j c_j P_j, where P_j are tensor products of {I, X, Y, Z}.
+    Optionally stored as sparse matrices for efficiency.
+
+    Args:
+        n_qubits: number of qubits
+        pauli_strings: e.g. ["ZZII", "XXZZ"]
+        coeffs: list/array of coefficients
+        sparse: if True, store and operate with scipy.sparse matrices
+    """
+
+    def __init__(
+        self,
+        n_qubits: int,
+        pauli_strings: Sequence[str],
+        coeffs: Sequence[float],
+        sparse: bool = False,
+    ):
+        self.n_qubits = int(n_qubits)
+        self.pauli_strings = list(pauli_strings)
+        self.coeffs = np.asarray(coeffs, dtype=float)
+        self.sparse = sparse
+
+        if len(self.pauli_strings) != len(self.coeffs):
+            raise ValueError("len(pauli_strings) must match len(coeffs)")
+        for s in self.pauli_strings:
+            if len(s) != self.n_qubits:
+                raise ValueError("each Pauli string must have length n_qubits")
+
+        self._dim = 2**self.n_qubits
+
+    @property
+    def hilbert_dim(self) -> int:
+        return self._dim
+
+    def _pauli_to_matrix(self, pstr: str):
+        tables = _PAULI_SINGLE_SPARSE if self.sparse else _PAULI_SINGLE_DENSE
+        return kron_all([tables[p] for p in pstr], sparse=self.sparse)
+
+    def to_matrix(self) -> Union[np.ndarray, sp.spmatrix]:
+        if self.sparse:
+            H = sp.csr_matrix((self._dim, self._dim), dtype=complex)
+            for c, pstr in zip(self.coeffs, self.pauli_strings):
+                H = H + c * self._pauli_to_matrix(pstr)
+        else:
+            H = np.zeros((self._dim, self._dim), dtype=complex)
+            for c, pstr in zip(self.coeffs, self.pauli_strings):
+                H += c * self._pauli_to_matrix(pstr)
+        return H
+
+    def terms(self) -> Sequence[Dict[str, Any]]:
+        out: List[Dict[str, Any]] = []
+        for c, pstr in zip(self.coeffs, self.pauli_strings):
+            P = self._pauli_to_matrix(pstr)
+            term = {
+                "coef": c,
+                "matrix": c * P,
+                "pauli": pstr,
+            }
+            out.append(term)
+        return out
+
+    def decompose(self) -> Dict[str, Any]:
+        return {
+            "type": "pauli_sum",
+            "n_qubits": self.n_qubits,
+            "n_terms": len(self.pauli_strings),
+            "sparse": self.sparse,
+            "terms": [
+                {"coeff": float(c), "pauli": p}
+                for c, p in zip(self.coeffs, self.pauli_strings)
+            ],
+        }
+
+
+# ---------------------------------------------------------------------
+# Stochastic family of Pauli Hamiltonians
+# ---------------------------------------------------------------------
+
+
+class RandomPauliHamiltonian(HamiltonianEnsemble):
+    """
+    Distribution over Pauli-sum Hamiltonians.
+
+    Args:
+        n_qubits: number of qubits
+        pauli_strings: list of Pauli terms, e.g. ["ZZII", "XXZZ"]
+        coeff_dist: ("normal", {"mean":0.0,"std":1.0}) or ("uniform", {...})
+        sparse: if True, samples produce sparse PauliSumHamiltonians
     """
 
     def __init__(
@@ -41,18 +131,16 @@ class RandomPauliHamiltonian(BaseHamiltonian):
         n_qubits: int,
         pauli_strings: Sequence[str],
         coeff_dist: Tuple[str, Dict[str, float]],
+        sparse: bool = False,
     ):
-        self.n_qubits = n_qubits
+        self.n_qubits = int(n_qubits)
         self.pauli_strings = list(pauli_strings)
-        self.coeff_dist = coeff_dist  # e.g. ("normal", {"mean":0.0,"std":1.0})
+        self.coeff_dist = coeff_dist
+        self.sparse = sparse
 
     @property
     def hilbert_dim(self) -> int:
         return 2**self.n_qubits
-
-    @property
-    def is_stochastic(self) -> bool:
-        return True
 
     def _draw_coeffs(self, rng: np.random.Generator) -> np.ndarray:
         dist_name, params = self.coeff_dist
@@ -65,92 +153,26 @@ class RandomPauliHamiltonian(BaseHamiltonian):
             hi = params.get("high", 1.0)
             return rng.uniform(low=lo, high=hi, size=len(self.pauli_strings))
         else:
-            raise ValueError(f"Unknown dist {dist_name}")
+            raise ValueError(f"Unknown coeff_dist {dist_name}")
 
     def sample(
-        self, rng: Optional[np.random.Generator] = None
-    ) -> "PauliSumHamiltonian":
-        if rng is None:
-            rng = np.random.default_rng()
-        coeffs = self._draw_coeffs(rng)
-        return PauliSumHamiltonian(self.n_qubits, self.pauli_strings, coeffs)
-
-    def to_matrix(self) -> np.ndarray:
-        """
-        NOTE: this returns the *expected* Hamiltonian if that makes sense.
-        Here: expectation of coeffs. For normal/uniform given above, that's the mean.
-        """
-        dist_name, params = self.coeff_dist
-        if dist_name == "normal":
-            mean = params.get("mean", 0.0)
-        elif dist_name == "uniform":
-            mean = 0.5 * (params.get("low", -1.0) + params.get("high", 1.0))
-        else:
-            raise ValueError(f"Unknown dist {dist_name}")
-
-        coeffs_mean = np.full(len(self.pauli_strings), mean, dtype=float)
-        det = PauliSumHamiltonian(self.n_qubits, self.pauli_strings, coeffs_mean)
-        return det.to_matrix()
-
-    def decompose(self) -> Dict[str, Any]:
-        return {
-            "type": "pauli_family",
-            "n_qubits": self.n_qubits,
-            "pauli_strings": list(self.pauli_strings),
-            "coeff_dist": self.coeff_dist,
-        }
-
-
-class PauliSumHamiltonian(BaseHamiltonian):
-    """
-    Deterministic Σ_j c_j P_j.
-    Created by RandomPauliHamiltonian.sample() or by hand.
-    """
-
-    def __init__(
         self,
-        n_qubits: int,
-        pauli_strings: Sequence[str],
-        coeffs: Sequence[float],
-    ):
-        pauli_strings = list(pauli_strings)
-        coeffs = np.array(coeffs, dtype=float)
-
-        if len(pauli_strings) != len(coeffs):
-            raise ValueError("len(pauli_strings) must match len(coeffs)")
-        for s in pauli_strings:
-            if len(s) != n_qubits:
-                raise ValueError("each pauli string must have length n_qubits")
-
-        self.n_qubits = n_qubits
-        self.pauli_strings = pauli_strings
-        self.coeffs = coeffs
-
-    @property
-    def hilbert_dim(self) -> int:
-        return 2**self.n_qubits
-
-    @property
-    def is_stochastic(self) -> bool:
-        return False
-
-    def _pauli_str_to_matrix(self, pstr: str) -> np.ndarray:
-        ops = [_PAULI_SINGLE[p] for p in pstr]
-        return kron_all(ops)
-
-    def to_matrix(self) -> np.ndarray:
-        dim = self.hilbert_dim
-        H = np.zeros((dim, dim), dtype=complex)
-        for c, pstr in zip(self.coeffs, self.pauli_strings):
-            H += c * self._pauli_str_to_matrix(pstr)
-        return H
+        rng: Optional[np.random.Generator] = None,
+    ) -> PauliSumHamiltonian:
+        rng = rng or np.random.default_rng()
+        coeffs = self._draw_coeffs(rng)
+        return PauliSumHamiltonian(
+            n_qubits=self.n_qubits,
+            pauli_strings=self.pauli_strings,
+            coeffs=coeffs,
+            sparse=self.sparse,
+        )
 
     def decompose(self) -> Dict[str, Any]:
-        terms = []
-        for c, p in zip(self.coeffs, self.pauli_strings):
-            terms.append({"coeff": float(c), "pauli": p})
         return {
-            "type": "pauli_sum",
+            "type": "random_pauli_family",
             "n_qubits": self.n_qubits,
-            "terms": terms,
+            "pauli_strings": self.pauli_strings,
+            "coeff_dist": self.coeff_dist,
+            "sparse": self.sparse,
         }

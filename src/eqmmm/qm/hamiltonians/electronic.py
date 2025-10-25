@@ -1,7 +1,9 @@
 from __future__ import annotations
 from typing import Any, Dict, Sequence, Union, Optional, Callable, Tuple, List
 import cupynumeric as np
-from eqmmm.qm.hamiltonians._hamiltonian import BaseHamiltonian
+import scipy.sparse as sp
+from eqmmm.qm.hamiltonians._hamiltonian import Hamiltonian
+from eqmmm.qm.hamiltonians.pauli import PauliSumHamiltonian
 
 from openfermion import (
     QubitOperator,
@@ -303,26 +305,26 @@ def _fermion_operator_from_integrals(
 def _qubit_op_to_matrix_and_terms(
     qubit_op: "QubitOperator",
     n_qubits: int,
-) -> Tuple[np.ndarray, List[Dict[str, Any]]]:
+    sparse: bool = False,
+) -> Tuple[Union[np.ndarray, "sp.spmatrix"], List[Dict[str, Any]]]:
     """
     Convert an OpenFermion QubitOperator to:
-      - dense matrix (2^n x 2^n)
+      - matrix (sparse or dense depending on `sparse`)
       - list of {"coeff": ..., "pauli": "X0 Z1 ..."}
     """
 
-    # dense matrix
-    sparse = get_sparse_operator(qubit_op, n_qubits=n_qubits)
-    mat = sparse.toarray()
+    # build sparse matrix from OpenFermion
+    sp_op = get_sparse_operator(qubit_op, n_qubits=n_qubits)
+
+    # convert to dense if requested
+    mat = sp_op if sparse else sp_op.toarray()
 
     # term list
     terms: List[Dict[str, Any]] = []
     for pauli_term, coeff in qubit_op.terms.items():
-        # pauli_term is tuple like ((qubit_idx, 'X'), (qubit_idx,'Z'), ...)
         if len(pauli_term) == 0:
             pstr = "I"
         else:
-            # we'll write something readable like "X0 Z2 Y5"
-            # (order them by qubit index for stability)
             sorted_ops = sorted(pauli_term, key=lambda t: t[0])
             pstr = " ".join(f"{op}{idx}" for idx, op in sorted_ops)
         terms.append({"coeff": complex(coeff), "pauli": pstr})
@@ -330,10 +332,88 @@ def _qubit_op_to_matrix_and_terms(
     return mat, terms
 
 
+def _apply_a(bitstring: int, p: int):
+    # annihilate mode p in Jordan-Wigner ordering
+    if ((bitstring >> p) & 1) == 0:
+        return None, 0.0
+    # fermionic sign = (-1)^(# of occupied modes < p)
+    mask = (1 << p) - 1
+    sign = (-1) ** (bin(bitstring & mask).count("1"))
+    new_bs = bitstring ^ (1 << p)
+    return new_bs, sign
+
+
+def _apply_adag(bitstring: int, p: int):
+    # create mode p
+    if ((bitstring >> p) & 1) == 1:
+        return None, 0.0
+    mask = (1 << p) - 1
+    sign = (-1) ** (bin(bitstring & mask).count("1"))
+    new_bs = bitstring ^ (1 << p)
+    return new_bs, sign
+
+
+def _one_body_term_matrix(M: int, p: int, q: int, coeff: complex) -> np.ndarray:
+    """
+    Build matrix for coeff * a_p^† a_q in 2^M occupation basis.
+    """
+    dim = 1 << M
+    block = np.zeros((dim, dim), dtype=complex)
+    for bs in range(dim):
+        bs1, ph1 = _apply_a(bs, q)
+        if bs1 is None:
+            continue
+        bs2, ph2 = _apply_adag(bs1, p)
+        if bs2 is None:
+            continue
+        block[bs2, bs] += coeff * ph1 * ph2
+    return block
+
+
+def _two_body_term_matrix(
+    M: int, p: int, q: int, r: int, s: int, coeff: complex
+) -> np.ndarray:
+    """
+    Build matrix for coeff * a_p^† a_q^† a_r a_s in 2^M occupation basis.
+    """
+    dim = 1 << M
+    block = np.zeros((dim, dim), dtype=complex)
+    for bs in range(dim):
+        bs1, ph1 = _apply_a(bs, s)
+        if bs1 is None:
+            continue
+        bs2, ph2 = _apply_a(bs1, r)
+        if bs2 is None:
+            continue
+        bs3, ph3 = _apply_adag(bs2, q)
+        if bs3 is None:
+            continue
+        bs4, ph4 = _apply_adag(bs3, p)
+        if bs4 is None:
+            continue
+        block[bs4, bs] += coeff * ph1 * ph2 * ph3 * ph4
+    return block
+
+
+def _pauli_string_to_matrix(pauli_ops, n_qubits: int) -> np.ndarray:
+    """
+    pauli_ops: tuple like ((i,'X'), (j,'Z'), ...)
+    returns dense (2^n,2^n) matrix for that Pauli string.
+    We'll build via OpenFermion one-term QubitOperator -> sparse -> dense.
+    """
+    # build one-term QubitOperator
+    term = ()
+    if len(pauli_ops) > 0:
+        term = tuple((idx, op) for (idx, op) in pauli_ops)
+    single = QubitOperator(term, 1.0)
+    sparse_single = get_sparse_operator(single, n_qubits=n_qubits)
+    return sparse_single.toarray()
+
+
 # ----------------------- main classes ----------------------- #
 
 
-class ElectronicHamiltonian(BaseHamiltonian):
+class ElectronicHamiltonian(Hamiltonian):
     """
     Second-quantized electronic Hamiltonian in spin-orbital basis.
     """
@@ -468,19 +548,19 @@ class ElectronicHamiltonian(BaseHamiltonian):
     def to_qubits(
         self,
         mapping: Optional[str] = None,
+        sparse: bool = False,
     ) -> "QElectronicHamiltonian":
         """
         Map this fermionic Hamiltonian to a qubit Hamiltonian using the
         chosen mapping ("jordan-wigner", "bravyi-kitaev", "parity", ...),
-        return a QElectronicHamiltonian that lives in qubit/Pauli space.
+        returning a QElectronicHamiltonian in Pauli-sum form.
         """
-
         use_mapping = mapping or self.mapping
 
-        # 1. build FermionOperator
+        # 1. Build FermionOperator
         H_f = _fermion_operator_from_integrals(self.h1, self.h2, self.constant)
 
-        # 2. map to qubits
+        # 2. Map to QubitOperator
         if use_mapping == "jordan-wigner":
             H_q = jordan_wigner(H_f)
         elif use_mapping == "bravyi-kitaev":
@@ -490,17 +570,85 @@ class ElectronicHamiltonian(BaseHamiltonian):
         else:
             raise ValueError(f"Unknown mapping {use_mapping}")
 
-        n_qubits = self.M  # spin-orbital count → qubit count
+        n_qubits = self.M
 
-        # 3. turn QubitOperator → dense matrix + term list
-        mat, terms = _qubit_op_to_matrix_and_terms(H_q, n_qubits)
+        # 3. Extract Pauli-sum terms (now supports sparse)
+        _, terms = _qubit_op_to_matrix_and_terms(H_q, n_qubits, sparse=sparse)
 
+        # 4. Construct QElectronicHamiltonian (sparse/dense internally handled)
         return QElectronicHamiltonian(
             qubit_terms=terms,
-            qubit_matrix=mat,
             n_qubits=n_qubits,
             mapping=use_mapping,
+            sparse=sparse,
+            origin={"source": "ElectronicHamiltonian"},
         )
+
+    def terms(self) -> List[Dict[str, Any]]:
+        """
+        Return list of additive pieces whose sum = full H matrix.
+
+        Each element:
+            {
+                "coef": <complex>,
+                "matrix": <(2^M x 2^M) np.ndarray>,
+                "kind": "1-body" | "2-body" | "constant",
+                "indices": (p,q,...)  # bookkeeping
+            }
+
+        This is exponential in M, just like to_matrix().
+        """
+        M = self.M
+        dim = 1 << M
+        out: List[Dict[str, Any]] = []
+
+        # 1-body terms: h1[p,q] a_p^† a_q
+        for p in range(M):
+            for q in range(M):
+                c = self.h1[p, q]
+                if abs(c) < 1e-12:
+                    continue
+                block = _one_body_term_matrix(M, p, q, c)
+                out.append(
+                    {
+                        "coef": c,
+                        "matrix": block,
+                        "kind": "1-body",
+                        "indices": (p, q),
+                    }
+                )
+
+        # 2-body terms: (1/2) h2[p,q,r,s] a_p^† a_q^† a_r a_s
+        for p in range(M):
+            for q in range(M):
+                for r in range(M):
+                    for s in range(M):
+                        c = 0.5 * self.h2[p, q, r, s]
+                        if abs(c) < 1e-12:
+                            continue
+                        block = _two_body_term_matrix(M, p, q, r, s, c)
+                        out.append(
+                            {
+                                "coef": c,
+                                "matrix": block,
+                                "kind": "2-body",
+                                "indices": (p, q, r, s),
+                            }
+                        )
+
+        # constant shift: constant * I
+        if abs(self.constant) > 1e-12:
+            block = np.eye(dim, dtype=complex) * self.constant
+            out.append(
+                {
+                    "coef": self.constant,
+                    "matrix": block,
+                    "kind": "constant",
+                    "indices": (),
+                }
+            )
+
+        return out
 
     @classmethod
     def from_xyz(
@@ -525,58 +673,48 @@ class ElectronicHamiltonian(BaseHamiltonian):
         return cls(h1=h1, h2=h2, constant=constant, mapping=mapping)
 
 
-class QElectronicHamiltonian(BaseHamiltonian):
+class QElectronicHamiltonian(PauliSumHamiltonian):
     """
-    Deterministic qubit-space Hamiltonian:
-        H = sum_j α_j P_j
-    where P_j are n-qubit Pauli strings.
+    Qubit-space electronic Hamiltonian:
+        H = Σ_j α_j P_j
+    where each P_j is a tensor product of {I,X,Y,Z}.
 
-    We store both:
-      - `qubit_terms`: [{"coeff": complex, "pauli": "X0 Z1 ..."}, ...]
-      - `qubit_matrix`: dense (2^n, 2^n) ndarray
+    Inherits from PauliSumHamiltonian for full dense/sparse support.
+
+    Extra metadata:
+        - mapping: str ("jordan-wigner", "bravyi-kitaev", etc.)
+        - origin: optional dict for provenance (e.g. molecule info)
     """
 
     def __init__(
         self,
         qubit_terms: Sequence[Dict[str, Any]],
-        qubit_matrix: np.ndarray,
         n_qubits: int,
         mapping: str,
+        sparse: bool = False,
+        origin: Dict[str, Any] | None = None,
     ):
-        self.qubit_terms = list(qubit_terms)
-        self._H = np.array(qubit_matrix, dtype=complex)
-        self.n_qubits = int(n_qubits)
+        # Extract coeffs and Pauli strings
+        coeffs = [complex(t["coeff"]) for t in qubit_terms]
+        pauli_strings = [t["pauli"].replace(" ", "") for t in qubit_terms]
+
+        # Initialize as PauliSumHamiltonian
+        super().__init__(
+            n_qubits=n_qubits,
+            pauli_strings=pauli_strings,
+            coeffs=coeffs,
+            sparse=sparse,
+        )
+
         self.mapping = mapping
-
-        dim = 1 << self.n_qubits
-        if self._H.shape != (dim, dim):
-            raise ValueError("qubit_matrix has wrong shape for n_qubits")
-
-        # optional Hermiticity check
-        if not np.allclose(self._H, self._H.conj().T):
-            raise ValueError("qubit_matrix must be Hermitian")
-
-    @property
-    def hilbert_dim(self) -> int:
-        return 2**self.n_qubits
-
-    @property
-    def is_stochastic(self) -> bool:
-        return False
-
-    def to_matrix(self) -> np.ndarray:
-        """
-        Dense n-qubit matrix representation (computational basis).
-        """
-        return self._H
+        self.origin = origin or {}
 
     def decompose(self) -> Dict[str, Any]:
-        return {
-            "type": "qubit_pauli_sum",
-            "mapping": self.mapping,
-            "n_qubits": self.n_qubits,
-            "terms": self.qubit_terms,
-        }
+        base = super().decompose()
+        base["type"] = "qubit_pauli_sum"
+        base["mapping"] = self.mapping
+        base["origin"] = self.origin
+        return base
 
 
 class QMMMHamiltonian(ElectronicHamiltonian):
@@ -661,3 +799,10 @@ class QMMMHamiltonian(ElectronicHamiltonian):
             mapping=mapping,
             mm_env=mm_env,
         )
+
+    def terms(self) -> List[Dict[str, Any]]:
+        base_terms = super().terms()
+        # attach mm_env metadata for traceability
+        for t in base_terms:
+            t["mm_env"] = self.mm_env
+        return base_terms
