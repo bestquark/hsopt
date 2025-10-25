@@ -1,10 +1,10 @@
+"""Electronic-structure Hamiltonians and mappings to Pauli representations."""
+
 from __future__ import annotations
 from typing import Any, Dict, Sequence, Union, Optional, Callable, Tuple, List
+
 import cupynumeric as np
 import scipy.sparse as sp
-from eqmmm.qm.hamiltonians._hamiltonian import Hamiltonian
-from eqmmm.qm.hamiltonians.pauli import PauliSumHamiltonian
-
 from openfermion import (
     QubitOperator,
     FermionOperator,
@@ -14,8 +14,23 @@ from openfermion import (
     get_sparse_operator,
 )
 
+from eqmmm.qm.hamiltonians._hamiltonian import Hamiltonian
+from eqmmm.qm.hamiltonians.pauli import PauliSumHamiltonian
+
 
 def _parse_xyz(xyz_source: Union[str, Sequence[str]]) -> str:
+    """Normalize XYZ input into a geometry string understood by PySCF.
+
+    Args:
+        xyz_source (Union[str, Sequence[str]]): Either a path to an XYZ file, a
+            multiline XYZ string, or an iterable of XYZ lines.
+
+    Returns:
+        str: Semicolon-separated ``"Atom x y z"`` specification.
+
+    Raises:
+        ValueError: If the XYZ content is malformed or inconsistent.
+    """
     if isinstance(xyz_source, str):
         if "\n" in xyz_source or "\r" in xyz_source:
             lines = xyz_source.strip().splitlines()
@@ -62,6 +77,25 @@ def _scf_with_optional_external(
     ] = None,
     use_gpu4pyscf: bool = False,
 ):
+    """Run a mean-field calculation with optional external potential.
+
+    Args:
+        geom_str (str): Semi-colon-separated geometry specification.
+        basis (str): Basis set keyword understood by PySCF.
+        charge (int): Total molecular charge.
+        spin_mult (int): Spin multiplicity ``2S + 1``.
+        external_potential (Callable | Sequence | np.ndarray | None): Either a
+            callable potential ``V(r)`` evaluated on grid points or an ``(N,4)``
+            array of point charges ``[x, y, z, q]``.
+        use_gpu4pyscf (bool): If ``True`` prefer ``gpu4pyscf`` SCF kernels.
+
+    Returns:
+        Tuple[Any, Any]: ``(mf, mol)`` objects from PySCF/gpu4pyscf.
+
+    Raises:
+        ValueError: If the external potential specification is invalid.
+        RuntimeError: If the SCF procedure fails to converge.
+    """
     # gpu4pyscf path first
     if use_gpu4pyscf:
         try:
@@ -146,11 +180,16 @@ def _scf_with_optional_external(
 
 
 def _integrals_from_mf(mf, mol):
-    """
-    Return spin-orbital one- and two-electron integrals and constant.
-    h1: (n_spin_orb, n_spin_orb)
-    h2: (n_spin_orb, n_spin_orb, n_spin_orb, n_spin_orb)
-    constant: float
+    """Extract spin-orbital integrals from a converged mean-field object.
+
+    Args:
+        mf: PySCF mean-field object with converged orbitals.
+        mol: PySCF molecule corresponding to ``mf``.
+
+    Returns:
+        Tuple[np.ndarray, np.ndarray, float]: One-body integrals ``h1``
+        (``n_spin_orb, n_spin_orb``), antisymmetrized two-body integrals ``h2``
+        (``n_spin_orb``^4), and the nuclear repulsion constant.
     """
     from pyscf import ao2mo
 
@@ -268,11 +307,17 @@ def _fermion_operator_from_integrals(
     h2: np.ndarray,
     constant: float,
 ) -> "FermionOperator":
-    """
-    Build an OpenFermion FermionOperator from spin-orbital integrals h1,h2.
-    h1[p,q] a_p^† a_q
-    (1/2) h2[p,q,r,s] a_p^† a_q^† a_r a_s
-    + constant
+    """Build an OpenFermion :class:`FermionOperator` from spin-orbital data.
+
+    Args:
+        h1 (np.ndarray): One-body integrals ``h1[p, q]``.
+        h2 (np.ndarray): Two-body integrals ``h2[p, q, r, s]`` before the
+            ``1/2`` prefactor.
+        constant (float): Scalar energy offset.
+
+    Returns:
+        FermionOperator: Second-quantized Hamiltonian suitable for mapping to
+        qubits.
     """
     from openfermion import FermionOperator
 
@@ -307,10 +352,17 @@ def _qubit_op_to_matrix_and_terms(
     n_qubits: int,
     sparse: bool = False,
 ) -> Tuple[Union[np.ndarray, "sp.spmatrix"], List[Dict[str, Any]]]:
-    """
-    Convert an OpenFermion QubitOperator to:
-      - matrix (sparse or dense depending on `sparse`)
-      - list of {"coeff": ..., "pauli": "X0 Z1 ..."}
+    """Convert an OpenFermion operator into matrix and Pauli metadata.
+
+    Args:
+        qubit_op (QubitOperator): Operator expressed as a Pauli sum.
+        n_qubits (int): Number of qubits needed for the operator.
+        sparse (bool): If ``True`` keep the matrix sparse.
+
+    Returns:
+        Tuple[Union[np.ndarray, sp.spmatrix], List[Dict[str, Any]]]: Sparse or
+        dense matrix plus a list of ``{"coeff", "pauli"}`` dictionaries with
+        human-readable strings like ``"X0 Z1"``.
     """
 
     # build sparse matrix from OpenFermion
@@ -333,7 +385,16 @@ def _qubit_op_to_matrix_and_terms(
 
 
 def _apply_a(bitstring: int, p: int):
-    # annihilate mode p in Jordan-Wigner ordering
+    """Apply the annihilation operator ``a_p`` to a bitstring Fock state.
+
+    Args:
+        bitstring (int): Integer encoding the occupation pattern.
+        p (int): Orbital index.
+
+    Returns:
+        Tuple[Optional[int], float]: New bitstring (or ``None`` if the term
+        annihilates the state) and the parity phase.
+    """
     if ((bitstring >> p) & 1) == 0:
         return None, 0.0
     # fermionic sign = (-1)^(# of occupied modes < p)
@@ -344,7 +405,16 @@ def _apply_a(bitstring: int, p: int):
 
 
 def _apply_adag(bitstring: int, p: int):
-    # create mode p
+    """Apply the creation operator ``a_p^†`` to a bitstring Fock state.
+
+    Args:
+        bitstring (int): Integer encoding the occupation pattern.
+        p (int): Orbital index.
+
+    Returns:
+        Tuple[Optional[int], float]: New bitstring (or ``None`` if creation is
+        blocked) and the parity phase.
+    """
     if ((bitstring >> p) & 1) == 1:
         return None, 0.0
     mask = (1 << p) - 1
@@ -354,8 +424,16 @@ def _apply_adag(bitstring: int, p: int):
 
 
 def _one_body_term_matrix(M: int, p: int, q: int, coeff: complex) -> np.ndarray:
-    """
-    Build matrix for coeff * a_p^† a_q in 2^M occupation basis.
+    """Construct the matrix for ``coeff * a_p^† a_q`` in the Fock basis.
+
+    Args:
+        M (int): Number of spin orbitals.
+        p (int): Creation index.
+        q (int): Annihilation index.
+        coeff (complex): Term coefficient.
+
+    Returns:
+        np.ndarray: Dense ``(2**M, 2**M)`` matrix block.
     """
     dim = 1 << M
     block = np.zeros((dim, dim), dtype=complex)
@@ -373,8 +451,18 @@ def _one_body_term_matrix(M: int, p: int, q: int, coeff: complex) -> np.ndarray:
 def _two_body_term_matrix(
     M: int, p: int, q: int, r: int, s: int, coeff: complex
 ) -> np.ndarray:
-    """
-    Build matrix for coeff * a_p^† a_q^† a_r a_s in 2^M occupation basis.
+    """Construct the matrix for ``coeff * a_p^† a_q^† a_r a_s``.
+
+    Args:
+        M (int): Number of spin orbitals.
+        p (int): First creation index.
+        q (int): Second creation index.
+        r (int): First annihilation index.
+        s (int): Second annihilation index.
+        coeff (complex): Term coefficient.
+
+    Returns:
+        np.ndarray: Dense ``(2**M, 2**M)`` representation.
     """
     dim = 1 << M
     block = np.zeros((dim, dim), dtype=complex)
@@ -396,10 +484,14 @@ def _two_body_term_matrix(
 
 
 def _pauli_string_to_matrix(pauli_ops, n_qubits: int) -> np.ndarray:
-    """
-    pauli_ops: tuple like ((i,'X'), (j,'Z'), ...)
-    returns dense (2^n,2^n) matrix for that Pauli string.
-    We'll build via OpenFermion one-term QubitOperator -> sparse -> dense.
+    """Build the matrix for a single Pauli string.
+
+    Args:
+        pauli_ops (Sequence[Tuple[int, str]]): Items like ``(index, "X")``.
+        n_qubits (int): Register size.
+
+    Returns:
+        np.ndarray: Dense ``(2**n_qubits, 2**n_qubits)`` matrix.
     """
     # build one-term QubitOperator
     term = ()
@@ -414,8 +506,20 @@ def _pauli_string_to_matrix(pauli_ops, n_qubits: int) -> np.ndarray:
 
 
 class ElectronicHamiltonian(Hamiltonian):
-    """
-    Second-quantized electronic Hamiltonian in spin-orbital basis.
+    """Second-quantized electronic Hamiltonian in a spin-orbital basis.
+
+    Args:
+        h1 (np.ndarray): One-body integrals ``(M, M)``.
+        h2 (np.ndarray): Two-body integrals ``(M, M, M, M)``.
+        constant (float): Scalar nuclear-repulsion/shift term.
+        mapping (str): Preferred fermion-to-qubit mapping label.
+
+    Attributes:
+        h1 (np.ndarray): Stored copy of the one-body integrals.
+        h2 (np.ndarray): Stored copy of the two-body integrals.
+        constant (float): Energy shift added to the Hamiltonian.
+        mapping (str): Default mapping name used by :meth:`to_qubits`.
+        M (int): Number of spin orbitals.
     """
 
     def __init__(
@@ -440,16 +544,19 @@ class ElectronicHamiltonian(Hamiltonian):
 
     @property
     def hilbert_dim(self) -> int:
+        """int: Dimension of the fermionic Fock space (``2**M``)."""
         return self._hilbert_dim
 
     @property
     def is_stochastic(self) -> bool:
+        """bool: ElectronicHamiltonian instances are deterministic."""
         return False
 
     def to_matrix(self) -> np.ndarray:
-        """
-        Return the full fermionic Hamiltonian matrix in the occupation-number
-        basis of spin orbitals (dimension 2^M). This is basically FCI H.
+        """Return the fermionic Hamiltonian matrix in Fock-space ordering.
+
+        Returns:
+            np.ndarray: Dense ``(2**M, 2**M)`` many-body matrix.
         """
         # brute-force build second-quantized matrix
         M = self.M
@@ -536,6 +643,12 @@ class ElectronicHamiltonian(Hamiltonian):
         return Hmat
 
     def decompose(self) -> Dict[str, Any]:
+        """Provide lightweight metadata describing the Hamiltonian.
+
+        Returns:
+            Dict[str, Any]: JSON-serializable data with tensor shapes and
+            mapping metadata.
+        """
         return {
             "type": "second_quantized",
             "one_body": self.h1,
@@ -550,10 +663,18 @@ class ElectronicHamiltonian(Hamiltonian):
         mapping: Optional[str] = None,
         sparse: bool = False,
     ) -> "QElectronicHamiltonian":
-        """
-        Map this fermionic Hamiltonian to a qubit Hamiltonian using the
-        chosen mapping ("jordan-wigner", "bravyi-kitaev", "parity", ...),
-        returning a QElectronicHamiltonian in Pauli-sum form.
+        """Map the fermionic Hamiltonian to qubits via the chosen mapping.
+
+        Args:
+            mapping (str | None): Mapping name. Defaults to ``self.mapping``.
+            sparse (bool): If ``True`` build a sparse Pauli representation.
+
+        Returns:
+            QElectronicHamiltonian: Pauli-sum Hamiltonian with metadata about
+            the mapping origin.
+
+        Raises:
+            ValueError: If the mapping keyword is unknown.
         """
         use_mapping = mapping or self.mapping
 
@@ -585,18 +706,15 @@ class ElectronicHamiltonian(Hamiltonian):
         )
 
     def terms(self) -> List[Dict[str, Any]]:
-        """
-        Return list of additive pieces whose sum = full H matrix.
+        """Return the additive decomposition of the fermionic Hamiltonian.
 
-        Each element:
-            {
-                "coef": <complex>,
-                "matrix": <(2^M x 2^M) np.ndarray>,
-                "kind": "1-body" | "2-body" | "constant",
-                "indices": (p,q,...)  # bookkeeping
-            }
+        Returns:
+            List[Dict[str, Any]]: Entries containing ``coef``, a dense matrix,
+            the ``kind`` of contribution, and the tensor indices involved.
 
-        This is exponential in M, just like to_matrix().
+        Notes:
+            The routine scales exponentially with the number of orbitals,
+            matching :meth:`to_matrix`.
         """
         M = self.M
         dim = 1 << M
@@ -660,6 +778,20 @@ class ElectronicHamiltonian(Hamiltonian):
         mapping: str = "jordan-wigner",
         use_gpu4pyscf: bool = False,
     ) -> "ElectronicHamiltonian":
+        """Construct an electronic Hamiltonian directly from XYZ input.
+
+        Args:
+            xyz_source (Union[str, Sequence[str]]): XYZ file path, multiline
+                string, or sequence of lines.
+            basis (str): Basis set keyword for PySCF.
+            charge (int): Molecular charge.
+            spin_mult (int): Spin multiplicity ``2S + 1``.
+            mapping (str): Default mapping tag stored on the object.
+            use_gpu4pyscf (bool): If ``True`` attempt to use ``gpu4pyscf``.
+
+        Returns:
+            ElectronicHamiltonian: Hamiltonian built from SCF integrals.
+        """
         geom_str = _parse_xyz(xyz_source)
         mf, mol = _scf_with_optional_external(
             geom_str=geom_str,
@@ -674,16 +806,15 @@ class ElectronicHamiltonian(Hamiltonian):
 
 
 class QElectronicHamiltonian(PauliSumHamiltonian):
-    """
-    Qubit-space electronic Hamiltonian:
-        H = Σ_j α_j P_j
-    where each P_j is a tensor product of {I,X,Y,Z}.
+    """Electronic Hamiltonian expressed as a Pauli sum.
 
-    Inherits from PauliSumHamiltonian for full dense/sparse support.
-
-    Extra metadata:
-        - mapping: str ("jordan-wigner", "bravyi-kitaev", etc.)
-        - origin: optional dict for provenance (e.g. molecule info)
+    Args:
+        qubit_terms (Sequence[Dict[str, Any]]): Terms with ``coeff`` and
+            ``pauli`` keys as produced by :func:`_qubit_op_to_matrix_and_terms`.
+        n_qubits (int): Number of qubits.
+        mapping (str): Label of the fermion-to-qubit mapping used.
+        sparse (bool): If ``True`` store data in sparse format.
+        origin (Dict[str, Any] | None): Optional provenance metadata.
     """
 
     def __init__(
@@ -710,6 +841,12 @@ class QElectronicHamiltonian(PauliSumHamiltonian):
         self.origin = origin or {}
 
     def decompose(self) -> Dict[str, Any]:
+        """Return Pauli metadata augmented with mapping information.
+
+        Returns:
+            Dict[str, Any]: Output of :meth:`PauliSumHamiltonian.decompose`
+            extended with ``type``, ``mapping``, and ``origin`` fields.
+        """
         base = super().decompose()
         base["type"] = "qubit_pauli_sum"
         base["mapping"] = self.mapping
@@ -718,17 +855,14 @@ class QElectronicHamiltonian(PauliSumHamiltonian):
 
 
 class QMMMHamiltonian(ElectronicHamiltonian):
-    """
-    QM/MM embedded electronic Hamiltonian.
+    """Electronic Hamiltonian embedded in a classical environment.
 
-    - Same data model as ElectronicHamiltonian (h1, h2, constant, mapping)
-    - Plus mm_env metadata describing the classical environment
-
-    Notes:
-    - to_matrix() works the same: builds the FCI-like fermionic Hamiltonian
-      for the *embedded* system (i.e. with MM effects already included
-      in the mean-field that produced h1/h2).
-    - to_qubits() also works the same and returns a QElectronicHamiltonian.
+    Args:
+        h1 (np.ndarray): One-body integrals for the embedded system.
+        h2 (np.ndarray): Two-body integrals for the embedded system.
+        constant (float): Energy offset.
+        mapping (str): Default fermion-to-qubit mapping tag.
+        mm_env (Dict[str, Any]): Metadata describing the MM environment.
     """
 
     def __init__(
@@ -743,6 +877,11 @@ class QMMMHamiltonian(ElectronicHamiltonian):
         self.mm_env = mm_env  # e.g. {"type": "point_charges", "charges": ...}
 
     def decompose(self) -> Dict[str, Any]:
+        """Extend :meth:`ElectronicHamiltonian.decompose` with MM metadata.
+
+        Returns:
+            Dict[str, Any]: Metadata including ``mm_env``.
+        """
         base = super().decompose()
         base["mm_env"] = self.mm_env
         base["type"] = "qmmm_second_quantized"
@@ -763,12 +902,21 @@ class QMMMHamiltonian(ElectronicHamiltonian):
         mapping: str = "jordan-wigner",
         use_gpu4pyscf: bool = False,
     ) -> "QMMMHamiltonian":
-        """
-        Build QM/MM Hamiltonian from xyz_source plus an MM environment.
+        """Construct a QM/MM Hamiltonian directly from XYZ data.
 
-        mm_external:
-            - callable(coords) -> V_ext(coords)   (continuous embedding)
-            - array-like (N,4): [x,y,z,q]         (point charges)
+        Args:
+            xyz_source (Union[str, Sequence[str]]): XYZ path, string, or lines.
+            mm_external (Callable | Sequence | np.ndarray): Either a callable
+                returning a potential ``V_ext(coords)`` or an ``(N, 4)`` array
+                of point charges ``[x, y, z, q]``.
+            basis (str): Basis set keyword for PySCF.
+            charge (int): Molecular charge.
+            spin_mult (int): Spin multiplicity ``2S + 1``.
+            mapping (str): Default mapping tag.
+            use_gpu4pyscf (bool): Attempt to use ``gpu4pyscf`` when available.
+
+        Returns:
+            QMMMHamiltonian: Embedded Hamiltonian with recorded MM metadata.
         """
         geom_str = _parse_xyz(xyz_source)
 
@@ -801,6 +949,13 @@ class QMMMHamiltonian(ElectronicHamiltonian):
         )
 
     def terms(self) -> List[Dict[str, Any]]:
+        """Return additive terms while annotating them with ``mm_env`` info.
+
+        Returns:
+            List[Dict[str, Any]]: Same structure as
+            :meth:`ElectronicHamiltonian.terms` but each term carries
+            ``mm_env`` metadata for provenance.
+        """
         base_terms = super().terms()
         # attach mm_env metadata for traceability
         for t in base_terms:

@@ -1,3 +1,5 @@
+"""Public re-exports for the Hamiltonians subpackage."""
+
 from eqmmm.qm.hamiltonians.electronic import (
     ElectronicHamiltonian,
     QElectronicHamiltonian,

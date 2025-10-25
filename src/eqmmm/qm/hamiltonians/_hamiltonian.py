@@ -1,17 +1,18 @@
+"""Common interfaces for deterministic Hamiltonians and Hamiltonian ensembles."""
+
 from __future__ import annotations
 from abc import ABC, abstractmethod
 from typing import Any, Dict, Sequence, Optional
+
 import numpy as np
 
 
-# -------------------------------------------------
-# Hamiltonian: concrete, deterministic operator
-# -------------------------------------------------
-
-
 class Hamiltonian(ABC):
-    """
-    A concrete Hermitian operator H on some Hilbert space.
+    """Abstract base class for deterministic Hermitian operators.
+
+    Attributes:
+        is_stochastic (bool): Flag used by downstream code to distinguish
+            concrete Hamiltonians from stochastic ensembles.
     """
 
     is_stochastic: bool = False  # invariant
@@ -19,39 +20,53 @@ class Hamiltonian(ABC):
     @property
     @abstractmethod
     def hilbert_dim(self) -> int:
-        """Hilbert space dimension (matrix size)."""
+        """int: Hilbert-space dimension (matrix size)."""
         raise NotImplementedError
 
     @abstractmethod
     def to_matrix(self) -> np.ndarray:
-        """Return the full (dim x dim) dense matrix representation."""
+        """Return the dense matrix representation.
+
+        Returns:
+            np.ndarray: Full ``(dim, dim)`` complex Hermitian matrix.
+        """
         raise NotImplementedError
 
     @abstractmethod
     def terms(self) -> Sequence[Dict[str, np.ndarray]]:
-        """
-        Return explicit additive decomposition:
+        """Return an additive decomposition of the Hamiltonian.
 
-            H = sum_i coef_i * H_i
-
-        as a list like:
-            [{"coef": scalar, "matrix": Hermitian np.ndarray}, ...]
-
-        If there’s no natural decomposition:
-            return [{"coef": 1.0, "matrix": self.to_matrix()}]
+        Returns:
+            Sequence[Dict[str, np.ndarray]]: Terms of the form
+            ``{"coef": scalar, "matrix": Hermitian np.ndarray}``. When the
+            Hamiltonian has no natural decomposition the method should return
+            ``[{"coef": 1.0, "matrix": self.to_matrix()}]``.
         """
         raise NotImplementedError
 
     @abstractmethod
     def decompose(self) -> Dict[str, Any]:
-        """Return lightweight structural metadata (no large arrays)."""
+        """Return metadata describing the Hamiltonian.
+
+        Returns:
+            Dict[str, Any]: JSON-serializable metadata without large arrays.
+        """
         raise NotImplementedError
 
     def sample(
         self,
         rng: Optional[np.random.Generator] = None,
     ) -> Hamiltonian:
-        """Deterministic Hamiltonians are already concrete."""
+        """Return a deterministic Hamiltonian sample.
+
+        Args:
+            rng (np.random.Generator | None): Unused RNG placeholder kept for
+                interface compatibility.
+
+        Returns:
+            Hamiltonian: ``self`` because deterministic Hamiltonians are
+            already concrete.
+        """
         return self
 
 
@@ -61,9 +76,9 @@ class Hamiltonian(ABC):
 
 
 class HamiltonianEnsemble(ABC):
-    """
-    A stochastic family of Hamiltonians.
-    Use .sample() to draw a concrete Hamiltonian instance.
+    """Abstract base class for stochastic Hamiltonian families.
+
+    Use :meth:`sample` to draw a concrete :class:`Hamiltonian` instance.
     """
 
     is_stochastic: bool = True  # invariant
@@ -71,7 +86,7 @@ class HamiltonianEnsemble(ABC):
     @property
     @abstractmethod
     def hilbert_dim(self) -> int:
-        """Hilbert-space dimension of each draw."""
+        """int: Hilbert-space dimension shared by all draws."""
         raise NotImplementedError
 
     @abstractmethod
@@ -79,10 +94,25 @@ class HamiltonianEnsemble(ABC):
         self,
         rng: Optional[np.random.Generator] = None,
     ) -> Hamiltonian:
-        """Draw one concrete Hamiltonian realization."""
+        """Draw one Hamiltonian from the ensemble.
+
+        Args:
+            rng (np.random.Generator | None): Random number generator used to
+                parameterize the draw. If ``None`` the implementation must pick
+                a sensible default.
+
+        Returns:
+            Hamiltonian: Concrete deterministic Hamiltonian sampled from the
+            ensemble.
+        """
         raise NotImplementedError
 
     @abstractmethod
     def decompose(self) -> Dict[str, Any]:
-        """Return metadata describing the ensemble (no actual samples)."""
+        """Return lightweight metadata about the ensemble.
+
+        Returns:
+            Dict[str, Any]: JSON-serializable description of the distribution
+            (no actual samples).
+        """
         raise NotImplementedError
