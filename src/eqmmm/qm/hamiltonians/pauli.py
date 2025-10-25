@@ -92,8 +92,7 @@ class PauliSumHamiltonian(Hamiltonian):
         """Return the full matrix representation of the Pauli sum.
 
         Returns:
-            Union[np.ndarray, sp.spmatrix]: Dense or sparse matrix depending on
-            ``sparse`` mode.
+            Union[np.ndarray, sp.spmatrix]: Dense or sparse matrix depending on ``sparse`` mode.
         """
         if self.sparse:
             H = sp.csr_matrix((self._dim, self._dim), dtype=complex)
@@ -109,8 +108,7 @@ class PauliSumHamiltonian(Hamiltonian):
         """Return the list of Pauli terms and their coefficients.
 
         Returns:
-            Sequence[Dict[str, Any]]: Entries with ``coef``, ``matrix``, and
-            ``pauli`` metadata.
+            Sequence[Dict[str, Any]]: Entries with ``coef``, ``matrix``, and ``pauli`` metadata.
         """
         out: List[Dict[str, Any]] = []
         for c, pstr in zip(self.coeffs, self.pauli_strings):
@@ -127,8 +125,7 @@ class PauliSumHamiltonian(Hamiltonian):
         """Return a JSON-serializable description of the Pauli sum.
 
         Returns:
-            Dict[str, Any]: Metadata including qubit count, sparsity flag, and
-            per-term coefficients.
+            Dict[str, Any]: Metadata including qubit count, sparsity flag, and per-term coefficients.
         """
         return {
             "type": "pauli_sum",
@@ -211,8 +208,7 @@ class RandomPauliHamiltonian(HamiltonianEnsemble):
             rng (np.random.Generator | None): Optional RNG.
 
         Returns:
-            PauliSumHamiltonian: Deterministic Hamiltonian containing the new
-            random coefficients.
+            PauliSumHamiltonian: Deterministic Hamiltonian containing the new random coefficients.
         """
         rng = rng or np.random.default_rng()
         coeffs = self._draw_coeffs(rng)
@@ -227,8 +223,7 @@ class RandomPauliHamiltonian(HamiltonianEnsemble):
         """Return a metadata description of the stochastic model.
 
         Returns:
-            Dict[str, Any]: Description with qubit count, Pauli support,
-            coefficient distribution, and sparsity flag.
+            Dict[str, Any]: Description with qubit count, Pauli support, coefficient distribution, and sparsity flag.
         """
         return {
             "type": "random_pauli_family",

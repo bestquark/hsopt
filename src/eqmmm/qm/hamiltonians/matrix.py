@@ -65,8 +65,7 @@ class MatrixHamiltonian(Hamiltonian):
         """Return a copy of the stored additive decomposition.
 
         Returns:
-            Sequence[Dict[str, np.ndarray]]: List of ``{"coef", "matrix"}``
-            entries with matrices copied to avoid aliasing.
+            Sequence[Dict[str, np.ndarray]]: List of ``{"coef", "matrix"}`` entries with matrices copied to avoid aliasing.
         """
         return [
             {"coef": t["coef"], "matrix": np.array(t["matrix"], copy=True)}
@@ -77,8 +76,7 @@ class MatrixHamiltonian(Hamiltonian):
         """Return metadata describing the deterministic matrix Hamiltonian.
 
         Returns:
-            Dict[str, Any]: Lightweight description with dimension, number of
-            terms, and raw coefficients.
+            Dict[str, Any]: Lightweight description with dimension, number of terms, and raw coefficients.
         """
         return {
             "type": "matrix",
@@ -165,8 +163,7 @@ class WeightedRandomHamiltonian(HamiltonianEnsemble):
             rng (np.random.Generator): Source of randomness.
 
         Returns:
-            List[Dict[str, np.ndarray]]: Raw term list with ``coef`` and
-            ``matrix`` entries.
+            List[Dict[str, np.ndarray]]: Raw term list with ``coef`` and ``matrix`` entries.
         """
         n = self.n
         coefs = self._draw_coefs(rng)
@@ -195,8 +192,7 @@ class WeightedRandomHamiltonian(HamiltonianEnsemble):
         """Describe the ensemble in a JSON-serializable way.
 
         Returns:
-            Dict[str, Any]: Metadata including dimension, number of terms, and
-            coefficient distribution descriptor.
+            Dict[str, Any]: Metadata including dimension, number of terms, and coefficient distribution descriptor.
         """
         return {
             "type": "weighted_random_ensemble",

@@ -37,10 +37,7 @@ class Hamiltonian(ABC):
         """Return an additive decomposition of the Hamiltonian.
 
         Returns:
-            Sequence[Dict[str, np.ndarray]]: Terms of the form
-            ``{"coef": scalar, "matrix": Hermitian np.ndarray}``. When the
-            Hamiltonian has no natural decomposition the method should return
-            ``[{"coef": 1.0, "matrix": self.to_matrix()}]``.
+            Sequence[Dict[str, np.ndarray]]: Terms of the form ``{"coef": scalar, "matrix": Hermitian np.ndarray}``; use ``[{"coef": 1.0, "matrix": self.to_matrix()}]`` when no natural decomposition exists.
         """
         raise NotImplementedError
 
@@ -64,8 +61,7 @@ class Hamiltonian(ABC):
                 interface compatibility.
 
         Returns:
-            Hamiltonian: ``self`` because deterministic Hamiltonians are
-            already concrete.
+            Hamiltonian: ``self`` because deterministic Hamiltonians are already concrete.
         """
         return self
 
@@ -102,8 +98,7 @@ class HamiltonianEnsemble(ABC):
                 a sensible default.
 
         Returns:
-            Hamiltonian: Concrete deterministic Hamiltonian sampled from the
-            ensemble.
+            Hamiltonian: Concrete deterministic Hamiltonian sampled from the ensemble.
         """
         raise NotImplementedError
 
@@ -112,7 +107,6 @@ class HamiltonianEnsemble(ABC):
         """Return lightweight metadata about the ensemble.
 
         Returns:
-            Dict[str, Any]: JSON-serializable description of the distribution
-            (no actual samples).
+            Dict[str, Any]: JSON-serializable description of the distribution (no actual samples).
         """
         raise NotImplementedError

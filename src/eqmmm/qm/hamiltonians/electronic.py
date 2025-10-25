@@ -187,9 +187,7 @@ def _integrals_from_mf(mf, mol):
         mol: PySCF molecule corresponding to ``mf``.
 
     Returns:
-        Tuple[np.ndarray, np.ndarray, float]: One-body integrals ``h1``
-        (``n_spin_orb, n_spin_orb``), antisymmetrized two-body integrals ``h2``
-        (``n_spin_orb``^4), and the nuclear repulsion constant.
+        Tuple[np.ndarray, np.ndarray, float]: One-body integrals ``h1`` (``n_spin_orb, n_spin_orb``), antisymmetrized two-body integrals ``h2`` (``n_spin_orb``^4), and the nuclear repulsion constant.
     """
     from pyscf import ao2mo
 
@@ -316,8 +314,7 @@ def _fermion_operator_from_integrals(
         constant (float): Scalar energy offset.
 
     Returns:
-        FermionOperator: Second-quantized Hamiltonian suitable for mapping to
-        qubits.
+        FermionOperator: Second-quantized Hamiltonian suitable for mapping to qubits.
     """
     from openfermion import FermionOperator
 
@@ -360,9 +357,7 @@ def _qubit_op_to_matrix_and_terms(
         sparse (bool): If ``True`` keep the matrix sparse.
 
     Returns:
-        Tuple[Union[np.ndarray, sp.spmatrix], List[Dict[str, Any]]]: Sparse or
-        dense matrix plus a list of ``{"coeff", "pauli"}`` dictionaries with
-        human-readable strings like ``"X0 Z1"``.
+        Tuple[Union[np.ndarray, sp.spmatrix], List[Dict[str, Any]]]: Sparse or dense matrix plus a list of ``{"coeff", "pauli"}`` dictionaries with human-readable strings like ``"X0 Z1"``.
     """
 
     # build sparse matrix from OpenFermion
@@ -392,8 +387,7 @@ def _apply_a(bitstring: int, p: int):
         p (int): Orbital index.
 
     Returns:
-        Tuple[Optional[int], float]: New bitstring (or ``None`` if the term
-        annihilates the state) and the parity phase.
+        Tuple[Optional[int], float]: New bitstring (or ``None`` if the term annihilates the state) and the parity phase.
     """
     if ((bitstring >> p) & 1) == 0:
         return None, 0.0
@@ -412,8 +406,7 @@ def _apply_adag(bitstring: int, p: int):
         p (int): Orbital index.
 
     Returns:
-        Tuple[Optional[int], float]: New bitstring (or ``None`` if creation is
-        blocked) and the parity phase.
+        Tuple[Optional[int], float]: New bitstring (or ``None`` if creation is blocked) and the parity phase.
     """
     if ((bitstring >> p) & 1) == 1:
         return None, 0.0
@@ -648,8 +641,7 @@ class ElectronicHamiltonian(Hamiltonian):
         """Provide lightweight metadata describing the Hamiltonian.
 
         Returns:
-            Dict[str, Any]: JSON-serializable data with tensor shapes and
-            mapping metadata.
+            Dict[str, Any]: JSON-serializable data with tensor shapes and mapping metadata.
         """
         return {
             "type": "second_quantized",
@@ -672,8 +664,7 @@ class ElectronicHamiltonian(Hamiltonian):
             sparse (bool): If ``True`` build a sparse Pauli representation.
 
         Returns:
-            QElectronicHamiltonian: Pauli-sum Hamiltonian with metadata about
-            the mapping origin.
+            QElectronicHamiltonian: Pauli-sum Hamiltonian with metadata about the mapping origin.
 
         Raises:
             ValueError: If the mapping keyword is unknown.
@@ -711,8 +702,8 @@ class ElectronicHamiltonian(Hamiltonian):
         """Return the additive decomposition of the fermionic Hamiltonian.
 
         Returns:
-            List[Dict[str, Any]]: Entries containing ``coef``, a dense matrix,
-            the ``kind`` of contribution, and the tensor indices involved.
+            List[Dict[str, Any]]: Entries containing ``coef``, a dense matrix, the
+            ``kind`` of contribution, and the tensor indices involved.
 
         Notes:
             The routine scales exponentially with the number of orbitals,
@@ -846,8 +837,7 @@ class QElectronicHamiltonian(PauliSumHamiltonian):
         """Return Pauli metadata augmented with mapping information.
 
         Returns:
-            Dict[str, Any]: Output of [`PauliSumHamiltonian.decompose`][]
-            extended with ``type``, ``mapping``, and ``origin`` fields.
+            Dict[str, Any]: Output of [`PauliSumHamiltonian.decompose`][] extended with ``type``, ``mapping``, and ``origin`` fields.
         """
         base = super().decompose()
         base["type"] = "qubit_pauli_sum"
@@ -954,9 +944,7 @@ class QMMMHamiltonian(ElectronicHamiltonian):
         """Return additive terms while annotating them with ``mm_env`` info.
 
         Returns:
-            List[Dict[str, Any]]: Same structure as
-            [`ElectronicHamiltonian.terms`][] but each term carries
-            ``mm_env`` metadata for provenance.
+            List[Dict[str, Any]]: Same structure as [`ElectronicHamiltonian.terms`][] but each term carries ``mm_env`` metadata for provenance.
         """
         base_terms = super().terms()
         # attach mm_env metadata for traceability
