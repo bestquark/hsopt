@@ -108,7 +108,8 @@ class PauliSumHamiltonian(Hamiltonian):
         """Return the list of Pauli terms and their coefficients.
 
         Returns:
-            Sequence[Dict[str, Any]]: Entries with ``coef``, ``matrix``, and ``pauli`` metadata.
+            Sequence[Dict[str, Any]]:
+                Entries with ``coef``, ``matrix``, and ``pauli`` metadata.
         """
         out: List[Dict[str, Any]] = []
         for c, pstr in zip(self.coeffs, self.pauli_strings):

@@ -700,8 +700,8 @@ class ElectronicHamiltonian(Hamiltonian):
         """Return the additive decomposition of the fermionic Hamiltonian.
 
         Returns:
-            List[Dict[str, Any]]: Entries containing ``coef``, a dense matrix, the
-            ``kind`` of contribution, and the tensor indices involved.
+            List[Dict[str, Any]]:
+                Entries containing ``coef``, a dense matrix, the ``kind`` of contribution, and the tensor indices involved.
 
         Notes:
             The routine scales exponentially with the number of orbitals,
@@ -942,7 +942,8 @@ class QMMMHamiltonian(ElectronicHamiltonian):
         """Return additive terms while annotating them with ``mm_env`` info.
 
         Returns:
-            List[Dict[str, Any]]: Same structure as [`ElectronicHamiltonian.terms`][] but each term carries ``mm_env`` metadata for provenance.
+            List[Dict[str, Any]]:
+                Same structure as [`ElectronicHamiltonian.terms`][] but each term carries ``mm_env`` metadata for provenance.
         """
         base_terms = super().terms()
         # attach mm_env metadata for traceability

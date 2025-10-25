@@ -65,7 +65,8 @@ class MatrixHamiltonian(Hamiltonian):
         """Return a copy of the stored additive decomposition.
 
         Returns:
-            Sequence[Dict[str, np.ndarray]]: List of ``{"coef", "matrix"}`` entries with matrices copied to avoid aliasing.
+            Sequence[Dict[str, np.ndarray]]:
+                List of ``{"coef", "matrix"}`` entries with matrices copied to avoid aliasing.
         """
         return [
             {"coef": t["coef"], "matrix": np.array(t["matrix"], copy=True)} for t in self._term_list

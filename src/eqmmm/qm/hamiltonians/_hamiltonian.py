@@ -37,7 +37,8 @@ class Hamiltonian(ABC):
         """Return an additive decomposition of the Hamiltonian.
 
         Returns:
-            Sequence[Dict[str, np.ndarray]]: Terms of the form ``{"coef": scalar, "matrix": Hermitian np.ndarray}``; use ``[{"coef": 1.0, "matrix": self.to_matrix()}]`` when no natural decomposition exists.
+            Sequence[Dict[str, np.ndarray]]:
+                Terms of the form ``{"coef": scalar, "matrix": Hermitian np.ndarray}``; use ``[{"coef": 1.0, "matrix": self.to_matrix()}]`` when no natural decomposition exists.
         """
         raise NotImplementedError
 
