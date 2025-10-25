@@ -70,9 +70,7 @@ def cast_matrix_and_vector_mixed(H, psi, fmt_or_dtype, compute_dtype=np.float32)
     tgt_compute = _complex_of(compute_dtype) if is_cplx else compute_dtype
 
     # Native dtype or 'fp16'/'fp32'/'fp64'
-    if (isinstance(fmt_or_dtype, str) and fmt_or_dtype in NATIVE) or hasattr(
-        fmt_or_dtype, "kind"
-    ):
+    if (isinstance(fmt_or_dtype, str) and fmt_or_dtype in NATIVE) or hasattr(fmt_or_dtype, "kind"):
         Hc = H.astype(tgt_compute, copy=False)
         psic = psi.astype(tgt_compute, copy=False)
         return Hc, psic
@@ -86,9 +84,7 @@ def cast_matrix_and_vector_mixed(H, psi, fmt_or_dtype, compute_dtype=np.float32)
     return H_d, psi_d
 
 
-def expmv_hermitian(
-    H, v, dt, work_dtype=np.float64, out_dtype=np.complex128, normalize=False
-):
+def expmv_hermitian(H, v, dt, work_dtype=np.float64, out_dtype=np.complex128, normalize=False):
     """
     Stable expmv for Hermitian H using eigh.
     All *internal* math in work_dtype; cast to out_dtype only at the end.
@@ -107,9 +103,7 @@ def expmv_hermitian(
     w, Q = np.linalg.eigh(Hd)  # w: real (float), Q: work_dtype
     # compute phase in work precision
     phase = np.exp((-1j * dt) * w.astype(np.float64))  # exponent in high precision
-    phase = phase.astype(
-        np.complex128 if work_dtype == np.complex128 else np.complex64, copy=False
-    )
+    phase = phase.astype(np.complex128 if work_dtype == np.complex128 else np.complex64, copy=False)
 
     y = Q.conj().T @ vd
     y = y.astype(phase.dtype, copy=False) * phase
@@ -149,9 +143,7 @@ def lie_trotter_step(
 
     for j, H in enumerate(H_terms):
         fmt = fmt_list[(step_idx + j) % len(fmt_list)]
-        Hc, psic = cast_matrix_and_vector_mixed(
-            H, psi_new, fmt, compute_dtype=compute_dtype
-        )
+        Hc, psic = cast_matrix_and_vector_mixed(H, psi_new, fmt, compute_dtype=compute_dtype)
         psi_new = expmv_hermitian(
             Hc,
             psic,

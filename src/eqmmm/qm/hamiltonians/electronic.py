@@ -441,9 +441,7 @@ def _one_body_term_matrix(M: int, p: int, q: int, coeff: complex) -> np.ndarray:
     return block
 
 
-def _two_body_term_matrix(
-    M: int, p: int, q: int, r: int, s: int, coeff: complex
-) -> np.ndarray:
+def _two_body_term_matrix(M: int, p: int, q: int, r: int, s: int, coeff: complex) -> np.ndarray:
     """Construct the matrix for ``coeff * a_p^† a_q^† a_r a_s``.
 
     Args:

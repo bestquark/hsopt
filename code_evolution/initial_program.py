@@ -65,6 +65,7 @@ def run(H_terms, psi0, t):
     )
     return psi_final, meta
 
+
 def main():
     # --- Mode 1: piped pickle over stdin (works for plain python) ---
     if not sys.stdin.isatty() and "--pickle" not in sys.argv:
@@ -79,8 +80,12 @@ def main():
 
     # --- Mode 2: file-based pickle (works under Legate) ---
     p = argparse.ArgumentParser()
-    p.add_argument("--pickle", type=str, default=None,
-                   help="Path to input pickle containing (H_terms, psi0, t).")
+    p.add_argument(
+        "--pickle",
+        type=str,
+        default=None,
+        help="Path to input pickle containing (H_terms, psi0, t).",
+    )
     # (optional normal CLI args here if you still want them)
     args, _ = p.parse_known_args()
 
@@ -90,6 +95,7 @@ def main():
                 H_terms, psi0, t = pickle.load(f)
             # If you’re using cupynumeric in run(), convert here:
             import cupynumeric as np
+
             H_terms = [np.array(H, copy=False) for H in H_terms]
             psi0 = np.array(psi0, copy=False)
 
@@ -105,9 +111,11 @@ def main():
     print("[error] no pickle provided and no stdin data", file=sys.stderr)
     return 2
 
+
 if __name__ == "__main__":
     import argparse
     import time
+
     # --- Mode 1: piped pickle input ---
     if not sys.stdin.isatty():
         try:

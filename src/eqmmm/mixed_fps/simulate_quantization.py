@@ -131,9 +131,7 @@ def dequantize_fp8(code, exp_bits, man_bits, bias, scale):
     return (val * scale.astype(np.float32)).astype(np.float32)
 
 
-def _quantize_fp(
-    x32: np.ndarray, exp_bits: int, man_bits: int, bias: int
-) -> np.ndarray:
+def _quantize_fp(x32: np.ndarray, exp_bits: int, man_bits: int, bias: int) -> np.ndarray:
     x = x32.astype(np.float32, copy=False)
     sign = (x < 0).astype(np.uint8)
     ax = np.abs(x)
@@ -160,9 +158,7 @@ def _quantize_fp(
     return code.astype(np.uint8)
 
 
-def _dequantize_fp(
-    code: np.ndarray, exp_bits: int, man_bits: int, bias: int
-) -> np.ndarray:
+def _dequantize_fp(code: np.ndarray, exp_bits: int, man_bits: int, bias: int) -> np.ndarray:
     c = code.astype(np.uint8, copy=False)
     sign = (c >> (exp_bits + man_bits)) & 0x1
     exp = (c >> man_bits) & ((1 << exp_bits) - 1)

@@ -42,9 +42,7 @@ def main():
     ap.add_argument("inputs", nargs="+", help="JSON file(s) or folder(s)")
     ap.add_argument("-o", "--outdir", default="extracted_code", help="Output directory")
     ap.add_argument("--field", default="code", help="JSON field containing code")
-    ap.add_argument(
-        "--name", default="{id}.{ext}", help="Filename template (fields: id, ext)"
-    )
+    ap.add_argument("--name", default="{id}.{ext}", help="Filename template (fields: id, ext)")
     args = ap.parse_args()
 
     outdir = pathlib.Path(args.outdir)

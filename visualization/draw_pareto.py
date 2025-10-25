@@ -113,9 +113,7 @@ def main():
         )
 
     # colored scatter by λ
-    sc = ax.scatter(
-        xs, ys, c=cs, cmap="viridis", s=40, alpha=0.9, zorder=2, label="runs"
-    )
+    sc = ax.scatter(xs, ys, c=cs, cmap="viridis", s=40, alpha=0.9, zorder=2, label="runs")
     cb = fig.colorbar(sc, ax=ax)
     cb.set_label("$\\lambda$")
 

@@ -104,9 +104,7 @@ def main(args):
 
     sim.reporters.append(DCDReporter("sims/traj.dcd", 1000, enforcePeriodicBox=True))
     sim.reporters.append(
-        StateDataReporter(
-            stdout, 1000, step=True, potentialEnergy=True, temperature=True
-        )
+        StateDataReporter(stdout, 1000, step=True, potentialEnergy=True, temperature=True)
     )
     sim.step(25000)
 

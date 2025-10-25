@@ -133,8 +133,7 @@ class PauliSumHamiltonian(Hamiltonian):
             "n_terms": len(self.pauli_strings),
             "sparse": self.sparse,
             "terms": [
-                {"coeff": float(c), "pauli": p}
-                for c, p in zip(self.coeffs, self.pauli_strings)
+                {"coeff": float(c), "pauli": p} for c, p in zip(self.coeffs, self.pauli_strings)
             ],
         }
 

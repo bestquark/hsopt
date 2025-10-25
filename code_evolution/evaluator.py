@@ -111,9 +111,7 @@ def _limit_child_resources():
 
 
 # ---------- Single-trial core used by BOTH paths ----------
-def _trial_core(
-    program_path: str, n: int, m: int, t: float, seed: int
-) -> tuple[bool, dict]:
+def _trial_core(program_path: str, n: int, m: int, t: float, seed: int) -> tuple[bool, dict]:
     try:
         mod = _load_module_from_file(program_path)
         if not hasattr(mod, "run"):
@@ -304,9 +302,7 @@ def _run_single_trial_nsys(
     ]
     print(f"[NSYS] Running command: {' '.join(cmd)}")
 
-    p = subprocess.run(
-        cmd, env=env, capture_output=True, text=True, timeout=timeout_s + 120
-    )
+    p = subprocess.run(cmd, env=env, capture_output=True, text=True, timeout=timeout_s + 120)
 
     if not json_out.exists():
         return False, {
@@ -375,9 +371,7 @@ def evaluate(
     errs, norms, mems_mb, times_ms = [], [], [], []
 
     for sd in seeds:
-        ok, res = _run_single_trial(
-            program, n, m, t, sd, TRIAL_TIMEOUT_S, profile_nsys=PROFILE_GPU
-        )
+        ok, res = _run_single_trial(program, n, m, t, sd, TRIAL_TIMEOUT_S, profile_nsys=PROFILE_GPU)
         print(f"[Trial seed={sd}] ok={ok} res={res}")
 
         if not ok:
@@ -393,9 +387,7 @@ def evaluate(
 
         # prefer GPU mem/time if present; fallback to wallclock+estimated mem
         mems_mb.append(
-            _safe_float(
-                res.get("gpu_mem_mb"), _safe_float(res.get("mem_mb"), MEM_CAP_MB)
-            )
+            _safe_float(res.get("gpu_mem_mb"), _safe_float(res.get("mem_mb"), MEM_CAP_MB))
         )
         times_ms.append(
             _safe_float(

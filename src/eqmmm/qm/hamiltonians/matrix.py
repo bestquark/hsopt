@@ -68,8 +68,7 @@ class MatrixHamiltonian(Hamiltonian):
             Sequence[Dict[str, np.ndarray]]: List of ``{"coef", "matrix"}`` entries with matrices copied to avoid aliasing.
         """
         return [
-            {"coef": t["coef"], "matrix": np.array(t["matrix"], copy=True)}
-            for t in self._term_list
+            {"coef": t["coef"], "matrix": np.array(t["matrix"], copy=True)} for t in self._term_list
         ]
 
     def decompose(self) -> Dict[str, Any]:

@@ -3,6 +3,7 @@ from pathlib import Path
 import duckdb
 import sqlite3
 
+
 def spacetime_gpu_duckdb(path: Path = Path("legion_prof"), verbose: bool = True):
     con = duckdb.connect(str(path))
 
@@ -90,13 +91,18 @@ def spacetime_gpu_duckdb(path: Path = Path("legion_prof"), verbose: bool = True)
       )
     """
 
-    avg_bytes = con.sql(mem_common_cte + r"""
+    avg_bytes = con.sql(
+        mem_common_cte
+        + r"""
       , span AS ( SELECT MIN(start_us) AS t0, MAX(stop_us) AS t1 FROM with_bytes )
       SELECT COALESCE(SUM(bytes * dur_us) / NULLIF((SELECT t1 - t0 FROM span),0), 0) AS avg_bytes
       FROM with_bytes;
-    """).fetchone()[0]
+    """
+    ).fetchone()[0]
 
-    peak_bytes = con.sql(mem_common_cte + r"""
+    peak_bytes = con.sql(
+        mem_common_cte
+        + r"""
       , events AS (
           SELECT start_us AS t,  bytes AS delta FROM with_bytes
           UNION ALL
@@ -107,20 +113,21 @@ def spacetime_gpu_duckdb(path: Path = Path("legion_prof"), verbose: bool = True)
           FROM events
         )
       SELECT COALESCE(MAX(live_bytes), 0) AS peak_bytes FROM running;
-    """).fetchone()[0]
+    """
+    ).fetchone()[0]
 
     if verbose and not df_time.empty:
         total = df_time[df_time["gpu"] == "TOTAL"].iloc[0]
         spacetime_s = total["run_us"] / 1e6
-        makespan_s  = (total["makespan_us"] or 0) / 1e6
-        avg_conc    = (spacetime_s / makespan_s) if makespan_s else 0.0
+        makespan_s = (total["makespan_us"] or 0) / 1e6
+        avg_conc = (spacetime_s / makespan_s) if makespan_s else 0.0
         print(df_time)
         print("\n== Space–time & Memory ==")
         print(f"GPU space–time:   {spacetime_s:.3f} GPU·s")
         print(f"Makespan:         {makespan_s:.3f} s")
         print(f"Avg concurrency:  {avg_conc:.3f} GPUs")
-        print(f"Avg FB footprint: {avg_bytes/1024**2:.3f} MiB")
-        print(f"Peak FB footprint:{peak_bytes/1024**2:.3f} MiB")
+        print(f"Avg FB footprint: {avg_bytes / 1024**2:.3f} MiB")
+        print(f"Peak FB footprint:{peak_bytes / 1024**2:.3f} MiB")
 
     return {
         "prof_df": df_time,
@@ -131,14 +138,16 @@ def spacetime_gpu_duckdb(path: Path = Path("legion_prof"), verbose: bool = True)
         "peak_framebuffer_bytes": peak_bytes,
     }
 
+
 def spacetime_gpu_sqlite3(db_path: Path):
     with sqlite3.connect(db_path) as conn:
         cur = conn.cursor()
 
         # --- Find which kernel table exists ---
-        tables = [r[0] for r in cur.execute(
-            "SELECT name FROM sqlite_master WHERE type='table';"
-        ).fetchall()]
+        tables = [
+            r[0]
+            for r in cur.execute("SELECT name FROM sqlite_master WHERE type='table';").fetchall()
+        ]
 
         for name in ["CUPTI_ACTIVITY_KIND_KERNEL", "CUPTI_ACTIVITY_KIND_CONCURRENT_KERNEL"]:
             if name in tables:
@@ -176,6 +185,7 @@ def spacetime_gpu_sqlite3(db_path: Path):
 
     return total_time, time_rows, mem_bytes
 
+
 if __name__ == "__main__":
     import argparse
 
@@ -195,8 +205,7 @@ if __name__ == "__main__":
         default=Path("legion_prof"),
         help="Path to the profiling database file (default: legion_prof)",
     )
-    
-    
+
     args = parser.parse_args()
     if args.db_type == "duckdb":
         spacetime_gpu_duckdb(args.path, verbose=True)
@@ -204,10 +213,10 @@ if __name__ == "__main__":
         total_time, time_rows, mem_bytes = spacetime_gpu_sqlite3(args.path)
 
         print(f"Total GPU time: {total_time:.6f} seconds")
-    
+
         total_bytes = sum(mem_bytes.values())
-        print(f"Total memory moved: {total_bytes/1e9:.6f} GB\n")
-        
+        print(f"Total memory moved: {total_bytes / 1e9:.6f} GB\n")
+
         print("Per-GPU breakdown:")
         for dev, gpu_seconds in time_rows:
             mem_gb = mem_bytes.get(dev, 0) / 1e9
