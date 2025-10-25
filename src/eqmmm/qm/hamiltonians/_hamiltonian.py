@@ -78,7 +78,7 @@ class Hamiltonian(ABC):
 class HamiltonianEnsemble(ABC):
     """Abstract base class for stochastic Hamiltonian families.
 
-    Use :meth:`sample` to draw a concrete :class:`Hamiltonian` instance.
+    Use [`Hamiltonian.sample`][] to draw a concrete [`Hamiltonian`][] instance.
     """
 
     is_stochastic: bool = True  # invariant

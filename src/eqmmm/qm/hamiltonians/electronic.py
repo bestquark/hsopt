@@ -307,7 +307,7 @@ def _fermion_operator_from_integrals(
     h2: np.ndarray,
     constant: float,
 ) -> "FermionOperator":
-    """Build an OpenFermion :class:`FermionOperator` from spin-orbital data.
+    """Build an OpenFermion ``FermionOperator`` from spin-orbital data.
 
     Args:
         h1 (np.ndarray): One-body integrals ``h1[p, q]``.
@@ -512,13 +512,15 @@ class ElectronicHamiltonian(Hamiltonian):
         h1 (np.ndarray): One-body integrals ``(M, M)``.
         h2 (np.ndarray): Two-body integrals ``(M, M, M, M)``.
         constant (float): Scalar nuclear-repulsion/shift term.
-        mapping (str): Preferred fermion-to-qubit mapping label.
+        mapping (str): Preferred fermion-to-qubit mapping label used by
+            [`ElectronicHamiltonian.to_qubits`][].
 
     Attributes:
         h1 (np.ndarray): Stored copy of the one-body integrals.
         h2 (np.ndarray): Stored copy of the two-body integrals.
         constant (float): Energy shift added to the Hamiltonian.
-        mapping (str): Default mapping name used by :meth:`to_qubits`.
+        mapping (str): Default mapping name used by
+            [`ElectronicHamiltonian.to_qubits`][].
         M (int): Number of spin orbitals.
     """
 
@@ -714,7 +716,7 @@ class ElectronicHamiltonian(Hamiltonian):
 
         Notes:
             The routine scales exponentially with the number of orbitals,
-            matching :meth:`to_matrix`.
+            matching [`ElectronicHamiltonian.to_matrix`][].
         """
         M = self.M
         dim = 1 << M
@@ -844,7 +846,7 @@ class QElectronicHamiltonian(PauliSumHamiltonian):
         """Return Pauli metadata augmented with mapping information.
 
         Returns:
-            Dict[str, Any]: Output of :meth:`PauliSumHamiltonian.decompose`
+            Dict[str, Any]: Output of [`PauliSumHamiltonian.decompose`][]
             extended with ``type``, ``mapping``, and ``origin`` fields.
         """
         base = super().decompose()
@@ -877,7 +879,7 @@ class QMMMHamiltonian(ElectronicHamiltonian):
         self.mm_env = mm_env  # e.g. {"type": "point_charges", "charges": ...}
 
     def decompose(self) -> Dict[str, Any]:
-        """Extend :meth:`ElectronicHamiltonian.decompose` with MM metadata.
+        """Extend [`ElectronicHamiltonian.decompose`][] with MM metadata.
 
         Returns:
             Dict[str, Any]: Metadata including ``mm_env``.
@@ -953,7 +955,7 @@ class QMMMHamiltonian(ElectronicHamiltonian):
 
         Returns:
             List[Dict[str, Any]]: Same structure as
-            :meth:`ElectronicHamiltonian.terms` but each term carries
+            [`ElectronicHamiltonian.terms`][] but each term carries
             ``mm_env`` metadata for provenance.
         """
         base_terms = super().terms()
