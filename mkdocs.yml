@@ -14,7 +14,7 @@ nav:
   - Home: index.md
   - API: api.md
   - Tutorials:
-      - Hamiltonians: tutorials/dmds_hamiltonian.ipynb
+      - Creating Hamiltonians: tutorials/dmds_hamiltonian.ipynb
 
 theme:
   name: material

@@ -9,10 +9,6 @@ import scipy.sparse as sp
 from eqmmm.qm.hamiltonians._hamiltonian import Hamiltonian, HamiltonianEnsemble
 
 
-# ---------------------------------------------------------------------
-# Single-qubit Pauli operators
-# ---------------------------------------------------------------------
-
 _PAULI_SINGLE_DENSE = {
     "I": np.array([[1, 0], [0, 1]], dtype=complex),
     "X": np.array([[0, 1], [1, 0]], dtype=complex),
@@ -40,11 +36,6 @@ def kron_all(
     for op in ops[1:]:
         out = sp.kron(out, op, format="csr") if sparse else np.kron(out, op)
     return out
-
-
-# ---------------------------------------------------------------------
-# Deterministic Pauli-sum Hamiltonian
-# ---------------------------------------------------------------------
 
 
 class PauliSumHamiltonian(Hamiltonian):
@@ -198,11 +189,6 @@ class PauliSumHamiltonian(Hamiltonian):
                 for c, s in zip(self.coeffs, self.pauli_sparse)
             ],
         }
-
-
-# ---------------------------------------------------------------------
-# Stochastic family of Pauli Hamiltonians
-# ---------------------------------------------------------------------
 
 
 class RandomPauliHamiltonian(HamiltonianEnsemble):
