@@ -1,3 +1,3 @@
-# `src.eqmmm.biosystem`
+# `eqmmm.biosystem`
 
-::: src.eqmmm.biosystem
+::: eqmmm.biosystem

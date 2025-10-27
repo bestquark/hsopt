@@ -2,6 +2,10 @@
 
 Welcome to the Evolutionary QM/MM API reference. Use the navigation tree to explore each subpackage.
 
-## Top-level package
+## Available modules
 
-::: src.eqmmm
+- [`eqmmm.biosystem`](biosystem.md)
+- [`eqmmm.mixed_fps`](mixed_fps.md)
+- [`eqmmm.mm`](mm.md)
+- [`eqmmm.qm`](qm.md)
+- [`eqmmm.interface`](interface.md)

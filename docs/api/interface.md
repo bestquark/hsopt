@@ -1,3 +1,3 @@
-# `src.eqmmm.interface`
+# `eqmmm.interface`
 
-::: src.eqmmm.interface
+::: eqmmm.interface

@@ -75,7 +75,7 @@ class Hamiltonian(ABC):
 class HamiltonianEnsemble(ABC):
     """Abstract base class for stochastic Hamiltonian families.
 
-    Use [`Hamiltonian.sample`][] to draw a concrete [`Hamiltonian`][] instance.
+    Use [`~eqmmm.qm.hamiltonians._hamiltonian.Hamiltonian.sample`][] to draw a concrete [`~eqmmm.qm.hamiltonians._hamiltonian.Hamiltonian`][] instance.
     """
 
     is_stochastic: bool = True  # invariant

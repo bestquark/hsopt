@@ -632,8 +632,7 @@ class ElectronicHamiltonian(Hamiltonian):
         h1 (np.ndarray): One-body integrals ``(M, M)``.
         h2 (np.ndarray): Two-body integrals ``(M, M, M, M)``.
         constant (float): Scalar nuclear-repulsion/shift term.
-        mapping (str): Preferred fermion-to-qubit mapping label used by
-            [`ElectronicHamiltonian.to_qubits`][].
+        meta (Optional[Dict[str, Any]]): Optional metadata dictionary.
 
     Attributes:
         h1 (np.ndarray): Stored copy of the one-body integrals.
@@ -812,7 +811,7 @@ class ElectronicHamiltonian(Hamiltonian):
 
         Notes:
             The routine scales exponentially with the number of orbitals,
-            matching [`ElectronicHamiltonian.to_matrix`][].
+            matching [`to_matrix`][eqmmm.qm.hamiltonians.electronic.ElectronicHamiltonian.to_matrix].
         """
         M = self.M
         dim = 1 << M
@@ -997,7 +996,7 @@ class QMMMHamiltonian(ElectronicHamiltonian):
         self.mm_env = mm_env  # e.g. {"type": "point_charges", "charges": ...}
 
     def decompose(self) -> Dict[str, Any]:
-        """Extend [`ElectronicHamiltonian.decompose`][] with MM metadata.
+        """Extend [`decompose`][eqmmm.qm.hamiltonians.electronic.ElectronicHamiltonian.decompose] with MM metadata.
 
         Returns:
             Dict[str, Any]: Metadata including ``mm_env``.
@@ -1070,7 +1069,7 @@ class QMMMHamiltonian(ElectronicHamiltonian):
 
         Returns:
             List[Dict[str, Any]]:
-                Same structure as [`ElectronicHamiltonian.terms`][] but each term carries ``mm_env`` metadata for provenance.
+                Same structure as [`terms`][eqmmm.qm.hamiltonians.electronic.ElectronicHamiltonian.terms] but each term carries ``mm_env`` metadata for provenance.
         """
         base_terms = super().terms()
         # attach mm_env metadata for traceability

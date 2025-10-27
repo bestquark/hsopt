@@ -1,3 +1,3 @@
-# `src.eqmmm.mm`
+# `eqmmm.mm`
 
-::: src.eqmmm.mm
+::: eqmmm.mm

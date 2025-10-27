@@ -20,7 +20,6 @@ nav:
           - Mixed Precision: api/mixed_fps.md
           - MM Module: api/mm.md
           - QM Module: api/qm.md
-          - Hamiltonians: api/qm_hamiltonians.md
   - Tutorials:
       - Creating Hamiltonians: tutorials/dmds_hamiltonian.ipynb
 
@@ -79,7 +78,7 @@ plugins:
       handlers:
         python:
           paths:
-            - src/eqmmm
+            - src
           options:
             docstring_style: google
             docstring_options:
@@ -97,7 +96,6 @@ plugins:
             summary: true
   - encryptcontent:
       global_password: gordonbell2026
-      delete_index: false
   - mkdocs-jupyter:
       execute: false 
 

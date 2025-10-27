@@ -1,3 +1,3 @@
-# `src.eqmmm.mixed_fps`
+# `eqmmm.mixed_fps`
 
-::: src.eqmmm.mixed_fps
+::: eqmmm.mixed_fps
