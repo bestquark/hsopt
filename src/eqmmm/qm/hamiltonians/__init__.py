@@ -1,4 +1,4 @@
-"""Public re-exports for the Hamiltonians subpackage."""
+"""Hamiltonian classes for quantum mechanical models."""
 
 from eqmmm.qm.hamiltonians.electronic import (
     ElectronicHamiltonian,

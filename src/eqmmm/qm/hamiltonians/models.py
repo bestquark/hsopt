@@ -1,19 +1,4 @@
-"""Lattice-model Hamiltonians (Ising, Heisenberg, Hubbard) on 1D/2D grids.
-
-All public constructors (ising_1d, hubbard_2d, ...) return a LatticeHamiltonian,
-which is a PauliSumHamiltonian plus metadata describing the lattice, couplings,
-and mapping conventions.
-
-Conventions (qubit indexing):
-- Spin models (Ising / Heisenberg): 1 qubit per lattice site.
-  σ^x_i -> "X{i}", σ^y_i -> "Y{i}", σ^z_i -> "Z{i}"
-
-- Hubbard model: Jordan–Wigner mapping with 2 spin orbitals per site:
-    site i:
-      spin-up    -> mode 2*i
-      spin-down  -> mode 2*i+1
-  So total n_qubits = 2 * n_sites.
-"""
+"""Lattice-model Hamiltonians (Ising, Heisenberg, Hubbard) on 1D/2D grids."""
 
 from __future__ import annotations
 from typing import List, Tuple, Sequence
@@ -79,8 +64,9 @@ def _ising_terms(
     h: float,
     neighbor_pairs: Sequence[Tuple[int, int]],
 ) -> Tuple[List[str], List[complex]]:
-    """Return (pauli_strings, coeffs) for transverse-field Ising:
-    H = -J Σ_<ij> Z_i Z_j - h Σ_i X_i
+    r"""Return Pauli data for the transverse-field Ising model:
+
+    $$H = -J \sum_{\langle ij\rangle} Z_i Z_j - h \sum_i X_i.$$
     """
     paulis: List[str] = []
     coeffs: List[complex] = []
@@ -104,9 +90,11 @@ def _heisenberg_terms(
     Jz: float,
     neighbor_pairs: Sequence[Tuple[int, int]],
 ) -> Tuple[List[str], List[complex]]:
-    r"""Return (pauli_strings, coeffs) for anisotropic Heisenberg:
-        H = Σ_<ij> [ Jx Sx_i Sx_j + Jy Sy_i Sy_j + Jz Sz_i Sz_j ]
-    with Sα = (1/2) σ^α, so Sx_i Sx_j = (1/4) X_i X_j, etc.
+    r"""Return Pauli data for the anisotropic Heisenberg model:
+
+    $$H = \sum_{\langle ij\rangle} \bigl(J_x S_i^x S_j^x + J_y S_i^y S_j^y + J_z S_i^z S_j^z\bigr).$$
+
+    Here $S^\alpha = \tfrac{1}{2}\sigma^\alpha$, so $S_i^x S_j^x = \tfrac{1}{4} X_i X_j$, etc.
     """
     paulis: List[str] = []
     coeffs: List[complex] = []
@@ -161,17 +149,15 @@ def _hubbard_terms(
     U_onsite: float,
     neighbor_pairs: Sequence[Tuple[int, int]],
 ) -> Tuple[List[str], List[complex]]:
-    r"""1-band Hubbard:
+    r"""Return Pauli data for the single-band Hubbard model:
 
-        H = -t Σ_<ij>,σ ( c†_{iσ} c_{jσ} + h.c. )
-            + U Σ_i n_{i↑} n_{i↓}
+    $$H = -t \sum_{\langle ij\rangle,\sigma} \left(c^\dagger_{i\sigma} c_{j\sigma} + \text{h.c.}\right) + U \sum_i n_{i,\mathrm{up}} n_{i,\mathrm{dn}}.$$
 
     Mapping:
-      site i spin-up -> qubit 2*i
-      site i spin-down -> qubit 2*i+1
+      site $i$ spin-up $\rightarrow$ qubit $2i$
+      site $i$ spin-down $\rightarrow$ qubit $2i+1$
 
-    n_{iσ} = (I - Z_k)/2
-    n_{i↑} n_{i↓} = (1/4)[ I - Z_up - Z_dn + Z_up Z_dn ]
+    $n_{i,\sigma} = \tfrac{1 - Z_k}{2}$ and $n_{i,\mathrm{up}} n_{i,\mathrm{dn}} = \tfrac{1}{4}\left(1 - Z_{\text{up}} - Z_{\text{dn}} + Z_{\text{up}} Z_{\text{dn}}\right)$.
     """
     paulis: List[str] = []
     coeffs: List[complex] = []
@@ -220,9 +206,9 @@ def ising_1d(
     boundary: str = "open",
     sparse: bool = False,
 ) -> LatticeHamiltonian:
-    """
-    Transverse-field Ising chain:
-        H = -J Σ_i Z_i Z_{i+1} - h Σ_i X_i
+    r"""Construct a transverse-field Ising chain.
+
+    $$H = -J \sum_i Z_i Z_{i+1} - h \sum_i X_i.$$
     """
     pairs = _neighbor_pairs_1d(Lx, boundary=boundary)
     paulis, coeffs = _ising_terms(Lx, J, h, pairs)
@@ -248,9 +234,9 @@ def ising_2d(
     boundary: str = "open",
     sparse: bool = False,
 ) -> LatticeHamiltonian:
-    """
-    2D transverse-field Ising on an Lx x Ly grid:
-        H = -J Σ_<ij> Z_i Z_j - h Σ_i X_i
+    r"""Construct a 2D transverse-field Ising model on an $L_x \times L_y$ grid.
+
+    $$H = -J \sum_{\langle ij\rangle} Z_i Z_j - h \sum_i X_i.$$
     """
     pairs = _neighbor_pairs_2d(Lx, Ly, boundary=boundary)
     n_sites = Lx * Ly
@@ -277,10 +263,11 @@ def heisenberg_1d(
     boundary: str = "open",
     sparse: bool = False,
 ) -> LatticeHamiltonian:
-    r"""
-    Anisotropic Heisenberg chain:
-        H = Σ_i [ Jx Sx_i Sx_{i+1} + Jy Sy_i Sy_{i+1} + Jz Sz_i Sz_{i+1} ],
-    with Sα = (1/2) σ^α.
+    r"""Construct an anisotropic Heisenberg chain.
+
+    $$H = \sum_i \bigl(J_x S_i^x S_{i+1}^x + J_y S_i^y S_{i+1}^y + J_z S_i^z S_{i+1}^z\bigr),$$
+
+    with $S^\alpha = \tfrac{1}{2}\sigma^\alpha$.
     """
     pairs = _neighbor_pairs_1d(Lx, boundary=boundary)
     paulis, coeffs = _heisenberg_terms(Jx, Jy, Jz, pairs)
@@ -307,9 +294,9 @@ def heisenberg_2d(
     boundary: str = "open",
     sparse: bool = False,
 ) -> LatticeHamiltonian:
-    r"""
-    2D anisotropic Heisenberg model:
-        H = Σ_<ij> [ Jx Sx_i Sx_j + Jy Sy_i Sy_j + Jz Sz_i Sz_j ]
+    r"""Construct a 2D anisotropic Heisenberg model.
+
+    $$H = \sum_{\langle ij\rangle} \bigl(J_x S_i^x S_j^x + J_y S_i^y S_j^y + J_z S_i^z S_j^z\bigr).$$
     """
     pairs = _neighbor_pairs_2d(Lx, Ly, boundary=boundary)
     n_sites = Lx * Ly
@@ -335,13 +322,11 @@ def hubbard_1d(
     boundary: str = "open",
     sparse: bool = False,
 ) -> LatticeHamiltonian:
-    r"""
-    1D single-band Fermi-Hubbard model:
-        H = -t Σ_{<ij>,σ} (c†_{iσ} c_{jσ} + h.c.)
-          + U Σ_i n_{i↑} n_{i↓}
+    r"""Construct a 1D single-band Fermi-Hubbard model.
 
-    Jordan–Wigner mapping with 2 qubits per site:
-        i↑ -> 2*i, i↓ -> 2*i+1
+    $$H = -t \sum_{\langle ij\rangle,\sigma} \left(c^\dagger_{i\sigma} c_{j\sigma} + \text{h.c.}\right) + U \sum_i n_{i,\mathrm{up}} n_{i,\mathrm{dn}}.$$
+
+    Jordan–Wigner mapping with two qubits per site: $i_{\mathrm{up}} \mapsto 2i$, $i_{\mathrm{dn}} \mapsto 2i+1$.
     """
     pairs = _neighbor_pairs_1d(Lx, boundary=boundary)
     paulis, coeffs = _hubbard_terms(Lx, t_hop, U_onsite, pairs)

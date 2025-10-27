@@ -6,10 +6,10 @@
 ## Mixed precision
 ::: mixed_fps
 
-## MM
+## MM Module
 ::: mm
 
-## QM
+## QM Module
 ::: qm
 
 ## Interface

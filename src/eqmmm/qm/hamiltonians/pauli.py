@@ -39,7 +39,7 @@ def kron_all(
 
 
 class PauliSumHamiltonian(Hamiltonian):
-    """Deterministic Pauli-sum Hamiltonian H = Σ_j c_j P_j.
+    r"""Deterministic Pauli-sum Hamiltonian $H = \sum_j c_j P_j$.
 
     Args:
         n_qubits (int): Number of qubits in the register.

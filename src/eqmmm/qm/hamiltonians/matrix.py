@@ -9,13 +9,13 @@ from eqmmm.qm.hamiltonians._hamiltonian import Hamiltonian, HamiltonianEnsemble
 
 
 class MatrixHamiltonian(Hamiltonian):
-    """Deterministic Hamiltonian defined by explicit dense matrices.
+    r"""Deterministic Hamiltonian defined by explicit dense matrices.
 
     Args:
         H_total (np.ndarray): Hermitian matrix for the full Hamiltonian.
         term_list (Sequence[Dict[str, np.ndarray]] | None): Optional additive
             decomposition ``{"coef": c, "matrix": H_i}`` such that
-            ``Σ_i c H_i = H_total``. If omitted, a single identity term is
+            $\sum_i c H_i = H_{\text{total}}$. If omitted, a single identity term is
             inferred.
     """
 
