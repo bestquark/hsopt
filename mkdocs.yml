@@ -1,21 +1,94 @@
 site_name: Evolutionary QM/MM
+site_description: Hybrid quantum mechanics/molecular mechanics tooling.
+repo_url: https://github.com/bestquark/evolutionary-qmmm
+repo_name: bestquark/evolutionary-qmmm
+site_dir: site
+docs_dir: docs
+watch:
+  - mkdocs.yml
+  - README.md
+  - docs
+  - src/eqmmm
+
+nav:
+  - Home: index.md
+  - API: api.md
+
 theme:
   name: material
+  language: en
+  features:
+    - navigation.instant
+    - navigation.sections
+    - navigation.tabs
+    - navigation.tabs.sticky
+    - navigation.top
+    - content.code.copy
+    - content.tooltips
+    - toc.follow
+  palette:
+    - scheme: default
+      primary: teal
+      accent: orange
+      toggle:
+        icon: material/weather-night
+        name: Switch to dark mode
+    - scheme: slate
+      primary: teal
+      accent: orange
+      toggle:
+        icon: material/weather-sunny
+        name: Switch to light mode
+
+markdown_extensions:
+  - admonition
+  - attr_list
+  - footnotes
+  - pymdownx.details
+  - pymdownx.highlight:
+      anchor_linenums: true
+      linenums_style: pymdownx-inline
+  - pymdownx.inlinehilite
+  - pymdownx.snippets:
+      check_paths: true
+  - pymdownx.superfences
+  - pymdownx.codeblock
+  - pymdownx.tabbed:
+      alternate_style: true
+  - pymdownx.tasklist:
+      custom_checkbox: true
+  - toc:
+      permalink: 🔗
+
 plugins:
   - search
   - autorefs
   - mkdocstrings:
       handlers:
         python:
-          paths: [src/eqmmm]           
+          paths:
+            - src/eqmmm
           options:
-            show_source: false
-            docstring_style: google  
+            docstring_style: google
+            docstring_options:
+              ignore_init_summary: true
+            docstring_section_style: list
+            filters:
+              - "!^_"
             members_order: source
-            show_submodules: true     
+            separate_signature: true
+            show_root_heading: true
+            show_root_full_path: false
+            show_signature_annotations: true
+            show_source: false
+            show_submodules: true
+            summary: true
   - encryptcontent:
-      global_password: 'gordonbell2026' 
-nav:
-  - Home: index.md
-  - API: api.md
-docs_dir: docs
+      global_password: gordonbell2026
+  - mkdocs-jupyter:
+      execute: false 
+
+extra:
+  social:
+    - icon: fontawesome/brands/github
+      link: https://github.com/bestquark/evolutionary-qmmm

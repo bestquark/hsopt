@@ -48,93 +48,154 @@ def kron_all(
 
 
 class PauliSumHamiltonian(Hamiltonian):
-    """Deterministic Pauli-sum Hamiltonian ``H = Σ_j c_j P_j``.
+    """Deterministic Pauli-sum Hamiltonian H = Σ_j c_j P_j.
 
     Args:
         n_qubits (int): Number of qubits in the register.
-        pauli_strings (Sequence[str]): Pauli strings such as ``"ZZII"``. Each
-            string must have length ``n_qubits``.
-        coeffs (Sequence[float]): Coefficients associated with each Pauli term.
-        sparse (bool): If ``True`` store and operate on sparse matrices.
+        pauli_strings (Sequence[str]): Sparse notation strings like
+            "X0 Z3 Y5", "Z2", or "I" for the all-identity term.
+            Identity is implied on all other qubits.
+        coeffs (Sequence[complex]): Coefficients for each Pauli term.
+        sparse (bool): If True operate/stash matrices in scipy.sparse.
     """
 
     def __init__(
         self,
         n_qubits: int,
         pauli_strings: Sequence[str],
-        coeffs: Sequence[float],
+        coeffs: Sequence[complex],
         sparse: bool = False,
     ):
         self.n_qubits = int(n_qubits)
-        self.pauli_strings = list(pauli_strings)
-        self.coeffs = np.asarray(coeffs, dtype=float)
         self.sparse = sparse
 
-        if len(self.pauli_strings) != len(self.coeffs):
+        self.coeffs = np.asarray(coeffs, dtype=complex)
+        if len(pauli_strings) != len(self.coeffs):
             raise ValueError("len(pauli_strings) must match len(coeffs)")
-        for s in self.pauli_strings:
-            if len(s) != self.n_qubits:
-                raise ValueError("each Pauli string must have length n_qubits")
+
+        # keep original sparse notation
+        self.pauli_sparse = list(pauli_strings)
+
+        parsed_ops = []
+        for s in self.pauli_sparse:
+            ss = s.replace(" ", "")
+
+            # special case: pure identity term
+            if ss == "" or ss == "I":
+                parsed_ops.append([])  # no ops, all identity
+                continue
+
+            ops_for_term = []
+            i = 0
+            while i < len(ss):
+                op = ss[i]
+                i += 1
+
+                if op not in {"X", "Y", "Z"}:
+                    raise ValueError(f"Invalid Pauli operator '{op}' in term '{s}'")
+
+                # read the integer qubit index following the op
+                digits = []
+                while i < len(ss) and ss[i].isdigit():
+                    digits.append(ss[i])
+                    i += 1
+                if not digits:
+                    raise ValueError(f"Missing qubit index after '{op}' in term '{s}'")
+
+                idx = int("".join(digits))
+                if idx < 0 or idx >= self.n_qubits:
+                    raise ValueError(
+                        f"Qubit index {idx} out of range for n_qubits={self.n_qubits} in term '{s}'"
+                    )
+
+                ops_for_term.append((idx, op))
+
+            parsed_ops.append(ops_for_term)
+
+        # list[ list[(idx, 'X'/'Y'/'Z')] ]
+        self._parsed_ops = parsed_ops
 
         self._dim = 2**self.n_qubits
 
     @property
     def hilbert_dim(self) -> int:
-        """int: Hilbert-space dimension ``2**n_qubits``."""
         return self._dim
 
-    def _pauli_to_matrix(self, pstr: str):
-        """Convert a Pauli string to a matrix, respecting ``sparse`` mode."""
+    def _pauli_to_matrix(self, sparse_ops: Sequence[Tuple[int, str]]):
+        """
+        Build the matrix for one Pauli term given its sparse ops.
+
+        sparse_ops: e.g. [(0,'X'), (3,'Z')] means:
+            X on qubit 0, Z on qubit 3, I elsewhere.
+        """
         tables = _PAULI_SINGLE_SPARSE if self.sparse else _PAULI_SINGLE_DENSE
-        return kron_all([tables[p] for p in pstr], sparse=self.sparse)
+
+        # start as all identity
+        single_site_ops = [tables["I"] for _ in range(self.n_qubits)]
+
+        # drop in the specified non-identity ops
+        for idx, op in sparse_ops:
+            single_site_ops[idx] = tables[op]
+
+        return kron_all(single_site_ops, sparse=self.sparse)
 
     def to_matrix(self) -> Union[np.ndarray, sp.spmatrix]:
-        """Return the full matrix representation of the Pauli sum.
-
-        Returns:
-            Union[np.ndarray, sp.spmatrix]: Dense or sparse matrix depending on ``sparse`` mode.
-        """
         if self.sparse:
             H = sp.csr_matrix((self._dim, self._dim), dtype=complex)
-            for c, pstr in zip(self.coeffs, self.pauli_strings):
-                H = H + c * self._pauli_to_matrix(pstr)
         else:
             H = np.zeros((self._dim, self._dim), dtype=complex)
-            for c, pstr in zip(self.coeffs, self.pauli_strings):
-                H += c * self._pauli_to_matrix(pstr)
+
+        cache: Dict[Tuple[Tuple[int, str], ...], Union[np.ndarray, sp.spmatrix]] = {}
+
+        for c, ops in zip(self.coeffs, self._parsed_ops):
+            key = tuple(ops)
+            if key in cache:
+                P = cache[key]
+            else:
+                P = self._pauli_to_matrix(ops)
+                cache[key] = P
+
+            if self.sparse:
+                H = H + c * P
+            else:
+                H += c * P
+
         return H
 
     def terms(self) -> Sequence[Dict[str, Any]]:
-        """Return the list of Pauli terms and their coefficients.
-
-        Returns:
-            Sequence[Dict[str, Any]]:
-                Entries with ``coef``, ``matrix``, and ``pauli`` metadata.
-        """
         out: List[Dict[str, Any]] = []
-        for c, pstr in zip(self.coeffs, self.pauli_strings):
-            P = self._pauli_to_matrix(pstr)
-            term = {
-                "coef": c,
-                "matrix": c * P,
-                "pauli": pstr,
-            }
-            out.append(term)
+        cache: Dict[Tuple[Tuple[int, str], ...], Union[np.ndarray, sp.spmatrix]] = {}
+
+        for c, ops, sparse_str in zip(self.coeffs, self._parsed_ops, self.pauli_sparse):
+            key = tuple(ops)
+            if key in cache:
+                P = cache[key]
+            else:
+                P = self._pauli_to_matrix(ops)
+                cache[key] = P
+
+            out.append(
+                {
+                    "coef": c,
+                    "matrix": c * P,
+                    "pauli": sparse_str,
+                }
+            )
+
         return out
 
     def decompose(self) -> Dict[str, Any]:
-        """Return a JSON-serializable description of the Pauli sum.
-
-        Returns:
-            Dict[str, Any]: Metadata including qubit count, sparsity flag, and per-term coefficients.
-        """
         return {
             "type": "pauli_sum",
             "n_qubits": self.n_qubits,
-            "n_terms": len(self.pauli_strings),
+            "n_terms": len(self.coeffs),
             "sparse": self.sparse,
             "terms": [
-                {"coeff": float(c), "pauli": p} for c, p in zip(self.coeffs, self.pauli_strings)
+                {
+                    "coeff": (c.real if abs(c.imag) < 1e-12 else c),
+                    "pauli": s,
+                }
+                for c, s in zip(self.coeffs, self.pauli_sparse)
             ],
         }
 

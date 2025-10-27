@@ -1,16 +1,16 @@
 """Electronic-structure Hamiltonians and mappings to Pauli representations."""
 
 from __future__ import annotations
-from typing import Any, Dict, Sequence, Union, Optional, Callable, Tuple, List
+from typing import Any, Dict, Sequence, Union, Optional, Callable, List
 
-import cupynumeric as np
-import scipy.sparse as sp
+import numpy as np
 from openfermion import (
     QubitOperator,
     FermionOperator,
     jordan_wigner,
     bravyi_kitaev,
-    parity_mapping,
+    parity_code,
+    binary_code_transform,
     get_sparse_operator,
 )
 
@@ -305,68 +305,77 @@ def _fermion_operator_from_integrals(
     h2: np.ndarray,
     constant: float,
 ) -> "FermionOperator":
-    """Build an OpenFermion ``FermionOperator`` from spin-orbital data.
+    """Build an OpenFermion FermionOperator from spin-orbital integrals.
 
-    Args:
-        h1 (np.ndarray): One-body integrals ``h1[p, q]``.
-        h2 (np.ndarray): Two-body integrals ``h2[p, q, r, s]`` before the
-            ``1/2`` prefactor.
-        constant (float): Scalar energy offset.
-
-    Returns:
-        FermionOperator: Second-quantized Hamiltonian suitable for mapping to qubits.
+    Uses sparsity of h1/h2 to avoid O(n_orb^4) pure-Python loops.
     """
     from openfermion import FermionOperator
 
     n_orb = h1.shape[0]
     H_f = FermionOperator()
 
-    # one-body terms
-    for p in range(n_orb):
-        for q in range(n_orb):
-            c = h1[p, q]
-            if abs(c) > 1e-12:
-                H_f += FermionOperator(((p, 1), (q, 0)), c)
+    thresh = 1e-12
 
-    # two-body terms
-    for p in range(n_orb):
-        for q in range(n_orb):
-            for r in range(n_orb):
-                for s in range(n_orb):
-                    c = 0.5 * h2[p, q, r, s]
-                    if abs(c) > 1e-12:
-                        H_f += FermionOperator(((p, 1), (q, 1), (r, 0), (s, 0)), c)
+    # --- 1-body terms: sum_{pq} h1[p,q] a_p^\dag a_q
+    nz_p, nz_q = np.nonzero(np.abs(h1) > thresh)
+    for p_raw, q_raw in zip(nz_p, nz_q):
+        p = int(p_raw)
+        q = int(q_raw)
+        c = h1[p, q]
+        H_f += FermionOperator(
+            ((p, 1), (q, 0)),  # a_p^\dag a_q
+            float(c),
+        )
 
-    # constant shift
-    if abs(constant) > 1e-12:
-        H_f += FermionOperator((), constant)
+    # --- 2-body terms: (1/2) sum_{pqrs} h2[p,q,r,s] a_p^\dag a_q^\dag a_r a_s
+    # flatten (pq, rs) so we can nonzero() once
+    h2_eff = 0.5 * h2
+    n2 = n_orb * n_orb
+    flat_h2 = h2_eff.reshape(n2, n2)
+
+    nz_row, nz_col = np.nonzero(np.abs(flat_h2) > thresh)
+
+    for row_raw, col_raw in zip(nz_row, nz_col):
+        row = int(row_raw)
+        col = int(col_raw)
+
+        val = flat_h2[row, col]
+        if abs(val) <= thresh:
+            continue
+
+        # decode row -> (p,q), col -> (r,s)
+        p = row // n_orb
+        q = row % n_orb
+        r = col // n_orb
+        s = col % n_orb
+
+        # cast to plain Python int for OpenFermion
+        p = int(p)
+        q = int(q)
+        r = int(r)
+        s = int(s)
+
+        H_f += FermionOperator(
+            ((p, 1), (q, 1), (r, 0), (s, 0)),  # a_p^\dag a_q^\dag a_r a_s
+            float(val),
+        )
+
+    # --- constant / nuclear repulsion etc.
+    if abs(constant) > thresh:
+        H_f += FermionOperator((), float(constant))
 
     return H_f
 
 
-def _qubit_op_to_matrix_and_terms(
+def _qubit_op_to_terms(
     qubit_op: "QubitOperator",
     n_qubits: int,
-    sparse: bool = False,
-) -> Tuple[Union[np.ndarray, "sp.spmatrix"], List[Dict[str, Any]]]:
-    """Convert an OpenFermion operator into matrix and Pauli metadata.
+) -> List[Dict[str, Any]]:
+    """Extract Pauli-term list *only*, skipping full matrix construction.
 
-    Args:
-        qubit_op (QubitOperator): Operator expressed as a Pauli sum.
-        n_qubits (int): Number of qubits needed for the operator.
-        sparse (bool): If ``True`` keep the matrix sparse.
-
-    Returns:
-        Tuple[Union[np.ndarray, sp.spmatrix], List[Dict[str, Any]]]: Sparse or dense matrix plus a list of ``{"coeff", "pauli"}`` dictionaries with human-readable strings like ``"X0 Z1"``.
+    Accepts sparse notation strings like "X0 Z1 Y2" (identity on all other qubits).
     """
 
-    # build sparse matrix from OpenFermion
-    sp_op = get_sparse_operator(qubit_op, n_qubits=n_qubits)
-
-    # convert to dense if requested
-    mat = sp_op if sparse else sp_op.toarray()
-
-    # term list
     terms: List[Dict[str, Any]] = []
     for pauli_term, coeff in qubit_op.terms.items():
         if len(pauli_term) == 0:
@@ -376,7 +385,7 @@ def _qubit_op_to_matrix_and_terms(
             pstr = " ".join(f"{op}{idx}" for idx, op in sorted_ops)
         terms.append({"coeff": complex(coeff), "pauli": pstr})
 
-    return mat, terms
+    return terms
 
 
 def _apply_a(bitstring: int, p: int):
@@ -493,6 +502,126 @@ def _pauli_string_to_matrix(pauli_ops, n_qubits: int) -> np.ndarray:
     return sparse_single.toarray()
 
 
+def parity_mapping(fermion_operator, n_modes):
+    return binary_code_transform(fermion_operator, parity_code(n_modes))
+
+
+def _active_space_from_mf(
+    mf,
+    n_core_keep: int,
+    n_virt_keep: int,
+):
+    """
+    Build active-space spin-orbital integrals from a converged RHF `mf`,
+    keeping only a subset of spatial MOs near the frontier.
+
+    Returns:
+        h1_spin, h2_spin, const_term, meta
+    where meta includes active/frozen orbital info.
+    """
+    import numpy as _np
+    from pyscf import ao2mo
+
+    mol = mf.mol
+    e_nuc = mol.energy_nuc()
+
+    C = mf.mo_coeff  # (nao, nmo)
+    eps = mf.mo_energy  # (nmo,)
+    occ = mf.mo_occ  # (nmo,)
+    nmo = C.shape[1]
+
+    # occupied / virtual split
+    occ_idx = [i for i in range(nmo) if occ[i] > 1e-8]
+    virt_idx = [i for i in range(nmo) if occ[i] <= 1e-8]
+
+    # sort within each block by energy
+    occ_sorted = sorted(occ_idx, key=lambda i: eps[i])  # low -> high
+    virt_sorted = sorted(virt_idx, key=lambda i: eps[i])  # low -> high
+
+    # choose active occ/virt
+    active_occ = occ_sorted[-n_core_keep:] if n_core_keep <= len(occ_sorted) else occ_sorted[:]
+    active_virt = virt_sorted[:n_virt_keep] if n_virt_keep <= len(virt_sorted) else virt_sorted[:]
+
+    active_indices = sorted(active_occ + active_virt)
+
+    # frozen ones = everything else
+    frozen_indices = sorted(set(range(nmo)) - set(active_indices))
+
+    # transform core Hamiltonian and ERIs to MO basis
+    h_core_ao = mf.get_hcore()
+    h_core_mo = C.T @ h_core_ao @ C  # (nmo,nmo)
+
+    eri_mo_packed = ao2mo.kernel(mol, C)
+    eri_mo = ao2mo.restore(1, eri_mo_packed, nmo)  # (nmo,nmo,nmo,nmo)
+
+    act = _np.array(active_indices, dtype=int)
+    n_act = act.shape[0]
+
+    # restricted 1e and 2e integrals in spatial active subspace
+    h1_spatial = h_core_mo[_np.ix_(act, act)]  # (n_act,n_act)
+
+    h2_spatial = eri_mo[
+        act[:, None, None, None],
+        act[None, :, None, None],
+        act[None, None, :, None],
+        act[None, None, None, :],
+    ]
+
+    # spin-orbital expansion
+    n_spin_orb = 2 * n_act
+    h1_spin = _np.zeros((n_spin_orb, n_spin_orb))
+    h1_spin[0::2, 0::2] = h1_spatial
+    h1_spin[1::2, 1::2] = h1_spatial
+
+    h2_spin = _np.zeros((n_spin_orb, n_spin_orb, n_spin_orb, n_spin_orb))
+
+    for p_i in range(n_act):
+        for q_i in range(n_act):
+            for r_i in range(n_act):
+                for s_i in range(n_act):
+                    coul = h2_spatial[p_i, q_i, r_i, s_i]  # (pq|rs)
+                    exch = h2_spatial[p_i, q_i, s_i, r_i]  # (pq|sr)
+
+                    for sp_p in (0, 1):
+                        for sp_q in (0, 1):
+                            for sp_r in (0, 1):
+                                for sp_s in (0, 1):
+                                    P = 2 * p_i + sp_p
+                                    Q = 2 * q_i + sp_q
+                                    R = 2 * r_i + sp_r
+                                    S = 2 * s_i + sp_s
+
+                                    term = 0.0
+                                    if sp_p == sp_r and sp_q == sp_s:
+                                        term += coul
+                                    if sp_p == sp_s and sp_q == sp_r:
+                                        term -= exch
+                                    if abs(term) > 1e-12:
+                                        h2_spin[P, Q, R, S] += term
+
+    # constant term: start with just nuclear repulsion.
+    const_term = e_nuc
+
+    meta = {
+        # which MOs we kept (spatial)
+        "active_indices": active_indices,
+        "frozen_indices": frozen_indices,
+        # label which part of active_indices came from occ/virt
+        "active_occ": active_occ,
+        "active_virt": active_virt,
+        # orbital info for debugging / plotting frontier orbitals
+        "orbital_energies": eps.tolist(),
+        "orbital_occupations": occ.tolist(),
+        # sizes
+        "n_act_spatial": n_act,
+        "n_spin_orb": n_spin_orb,
+        "n_core_keep": int(n_core_keep),
+        "n_virt_keep": int(n_virt_keep),
+    }
+
+    return h1_spin, h2_spin, const_term, meta
+
+
 # ----------------------- main classes ----------------------- #
 
 
@@ -521,6 +650,7 @@ class ElectronicHamiltonian(Hamiltonian):
         h2: np.ndarray,
         constant: float = 0.0,
         mapping: str = "jordan-wigner",
+        meta: Optional[Dict[str, Any]] = None,
     ):
         self.h1 = np.array(h1, dtype=float)
         self.h2 = np.array(h2, dtype=float)
@@ -534,6 +664,7 @@ class ElectronicHamiltonian(Hamiltonian):
             raise ValueError("h2 must be (M,M,M,M)")
         self.M = M
         self._hilbert_dim = 2**M  # spin-orbital occupation basis dim
+        self.meta = meta or {}
 
     @property
     def hilbert_dim(self) -> int:
@@ -655,39 +786,23 @@ class ElectronicHamiltonian(Hamiltonian):
         mapping: Optional[str] = None,
         sparse: bool = False,
     ) -> "QElectronicHamiltonian":
-        """Map the fermionic Hamiltonian to qubits via the chosen mapping.
-
-        Args:
-            mapping (str | None): Mapping name. Defaults to ``self.mapping``.
-            sparse (bool): If ``True`` build a sparse Pauli representation.
-
-        Returns:
-            QElectronicHamiltonian: Pauli-sum Hamiltonian with metadata about the mapping origin.
-
-        Raises:
-            ValueError: If the mapping keyword is unknown.
-        """
         use_mapping = mapping or self.mapping
 
         # 1. Build FermionOperator
         H_f = _fermion_operator_from_integrals(self.h1, self.h2, self.constant)
 
-        # 2. Map to QubitOperator
         if use_mapping == "jordan-wigner":
             H_q = jordan_wigner(H_f)
         elif use_mapping == "bravyi-kitaev":
             H_q = bravyi_kitaev(H_f)
         elif use_mapping == "parity":
-            H_q = parity_mapping(H_f)
+            H_q = parity_mapping(H_f, n_modes=self.M)
         else:
             raise ValueError(f"Unknown mapping {use_mapping}")
 
         n_qubits = self.M
+        terms = _qubit_op_to_terms(H_q, n_qubits)
 
-        # 3. Extract Pauli-sum terms (now supports sparse)
-        _, terms = _qubit_op_to_matrix_and_terms(H_q, n_qubits, sparse=sparse)
-
-        # 4. Construct QElectronicHamiltonian (sparse/dense internally handled)
         return QElectronicHamiltonian(
             qubit_terms=terms,
             n_qubits=n_qubits,
@@ -768,22 +883,19 @@ class ElectronicHamiltonian(Hamiltonian):
         spin_mult: int = 1,
         mapping: str = "jordan-wigner",
         use_gpu4pyscf: bool = False,
+        freeze_core: bool = False,
+        n_core_keep: int = 4,
+        n_virt_keep: int = 4,
     ) -> "ElectronicHamiltonian":
-        """Construct an electronic Hamiltonian directly from XYZ input.
-
-        Args:
-            xyz_source (Union[str, Sequence[str]]): XYZ file path, multiline
-                string, or sequence of lines.
-            basis (str): Basis set keyword for PySCF.
-            charge (int): Molecular charge.
-            spin_mult (int): Spin multiplicity ``2S + 1``.
-            mapping (str): Default mapping tag stored on the object.
-            use_gpu4pyscf (bool): If ``True`` attempt to use ``gpu4pyscf``.
-
-        Returns:
-            ElectronicHamiltonian: Hamiltonian built from SCF integrals.
+        """
+        If freeze_core is False:
+            build full Hamiltonian (all orbitals).
+        If freeze_core is True:
+            build an active-space Hamiltonian with only selected valence+low virtual
+            and attach metadata listing which orbitals were kept/frozen.
         """
         geom_str = _parse_xyz(xyz_source)
+
         mf, mol = _scf_with_optional_external(
             geom_str=geom_str,
             basis=basis,
@@ -792,19 +904,56 @@ class ElectronicHamiltonian(Hamiltonian):
             external_potential=None,
             use_gpu4pyscf=use_gpu4pyscf,
         )
-        h1, h2, constant = _integrals_from_mf(mf, mol)
-        return cls(h1=h1, h2=h2, constant=constant, mapping=mapping)
+
+        if not freeze_core:
+            h1, h2, constant = _integrals_from_mf(mf, mol)
+            meta = {
+                "active_indices": list(range(h1.shape[0] // 2)),  # spatial MOs ~ all of them
+                "frozen_indices": [],
+                "active_occ": [],
+                "active_virt": [],
+                "orbital_energies": getattr(mf, "mo_energy").tolist(),
+                "orbital_occupations": getattr(mf, "mo_occ").tolist(),
+                "n_act_spatial": h1.shape[0] // 2,
+                "n_spin_orb": h1.shape[0],
+                "n_core_keep": None,
+                "n_virt_keep": None,
+                "note": "full-space (no freezing)",
+            }
+            return cls(
+                h1=h1,
+                h2=h2,
+                constant=constant,
+                mapping=mapping,
+                meta=meta,
+            )
+
+        # freeze_core=True path
+        h1_act, h2_act, const_act, meta_act = _active_space_from_mf(
+            mf,
+            n_core_keep=n_core_keep,
+            n_virt_keep=n_virt_keep,
+        )
+
+        meta_act["note"] = "active-space / frozen-core approximation"
+
+        return cls(
+            h1=h1_act,
+            h2=h2_act,
+            constant=const_act,
+            mapping=mapping,
+            meta=meta_act,
+        )
 
 
 class QElectronicHamiltonian(PauliSumHamiltonian):
     """Electronic Hamiltonian expressed as a Pauli sum.
 
     Args:
-        qubit_terms (Sequence[Dict[str, Any]]): Terms with ``coeff`` and
-            ``pauli`` keys as produced by :func:`_qubit_op_to_matrix_and_terms`.
+        qubit_terms (Sequence[Dict[str, Any]]): Terms with “coeff” and “pauli” keys.
         n_qubits (int): Number of qubits.
         mapping (str): Label of the fermion-to-qubit mapping used.
-        sparse (bool): If ``True`` store data in sparse format.
+        sparse (bool): If True store data in sparse format.
         origin (Dict[str, Any] | None): Optional provenance metadata.
     """
 
@@ -814,13 +963,11 @@ class QElectronicHamiltonian(PauliSumHamiltonian):
         n_qubits: int,
         mapping: str,
         sparse: bool = False,
-        origin: Dict[str, Any] | None = None,
+        origin: Optional[Dict[str, Any]] = None,
     ):
-        # Extract coeffs and Pauli strings
         coeffs = [complex(t["coeff"]) for t in qubit_terms]
         pauli_strings = [t["pauli"].replace(" ", "") for t in qubit_terms]
 
-        # Initialize as PauliSumHamiltonian
         super().__init__(
             n_qubits=n_qubits,
             pauli_strings=pauli_strings,
@@ -832,11 +979,6 @@ class QElectronicHamiltonian(PauliSumHamiltonian):
         self.origin = origin or {}
 
     def decompose(self) -> Dict[str, Any]:
-        """Return Pauli metadata augmented with mapping information.
-
-        Returns:
-            Dict[str, Any]: Output of [`PauliSumHamiltonian.decompose`][] extended with ``type``, ``mapping``, and ``origin`` fields.
-        """
         base = super().decompose()
         base["type"] = "qubit_pauli_sum"
         base["mapping"] = self.mapping
