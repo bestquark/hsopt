@@ -1,16 +1,21 @@
 # API Reference
 
-## Biosystem
-::: biosystem
+## Top-level package
+::: src.eqmmm             
 
-## Mixed precision
-::: mixed_fps
+## Subpackages
 
-## MM Module
-::: mm
+### `src.eqmmm.biosystem`
+::: src.eqmmm.biosystem
 
-## QM Module
-::: qm
+### `src.eqmmm.mixed_fps`
+::: src.eqmmm.mixed_fps
 
-## Interface
-::: interface
+### `src.eqmmm.mm`
+::: src.eqmmm.mm
+
+### `src.eqmmm.qm`
+::: src.eqmmm.qm
+
+### `src.eqmmm.interface`
+::: src.eqmmm.interface
