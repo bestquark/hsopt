@@ -89,6 +89,7 @@ plugins:
             summary: true
   - encryptcontent:
       global_password: gordonbell2026
+      delete_index: false
   - mkdocs-jupyter:
       execute: false 
 
