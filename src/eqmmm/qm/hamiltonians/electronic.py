@@ -1,4 +1,4 @@
-"""Electronic-structure Hamiltonians and mappings to Pauli representations."""
+"""Electronic-structure Hamiltonians"""
 
 from __future__ import annotations
 from typing import Any, Dict, Sequence, Union, Optional, Callable, List
@@ -639,8 +639,6 @@ class ElectronicHamiltonian(Hamiltonian):
         h1 (np.ndarray): Stored copy of the one-body integrals.
         h2 (np.ndarray): Stored copy of the two-body integrals.
         constant (float): Energy shift added to the Hamiltonian.
-        mapping (str): Default mapping name used by
-            [`ElectronicHamiltonian.to_qubits`][].
         M (int): Number of spin orbitals.
     """
 
@@ -649,13 +647,11 @@ class ElectronicHamiltonian(Hamiltonian):
         h1: np.ndarray,
         h2: np.ndarray,
         constant: float = 0.0,
-        mapping: str = "jordan-wigner",
         meta: Optional[Dict[str, Any]] = None,
     ):
         self.h1 = np.array(h1, dtype=float)
         self.h2 = np.array(h2, dtype=float)
         self.constant = float(constant)
-        self.mapping = mapping  # default suggestion, can be overridden
 
         M = self.h1.shape[0]
         if self.h1.shape != (M, M):
@@ -770,7 +766,7 @@ class ElectronicHamiltonian(Hamiltonian):
         """Provide lightweight metadata describing the Hamiltonian.
 
         Returns:
-            Dict[str, Any]: JSON-serializable data with tensor shapes and mapping metadata.
+            Dict[str, Any]: JSON-serializable data with tensor shapes.
         """
         return {
             "type": "second_quantized",
@@ -778,27 +774,23 @@ class ElectronicHamiltonian(Hamiltonian):
             "two_body": self.h2,
             "constant": self.constant,
             "n_spin_orbs": self.M,
-            "mapping": self.mapping,
         }
 
     def to_qubits(
         self,
-        mapping: Optional[str] = None,
+        mapping: Optional[str] = "jordan-wigner",
         sparse: bool = False,
     ) -> "QElectronicHamiltonian":
-        use_mapping = mapping or self.mapping
-
-        # 1. Build FermionOperator
         H_f = _fermion_operator_from_integrals(self.h1, self.h2, self.constant)
 
-        if use_mapping == "jordan-wigner":
+        if mapping == "jordan-wigner":
             H_q = jordan_wigner(H_f)
-        elif use_mapping == "bravyi-kitaev":
+        elif mapping == "bravyi-kitaev":
             H_q = bravyi_kitaev(H_f)
-        elif use_mapping == "parity":
+        elif mapping == "parity":
             H_q = parity_mapping(H_f, n_modes=self.M)
         else:
-            raise ValueError(f"Unknown mapping {use_mapping}")
+            raise ValueError(f"Unknown mapping {mapping}")
 
         n_qubits = self.M
         terms = _qubit_op_to_terms(H_q, n_qubits)
@@ -806,7 +798,7 @@ class ElectronicHamiltonian(Hamiltonian):
         return QElectronicHamiltonian(
             qubit_terms=terms,
             n_qubits=n_qubits,
-            mapping=use_mapping,
+            mapping=mapping,
             sparse=sparse,
             origin={"source": "ElectronicHamiltonian"},
         )
@@ -881,7 +873,6 @@ class ElectronicHamiltonian(Hamiltonian):
         basis: str = "sto-3g",
         charge: int = 0,
         spin_mult: int = 1,
-        mapping: str = "jordan-wigner",
         use_gpu4pyscf: bool = False,
         freeze_core: bool = False,
         n_core_keep: int = 4,
@@ -924,7 +915,6 @@ class ElectronicHamiltonian(Hamiltonian):
                 h1=h1,
                 h2=h2,
                 constant=constant,
-                mapping=mapping,
                 meta=meta,
             )
 
@@ -941,7 +931,6 @@ class ElectronicHamiltonian(Hamiltonian):
             h1=h1_act,
             h2=h2_act,
             constant=const_act,
-            mapping=mapping,
             meta=meta_act,
         )
 
@@ -1002,10 +991,9 @@ class QMMMHamiltonian(ElectronicHamiltonian):
         h1: np.ndarray,
         h2: np.ndarray,
         constant: float,
-        mapping: str,
         mm_env: Dict[str, Any],
     ):
-        super().__init__(h1=h1, h2=h2, constant=constant, mapping=mapping)
+        super().__init__(h1=h1, h2=h2, constant=constant)
         self.mm_env = mm_env  # e.g. {"type": "point_charges", "charges": ...}
 
     def decompose(self) -> Dict[str, Any]:
@@ -1031,7 +1019,6 @@ class QMMMHamiltonian(ElectronicHamiltonian):
         basis: str = "sto-3g",
         charge: int = 0,
         spin_mult: int = 1,
-        mapping: str = "jordan-wigner",
         use_gpu4pyscf: bool = False,
     ) -> "QMMMHamiltonian":
         """Construct a QM/MM Hamiltonian directly from XYZ data.
@@ -1044,7 +1031,6 @@ class QMMMHamiltonian(ElectronicHamiltonian):
             basis (str): Basis set keyword for PySCF.
             charge (int): Molecular charge.
             spin_mult (int): Spin multiplicity ``2S + 1``.
-            mapping (str): Default mapping tag.
             use_gpu4pyscf (bool): Attempt to use ``gpu4pyscf`` when available.
 
         Returns:
@@ -1076,7 +1062,6 @@ class QMMMHamiltonian(ElectronicHamiltonian):
             h1=h1,
             h2=h2,
             constant=constant,
-            mapping=mapping,
             mm_env=mm_env,
         )
 

@@ -5,7 +5,11 @@ from eqmmm.qm.hamiltonians.electronic import (
     QElectronicHamiltonian,
     QMMMHamiltonian,
 )
-from eqmmm.qm.hamiltonians.pauli import RandomPauliHamiltonian, PauliSumHamiltonian
+from eqmmm.qm.hamiltonians.pauli import (
+    RandomPauliHamiltonian,
+    PauliSumHamiltonian,
+    LatticeHamiltonian,
+)
 from eqmmm.qm.hamiltonians.matrix import MatrixHamiltonian, WeightedRandomHamiltonian
 
 __all__ = [
@@ -16,4 +20,5 @@ __all__ = [
     "PauliSumHamiltonian",
     "MatrixHamiltonian",
     "WeightedRandomHamiltonian",
+    "LatticeHamiltonian",
 ]

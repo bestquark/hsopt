@@ -191,6 +191,66 @@ class PauliSumHamiltonian(Hamiltonian):
         }
 
 
+class LatticeHamiltonian(PauliSumHamiltonian):
+    """Pauli-sum Hamiltonian for a lattice model, with model/lattice metadata.
+
+    Args:
+        n_qubits (int): Number of qubits in the register.
+        pauli_strings (Sequence[str]): Sparse notation strings like
+            "X0 Z3 Y5", "Z2", or "I" for the all-identity term.
+            Identity is implied on all other qubits.
+        coeffs (Sequence[complex]): Coefficients for each Pauli term.
+        sparse (bool): If True operate/stash matrices in scipy.sparse.
+        model (str): Name of the lattice model, e.g. "ising", "heisenberg", "hubbard".
+        dims (Tuple[int, ...]): Lattice dimensions, e.g. (Lx,) or (Lx, Ly).
+        boundary (str): Boundary condition, e.g. "open" or "periodic".
+        params (Dict[str, Any]): Model parameters, e.g. {"J": 1.0, "h": 0.5}.
+        neighbor_pairs (Sequence[Tuple[int, int]]): List of lattice neighbor
+            site index pairs used in the model.
+        notes (str | None): Optional free-text notes about the model instance.
+    """
+
+    def __init__(
+        self,
+        *,
+        n_qubits: int,
+        pauli_strings: Sequence[str],
+        coeffs: Sequence[complex],
+        sparse: bool,
+        model: str,
+        dims: Tuple[int, ...],
+        boundary: str,
+        params: Dict[str, Any],
+        neighbor_pairs: Sequence[Tuple[int, int]],
+        notes: Optional[str] = None,
+    ):
+        super().__init__(
+            n_qubits=n_qubits,
+            pauli_strings=pauli_strings,
+            coeffs=coeffs,
+            sparse=sparse,
+        )
+        self.model = model
+        self.dims = tuple(dims)
+        self.boundary = str(boundary)
+        self.params = dict(params)
+        self.neighbor_pairs = list(neighbor_pairs)
+        self.notes = notes
+
+    def decompose(self) -> Dict[str, Any]:
+        """Extend PauliSumHamiltonian.decompose() with lattice metadata."""
+        base = super().decompose()
+        base["type"] = "lattice_pauli_sum"
+        base["model"] = self.model
+        base["dims"] = self.dims
+        base["boundary"] = self.boundary
+        base["params"] = self.params
+        base["n_neighbor_pairs"] = len(self.neighbor_pairs)
+        if self.notes is not None:
+            base["notes"] = self.notes
+        return base
+
+
 class RandomPauliHamiltonian(HamiltonianEnsemble):
     """Stochastic ensemble whose draws are Pauli-sum Hamiltonians.
 
