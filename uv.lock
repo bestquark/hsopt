@@ -482,6 +482,7 @@ docs = [
     { name = "mkdocs-encryptcontent-plugin" },
     { name = "mkdocs-material" },
     { name = "mkdocstrings", extra = ["python"] },
+    { name = "pymdown-extensions" },
 ]
 gpu = [
     { name = "cuquantum" },
@@ -522,6 +523,7 @@ docs = [
     { name = "mkdocs-encryptcontent-plugin", specifier = ">=3.0.5" },
     { name = "mkdocs-material", specifier = ">=9.6.21" },
     { name = "mkdocstrings", extras = ["python"], specifier = ">=0.30.1" },
+    { name = "pymdown-extensions", specifier = ">=10.16.1" },
 ]
 gpu = [
     { name = "cuquantum", specifier = ">=25.9.1" },
