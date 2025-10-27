@@ -10,6 +10,7 @@ code_evolution/*.json
 code_evolution/legion_prof
 cupynum_test.ipynb
 sims/
+encryptcontent.cache
 
 
 # Byte-compiled / optimized / DLL files
