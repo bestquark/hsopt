@@ -27,18 +27,18 @@ theme:
     - content.tooltips
     - toc.follow
   palette:
-    - scheme: default
-      primary: teal
-      accent: orange
-      toggle:
-        icon: material/weather-night
-        name: Switch to dark mode
-    - scheme: slate
-      primary: teal
-      accent: orange
+    - scheme: slate          # Dark mode first (default)
+      primary: blue          # Main color theme
+      accent: indigo         # Accent color (you can choose e.g. cyan, light blue)
       toggle:
         icon: material/weather-sunny
         name: Switch to light mode
+    - scheme: default        # Light mode second
+      primary: blue
+      accent: indigo
+      toggle:
+        icon: material/weather-night
+        name: Switch to dark mode
 
 markdown_extensions:
   - admonition
