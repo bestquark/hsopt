@@ -4,7 +4,7 @@ import cupynumeric as np
 from evaluator import _make_problem
 
 # from src.mixed_fps.simulate_quantization import *
-from eqmmm.qm.hamsim import simulate_hamiltonian
+from trotvol.qm.hamsim import simulate_hamiltonian
 
 
 FMT = {

@@ -1,3 +1,3 @@
-# `eqmmm.biosystem`
+# `trotvol.biosystem`
 
-::: eqmmm.biosystem
+::: trotvol.biosystem

@@ -8,7 +8,7 @@ watch:
   - mkdocs.yml
   - README.md
   - docs
-  - src/eqmmm
+  - src/trotvol
 
 nav:
   - Home: index.md
@@ -36,19 +36,22 @@ theme:
     - content.tooltips
     - toc.follow
   palette:
-    - scheme: slate
-      primary: deep-orange
-      accent: amber
-      toggle:
-        icon: material/weather-sunny
-        name: Switch to light mode
     - scheme: default
-      primary: deep-orange
-      accent: amber
-      toggle:
-        icon: material/weather-night
-        name: Switch to dark mode
-  palette_mode: dark
+      primary: custom
+      accent: custom
+    #   toggle:
+    #     icon: material/weather-night
+    #     name: Switch to dark mode
+    # - scheme: slate
+    #   primary: custom
+    #   accent: custom
+    #   toggle:
+    #     icon: material/weather-sunny
+    #     name: Switch to light mode
+  logo: assets/nv-logo.png
+
+extra_css:
+  - stylesheets/extra.css
 
 markdown_extensions:
   - admonition

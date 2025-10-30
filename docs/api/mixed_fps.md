@@ -1,3 +1,3 @@
-# `eqmmm.mixed_fps`
+# `trotvol.mixed_fps`
 
-::: eqmmm.mixed_fps
+::: trotvol.mixed_fps

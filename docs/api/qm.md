@@ -1,19 +1,19 @@
-# `eqmmm.qm`
+# `trotvol.qm`
 
 ## Submodules
 
-### `eqmmm.qm.hamiltonians`
+### `trotvol.qm.hamiltonians`
 
-::: eqmmm.qm.hamiltonians
+::: trotvol.qm.hamiltonians
 
-### `eqmmm.qm.hamsim`
+### `trotvol.qm.hamsim`
 
-::: eqmmm.qm.hamsim
+::: trotvol.qm.hamsim
 
-### `eqmmm.qm.hamiltonians.models`
+### `trotvol.qm.hamiltonians.models`
 
-::: eqmmm.qm.hamiltonians.models
+::: trotvol.qm.hamiltonians.models
 
-<!-- ### `eqmmm.qm.gpu4pyscf_wrapper`
+<!-- ### `trotvol.qm.gpu4pyscf_wrapper`
 
-::: eqmmm.qm.gpu4pyscf_wrapper -->
+::: trotvol.qm.gpu4pyscf_wrapper -->

@@ -14,8 +14,8 @@ from openfermion import (
     get_sparse_operator,
 )
 
-from eqmmm.qm.hamiltonians._hamiltonian import Hamiltonian
-from eqmmm.qm.hamiltonians.pauli import PauliSumHamiltonian
+from trotvol.qm.hamiltonians._hamiltonian import Hamiltonian
+from trotvol.qm.hamiltonians.pauli import PauliSumHamiltonian
 
 
 def _parse_xyz(xyz_source: Union[str, Sequence[str]]) -> str:
@@ -68,39 +68,15 @@ def _scf_with_optional_external(
     basis: str,
     charge: int,
     spin_mult: int,
-    external_potential: Optional[
-        Union[
-            Callable[[np.ndarray], np.ndarray],
-            Sequence[Sequence[float]],
-            np.ndarray,
-        ]
-    ] = None,
+    external_potential=None,
     use_gpu4pyscf: bool = False,
 ):
-    """Run a mean-field calculation with optional external potential.
+    # try gpu
+    from pyscf import gto, scf, qmmm as pyscf_qmmm, dft as pyscf_dft
 
-    Args:
-        geom_str (str): Semi-colon-separated geometry specification.
-        basis (str): Basis set keyword understood by PySCF.
-        charge (int): Total molecular charge.
-        spin_mult (int): Spin multiplicity ``2S + 1``.
-        external_potential (Callable | Sequence | np.ndarray | None): Either a
-            callable potential ``V(r)`` evaluated on grid points or an ``(N,4)``
-            array of point charges ``[x, y, z, q]``.
-        use_gpu4pyscf (bool): If ``True`` prefer ``gpu4pyscf`` SCF kernels.
-
-    Returns:
-        Tuple[Any, Any]: ``(mf, mol)`` objects from PySCF/gpu4pyscf.
-
-    Raises:
-        ValueError: If the external potential specification is invalid.
-        RuntimeError: If the SCF procedure fails to converge.
-    """
-    # gpu4pyscf path first
     if use_gpu4pyscf:
         try:
             from gpu4pyscf import scf as gpu_scf
-            from pyscf import gto, qmmm as pyscf_qmmm, dft as pyscf_dft
 
             have_gpu = True
         except ImportError:
@@ -108,10 +84,7 @@ def _scf_with_optional_external(
     else:
         have_gpu = False
 
-    # base pyscf
-    from pyscf import gto, scf, qmmm as pyscf_qmmm, dft as pyscf_dft
-
-    # spin multiplicity M = 2S+1 → S=(M-1)/2 → spin = 2S
+    # spin multiplicity M = 2S+1  -> S=(M-1)/2  -> spin = 2S = #alpha-#beta
     S = (spin_mult - 1) / 2.0
     mol_spin = int(round(2 * S))
 
@@ -120,58 +93,63 @@ def _scf_with_optional_external(
         atom=geom_str,
         basis=basis,
         charge=charge,
-        spin=mol_spin,  # = #alpha - #beta
+        spin=mol_spin,
         unit="Ang",
     )
 
-    # RHF vs UHF
     if mol.spin == 0:
         mf = gpu_scf.RHF(mol) if have_gpu else scf.RHF(mol)
     else:
         mf = gpu_scf.UHF(mol) if have_gpu else scf.UHF(mol)
 
-    # external classical environment
     if external_potential is not None:
-        # point charges case
+        # ---- case A: list/ndarray of [x,y,z,q] point charges ----
         if not callable(external_potential):
             charges_arr = np.asarray(external_potential)
             if charges_arr.ndim != 2 or charges_arr.shape[1] != 4:
                 raise ValueError("external_potential array must be (N,4): [x,y,z,q]")
-            coords = np.array(charges_arr[:, :3])
-            vals = np.array(charges_arr[:, 3])
-            mf = pyscf_qmmm.mm_charge(mf, coords, vals)
+            coords_pc = np.array(charges_arr[:, :3])
+            qs = np.array(charges_arr[:, 3])
+            mf = pyscf_qmmm.mm_charge(mf, coords_pc, qs)
 
-        # callable V(r) case
+        # ---- case B: callable V(r) ----
         else:
-            original_get_veff = mf.get_veff
+            orig_get_veff = mf.get_veff
+            mol_ref = mf.mol
+
+            # grid
+            if hasattr(mf, "grids"):
+                grids = mf.grids
+                if not getattr(grids, "coords", None):
+                    grids.build()
+            else:
+                grids = pyscf_dft.gen_grid.Grids(mol_ref)
+                grids.build()
+
+            coords_grid = grids.coords  # (Ng,3) in Bohr
+            weights = grids.weights  # (Ng,)
+            ni = pyscf_dft.numint.NumInt()
+            ao = ni.eval_ao(mol_ref, coords_grid)  # (Ng, nao)
+
+            # external_potential must take Bohr coords, return Hartree
+            v_ext_vals = external_potential(coords_grid)  # (Ng,)
+
+            wv = weights * v_ext_vals  # (Ng,)
+            Vmat = ao.T @ (wv[:, None] * ao)  # (nao, nao)
 
             def get_veff_with_external(mol_=None, dm=None, *args, **kwargs):
-                if mol_ is None:
-                    mol_ = mf.mol
-                if dm is None:
-                    dm = mf.make_rdm1()
+                veff = orig_get_veff(mol_ or mol_ref, dm, *args, **kwargs)
 
-                veff = original_get_veff(mol_, dm, *args, **kwargs)
+                # RHF/RKS case
+                if isinstance(veff, np.ndarray):
+                    return veff + Vmat
 
-                try:
-                    if hasattr(mf, "grids"):
-                        grids = mf.grids
-                    else:
-                        grids = pyscf_dft.gen_grid.Grids(mf.mol)
-                        grids.build()
-
-                    coords_grid = grids.coords  # (Ng,3)
-                    weights = grids.weights  # (Ng,)
-                    v_ext_vals = external_potential(coords_grid)  # (Ng,)
-                    veff += (v_ext_vals * weights).sum()
-                except Exception:
-                    pass
-
-                return veff
+                # UHF/UKS case
+                va, vb = veff
+                return (va + Vmat, vb + Vmat)
 
             mf.get_veff = get_veff_with_external
 
-    # run SCF
     mf.kernel()
     if not mf.converged:
         raise RuntimeError("SCF did not converge")
@@ -811,7 +789,7 @@ class ElectronicHamiltonian(Hamiltonian):
 
         Notes:
             The routine scales exponentially with the number of orbitals,
-            matching [`to_matrix`][eqmmm.qm.hamiltonians.electronic.ElectronicHamiltonian.to_matrix].
+            matching [`to_matrix`][trotvol.qm.hamiltonians.electronic.ElectronicHamiltonian.to_matrix].
         """
         M = self.M
         dim = 1 << M
@@ -996,7 +974,7 @@ class QMMMHamiltonian(ElectronicHamiltonian):
         self.mm_env = mm_env  # e.g. {"type": "point_charges", "charges": ...}
 
     def decompose(self) -> Dict[str, Any]:
-        """Extend [`decompose`][eqmmm.qm.hamiltonians.electronic.ElectronicHamiltonian.decompose] with MM metadata.
+        """Extend [`decompose`][trotvol.qm.hamiltonians.electronic.ElectronicHamiltonian.decompose] with MM metadata.
 
         Returns:
             Dict[str, Any]: Metadata including ``mm_env``.
@@ -1069,7 +1047,7 @@ class QMMMHamiltonian(ElectronicHamiltonian):
 
         Returns:
             List[Dict[str, Any]]:
-                Same structure as [`terms`][eqmmm.qm.hamiltonians.electronic.ElectronicHamiltonian.terms] but each term carries ``mm_env`` metadata for provenance.
+                Same structure as [`terms`][trotvol.qm.hamiltonians.electronic.ElectronicHamiltonian.terms] but each term carries ``mm_env`` metadata for provenance.
         """
         base_terms = super().terms()
         # attach mm_env metadata for traceability

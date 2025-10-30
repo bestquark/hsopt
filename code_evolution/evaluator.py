@@ -13,7 +13,7 @@ import importlib.util
 import multiprocessing as mp
 from typing import Dict, Any
 from spacetime_gpu import spacetime_gpu_sqlite3
-from eqmmm.qm.hamiltonians import WeightedRandomHamiltonian
+from trotvol.qm.hamiltonians import WeightedRandomHamiltonian
 
 # -------- Global knobs (override via env) ----------
 MEM_CAP_MB = float(os.getenv("OE_MEM_CAP_MB", "32"))

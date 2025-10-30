@@ -1,3 +1,3 @@
-# `eqmmm.mm`
+# `trotvol.mm`
 
-::: eqmmm.mm
+::: trotvol.mm

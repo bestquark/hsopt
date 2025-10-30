@@ -1,16 +1,16 @@
 """Hamiltonian classes for quantum mechanical models."""
 
-from eqmmm.qm.hamiltonians.electronic import (
+from trotvol.qm.hamiltonians.electronic import (
     ElectronicHamiltonian,
     QElectronicHamiltonian,
     QMMMHamiltonian,
 )
-from eqmmm.qm.hamiltonians.pauli import (
+from trotvol.qm.hamiltonians.pauli import (
     RandomPauliHamiltonian,
     PauliSumHamiltonian,
     LatticeHamiltonian,
 )
-from eqmmm.qm.hamiltonians.matrix import MatrixHamiltonian, WeightedRandomHamiltonian
+from trotvol.qm.hamiltonians.matrix import MatrixHamiltonian, WeightedRandomHamiltonian
 
 __all__ = [
     "ElectronicHamiltonian",

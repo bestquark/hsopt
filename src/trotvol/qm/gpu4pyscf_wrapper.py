@@ -7,6 +7,7 @@ perturbation theory (MP2) methods with optional QMMM external potential support.
 """
 
 import numpy as np
+import warnings
 
 try:
     from gpu4pyscf import scf, dft, mp
@@ -15,18 +16,14 @@ try:
     GPU4PYSCF_AVAILABLE = True
 except ImportError:
     GPU4PYSCF_AVAILABLE = False
-    scf = None
-    dft = None
-    mp = None
-    gto = None
+    from pyscf import scf, dft, mp  # type: ignore
+    from pyscf import gto
 
 
 def _validate_gpu4pyscf():
     """Check if gpu4pyscf is available."""
     if not GPU4PYSCF_AVAILABLE:
-        raise ImportError(
-            "gpu4pyscf is not installed. Please install it with: pip install gpu4pyscf"
-        )
+        warnings.warn("gpu4pyscf is not installed. Please install it with: pip install gpu4pyscf")
 
 
 def create_molecule(atoms, basis="6-31g", charge=0, spin=0, unit="Angstrom"):
@@ -226,59 +223,41 @@ def compute_mp2_ground_state(mol, external_potential=None):
 
 def _add_external_potential_function(mf, potential_func):
     """
-    Add a custom external potential function to a mean-field calculation.
-
-    Parameters
-    ----------
-    mf : pyscf.scf object
-        Mean-field calculation object
-    potential_func : callable
-        Function V(r) that returns potential at position r
-
-    Returns
-    -------
-    mf : pyscf.scf object
-        Modified mean-field object with external potential
+    Attach an external potential V(r) to the mean-field object.
+    potential_func(coords) -> shape (ngrid,) giving V(r) in Hartree.
     """
-    # Store original get_veff method
-    original_get_veff = mf.get_veff
 
-    def get_veff_with_external(mol=None, dm=None, *args, **kwargs):
-        """Modified get_veff that includes external potential."""
-        if mol is None:
-            mol = mf.mol
-        if dm is None:
-            dm = mf.make_rdm1()
+    orig_get_veff = mf.get_veff
+    mol = mf.mol
 
-        # Get original Veff
-        veff = original_get_veff(mol, dm, *args, **kwargs)
+    # pre-build grid once
+    if hasattr(mf, "grids"):
+        grids = mf.grids
+        if not getattr(grids, "coords", None):
+            grids.build()
+    else:
+        grids = dft.gen_grid.Grids(mol)
+        grids.build()
 
-        # Add external potential contribution
-        # This is a simplified implementation; production code would need
-        # to properly integrate the external potential
-        try:
-            # Get grid for numerical integration
-            from pyscf import dft
+    coords = grids.coords  # (ngrid,3)
+    weights = grids.weights  # (ngrid,)
 
-            if hasattr(mf, "grids"):
-                grids = mf.grids
-            else:
-                grids = dft.gen_grid.Grids(mol)
-                grids.build()
+    # precompute AO values on grid
+    ni = dft.numint.NumInt()
+    ao = ni.eval_ao(mol, coords)  # (ngrid, nao)
 
-            # Evaluate potential on grid
-            coords = grids.coords
-            weights = grids.weights
-            v_ext = potential_func(coords)
+    # evaluate external potential on grid
+    v_ext_grid = potential_func(coords)  # (ngrid,)
 
-            # Add to one-electron Hamiltonian
-            # Note: This is approximate; exact implementation depends on basis
-            veff += v_ext.sum() * weights.sum()
-        except Exception:
-            # If grid integration fails, use a simpler approach
-            pass
+    # build AO matrix V_mu_nu
+    # V_mu_nu = sum_g w_g * ao[g,mu] * ao[g,nu] * V(r_g)
+    # we'll do (ao^T * (w * V * ao))
+    wv = weights * v_ext_grid  # (ngrid,)
+    Vmat = ao.T @ (wv[:, None] * ao)  # (nao, nao)
 
-        return veff
+    def get_veff_with_external(mol_arg=None, dm=None, *args, **kwargs):
+        veff = orig_get_veff(mol_arg or mol, dm, *args, **kwargs)
+        return veff + Vmat
 
     mf.get_veff = get_veff_with_external
     return mf

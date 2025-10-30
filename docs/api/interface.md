@@ -1,3 +1,3 @@
-# `eqmmm.interface`
+# `trotvol.interface`
 
-::: eqmmm.interface
+::: trotvol.interface
