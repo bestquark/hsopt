@@ -5,7 +5,7 @@ from typing import Any, Dict, Sequence, Optional, List
 
 import cupynumeric as np
 
-from trotvol.qm.hamiltonians._hamiltonian import Hamiltonian, HamiltonianEnsemble
+from trovolut.qm.hamiltonians._hamiltonian import Hamiltonian, HamiltonianEnsemble
 
 
 class MatrixHamiltonian(Hamiltonian):

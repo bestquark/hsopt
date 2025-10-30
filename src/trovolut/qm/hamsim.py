@@ -1,5 +1,5 @@
 import cupynumeric as np
-from trotvol.mixed_fps.simulate_quantization import quantize_any, dequantize_any, NATIVE
+from trovolut.mixed_fps.simulate_quantization import quantize_any, dequantize_any, NATIVE
 
 BYTES_PER_ELT = {
     "fp4_e2m1": 0.5,

@@ -8,7 +8,7 @@ watch:
   - mkdocs.yml
   - README.md
   - docs
-  - src/trotvol
+  - src/trovolut
 
 nav:
   - Home: index.md

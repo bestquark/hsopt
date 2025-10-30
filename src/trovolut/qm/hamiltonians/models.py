@@ -4,7 +4,7 @@ from __future__ import annotations
 from typing import List, Tuple, Sequence
 
 
-from trotvol.qm.hamiltonians.pauli import LatticeHamiltonian
+from trovolut.qm.hamiltonians.pauli import LatticeHamiltonian
 
 
 def _linear_index_2d(ix: int, iy: int, Lx: int, Ly: int) -> int:

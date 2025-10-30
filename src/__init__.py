@@ -1,9 +1,9 @@
-from trotvol.qm import hamsim
-from trotvol.mixed_fps import simulate_quantization
+from trovolut.qm import hamsim
+from trovolut.mixed_fps import simulate_quantization
 
-from trotvol import qm
-from trotvol import mm
-from trotvol import mixed_fps
+from trovolut import qm
+from trovolut import mm
+from trovolut import mixed_fps
 
 __all__ = [
     "hamsim",

@@ -1,3 +1,3 @@
-# `trotvol.interface`
+# `trovolut.interface`
 
-::: trotvol.interface
+::: trovolut.interface

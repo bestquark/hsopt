@@ -1,19 +1,19 @@
-# `trotvol.qm`
+# `trovolut.qm`
 
 ## Submodules
 
-### `trotvol.qm.hamiltonians`
+### `trovolut.qm.hamiltonians`
 
-::: trotvol.qm.hamiltonians
+::: trovolut.qm.hamiltonians
 
-### `trotvol.qm.hamsim`
+### `trovolut.qm.hamsim`
 
-::: trotvol.qm.hamsim
+::: trovolut.qm.hamsim
 
-### `trotvol.qm.hamiltonians.models`
+### `trovolut.qm.hamiltonians.models`
 
-::: trotvol.qm.hamiltonians.models
+::: trovolut.qm.hamiltonians.models
 
-<!-- ### `trotvol.qm.gpu4pyscf_wrapper`
+<!-- ### `trovolut.qm.gpu4pyscf_wrapper`
 
-::: trotvol.qm.gpu4pyscf_wrapper -->
+::: trovolut.qm.gpu4pyscf_wrapper -->

@@ -4,8 +4,8 @@ Welcome to the Evolutionary QM/MM API reference. Use the navigation tree to expl
 
 ## Available modules
 
-- [`trotvol.biosystem`](biosystem.md)
-- [`trotvol.mixed_fps`](mixed_fps.md)
-- [`trotvol.mm`](mm.md)
-- [`trotvol.qm`](qm.md)
-- [`trotvol.interface`](interface.md)
+- [`trovolut.biosystem`](biosystem.md)
+- [`trovolut.mixed_fps`](mixed_fps.md)
+- [`trovolut.mm`](mm.md)
+- [`trovolut.qm`](qm.md)
+- [`trovolut.interface`](interface.md)

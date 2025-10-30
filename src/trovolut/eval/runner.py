@@ -70,7 +70,7 @@ def _load_module_from_file(path: str):
 
 def _make_problem(n: int, m: int, seed: int, coef_dist=None):
     # you can import your real WeightedRandomHamiltonian here
-    from trotvol.qm.hamiltonians import WeightedRandomHamiltonian
+    from trovolut.qm.hamiltonians import WeightedRandomHamiltonian
 
     rng = np.random.default_rng(seed)
     ensemble = WeightedRandomHamiltonian(n=n, m=m, coef_dist=coef_dist)

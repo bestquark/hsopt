@@ -1,3 +1,3 @@
-# `trotvol.mixed_fps`
+# `trovolut.mixed_fps`
 
-::: trotvol.mixed_fps
+::: trovolut.mixed_fps

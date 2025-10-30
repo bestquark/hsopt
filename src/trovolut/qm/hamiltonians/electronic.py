@@ -14,8 +14,8 @@ from openfermion import (
     get_sparse_operator,
 )
 
-from trotvol.qm.hamiltonians._hamiltonian import Hamiltonian
-from trotvol.qm.hamiltonians.pauli import PauliSumHamiltonian
+from trovolut.qm.hamiltonians._hamiltonian import Hamiltonian
+from trovolut.qm.hamiltonians.pauli import PauliSumHamiltonian
 
 
 def _parse_xyz(xyz_source: Union[str, Sequence[str]]) -> str:
@@ -789,7 +789,7 @@ class ElectronicHamiltonian(Hamiltonian):
 
         Notes:
             The routine scales exponentially with the number of orbitals,
-            matching [`to_matrix`][trotvol.qm.hamiltonians.electronic.ElectronicHamiltonian.to_matrix].
+            matching [`to_matrix`][trovolut.qm.hamiltonians.electronic.ElectronicHamiltonian.to_matrix].
         """
         M = self.M
         dim = 1 << M
@@ -974,7 +974,7 @@ class QMMMHamiltonian(ElectronicHamiltonian):
         self.mm_env = mm_env  # e.g. {"type": "point_charges", "charges": ...}
 
     def decompose(self) -> Dict[str, Any]:
-        """Extend [`decompose`][trotvol.qm.hamiltonians.electronic.ElectronicHamiltonian.decompose] with MM metadata.
+        """Extend [`decompose`][trovolut.qm.hamiltonians.electronic.ElectronicHamiltonian.decompose] with MM metadata.
 
         Returns:
             Dict[str, Any]: Metadata including ``mm_env``.
@@ -1047,7 +1047,7 @@ class QMMMHamiltonian(ElectronicHamiltonian):
 
         Returns:
             List[Dict[str, Any]]:
-                Same structure as [`terms`][trotvol.qm.hamiltonians.electronic.ElectronicHamiltonian.terms] but each term carries ``mm_env`` metadata for provenance.
+                Same structure as [`terms`][trovolut.qm.hamiltonians.electronic.ElectronicHamiltonian.terms] but each term carries ``mm_env`` metadata for provenance.
         """
         base_terms = super().terms()
         # attach mm_env metadata for traceability

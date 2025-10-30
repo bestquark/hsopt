@@ -6,7 +6,7 @@ from typing import Any, Dict, Tuple, Sequence, Optional, List, Union
 import cupynumeric as np
 import scipy.sparse as sp
 
-from trotvol.qm.hamiltonians._hamiltonian import Hamiltonian, HamiltonianEnsemble
+from trovolut.qm.hamiltonians._hamiltonian import Hamiltonian, HamiltonianEnsemble
 
 
 _PAULI_SINGLE_DENSE = {
