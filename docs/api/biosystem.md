@@ -1,3 +1,0 @@
-# `trovolut.biosystem`
-
-::: trovolut.biosystem

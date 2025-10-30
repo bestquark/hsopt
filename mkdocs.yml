@@ -15,11 +15,11 @@ nav:
   - API:
       - Overview: api/index.md
       - Modules:
-          - Biosystem: api/biosystem.md
-          - Interface: api/interface.md
-          - Mixed Precision: api/mixed_fps.md
-          - MM Module: api/mm.md
           - QM Module: api/qm.md
+          - MM Module: api/mm.md
+          - Mixed Precision: api/mixed_fps.md
+          - Interface: api/interface.md
+          - Utils: api/utils.md
   - Tutorials:
       - Creating Hamiltonians: tutorials/dmds_hamiltonian.ipynb
 

@@ -1,7 +1,7 @@
 [project]
 name = "trovolut"
 version = "0.1.0"
-description = "Evolutionary quantum simulations"
+description = "Evolutionary Trotterization"
 readme = "README.md"
 requires-python = ">=3.13"
 dependencies = [
@@ -66,7 +66,7 @@ where = ["src"]
 line-length = 100
 target-version = "py313"
 exclude = [
-    "src/trovolut/biosystem/*",
+    "src/trovolut/utils/*",
     "src/trovolut/mm/*",
     "code_evolution/*"
 ]
