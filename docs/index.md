@@ -1,4 +1,4 @@
-# Evolutionary QM/MM
+# Trovolut
 
 This project provides tools for performing QM/MM simulations with mixed precision arithmetic, enabling efficient and accurate modeling of complex biological systems.
 

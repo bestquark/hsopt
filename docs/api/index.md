@@ -1,6 +1,6 @@
 # API Overview
 
-Welcome to the Evolutionary QM/MM API reference. Use the navigation tree to explore each subpackage.
+Welcome to the Trovolut API reference. Use the navigation tree to explore each subpackage.
 
 ## Available modules
 
