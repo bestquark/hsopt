@@ -1,6 +1,6 @@
 # Welcome to the `trovolut` repository
 
-> [![Docs](https://img.shields.io/badge/docs-online-blue.svg)](https://bestquark.github.io/evolutionary-qmmm/) &nbsp;&nbsp;&nbsp; 🔑 **Password**: `gordonbell2026`
+> [![Docs](https://img.shields.io/badge/docs-online-blue.svg)](https://bestquark.github.io/trovolut/) &nbsp;&nbsp;&nbsp; 🔑 **Password**: `gordonbell2026`
 
 The `trovolut` package is a software for evolutionary Trotterization in quantum mechanics. 
 Here, you will find code for automatically evolving simulations of quantum systems using mixed-precision arithmetic, embedded in a classical environment. The aim is to use this technique for speeding up free-energy calculations (e.g. FEP) while maintaining accuracy.
@@ -20,8 +20,8 @@ export OPENAI_API_KEY="your_key_here"
 If you are only running only the QM simulations, clone the repository and sync the environment:
 
 ```bash
-git clone https://github.com/bestquark/evolutionary-qmmm.git
-cd evolutionary-qmmm
+git clone https://github.com/bestquark/trovolut.git
+cd trovolut
 uv sync
 uv run pre-commit install
 ```
