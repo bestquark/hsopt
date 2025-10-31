@@ -205,3 +205,47 @@ def simulate_hamiltonian(
 
     mem_mb = bytes_used / (1024.0 * 1024.0)
     return psi, {"r": r, "fmts": fmt_list, "bytes_used": bytes_used, "mem_mb": mem_mb}
+
+
+# do simulation without mixed precision, just directly on the full Hamiltonian
+def lie_trotter_no_simulated_precision(
+    H,
+    psi,
+    dt,
+    normalize=False,
+):
+    """
+    Apply exp(-i H dt) directly without mixed precision.
+    All *internal* math in work_dtype; cast to out_dtype only at the end.
+    """
+    psi_new = psi
+    for h in H:
+        psi_new = np.linalg.expm(-1j * h * dt) @ psi_new
+    return psi_new
+
+
+def simulate_hamiltonian_no_simulated_precision(
+    H,
+    psi0,
+    t,
+    r,
+    normalize=False,
+):
+    """
+    Simulate dynamics under H without mixed precision.
+    """
+    dt = t / r
+    psi = psi0
+
+    for _ in range(r):
+        # include Hamiltonian
+        psi = lie_trotter_no_simulated_precision(
+            H,
+            psi,
+            dt,
+            normalize=normalize,
+        )
+
+    return psi, {
+        "r": r,
+    }

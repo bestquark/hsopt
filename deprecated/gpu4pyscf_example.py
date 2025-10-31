@@ -9,7 +9,7 @@ with optional QMMM external potentials.
 import numpy as np
 
 # Import the new gpu4pyscf functionality
-from src.qm import (
+from .gpu4pyscf_wrapper import (
     create_molecule,
     compute_ground_state,
     compute_hf_ground_state,

@@ -22,6 +22,9 @@ dependencies = [
   "duckdb>=1.4.1",
   "ruff>=0.14.2",
   "scikit-image>=0.25.2",
+  "nvidia-cupynumeric>=25.10.0",
+  "ipykernel>=6.31.0",
+  "legate>=25.10.0",
 ]
 
 [dependency-groups]
@@ -55,6 +58,7 @@ package = true
 
 [tool.uv.sources]
 openmmforcefields = { git = "https://github.com/openmm/openmmforcefields" }
+legate-sparse = { git = "https://github.com/nv-legate/legate-sparse"}
 
 [tool.uv.workspace]
 members = ["."]
