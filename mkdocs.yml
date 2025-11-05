@@ -22,6 +22,7 @@ nav:
           - Utils: api/utils.md
   - Tutorials:
       - Creating Hamiltonians: tutorials/dmds_hamiltonian.ipynb
+      - Trotter Dynamics: tutorials/trotter_dynamics.ipynb
 
 theme:
   name: material

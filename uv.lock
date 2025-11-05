@@ -365,6 +365,12 @@ wheels = [
 ]
 
 [[package]]
+name = "cudaq"
+version = "0.12.0.post1"
+source = { registry = "https://pypi.org/simple" }
+sdist = { url = "https://files.pythonhosted.org/packages/a8/8a/a2eca5ac244e40b6860569d2dd9ed17e4519a587dd86780122cfb13bf183/cudaq-0.12.0.post1.tar.gz", hash = "sha256:f3bd7c0489eae5674c0b1b5544a8944ecb6afd95776fbec8777cfb79b3367bb9", size = 9245, upload-time = "2025-09-03T14:14:44.758Z" }
+
+[[package]]
 name = "cuquantum"
 version = "25.9.1"
 source = { registry = "https://pypi.org/simple" }
@@ -2644,6 +2650,7 @@ version = "0.1.0"
 source = { editable = "." }
 dependencies = [
     { name = "ase" },
+    { name = "cudaq" },
     { name = "duckdb" },
     { name = "imageio" },
     { name = "ipykernel" },
@@ -2690,6 +2697,7 @@ gpu = [
 [package.metadata]
 requires-dist = [
     { name = "ase", specifier = ">=3.26.0" },
+    { name = "cudaq", specifier = ">=0.12.0.post1" },
     { name = "duckdb", specifier = ">=1.4.1" },
     { name = "imageio", specifier = ">=2.37.0" },
     { name = "ipykernel", specifier = ">=6.31.0" },

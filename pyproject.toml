@@ -25,6 +25,7 @@ dependencies = [
   "nvidia-cupynumeric>=25.10.0",
   "ipykernel>=6.31.0",
   "legate>=25.10.0",
+  "cudaq>=0.12.0.post1",
 ]
 
 [dependency-groups]
