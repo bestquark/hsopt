@@ -1,57 +1,61 @@
 # evaluate.py
 from __future__ import annotations
-import os, sys, json
+import json
 from pathlib import Path
 import numpy as np
 
 from trovolut.qm.hamiltonians import WeightedRandomHamiltonian
-from trovolut.eval import GPUSpaceTimeEval  
+from trovolut.eval import GPUSpaceTimeEval
+
+
+# =============================
+# Configurable parameters
+# =============================
+CANDIDATE_PATH = Path("code_evolution/initial_program_with_classes.py")   # file exporting run(H_terms, psi0, t)
+DB_TYPE = "duckdb"                     
+DB_PATH = Path("legion_prof")          
+
+# Hamiltonian and simulation parameters
+N = 8
+M = 3
+T = 0.05
+TRIALS = 3
+SEEDS = [1337 + i for i in range(TRIALS)]
+
+# Metric weights
+W_TIME = 1.0
+W_PEAK = 0.02
+W_AVG  = 0.01
+W_ERR  = 100.0
+# =============================
 
 
 def main():
-    # --- defaults (override via env if you want) ---
-    candidate = Path(os.getenv("OE_CANDIDATE", "candidate.py"))
-    if not candidate.exists():
-        print("❌ candidate.py not found (set OE_CANDIDATE to override).")
-        sys.exit(1)
+    if not CANDIDATE_PATH.exists():
+        raise FileNotFoundError(f"❌ Candidate file not found: {CANDIDATE_PATH}")
 
-    # tiny random Hamiltonian (fast)
-    n = int(os.getenv("OE_N", "8"))
-    m = int(os.getenv("OE_M", "3"))
-    t = float(os.getenv("OE_T", "0.05"))
-    trials = int(os.getenv("OE_TRIALS", "3"))
-    seeds = [1337 + i for i in range(trials)]
+    print(f"Running evaluation for {CANDIDATE_PATH} using {DB_TYPE} database...")
 
-    # profiler DB settings
-    db_type = os.getenv("OE_DB_TYPE", "duckdb")        # "duckdb" or "sqlite"
-    db_path = Path(os.getenv("OE_DB_PATH", "legion_prof"))
+    # small random Hamiltonian
+    rng = np.random.default_rng(42)
+    ham = WeightedRandomHamiltonian(n=N, m=M).sample(rng)
 
-    # weights (seconds + FB MiB + error penalty)
-    w_time = float(os.getenv("OE_W_TIME", "1.0"))
-    w_peak = float(os.getenv("OE_W_PEAK", "0.02"))
-    w_avg  = float(os.getenv("OE_W_AVG",  "0.01"))
-    w_err  = float(os.getenv("OE_W_ERR",  "100.0"))
-
-    # --- build a concrete Hamiltonian sample ---
-    ham = WeightedRandomHamiltonian(n=n, m=m).sample()
-
-    # --- run GPU profiler–driven evaluation ---
-    evalr = GPUSpaceTimeEval(
+    # initialize GPU evaluation (DuckDB-based)
+    evaluator = GPUSpaceTimeEval(
         ham_or_ensemble=ham,
-        program=str(candidate),
-        trials=trials,
-        t=t,
-        seeds=seeds,
-        db_type=db_type,
-        db_path=db_path,
-        w_time=w_time,
-        w_peak=w_peak,
-        w_avg=w_avg,
-        w_err=w_err,
+        program=str(CANDIDATE_PATH),
+        trials=TRIALS,
+        t=T,
+        seeds=SEEDS,
+        legion_db=DB_PATH,
+        w_time=W_TIME,
+        w_peak=W_PEAK,
+        w_avg=W_AVG,
+        w_err=W_ERR,
     )
 
-    res = evalr.evaluate()
-    print(json.dumps(res, indent=2))
+    result = evaluator.evaluate()
+    print(json.dumps(result, indent=2))
 
 
 if __name__ == "__main__":

@@ -71,7 +71,6 @@ class BaseEval:
     def __init__(
         self,
         ham_or_ensemble: object,
-        program: Optional[str] = None,           # path to candidate .py exporting run()
         trials: int = 5,
         t: float = 0.05,
         seeds: Optional[Sequence[int]] = None,
@@ -80,12 +79,11 @@ class BaseEval:
         if ham_or_ensemble is None:
             raise ValueError("Must provide a Hamiltonian or HamiltonianEnsemble.")
         self._src = ham_or_ensemble
-        self._program = program
         self.trials = int(trials)
         self.t = float(t)
         self.seeds = list(seeds) if seeds else [1337 + i for i in range(trials)]
         self._psi0_fixed = _to_numpy(psi0) if psi0 is not None else None
-
+    
     # --- hooks for subclasses ---
     def _score(self, rows: List[Dict[str, float]]) -> float:
         """Compute a scalar score from per-trial rows. Higher is better."""
