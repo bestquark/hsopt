@@ -5,6 +5,7 @@ Welcome to the Trovolut API reference. Use the navigation tree to explore each s
 ## Available modules
 
 - [`trovolut.qm`](qm.md)
+- [`trovolut.eval`](eval.md)
 - [`trovolut.mm`](mm.md)
 - [`trovolut.mixed_fps`](mixed_fps.md)
 - [`trovolut.interface`](interface.md)

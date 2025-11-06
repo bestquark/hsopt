@@ -16,6 +16,7 @@ nav:
       - Overview: api/index.md
       - Modules:
           - QM Module: api/qm.md
+          - Eval Module: api/eval.md
           - MM Module: api/mm.md
           - Mixed Precision: api/mixed_fps.md
           - Interface: api/interface.md
