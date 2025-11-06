@@ -52,6 +52,7 @@ gpu = [
   # pick one variant that matches your CUDA:
   # or: "cuquantum-cu11>=25.9.1",
   "cuquantum>=25.9.1",
+  "cupy-cuda12x>=13.6.0",
 ]
 
 [build-system]

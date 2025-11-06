@@ -1,7 +1,6 @@
 import pickle
 import sys
 import cupynumeric as np
-from evaluator import _make_problem
 
 # from src.mixed_fps.simulate_quantization import *
 from trovolut.qm.hamsim import simulate_hamiltonian
@@ -115,6 +114,7 @@ def main():
 if __name__ == "__main__":
     import argparse
     import time
+    from evaluator import _make_problem
 
     # --- Mode 1: piped pickle input ---
     if not sys.stdin.isatty():
