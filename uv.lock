@@ -155,6 +155,15 @@ wheels = [
 ]
 
 [[package]]
+name = "cachetools"
+version = "6.2.1"
+source = { registry = "https://pypi.org/simple" }
+sdist = { url = "https://files.pythonhosted.org/packages/cc/7e/b975b5814bd36faf009faebe22c1072a1fa1168db34d285ef0ba071ad78c/cachetools-6.2.1.tar.gz", hash = "sha256:3f391e4bd8f8bf0931169baf7456cc822705f4e2a31f840d218f445b9a854201", size = 31325, upload-time = "2025-10-12T14:55:30.139Z" }
+wheels = [
+    { url = "https://files.pythonhosted.org/packages/96/c5/1e741d26306c42e2bf6ab740b2202872727e0f606033c9dd713f8b93f5a8/cachetools-6.2.1-py3-none-any.whl", hash = "sha256:09868944b6dde876dfd44e1d47e18484541eaf12f26f29b7af91b26cc892d701", size = 11280, upload-time = "2025-10-12T14:55:28.382Z" },
+]
+
+[[package]]
 name = "certifi"
 version = "2025.10.5"
 source = { registry = "https://pypi.org/simple" }
@@ -573,6 +582,30 @@ dependencies = [
 sdist = { url = "https://files.pythonhosted.org/packages/dc/6d/cfe3c0fcc5e477df242b98bfe186a4c34357b4847e87ecaef04507332dab/flask-3.1.2.tar.gz", hash = "sha256:bf656c15c80190ed628ad08cdfd3aaa35beb087855e2f494910aa3774cc4fd87", size = 720160, upload-time = "2025-08-19T21:03:21.205Z" }
 wheels = [
     { url = "https://files.pythonhosted.org/packages/ec/f9/7f9263c5695f4bd0023734af91bedb2ff8209e8de6ead162f35d8dc762fd/flask-3.1.2-py3-none-any.whl", hash = "sha256:ca1d8112ec8a6158cc29ea4858963350011b5c846a414cdb7a954aa9e967d03c", size = 103308, upload-time = "2025-08-19T21:03:19.499Z" },
+]
+
+[[package]]
+name = "flexcache"
+version = "0.3"
+source = { registry = "https://pypi.org/simple" }
+dependencies = [
+    { name = "typing-extensions" },
+]
+sdist = { url = "https://files.pythonhosted.org/packages/55/b0/8a21e330561c65653d010ef112bf38f60890051d244ede197ddaa08e50c1/flexcache-0.3.tar.gz", hash = "sha256:18743bd5a0621bfe2cf8d519e4c3bfdf57a269c15d1ced3fb4b64e0ff4600656", size = 15816, upload-time = "2024-03-09T03:21:07.555Z" }
+wheels = [
+    { url = "https://files.pythonhosted.org/packages/27/cd/c883e1a7c447479d6e13985565080e3fea88ab5a107c21684c813dba1875/flexcache-0.3-py3-none-any.whl", hash = "sha256:d43c9fea82336af6e0115e308d9d33a185390b8346a017564611f1466dcd2e32", size = 13263, upload-time = "2024-03-09T03:21:05.635Z" },
+]
+
+[[package]]
+name = "flexparser"
+version = "0.4"
+source = { registry = "https://pypi.org/simple" }
+dependencies = [
+    { name = "typing-extensions" },
+]
+sdist = { url = "https://files.pythonhosted.org/packages/82/99/b4de7e39e8eaf8207ba1a8fa2241dd98b2ba72ae6e16960d8351736d8702/flexparser-0.4.tar.gz", hash = "sha256:266d98905595be2ccc5da964fe0a2c3526fbbffdc45b65b3146d75db992ef6b2", size = 31799, upload-time = "2024-11-07T02:00:56.249Z" }
+wheels = [
+    { url = "https://files.pythonhosted.org/packages/fe/5e/3be305568fe5f34448807976dc82fc151d76c3e0e03958f34770286278c1/flexparser-0.4-py3-none-any.whl", hash = "sha256:3738b456192dcb3e15620f324c447721023c0293f6af9955b481e91d00179846", size = 27625, upload-time = "2024-11-07T02:00:54.523Z" },
 ]
 
 [[package]]
@@ -1721,6 +1754,26 @@ wheels = [
 ]
 
 [[package]]
+name = "openff-toolkit"
+version = "0.18.0.post1+g95a463fc"
+source = { git = "https://github.com/openforcefield/openff-toolkit.git#95a463fcefee3b1171c5e9c646682f323e6ff470" }
+
+[[package]]
+name = "openff-units"
+version = "0.3.1.post14+gb1d16f7"
+source = { git = "https://github.com/openforcefield/openff-units.git#b1d16f795cfaa1de47bad06450462f72008471d3" }
+dependencies = [
+    { name = "numpy" },
+    { name = "openff-utilities" },
+    { name = "pint" },
+]
+
+[[package]]
+name = "openff-utilities"
+version = "0.1.16.post5+g0dd2f34"
+source = { git = "https://github.com/openforcefield/openff-utilities.git#0dd2f34223cecccba8837f9906194408500f00a8" }
+
+[[package]]
 name = "openmm"
 version = "8.4.0"
 source = { registry = "https://pypi.org/simple" }
@@ -1943,6 +1996,21 @@ wheels = [
     { url = "https://files.pythonhosted.org/packages/a2/2f/16cabcc6426c32218ace36bf0d55955e813f2958afddbf1d391849fee9d1/pillow-12.0.0-cp314-cp314t-win32.whl", hash = "sha256:3830c769decf88f1289680a59d4f4c46c72573446352e2befec9a8512104fa52", size = 6408045, upload-time = "2025-10-15T18:23:53.177Z" },
     { url = "https://files.pythonhosted.org/packages/35/73/e29aa0c9c666cf787628d3f0dcf379f4791fba79f4936d02f8b37165bdf8/pillow-12.0.0-cp314-cp314t-win_amd64.whl", hash = "sha256:905b0365b210c73afb0ebe9101a32572152dfd1c144c7e28968a331b9217b94a", size = 7148282, upload-time = "2025-10-15T18:23:55.316Z" },
     { url = "https://files.pythonhosted.org/packages/c1/70/6b41bdcddf541b437bbb9f47f94d2db5d9ddef6c37ccab8c9107743748a4/pillow-12.0.0-cp314-cp314t-win_arm64.whl", hash = "sha256:99353a06902c2e43b43e8ff74ee65a7d90307d82370604746738a1e0661ccca7", size = 2525630, upload-time = "2025-10-15T18:23:57.149Z" },
+]
+
+[[package]]
+name = "pint"
+version = "0.24.4"
+source = { registry = "https://pypi.org/simple" }
+dependencies = [
+    { name = "flexcache" },
+    { name = "flexparser" },
+    { name = "platformdirs" },
+    { name = "typing-extensions" },
+]
+sdist = { url = "https://files.pythonhosted.org/packages/20/bb/52b15ddf7b7706ed591134a895dbf6e41c8348171fb635e655e0a4bbb0ea/pint-0.24.4.tar.gz", hash = "sha256:35275439b574837a6cd3020a5a4a73645eb125ce4152a73a2f126bf164b91b80", size = 342225, upload-time = "2024-11-07T16:29:46.061Z" }
+wheels = [
+    { url = "https://files.pythonhosted.org/packages/b7/16/bd2f5904557265882108dc2e04f18abc05ab0c2b7082ae9430091daf1d5c/Pint-0.24.4-py3-none-any.whl", hash = "sha256:aa54926c8772159fcf65f82cc0d34de6768c151b32ad1deb0331291c38fe7659", size = 302029, upload-time = "2024-11-07T16:29:43.976Z" },
 ]
 
 [[package]]
@@ -2682,6 +2750,7 @@ version = "0.1.0"
 source = { editable = "." }
 dependencies = [
     { name = "ase" },
+    { name = "cachetools" },
     { name = "cudaq" },
     { name = "duckdb" },
     { name = "imageio" },
@@ -2693,6 +2762,9 @@ dependencies = [
     { name = "nvidia-cupynumeric" },
     { name = "openevolve" },
     { name = "openfermion" },
+    { name = "openff-toolkit" },
+    { name = "openff-units" },
+    { name = "openff-utilities" },
     { name = "openmm" },
     { name = "openmmforcefields" },
     { name = "orjson" },
@@ -2730,6 +2802,7 @@ gpu = [
 [package.metadata]
 requires-dist = [
     { name = "ase", specifier = ">=3.26.0" },
+    { name = "cachetools", specifier = ">=6.2.1" },
     { name = "cudaq", specifier = ">=0.12.0.post1" },
     { name = "duckdb", specifier = ">=1.4.1" },
     { name = "imageio", specifier = ">=2.37.0" },
@@ -2741,6 +2814,9 @@ requires-dist = [
     { name = "nvidia-cupynumeric", specifier = ">=25.10.0" },
     { name = "openevolve", specifier = ">=0.2.14" },
     { name = "openfermion", specifier = ">=1.7.1" },
+    { name = "openff-toolkit", git = "https://github.com/openforcefield/openff-toolkit.git" },
+    { name = "openff-units", git = "https://github.com/openforcefield/openff-units.git" },
+    { name = "openff-utilities", git = "https://github.com/openforcefield/openff-utilities.git" },
     { name = "openmm", specifier = ">=8.3.1" },
     { name = "openmmforcefields", git = "https://github.com/openmm/openmmforcefields" },
     { name = "orjson", specifier = ">=3.11.3" },

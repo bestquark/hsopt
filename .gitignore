@@ -8,6 +8,7 @@ code_evolution/*.sqlite
 code_evolution/*.nsys-rep
 code_evolution/*.json
 code_evolution/legion_prof
+testing_scripts/notebooks/protein-ligand-benchmark/
 cupynum_test.ipynb
 sims/
 encryptcontent.cache
