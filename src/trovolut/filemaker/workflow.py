@@ -3,27 +3,28 @@ import textwrap
 from pathlib import Path
 
 
-class _Marker:
+class Comment:
     def __init__(self, name: str):
         self.name = name
     def __repr__(self):
         return self.name
 
 
-EVO_START = _Marker("EVOLVE-BLOCK-START")
-EVO_END = _Marker("EVOLVE-BLOCK-END")
+EVO_START = Comment("EVOLVE-BLOCK-START")
+EVO_END = Comment("EVOLVE-BLOCK-END")
 
 
 class Workflow:
     def __init__(self, parts, out_path="initial_program.py", imports=None, main_func=None):
         """
-        parts: list of callables, markers, or code strings
+        parts: list of callables, comments, or code strings
         main_func: callable (optional)
         """
         self.parts = parts
         self.out_path = Path(out_path)
         self.imports = imports or [
-            "import cupynumeric as np",
+            "import numpy as np",
+            "import scipy",
             "import trovolut as trv",
         ]
         self.main_func = main_func
@@ -40,10 +41,8 @@ class Workflow:
 
             # code sections
             for part in self.parts:
-                if part is EVO_START:
-                    f.write("# EVOLVE-BLOCK-START\n\n")
-                elif part is EVO_END:
-                    f.write("# EVOLVE-BLOCK-END\n\n")
+                if isinstance(part, Comment):
+                    f.write(f"# {part.name}\n\n")
                 elif callable(part):
                     src = inspect.getsource(part)
                     src = textwrap.dedent(src)
