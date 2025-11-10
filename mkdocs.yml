@@ -17,6 +17,7 @@ nav:
       - Modules:
           - QM Module: api/qm.md
           - Eval Module: api/eval.md
+          - Filemaker Module: api/filemaker.md
           - MM Module: api/mm.md
           - Mixed Precision: api/mixed_fps.md
           - Interface: api/interface.md
@@ -24,6 +25,7 @@ nav:
   - Tutorials:
       - Creating Hamiltonians: tutorials/dmds_hamiltonian.ipynb
       - Trotter Dynamics: tutorials/trotter_dynamics.ipynb
+      - Filemaker: tutorials/filemaker.ipynb
 
 theme:
   name: material
