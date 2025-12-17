@@ -1,0 +1,92 @@
+; 3GPH–DMS ABFE PRODUCTION MDP (NPT, 2 fs, 16 lambda windows)
+; Use same file for complex and solvent legs, just different coords/topologies.
+
+; RUN CONTROL
+integrator              = md
+dt                      = 0.002         ; 2 fs
+nsteps                  = 2500000       ; 5 ns (change as needed)
+tinit                   = 0
+comm-mode               = Linear
+nstcomm                 = 100
+
+; OUTPUT CONTROL
+nstxout-compressed      = 5000          ; compressed trajectory
+nstenergy               = 1000
+nstlog                  = 1000
+nstcalcenergy           = 10
+nstlist                 = 20
+
+; NEIGHBORSEARCHING
+cutoff-scheme           = Verlet
+ns_type                 = grid
+rlist                   = 1.0
+
+; ELECTROSTATICS AND VDW
+coulombtype             = PME
+rcoulomb                = 1.0
+fourierspacing          = 0.12
+pme-order               = 4
+vdwtype                 = Cut-off
+vdw-modifier            = force-switch
+rvdw-switch             = 0.8
+rvdw                    = 1.0
+DispCorr                = EnerPres
+
+; TEMPERATURE COUPLING
+tcoupl                  = V-rescale
+tc-grps                 = Protein_LIG  Water_and_ions
+tau-t                   = 0.5          0.5
+ref-t                   = 300          300
+
+; PRESSURE COUPLING
+pcoupl                  = Parrinello-Rahman
+pcoupltype              = isotropic
+tau-p                   = 5.0
+ref-p                   = 1.0
+compressibility         = 4.5e-5
+
+; CONSTRAINTS
+constraints             = h-bonds
+constraint-algorithm    = lincs
+lincs-order             = 4
+lincs-iter              = 1
+
+; VELOCITY GENERATION
+gen-vel                 = no           ; yes if starting from minimized, no if continuing
+
+; BONDS, PBC
+pbc                     = xyz
+tc-grps                 = Protein_LIG  Water_and_ions
+
+; ---------------------------------------------------------------------------
+; FREE ENERGY SETTINGS (ABFE, ligand decoupling)
+; ---------------------------------------------------------------------------
+free-energy             = yes
+init-lambda-state       = 0            ; change to 0..15 per window
+
+; Write dH/dlambda for analysis (alchemlyb / gmx bar)
+nstdhdl                 = 100
+dhdl-derivatives        = yes
+dhdl-print-energy       = total
+separate-dhdl-file      = yes          ; produce dhdl.xvg
+
+; Ligand decoupling
+couple-moltype          = LIG          ; name of DMS molecule type in .top
+couple-lambda0          = vdw-q        ; state A: fully interacting
+couple-lambda1          = none         ; state B: fully decoupled
+couple-intramol         = no
+
+; Soft-core LJ for vdW decoupling
+sc-alpha                = 0.5
+sc-power                = 1
+sc-sigma                = 0.3
+sc-coul                 = no           ; linear Coulomb, softcore only for LJ
+
+; Lambda vectors (16 windows: 0..15)
+; First 5: turn off Coulomb, VDW fixed; then 11: VDW soft-core
+coul-lambdas            = 0.00 0.25 0.50 0.75 1.00   1.00 1.00 1.00 1.00 1.00 1.00 1.00 1.00 1.00 1.00 1.00
+vdw-lambdas             = 0.00 0.00 0.00 0.00 0.00   0.05 0.10 0.20 0.30 0.40 0.50 0.60 0.70 0.80 0.90 1.00
+bonded-lambdas          = 0.0  0.0  0.0  0.0  0.0    0.0  0.0  0.0  0.0  0.0  0.0  0.0  0.0  0.0  0.0  0.0
+restraint-lambdas       = 1.0 1.0 1.0 1.0 1.0       1.0 1.0 1.0 1.0 1.0 1.0 1.0 1.0 1.0 1.0 1.0
+
+calc-lambda-neighbors   = -1           ; let gromacs choose neighbors

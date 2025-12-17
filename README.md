@@ -34,6 +34,10 @@ echo "$CUDA_VISIBLE_DEVICES" # Check the GPUs assigned
 
 ## Usage
 
+### For protein-ligand binding free energy calculations:
+
+An example is provided in the [README](examples/qmmm/biocomplex/README.md) of the `examples/qmmm/biocomplex/` directory.
+
 ### GPU-Accelerated Quantum Chemistry
 
 The repository now includes GPU-accelerated ground state calculations using `gpu4pyscf`. This enables fast QM calculations with optional QMMM external potentials:

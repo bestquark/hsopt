@@ -3,7 +3,7 @@ name = "trovolut"
 version = "0.1.0"
 description = "Evolutionary Trotterization"
 readme = "README.md"
-requires-python = ">=3.13"
+requires-python = ">=3.12"
 dependencies = [
   "ase>=3.26.0",
   "imageio>=2.37.0",
@@ -29,9 +29,23 @@ dependencies = [
   "openff-utilities",
   "openff-units",
   "cachetools>=6.2.1",
-  "nglview>=3.1.4",
+  "nglview==3.1.4",
   "plotly>=6.4.0",
   "nest-asyncio>=1.6.0",
+  "alchemlyb>=2.5.0",
+  "alchemtest>=1.0.0",
+  "pymbar>=4.0.3",
+  "jax>=0.8.1",
+  "openmmtools",
+  "python-constraint>=1.4.0",
+  "cudaq>=0.13.0",
+  "pandas>=2.3.3",
+  "pdbfixer",
+  "xmltodict>=1.0.2",
+  "openforcefields",
+  "openff-interchange",
+  "lxml>=6.0.2",
+  "py3dmol>=2.5.3",
 ]
 
 [dependency-groups]
@@ -52,14 +66,9 @@ docs = [
 ]
 
 gpu = [
-  "cudaq>=0.12.0.post1",
   "nvidia-cupynumeric>=25.8.0",
   "legate>=25.8.0",
   "legate-profiler>=0.0.0",
-  # pick one variant that matches your CUDA:
-  # or: "cuquantum-cu11>=25.9.1",
-  "cuquantum>=25.9.1",
-  "cupy-cuda12x>=13.6.0",
 ]
 
 [build-system]
@@ -70,11 +79,15 @@ build-backend = "uv_build"
 package = true
 
 [tool.uv.sources]
-openmmforcefields = { git = "https://github.com/openmm/openmmforcefields" }
-legate-sparse = { git = "https://github.com/nv-legate/legate-sparse"}
+openmmforcefields = { git = "https://github.com/openmm/openmmforcefields.git" }
+legate-sparse = { git = "https://github.com/nv-legate/legate-sparse.git"}
 openff-toolkit = { git = "https://github.com/openforcefield/openff-toolkit.git" }
 openff-utilities = { git = "https://github.com/openforcefield/openff-utilities.git" }
 openff-units = { git = "https://github.com/openforcefield/openff-units.git" }
+openmmtools = { git = "https://github.com/choderalab/openmmtools.git" }
+pdbfixer = { git = "https://github.com/openmm/pdbfixer.git" }
+openforcefields = { git = "https://github.com/openforcefield/openff-forcefields.git" }
+openff-interchange = { git = "https://github.com/openforcefield/openff-interchange.git" }
 
 [tool.uv.workspace]
 members = ["."]
