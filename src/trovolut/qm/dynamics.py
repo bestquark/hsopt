@@ -1,7 +1,7 @@
 import cupynumeric as np
 import scipy.linalg
 
-def _suzuki_step(H_terms, dt, order=1):
+def suzuki_step(H_terms, dt, order=1):
     """Single-step unitary for e^{-i H dt} with Suzuki formula of given order.
 
     order = 1: first-order (Lie-Trotter)
@@ -34,8 +34,8 @@ def _suzuki_step(H_terms, dt, order=1):
     k = order // 2
     p_k = 1.0 / (4.0 - 4.0 ** (1.0 / (2 * k - 1)))
 
-    U_p = _suzuki_step(H_terms, p_k * dt, order=order - 2)
-    U_m = _suzuki_step(H_terms, (1.0 - 4.0 * p_k) * dt, order=order - 2)
+    U_p = suzuki_step(H_terms, p_k * dt, order=order - 2)
+    U_m = suzuki_step(H_terms, (1.0 - 4.0 * p_k) * dt, order=order - 2)
 
     return U_p @ U_p @ U_m @ U_p @ U_p
 
@@ -52,7 +52,7 @@ def product_formula(H_terms, t, r, order=1):
     dt = t / r
     U = np.eye(H_terms[0].shape[0], dtype=complex)
     for _ in range(r):
-        U_step = _suzuki_step(H_terms, dt, order=order)
+        U_step = suzuki_step(H_terms, dt, order=order)
         U = U_step @ U
     return U
 

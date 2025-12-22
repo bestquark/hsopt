@@ -40,11 +40,49 @@ def _hann(n: int) -> np.ndarray:
     return 0.5 - 0.5 * np.cos(2 * np.pi * k / (n - 1))
 
 def build_autocorr(psi_t: np.ndarray) -> np.ndarray:
+    """Return autocorrelation C(t)=<psi(0)|psi(t)>.
+
+    If `psi_t` is (T, dim), we compute <psi0|psi(t)> and normalize so C(0)=1
+    (when possible). This makes FFT peak picking much more stable when norms drift.
+
+    If `psi_t` is already (T,), it's assumed to be an autocorrelation-like signal
+    and we normalize similarly.
+    """
     X = np.asarray(psi_t, dtype=np.complex128)
+
+    # If user already passed an autocorrelation-like 1D signal
     if X.ndim == 1:
-        return X
+        C = X
+        if C.size:
+            c0 = C[0]
+            if np.abs(c0) > 0:
+                C = C / c0
+        return C
+
+    # Otherwise compute from time series of states
     psi0 = X[0]
-    return np.einsum("ti,i->t", X, np.conj(psi0))
+    n0 = np.vdot(psi0, psi0)
+    if np.abs(n0) == 0:
+        raise ValueError("psi_t[0] has zero norm; cannot build autocorrelation")
+
+    # <psi(0)|psi(t)>
+    C = np.einsum("ti,i->t", X, np.conj(psi0))
+
+    # Normalize by ||psi0||^2 so C(0)=1 (assuming psi(t) is normalized similarly)
+    C = C / n0
+
+    # If norms drift significantly, additionally normalize by ||psi(t)||
+    # so C remains bounded (helps peak finding when the simulation is noisy).
+    norms_t = np.sqrt(np.einsum("ti,ti->t", X.conj(), X).real)
+    n0s = float(np.sqrt(n0.real))
+    denom = np.maximum(norms_t * n0s, 1e-30)
+    C = C / denom
+
+    # Force exact C(0)=1 when possible
+    if C.size and np.abs(C[0]) > 0:
+        C = C / C[0]
+
+    return C
 
 def estimate_noise_variance(C: np.ndarray) -> float:
     C = np.asarray(C)
@@ -184,6 +222,67 @@ def crb_from_projection(
 # =============================================================================
 
 @dataclass
+class FFTSpectrum:
+    """Raw FFT spectrum data for reuse across functions."""
+    energies: np.ndarray      # E = -omega (sorted, all positive values)
+    power: np.ndarray         # Power spectrum at those energies
+    autocorr: np.ndarray      # Autocorrelation C(t)
+    dt: float
+    n_fft: int
+
+def _compute_fft_spectrum(
+    psi_t: np.ndarray,
+    dt: float,
+    zero_pad_factor: int = 4,
+    detrend: Literal["none", "mean"] = "none",
+) -> FFTSpectrum:
+    """
+    Compute raw FFT spectrum from time-evolved wavefunctions.
+    
+    Returns energies and power spectrum for visualization or peak extraction.
+    For C(t)=Σ a exp(-iEt), FFT peaks are at negative freqs -> E=-ω.
+    """
+    C = build_autocorr(psi_t)
+    T = C.size
+    if T < 8:
+        raise ValueError("Need at least 8 time points")
+
+    n_fft = int(T * zero_pad_factor)
+    w = _hann(T)
+    
+    if detrend == "mean":
+        C_use = C - np.mean(C)
+    elif detrend == "none":
+        C_use = C
+    else:
+        raise ValueError("detrend must be 'none' or 'mean'")
+
+    X = np.fft.fft(C_use * w, n=n_fft)
+    P_full = np.abs(X) ** 2
+
+    freqs_full = np.fft.fftfreq(n_fft, d=dt)
+    omega_full = 2 * np.pi * freqs_full
+
+    # Use negative frequencies (where energies appear for C(t) = Σ a exp(-iEt))
+    neg = freqs_full < 0
+    P = P_full[neg]
+    omega = omega_full[neg]
+
+    # Drop bin closest to 0
+    if P.size > 2:
+        P = P[:-1]
+        omega = omega[:-1]
+
+    # Convert to energies and sort
+    E = -omega
+    sort_idx = np.argsort(E)
+    E = E[sort_idx]
+    P = P[sort_idx]
+
+    return FFTSpectrum(energies=E, power=P, autocorr=C, dt=dt, n_fft=n_fft)
+
+
+@dataclass
 class FFTResult:
     energies: np.ndarray
     uncertainty: np.ndarray | None
@@ -197,6 +296,7 @@ def fft_energy_levels(
     min_prom_frac: float = 0.01,
     zero_pad_factor: int = 4,
     refine_peaks: bool = True,
+    detrend: Literal["none", "mean"] = "none",
     compute_errors: bool = False,
     n_bootstrap: int = 200,
     compute_crb: bool = False,
@@ -208,26 +308,30 @@ def fft_energy_levels(
 
     For C(t)=Σ a exp(-iEt), FFT peaks are at negative freqs -> E=-ω.
     """
-    C = build_autocorr(psi_t)
+    # Use shared FFT computation
+    spec = _compute_fft_spectrum(psi_t, dt, zero_pad_factor=zero_pad_factor, detrend=detrend)
+    C = spec.autocorr
     T = C.size
-    if T < 8:
-        raise ValueError("Need at least 8 time points")
-
-    # Full-signal FFT with zero padding
-    n_fft = int(T * zero_pad_factor)
+    
+    # For peak finding, we need to work in the original (unsorted) order
+    # Recompute P and omega for peak finding with normalization
+    n_fft = spec.n_fft
     w = _hann(T)
-    X = np.fft.fft((C - np.mean(C)) * w, n=n_fft)
+    C_use = C - np.mean(C) if detrend == "mean" else C
+    X = np.fft.fft(C_use * w, n=n_fft)
     P_full = np.abs(X) ** 2
-
     freqs_full = np.fft.fftfreq(n_fft, d=dt)
     omega_full = 2 * np.pi * freqs_full
-
-    # Use negative frequencies (where energies appear for C(t) = Σ a exp(-iEt))
+    
     neg = freqs_full < 0
     P = P_full[neg]
     omega = omega_full[neg]
+    
+    # Normalize to tame dynamic range and make the peak threshold less brittle
+    med = float(np.median(P)) if P.size else 1.0
+    if med > 0:
+        P = P / med
 
-    # Drop bin closest to 0
     if P.size > 2:
         P = P[:-1]
         omega = omega[:-1]
@@ -265,15 +369,25 @@ def fft_energy_levels(
         boot_energies = [[] for _ in range(E_hat.size)]
         
         for _ in range(n_bootstrap):
-            # Add bootstrap noise (scaled to actual signal noise)
-            noise_scale = np.std(np.abs(C)) * 0.1  # 10% noise perturbation
+            # Perturbation scale tied to estimated noise on C (more stable than |C| std)
+            noise_var_hat = estimate_noise_variance(C)
+            noise_scale = float(np.sqrt(noise_var_hat))
             noise = noise_scale * (rng.standard_normal(T) + 1j * rng.standard_normal(T))
             Cb = C + noise
-            Xb = np.fft.fft((Cb - np.mean(Cb)) * w, n=n_fft)
+            if detrend == "mean":
+                Cb_use = Cb - np.mean(Cb)
+            else:
+                Cb_use = Cb
+            Xb = np.fft.fft(Cb_use * w, n=n_fft)
             Pb = np.abs(Xb) ** 2
             Pb_neg = Pb[neg]
             if Pb_neg.size > 2:
                 Pb_neg = Pb_neg[:-1]
+
+            # Match the same normalization used for the main spectrum
+            med_b = float(np.median(Pb_neg)) if Pb_neg.size else 1.0
+            if med_b > 0:
+                Pb_neg = Pb_neg / med_b
             
             # Find peaks in bootstrap spectrum
             try:
@@ -464,7 +578,7 @@ def estimate_spectrum(
     """
     if method == "fft":
         # Filter to FFT-specific kwargs only
-        fft_keys = {"min_prom_frac", "zero_pad_factor", "refine_peaks", "n_bootstrap", "seed"}
+        fft_keys = {"min_prom_frac", "zero_pad_factor", "refine_peaks", "detrend", "n_bootstrap", "seed"}
         fft_kwargs = {k: v for k, v in kwargs.items() if k in fft_keys}
         res = fft_energy_levels(
             psi_t, dt,
@@ -526,33 +640,48 @@ def estimate_ground_state_energy_fast(
         T = C.size
         n_fft = int(kwargs.get("zero_pad_factor", 4) * T)
         w = _hann(T)
-        X = np.fft.fft((C - np.mean(C)) * w, n=n_fft)
+
+        # Match fft_energy_levels() convention: no detrending by default.
+        C_use = C
+
+        X = np.fft.fft(C_use * w, n=n_fft)
         P = np.abs(X) ** 2
         freqs = np.fft.fftfreq(n_fft, d=dt)
         omega = 2 * np.pi * freqs
         neg = freqs < 0
         Pn = P[neg]
         on = omega[neg]
+
+        # Normalize to reduce dynamic range brittleness (robust to a few huge lines)
+        med = float(np.median(Pn)) if Pn.size else 1.0
+        if med > 0:
+            Pn = Pn / med
+
         if Pn.size > 2:
             Pn = Pn[:-1]
             on = on[:-1]
-        
+
         # Find multiple peaks, then return the minimum energy
         n_levels = kwargs.get("n_levels", 10)
-        pk = _robust_peaks(Pn, min_prom_frac=0.01, k_fallback=max(n_levels * 4, 20),
-                          low_bin_skip=0, baseline_win=31)
+        pk = _robust_peaks(
+            Pn,
+            min_prom_frac=float(kwargs.get("min_prom_frac", 0.01)),
+            k_fallback=max(n_levels * 4, 20),
+            low_bin_skip=0,
+            baseline_win=31,
+        )
         if pk.size == 0:
             # Fallback to argmax
             k = int(np.argmax(Pn))
             return float(-on[k])
-        
+
         # Convert peaks to energies
         E_hat = -on[pk]
         E_hat = E_hat[E_hat > 0]  # Keep positive energies
         if E_hat.size == 0:
             k = int(np.argmax(Pn))
             return float(-on[k])
-        
+
         return float(np.min(E_hat))  # Return ground state (lowest energy)
 
     raise ValueError("method must be one of: 'esprit' or 'fft'")
@@ -587,6 +716,105 @@ def estimate_ground_state_energy(
     sigma0 = float(sig[0]) if (sig is not None and sig.size) else None
     crb0 = float(crb.std[0]) if (crb is not None and crb.std.size) else None
     return E0, sigma0, crb0, info
+
+
+# =============================================================================
+# Visualization utilities
+# =============================================================================
+
+def plot_fft_spectrum(
+    psi_t: np.ndarray,
+    dt: float,
+    energy_offset: float = 0.0,
+    max_energy: float | None = None,
+    min_energy: float | None = None,
+    true_energies: np.ndarray | None = None,
+    estimated_energies: np.ndarray | None = None,
+    figsize: tuple = (12, 5),
+    log_scale: bool = True,
+    title: str | None = None,
+    zero_pad_factor: int = 4,
+):
+    """
+    Visualize the FFT power spectrum of time-evolved wavefunctions.
+    
+    Uses the same FFT computation as fft_energy_levels for consistency.
+    
+    Args:
+        psi_t: Time-evolved wavefunction array (T, dim) or autocorrelation (T,)
+        dt: Time step
+        energy_offset: Constant to add to FFT energies (e.g., identity term coefficient)
+        max_energy: Maximum energy to display
+        min_energy: Minimum energy to display
+        true_energies: If provided, plot vertical lines at these energies (red dashed)
+        estimated_energies: If provided, plot vertical lines at estimated energies (green dotted)
+        figsize: Figure size
+        log_scale: Use log scale for power spectrum
+        title: Plot title
+        zero_pad_factor: Zero padding factor for FFT resolution
+        
+    Returns:
+        fig, ax, (energies_plot, power_plot)
+    """
+    import matplotlib.pyplot as plt
+    
+    # Use shared FFT computation
+    spec = _compute_fft_spectrum(psi_t, dt, zero_pad_factor=zero_pad_factor)
+    
+    # Apply energy offset
+    E_plot = spec.energies + energy_offset
+    P_plot = spec.power.copy()
+    
+    # Apply energy range filter
+    mask = np.ones(len(E_plot), dtype=bool)
+    if min_energy is not None:
+        mask &= E_plot >= min_energy
+    if max_energy is not None:
+        mask &= E_plot <= max_energy
+    E_plot = E_plot[mask]
+    P_plot = P_plot[mask]
+    
+    # Plot
+    fig, ax = plt.subplots(figsize=figsize)
+    
+    if E_plot.size == 0:
+        ax.text(0.5, 0.5, 'No data in energy range', ha='center', va='center', 
+                transform=ax.transAxes, fontsize=14)
+    else:
+        ax.plot(E_plot, P_plot, 'b-', linewidth=0.8, alpha=0.8)
+        ax.fill_between(E_plot, P_plot, alpha=0.3)
+        
+        if log_scale and P_plot.size > 0 and P_plot.max() > 0:
+            ax.set_yscale('log')
+    
+    # Mark true energies if provided
+    if true_energies is not None:
+        true_energies = np.atleast_1d(true_energies)
+        for i, E in enumerate(true_energies):
+            if (min_energy is None or E >= min_energy) and (max_energy is None or E <= max_energy):
+                ax.axvline(E, color='r', linestyle='--', alpha=0.7, linewidth=1.5,
+                          label='True eigenvalues' if i == 0 else None)
+    
+    # Mark estimated energies if provided
+    if estimated_energies is not None:
+        estimated_energies = np.atleast_1d(estimated_energies)
+        for i, E in enumerate(estimated_energies):
+            E_shifted = E + energy_offset
+            if (min_energy is None or E_shifted >= min_energy) and (max_energy is None or E_shifted <= max_energy):
+                ax.axvline(E_shifted, color='g', linestyle=':', alpha=0.8, linewidth=2,
+                          label='Estimated energies' if i == 0 else None)
+    
+    ax.set_xlabel('Energy (Hartree)', fontsize=12)
+    ax.set_ylabel('Power Spectrum', fontsize=12)
+    ax.set_title(title or 'FFT Spectrum of Time-Evolved Wavefunction', fontsize=14)
+    ax.grid(True, alpha=0.3)
+    
+    if true_energies is not None or estimated_energies is not None:
+        ax.legend()
+    
+    plt.tight_layout()
+    return fig, ax, (E_plot, P_plot)
+
 
 def main(compute_uncertainties: bool = True):
     """

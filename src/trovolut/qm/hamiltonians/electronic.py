@@ -1,4 +1,17 @@
-"""Electronic-structure Hamiltonians"""
+"""Electronic-structure Hamiltonians
+
+This module provides classes for constructing and manipulating electronic
+structure Hamiltonians using standard OpenFermion conventions.
+
+The spin-orbital indexing follows OpenFermion's convention:
+- For N spatial orbitals, we have 2N spin-orbitals
+- Spin-orbital index = 2 * spatial_index + spin (spin=0 for alpha, spin=1 for beta)
+- So: 0=0α, 1=0β, 2=1α, 3=1β, 4=2α, 5=2β, ...
+
+The Hartree-Fock state for n_electrons occupies the lowest n_electrons spin-orbitals
+in this ordering, which corresponds to the lowest-energy spatial orbitals with
+both alpha and beta electrons.
+"""
 
 from __future__ import annotations
 from typing import Any, Dict, Sequence, Union, Optional, Callable, List
@@ -7,11 +20,13 @@ import numpy as np
 from openfermion import (
     QubitOperator,
     FermionOperator,
+    InteractionOperator,
     jordan_wigner,
     bravyi_kitaev,
     parity_code,
     binary_code_transform,
     get_sparse_operator,
+    get_fermion_operator,
 )
 
 from trovolut.qm.hamiltonians._hamiltonian import Hamiltonian
@@ -155,6 +170,85 @@ def _scf_with_optional_external(
         raise RuntimeError("SCF did not converge")
 
     return mf, mol
+
+
+def _spatial_integrals_from_mf(mf, mol):
+    """Extract SPATIAL orbital integrals from a converged RHF mean-field object.
+    
+    These are the integrals in the standard quantum chemistry convention that
+    OpenFermion's InteractionOperator expects.
+
+    Args:
+        mf: PySCF RHF mean-field object with converged orbitals.
+        mol: PySCF molecule corresponding to ``mf``.
+
+    Returns:
+        Tuple[np.ndarray, np.ndarray, float, int]: 
+            - one_body_integrals: (n_spatial, n_spatial) one-body integrals
+            - two_body_integrals: (n_spatial, n_spatial, n_spatial, n_spatial) 
+              two-body integrals in physicist notation <pq|rs>
+            - nuclear_repulsion: nuclear repulsion energy
+            - n_electrons: number of electrons
+    """
+    from pyscf import ao2mo
+
+    if mol.spin != 0:
+        raise NotImplementedError("Only RHF (closed-shell) currently supported for InteractionOperator")
+    
+    e_nuc = mol.energy_nuc()
+    n_electrons = mol.nelectron
+    
+    C = mf.mo_coeff  # (nao, nmo)
+    h_core_ao = mf.get_hcore()
+    h_core_mo = C.T @ h_core_ao @ C  # (nmo, nmo)
+    nmo = C.shape[1]
+
+    # Get ERIs in MO basis - PySCF returns in chemist notation (pq|rs)
+    eri_mo_packed = ao2mo.kernel(mol, C)
+    eri_mo_chemist = ao2mo.restore(1, eri_mo_packed, nmo)  # (pq|rs)
+    
+    # Convert to physicist notation <pq|rs> = (pr|qs)
+    # OpenFermion expects physicist notation
+    eri_mo_physicist = np.transpose(eri_mo_chemist, (0, 2, 1, 3))  # <pq|rs>
+    
+    return h_core_mo, eri_mo_physicist, e_nuc, n_electrons
+
+
+def _interaction_operator_from_mf(mf, mol):
+    """Build an OpenFermion InteractionOperator from a converged PySCF mean-field.
+    
+    This uses OpenFermion's standard conventions for spin-orbital indexing.
+
+    Args:
+        mf: PySCF RHF mean-field object with converged orbitals.
+        mol: PySCF molecule corresponding to ``mf``.
+
+    Returns:
+        Tuple[InteractionOperator, dict]: The InteractionOperator and metadata
+    """
+    h1, h2_physicist, e_nuc, n_electrons = _spatial_integrals_from_mf(mf, mol)
+    nmo = h1.shape[0]
+    
+    # Create InteractionOperator using OpenFermion's standard conventions
+    # InteractionOperator expects:
+    # - constant: nuclear repulsion
+    # - one_body_tensor: (n_spatial, n_spatial) 
+    # - two_body_tensor: (n_spatial, n_spatial, n_spatial, n_spatial) in physicist notation
+    #   with the 0.5 factor already accounted for in the class
+    int_op = InteractionOperator(
+        constant=e_nuc,
+        one_body_tensor=h1,
+        two_body_tensor=0.5 * h2_physicist,  # InteractionOperator expects 0.5 * <pq||rs>
+    )
+    
+    meta = {
+        "n_spatial_orbitals": nmo,
+        "n_spin_orbitals": 2 * nmo,
+        "n_electrons": n_electrons,
+        "nuclear_repulsion": e_nuc,
+    }
+    
+    return int_op, meta
 
 
 def _integrals_from_mf(mf, mol):
@@ -484,6 +578,136 @@ def parity_mapping(fermion_operator, n_modes):
     return binary_code_transform(fermion_operator, parity_code(n_modes))
 
 
+def _active_space_interaction_operator(
+    mf,
+    n_core_keep: int,
+    n_virt_keep: int,
+):
+    """
+    Build active-space InteractionOperator from a converged RHF `mf`,
+    using PySCF's CASCI to get correct frozen-core integrals.
+
+    This uses PySCF's CASCI machinery which correctly handles:
+    - Frozen core energy contribution
+    - Effective 1-body integrals (dressed with frozen core effects)
+    - Active space 2-body integrals
+
+    Returns:
+        Tuple[InteractionOperator, dict]: The InteractionOperator and metadata
+    """
+    import numpy as _np
+    from pyscf import ao2mo, mcscf
+    from openfermion.chem.molecular_data import spinorb_from_spatial
+
+    mol = mf.mol
+    n_electrons_total = mol.nelectron
+
+    C = mf.mo_coeff  # (nao, nmo)
+    eps = mf.mo_energy  # (nmo,)
+    occ = mf.mo_occ  # (nmo,)
+    nmo = C.shape[1]
+
+    # occupied / virtual split
+    occ_idx = [i for i in range(nmo) if occ[i] > 1e-8]
+    virt_idx = [i for i in range(nmo) if occ[i] <= 1e-8]
+
+    # sort within each block by energy
+    occ_sorted = sorted(occ_idx, key=lambda i: eps[i])  # low -> high
+    virt_sorted = sorted(virt_idx, key=lambda i: eps[i])  # low -> high
+
+    # choose active occ/virt
+    active_occ = occ_sorted[-n_core_keep:] if n_core_keep <= len(occ_sorted) else occ_sorted[:]
+    active_virt = virt_sorted[:n_virt_keep] if n_virt_keep <= len(virt_sorted) else virt_sorted[:]
+
+    active_indices = sorted(active_occ + active_virt)
+    frozen_occ = [i for i in occ_sorted if i not in active_occ]
+    frozen_indices = sorted(set(range(nmo)) - set(active_indices))
+
+    # Number of active electrons = electrons in active occupied orbitals
+    # Each occupied spatial orbital has 2 electrons (RHF)
+    n_active_electrons = 2 * len(active_occ)
+    n_act = len(active_indices)
+    
+    # Use PySCF's CASCI to get correct active space integrals
+    # CASCI handles the frozen core correctly
+    mc = mcscf.CASCI(mf, ncas=n_act, nelecas=n_active_electrons)
+    mc.verbose = 0
+    
+    # Sort MO coefficients to put active orbitals in the right place for CASCI
+    # PySCF CASCI expects: [frozen core] [active] [frozen virtual]
+    # We need to reorder so that our active_indices become the middle block
+    # The indices passed to sort_mo should be 1-indexed (PySCF convention)
+    active_indices_1indexed = [i + 1 for i in active_indices]
+    mc.mo_coeff = mcscf.sort_mo(mc, mf.mo_coeff, active_indices_1indexed)
+    
+    # Run CASCI to get the energy (we mainly need get_h1eff/get_h2eff)
+    mc.kernel()
+    
+    # Get effective 1-body and 2-body integrals from CASCI
+    # h1eff already includes frozen core dressing
+    # energy_core includes nuclear repulsion + frozen core electronic energy
+    h1eff, energy_core = mc.get_h1eff()  # energy_core includes e_nuc!
+    h2eff = mc.get_h2eff()  # 2-body integrals in active space (chemist notation, possibly packed)
+    
+    # Restore 2-body integrals to full 4-index form if packed
+    if len(h2eff.shape) != 4:
+        h2eff_chemist = ao2mo.restore(1, h2eff.ravel(), n_act)
+    else:
+        h2eff_chemist = h2eff
+    
+    # Convert from chemist notation (pq|rs) to physicist notation <pq|rs>
+    # Physicist: <pq|rs> = integral(phi_p*(1) phi_q*(2) 1/r12 phi_r(1) phi_s(2))
+    # Chemist:   (pq|rs) = integral(phi_p*(1) phi_q(1) 1/r12 phi_r*(2) phi_s(2))
+    # Relationship: <pq|rs> = (pr|qs)
+    # So h2_physicist[p,q,r,s] = h2_chemist[p,r,q,s]
+    h2eff_physicist = _np.transpose(h2eff_chemist, (0, 2, 1, 3))
+    
+    # Use OpenFermion's spinorb_from_spatial for consistent spin-orbital conversion
+    # spinorb_from_spatial expects physicist notation integrals
+    h1_spinorb, h2_spinorb = spinorb_from_spatial(h1eff, h2eff_physicist)
+    
+    # Create InteractionOperator
+    # OpenFermion's MolecularData.get_molecular_hamiltonian uses 1/2 factor
+    # for two_body_coefficients from spinorb_from_spatial because the
+    # Hamiltonian is: H = const + sum_pq h1[p,q] a†_p a_q + sum_pqrs h2[p,q,r,s] a†_p a†_q a_r a_s
+    # and the physical two-body term has a factor of 1/2 to avoid double counting
+    int_op = InteractionOperator(
+        constant=energy_core,
+        one_body_tensor=h1_spinorb,
+        two_body_tensor=0.5 * h2_spinorb,
+    )
+
+    # Build mapping from active space local index to global MO index
+    # and compute which LOCAL spatial orbitals are occupied
+    local_occ_indices = [active_indices.index(mo) for mo in active_occ]
+
+    meta = {
+        # which MOs we kept (spatial) - GLOBAL indices
+        "active_indices": active_indices,
+        "frozen_indices": frozen_indices,
+        "frozen_occ": frozen_occ,
+        # label which part of active_indices came from occ/virt - GLOBAL indices  
+        "active_occ": active_occ,
+        "active_virt": active_virt,
+        # LOCAL indices within the active space that are occupied
+        "local_occ_indices": local_occ_indices,
+        # orbital info for debugging / plotting frontier orbitals
+        "orbital_energies": eps.tolist(),
+        "orbital_occupations": occ.tolist(),
+        # sizes
+        "n_act_spatial": n_act,
+        "n_spin_orb": 2 * n_act,
+        "n_electrons": n_active_electrons,
+        "n_core_keep": int(n_core_keep),
+        "n_virt_keep": int(n_virt_keep),
+        "energy_core": energy_core,  # includes e_nuc + frozen core
+        "casci_energy": mc.e_tot,  # for reference
+        "note": "active-space integrals from PySCF CASCI with OpenFermion spinorb convention",
+    }
+
+    return int_op, meta
+
+
 def _active_space_from_mf(
     mf,
     n_core_keep: int,
@@ -604,40 +828,47 @@ def _active_space_from_mf(
 
 
 class ElectronicHamiltonian(Hamiltonian):
-    """Second-quantized electronic Hamiltonian in a spin-orbital basis.
+    """Second-quantized electronic Hamiltonian using OpenFermion conventions.
+    
+    This class uses OpenFermion's InteractionOperator internally to ensure
+    correct spin-orbital indexing and fermion-to-qubit mappings.
+    
+    The spin-orbital convention is:
+    - Spin-orbital index = 2 * spatial_orbital + spin
+    - spin=0 for alpha, spin=1 for beta
+    - So: 0=0α, 1=0β, 2=1α, 3=1β, ...
+    
+    The Hartree-Fock state for n_electrons occupies the lowest
+    n_electrons spin-orbitals in this ordering.
 
     Args:
-        h1 (np.ndarray): One-body integrals ``(M, M)``.
-        h2 (np.ndarray): Two-body integrals ``(M, M, M, M)``.
-        constant (float): Scalar nuclear-repulsion/shift term.
+        interaction_operator (InteractionOperator): OpenFermion InteractionOperator
+            containing one-body, two-body integrals and constant term.
         meta (Optional[Dict[str, Any]]): Optional metadata dictionary.
 
     Attributes:
-        h1 (np.ndarray): Stored copy of the one-body integrals.
-        h2 (np.ndarray): Stored copy of the two-body integrals.
-        constant (float): Energy shift added to the Hamiltonian.
-        M (int): Number of spin orbitals.
+        interaction_operator: The OpenFermion InteractionOperator
+        n_spatial (int): Number of spatial orbitals
+        M (int): Number of spin orbitals (= 2 * n_spatial)
+        constant (float): Energy shift (nuclear repulsion + frozen core)
     """
 
     def __init__(
         self,
-        h1: np.ndarray,
-        h2: np.ndarray,
-        constant: float = 0.0,
+        interaction_operator: InteractionOperator,
         meta: Optional[Dict[str, Any]] = None,
     ):
-        self.h1 = np.array(h1, dtype=float)
-        self.h2 = np.array(h2, dtype=float)
-        self.constant = float(constant)
-
-        M = self.h1.shape[0]
-        if self.h1.shape != (M, M):
-            raise ValueError("h1 must be (M,M)")
-        if self.h2.shape != (M, M, M, M):
-            raise ValueError("h2 must be (M,M,M,M)")
-        self.M = M
-        self._hilbert_dim = 2**M  # spin-orbital occupation basis dim
+        self.interaction_operator = interaction_operator
         self.meta = meta or {}
+        
+        # Number of spatial orbitals
+        self.n_spatial = interaction_operator.one_body_tensor.shape[0]
+        # Number of spin-orbitals (qubits for JW)
+        self.M = 2 * self.n_spatial
+        self._hilbert_dim = 2 ** self.M
+        
+        # Cache the FermionOperator
+        self._fermion_operator = None
 
     @property
     def hilbert_dim(self) -> int:
@@ -648,96 +879,48 @@ class ElectronicHamiltonian(Hamiltonian):
     def is_stochastic(self) -> bool:
         """bool: ElectronicHamiltonian instances are deterministic."""
         return False
+    
+    @property
+    def n_electrons(self) -> Optional[int]:
+        """Number of electrons in the system."""
+        return self.meta.get("n_electrons")
+    
+    @property
+    def constant(self) -> float:
+        """Constant (nuclear repulsion + frozen core) term."""
+        return float(self.interaction_operator.constant)
+    
+    @property
+    def one_body_tensor(self) -> np.ndarray:
+        """One-body integrals in spatial orbital basis (n_spatial, n_spatial)."""
+        return self.interaction_operator.one_body_tensor
+    
+    @property
+    def two_body_tensor(self) -> np.ndarray:
+        """Two-body integrals in spatial orbital basis (n_spatial^4)."""
+        return self.interaction_operator.two_body_tensor
+    
+    def get_fermion_operator(self) -> FermionOperator:
+        """Get the FermionOperator representation using OpenFermion.
+        
+        This uses OpenFermion's get_fermion_operator which correctly
+        expands spatial integrals to spin-orbital basis.
+        """
+        if self._fermion_operator is None:
+            self._fermion_operator = get_fermion_operator(self.interaction_operator)
+        return self._fermion_operator
 
     def to_matrix(self) -> np.ndarray:
-        """Return the fermionic Hamiltonian matrix in Fock-space ordering.
+        """Return the Hamiltonian matrix in Fock-space ordering.
+        
+        Uses OpenFermion's get_sparse_operator for correctness.
 
         Returns:
             np.ndarray: Dense ``(2**M, 2**M)`` many-body matrix.
         """
-        # brute-force build second-quantized matrix
-        M = self.M
-        dim = 1 << M  # 2**M
-        Hmat = np.zeros((dim, dim), dtype=complex)
-
-        # we'll apply creation/annihilation on bitstrings
-        # a_p |n> = (-1)^{#occ< p} n_p |n with p flipped to 0> etc.
-        # Note: this is standard Jordan–Wigner action in Fock space.
-        # This is exponential, so OK only for small M.
-        def occ(bitstring, p):
-            return (bitstring >> p) & 1
-
-        def phase(bitstring, p):
-            # number of 1s below p
-            mask = (1 << p) - 1
-            return (-1) ** (bin(bitstring & mask).count("1"))
-
-        def apply_a(bitstring, p):
-            # annihilate at p
-            if not occ(bitstring, p):
-                return None, 0.0
-            new_bs = bitstring ^ (1 << p)
-            return new_bs, phase(bitstring, p)
-
-        def apply_adag(bitstring, p):
-            # create at p
-            if occ(bitstring, p):
-                return None, 0.0
-            new_bs = bitstring ^ (1 << p)
-            return new_bs, phase(bitstring, p)
-
-        # 1-body: sum_{pq} h1[p,q] a_p^† a_q
-        for p in range(M):
-            for q in range(M):
-                hpq = self.h1[p, q]
-                if abs(hpq) < 1e-12:
-                    continue
-                for bs in range(dim):
-                    # a_q on |bs>
-                    bs1, phase1 = apply_a(bs, q)
-                    if bs1 is None:
-                        continue
-                    # a_p^† on result
-                    bs2, phase2 = apply_adag(bs1, p)
-                    if bs2 is None:
-                        continue
-                    amp = hpq * phase1 * phase2
-                    Hmat[bs2, bs] += amp
-
-        # 2-body: (1/2) sum_{pqrs} h2[p,q,r,s] a_p^† a_q^† a_r a_s
-        for p in range(M):
-            for q in range(M):
-                for r in range(M):
-                    for s in range(M):
-                        hpqrs = 0.5 * self.h2[p, q, r, s]
-                        if abs(hpqrs) < 1e-12:
-                            continue
-                        for bs in range(dim):
-                            # a_s
-                            bs1, ph1 = apply_a(bs, s)
-                            if bs1 is None:
-                                continue
-                            # a_r
-                            bs2, ph2 = apply_a(bs1, r)
-                            if bs2 is None:
-                                continue
-                            # a_q^†
-                            bs3, ph3 = apply_adag(bs2, q)
-                            if bs3 is None:
-                                continue
-                            # a_p^†
-                            bs4, ph4 = apply_adag(bs3, p)
-                            if bs4 is None:
-                                continue
-                            amp = hpqrs * ph1 * ph2 * ph3 * ph4
-                            Hmat[bs4, bs] += amp
-
-        # constant shift
-        if abs(self.constant) > 1e-12:
-            for bs in range(dim):
-                Hmat[bs, bs] += self.constant
-
-        return Hmat
+        H_f = self.get_fermion_operator()
+        sparse_mat = get_sparse_operator(H_f, n_qubits=self.M)
+        return sparse_mat.toarray()
 
     def decompose(self) -> Dict[str, Any]:
         """Provide lightweight metadata describing the Hamiltonian.
@@ -747,10 +930,14 @@ class ElectronicHamiltonian(Hamiltonian):
         """
         return {
             "type": "second_quantized",
-            "one_body": self.h1,
-            "two_body": self.h2,
+            "one_body": self.one_body_tensor,
+            "two_body": self.two_body_tensor,
             "constant": self.constant,
+            "n_spatial_orbitals": self.n_spatial,
             "n_spin_orbs": self.M,
+            "n_qubits": self.M,
+            "n_electrons": self.n_electrons,
+            "meta": self.meta,
         }
 
     def to_qubits(
@@ -758,12 +945,21 @@ class ElectronicHamiltonian(Hamiltonian):
         mapping: Optional[str] = "jordan-wigner",
         sparse: bool = False,
     ) -> "QElectronicHamiltonian":
-        H_f = _fermion_operator_from_integrals(self.h1, self.h2, self.constant)
+        """Convert to qubit Hamiltonian using the specified mapping.
+        
+        Args:
+            mapping: One of "jordan-wigner", "bravyi-kitaev", or "parity"
+            sparse: If True, use sparse matrix representation
+            
+        Returns:
+            QElectronicHamiltonian with the specified mapping
+        """
+        H_f = self.get_fermion_operator()
 
         if mapping == "jordan-wigner":
             H_q = jordan_wigner(H_f)
         elif mapping == "bravyi-kitaev":
-            H_q = bravyi_kitaev(H_f)
+            H_q = bravyi_kitaev(H_f, self.M)
         elif mapping == "parity":
             H_q = parity_mapping(H_f, n_modes=self.M)
         else:
@@ -778,70 +974,59 @@ class ElectronicHamiltonian(Hamiltonian):
             mapping=mapping,
             sparse=sparse,
             origin={"source": "ElectronicHamiltonian"},
+            meta=self.meta,
         )
 
     def terms(self) -> List[Dict[str, Any]]:
-        """Return the additive decomposition of the fermionic Hamiltonian.
+        """Return the additive decomposition of the Hamiltonian as Pauli terms.
 
         Returns:
             List[Dict[str, Any]]:
-                Entries containing ``coef``, a dense matrix, the ``kind`` of contribution, and the tensor indices involved.
-
-        Notes:
-            The routine scales exponentially with the number of orbitals,
-            matching [`to_matrix`][trovolut.qm.hamiltonians.electronic.ElectronicHamiltonian.to_matrix].
+                Entries containing ``coef``, a dense matrix, and ``pauli`` string.
         """
-        M = self.M
-        dim = 1 << M
-        out: List[Dict[str, Any]] = []
-
-        # 1-body terms: h1[p,q] a_p^† a_q
-        for p in range(M):
-            for q in range(M):
-                c = self.h1[p, q]
-                if abs(c) < 1e-12:
-                    continue
-                block = _one_body_term_matrix(M, p, q, c)
-                out.append(
-                    {
-                        "coef": c,
-                        "matrix": block,
-                        "kind": "1-body",
-                        "indices": (p, q),
-                    }
-                )
-
-        # 2-body terms: (1/2) h2[p,q,r,s] a_p^† a_q^† a_r a_s
-        for p in range(M):
-            for q in range(M):
-                for r in range(M):
-                    for s in range(M):
-                        c = 0.5 * self.h2[p, q, r, s]
-                        if abs(c) < 1e-12:
-                            continue
-                        block = _two_body_term_matrix(M, p, q, r, s, c)
-                        out.append(
-                            {
-                                "coef": c,
-                                "matrix": block,
-                                "kind": "2-body",
-                                "indices": (p, q, r, s),
-                            }
-                        )
-
-        # constant shift: constant * I
-        if abs(self.constant) > 1e-12:
-            block = np.eye(dim, dtype=complex) * self.constant
-            out.append(
-                {
-                    "coef": self.constant,
-                    "matrix": block,
-                    "kind": "constant",
-                    "indices": (),
-                }
-            )
-
-        return out
+        # Use the qubit representation for term decomposition
+        qham = self.to_qubits(mapping="jordan-wigner", sparse=False)
+        return qham.terms()
+    
+    def hf_state_index(self) -> int:
+        """Get the computational basis index of the Hartree-Fock state.
+        
+        The HF state occupies the lowest n_electrons spin-orbitals.
+        In OpenFermion's convention (spin-orb = 2*spatial + spin), this
+        means filling spatial orbitals 0, 1, ... with both alpha and beta.
+        
+        OpenFermion's get_sparse_operator uses the convention where orbital j
+        is occupied when bit (n_qubits - 1 - j) is set in the integer index.
+        
+        Returns:
+            int: The basis state index with electrons in spin-orbitals 0..n_e-1
+        """
+        n_e = self.n_electrons
+        M = self.M  # number of spin-orbitals / qubits
+        if n_e is None:
+            raise ValueError("n_electrons not set in metadata")
+        # HF state has electrons in spin-orbitals 0, 1, ..., n_e-1
+        # In OpenFermion: orbital j occupied -> bit (M-1-j) is set
+        # So for orbitals 0..n_e-1: set bits M-1, M-2, ..., M-n_e
+        return sum(1 << (M - 1 - j) for j in range(n_e))
+    
+    def hf_state(self) -> np.ndarray:
+        """Get the Hartree-Fock state vector.
+        
+        Returns:
+            np.ndarray: State vector with 1 at HF index, 0 elsewhere
+        """
+        psi = np.zeros(self._hilbert_dim, dtype=complex)
+        psi[self.hf_state_index()] = 1.0
+        return psi
+    
+    def hf_bitstring(self) -> str:
+        """Get the Hartree-Fock state as a bitstring (big-endian).
+        
+        Returns:
+            str: Bitstring like '001111' for 4 electrons in 6 spin-orbitals
+        """
+        return format(self.hf_state_index(), f'0{self.M}b')
 
     @classmethod
     def from_xyz(
@@ -855,12 +1040,22 @@ class ElectronicHamiltonian(Hamiltonian):
         n_core_keep: int = 4,
         n_virt_keep: int = 4,
     ) -> "ElectronicHamiltonian":
-        """
-        If freeze_core is False:
-            build full Hamiltonian (all orbitals).
-        If freeze_core is True:
-            build an active-space Hamiltonian with only selected valence+low virtual
-            and attach metadata listing which orbitals were kept/frozen.
+        """Build ElectronicHamiltonian from XYZ geometry.
+        
+        Uses OpenFermion's InteractionOperator for correct spin-orbital conventions.
+        
+        Args:
+            xyz_source: XYZ file path, multiline string, or list of lines
+            basis: Basis set name (default: "sto-3g")
+            charge: Molecular charge (default: 0)
+            spin_mult: Spin multiplicity 2S+1 (default: 1 for singlet)
+            use_gpu4pyscf: Use GPU-accelerated PySCF if available
+            freeze_core: If True, use active space approximation
+            n_core_keep: Number of occupied orbitals to keep in active space
+            n_virt_keep: Number of virtual orbitals to keep in active space
+            
+        Returns:
+            ElectronicHamiltonian with proper OpenFermion conventions
         """
         geom_str = _parse_xyz(xyz_source)
 
@@ -874,41 +1069,17 @@ class ElectronicHamiltonian(Hamiltonian):
         )
 
         if not freeze_core:
-            h1, h2, constant = _integrals_from_mf(mf, mol)
-            meta = {
-                "active_indices": list(range(h1.shape[0] // 2)),  # spatial MOs ~ all of them
-                "frozen_indices": [],
-                "active_occ": [],
-                "active_virt": [],
-                "orbital_energies": getattr(mf, "mo_energy").tolist(),
-                "orbital_occupations": getattr(mf, "mo_occ").tolist(),
-                "n_act_spatial": h1.shape[0] // 2,
-                "n_spin_orb": h1.shape[0],
-                "n_core_keep": None,
-                "n_virt_keep": None,
-                "note": "full-space (no freezing)",
-            }
-            return cls(
-                h1=h1,
-                h2=h2,
-                constant=constant,
-                meta=meta,
+            int_op, meta = _interaction_operator_from_mf(mf, mol)
+        else:
+            int_op, meta = _active_space_interaction_operator(
+                mf,
+                n_core_keep=n_core_keep,
+                n_virt_keep=n_virt_keep,
             )
 
-        # freeze_core=True path
-        h1_act, h2_act, const_act, meta_act = _active_space_from_mf(
-            mf,
-            n_core_keep=n_core_keep,
-            n_virt_keep=n_virt_keep,
-        )
-
-        meta_act["note"] = "active-space / frozen-core approximation"
-
         return cls(
-            h1=h1_act,
-            h2=h2_act,
-            constant=const_act,
-            meta=meta_act,
+            interaction_operator=int_op,
+            meta=meta,
         )
 
 
@@ -930,6 +1101,7 @@ class QElectronicHamiltonian(PauliSumHamiltonian):
         mapping: str,
         sparse: bool = False,
         origin: Optional[Dict[str, Any]] = None,
+        meta: Optional[Dict[str, Any]] = None,
     ):
         coeffs = [complex(t["coeff"]) for t in qubit_terms]
         pauli_strings = [t["pauli"].replace(" ", "") for t in qubit_terms]
@@ -943,12 +1115,14 @@ class QElectronicHamiltonian(PauliSumHamiltonian):
 
         self.mapping = mapping
         self.origin = origin or {}
+        self.meta = meta or {}
 
     def decompose(self) -> Dict[str, Any]:
         base = super().decompose()
         base["type"] = "qubit_pauli_sum"
         base["mapping"] = self.mapping
         base["origin"] = self.origin
+        base["meta"] = self.meta
         return base
 
 
