@@ -1,10 +1,90 @@
-"""Module to evaluate performance of quantum simulations."""
+"""
+Evaluation module for quantum simulation optimization.
+
+Provides composable constraints for OpenEvolve evaluators.
+
+Example:
+    import trovolut as trv
+    
+    # Create constraints
+    constraints = trv.eval.ConstraintSet([
+        trv.eval.Time(max_seconds=30, hard=True),
+        trv.eval.Accuracy(weight=1.0),
+    ])
+    
+    # Evaluate metrics
+    result = constraints.evaluate({"time_seconds": 10.5, "mean_error": 0.01})
+    
+    # Generate prompts for OpenEvolve
+    prompt = constraints.generate_prompt()
+    
+    # View formulas
+    constraints.explain()
+    
+    # Use with filemaker to generate evaluator files
+    evaluator = trv.filemaker.Workflow([
+        get_hamiltonian,
+        evaluate,
+    ], out_path="evaluator.py").build()
+"""
+
+# Constraints - new simplified names
+from trovolut.eval.constraints import (
+    Constraint,
+    ConstraintSet,
+    ConstraintResult,
+    # Core constraints (simplified names)
+    Time,
+    Accuracy,
+    Memory,
+    GPUTime,
+    Custom,
+    # Legate GPU profiling constraints
+    LegateGPUSeconds,
+    LegateFramebuffer,
+    LegateMakespan,
+    LegateConcurrency,
+    # Backward compatibility aliases
+    TimeConstraint,
+    AccuracyConstraint,
+    MemoryConstraint,
+    GPUTimeConstraint,
+    CustomConstraint,
+    LegateGPUSecondsConstraint,
+    LegateFramebufferConstraint,
+    LegateMakespanConstraint,
+    LegateConcurrencyConstraint,
+)
+
+# Legacy (kept for code_evolution/)
 from trovolut.eval.gpu_evals import GPUSpaceTimeEval
-from trovolut.eval.simulated_evals import SimulatedMemoryEval
-from trovolut.eval.trotter_evals import TrotterErrorEval
 
 __all__ = [
+    # Base classes
+    "Constraint",
+    "ConstraintSet",
+    "ConstraintResult",
+    # Core constraints (new simplified names)
+    "Time",
+    "Accuracy",
+    "Memory",
+    "GPUTime",
+    "Custom",
+    # Legate GPU constraints (new simplified names)
+    "LegateGPUSeconds",
+    "LegateFramebuffer",
+    "LegateMakespan",
+    "LegateConcurrency",
+    # Backward compatibility (old names with 'Constraint' suffix)
+    "TimeConstraint",
+    "AccuracyConstraint",
+    "MemoryConstraint",
+    "GPUTimeConstraint",
+    "CustomConstraint",
+    "LegateGPUSecondsConstraint",
+    "LegateFramebufferConstraint",
+    "LegateMakespanConstraint",
+    "LegateConcurrencyConstraint",
+    # Legacy
     "GPUSpaceTimeEval",
-    "SimulatedMemoryEval",
-    "TrotterErrorEval",
 ]

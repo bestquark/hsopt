@@ -1,4 +1,8 @@
-import cupynumeric as np
+try:
+    import cupynumeric as np
+except ImportError:
+    import numpy as np
+
 import scipy.linalg
 
 def suzuki_step(H_terms, dt, order=1):

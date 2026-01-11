@@ -22,9 +22,7 @@ dependencies = [
   "duckdb>=1.4.1",
   "ruff>=0.14.2",
   "scikit-image>=0.25.2",
-  "nvidia-cupynumeric>=25.10.0",
   "ipykernel>=6.31.0",
-  "legate>=25.10.0",
   "openff-toolkit",
   "openff-utilities",
   "openff-units",
@@ -38,7 +36,6 @@ dependencies = [
   "jax>=0.8.1",
   "openmmtools",
   "python-constraint>=1.4.0",
-  "cudaq>=0.13.0",
   "pandas>=2.3.3",
   "pdbfixer",
   "xmltodict>=1.0.2",
@@ -46,6 +43,10 @@ dependencies = [
   "openff-interchange",
   "lxml>=6.0.2",
   "py3dmol>=2.5.3",
+  "nvidia-cupynumeric>=25.10.0",
+  # Linux-only GPU dependencies (platform markers)
+  "legate>=25.10.0; sys_platform == 'linux'",
+  "cudaq>=0.13.0; sys_platform == 'linux'",
 ]
 
 [dependency-groups]

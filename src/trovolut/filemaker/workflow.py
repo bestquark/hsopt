@@ -110,10 +110,25 @@ def get_source_with_deps(func, visited=None, root_name="trv"):
 # ---------- Workflow ----------
 
 class Workflow:
-    def __init__(self, parts, out_path="initial_program.py", imports=None, main_func=None):
+    def __init__(self, parts, out_path="initial_program.py", imports=None, main_func=None, constraints=None):
         """
-        parts: list of callables, comments, or code strings
-        main_func: callable (optional)
+        Build standalone Python files from functions and objects.
+        
+        Args:
+            parts: list of callables, comments, or code strings
+            out_path: output file path
+            imports: list of import statements
+            main_func: callable (optional)
+            constraints: ConstraintSet for auto-generating evaluator files
+        
+        Example:
+            workflow = Workflow(
+                [EVO_START, run_dynamics, EVO_END],
+                out_path="program.py",
+                constraints=constraints,  # enables build_evaluator()
+            )
+            workflow.build()  # generates program.py
+            workflow.build_evaluator()  # generates evaluator.py
         """
         self.parts = parts
         self.out_path = Path(out_path)
@@ -123,6 +138,7 @@ class Workflow:
             "import trovolut as trv",
         ]
         self.main_func = main_func
+        self._constraints = constraints
 
     def build(self):
         self.out_path.parent.mkdir(parents=True, exist_ok=True)
@@ -156,6 +172,46 @@ class Workflow:
                 f.write(body.rstrip() + "\n\n")
 
         return self.out_path
+    
+    def build_evaluator(self, out_path=None) -> Path:
+        """Generate an evaluator file from attached constraints.
+        
+        Args:
+            out_path: Output path for evaluator. Defaults to same dir as main file
+                      with name 'evaluator.py'.
+        
+        Returns:
+            Path to generated evaluator file.
+        
+        Raises:
+            ValueError: If no constraints were passed to the Workflow constructor.
+        
+        Example:
+            workflow = trv.filemaker.Workflow(
+                [trv.filemaker.EVO_START, run_dynamics, trv.filemaker.EVO_END],
+                out_path="opt/program.py",
+                constraints=constraints,  # enables build_evaluator()
+            )
+            
+            workflow.build()  # Creates opt/program.py
+            workflow.build_evaluator()  # Creates opt/evaluator.py
+        """
+        if self._constraints is None:
+            raise ValueError(
+                "No constraints attached. Pass constraints to Workflow:\n\n"
+                "    workflow = trv.filemaker.Workflow(\n"
+                "        [...],\n"
+                "        constraints=constraints,\n"
+                "    )"
+            )
+        
+        eval_path = Path(out_path) if out_path else self.out_path.parent / "evaluator.py"
+        eval_path.parent.mkdir(parents=True, exist_ok=True)
+        
+        code = self._constraints._generate_evaluator_code()
+        eval_path.write_text(code)
+        
+        return eval_path
     
 # class Workflow:
 #     def __init__(self, parts, out_path="initial_program.py", imports=None, main_func=None):

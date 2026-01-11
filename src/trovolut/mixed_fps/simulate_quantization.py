@@ -1,4 +1,7 @@
-import cupynumeric as np
+try:
+    import cupynumeric as np
+except ImportError:
+    import numpy as np
 
 FMT = {
     # "fp4_e2m1": dict(exp_bits=2, man_bits=1, bias=1),

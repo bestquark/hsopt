@@ -1,19 +1,24 @@
 # trovolut/eval/gpu_evals.py
 from __future__ import annotations
 from pathlib import Path
-from typing import Any, Dict, List, Optional, Sequence, Tuple
+from typing import Any, Dict, List, Optional, Sequence, Tuple, TYPE_CHECKING
 import os, sys, io, pickle, glob, time, shutil, subprocess
-import duckdb, sqlite3
 import numpy as np
 
 from trovolut.eval.base import BaseEval
-from trovolut.qm.hamiltonians._hamiltonian import Hamiltonian, HamiltonianEnsemble
+
+# Lazy imports for heavy dependencies
+if TYPE_CHECKING:
+    import duckdb
+    import sqlite3
+    from trovolut.qm.hamiltonians._hamiltonian import Hamiltonian, HamiltonianEnsemble
 
 # --------------------------
 # DuckDB reader for legate_prof
 # --------------------------
 def _spacetime_gpu_duckdb(db_path: Path) -> Dict[str, Any]:
     # db_path should be a DuckDB DB *file* produced by `legion_prof load`.
+    import duckdb  # lazy import - heavy dependency
     con = duckdb.connect(str(db_path))
 
     time_q = r"""

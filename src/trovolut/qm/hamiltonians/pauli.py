@@ -3,7 +3,11 @@
 from __future__ import annotations
 from typing import Any, Dict, Tuple, Sequence, Optional, List, Union
 
-import cupynumeric as np
+try:
+    import cupynumeric as np
+except ImportError:
+    import numpy as np
+
 import scipy.sparse as sp
 
 from trovolut.qm.hamiltonians._hamiltonian import Hamiltonian, HamiltonianEnsemble

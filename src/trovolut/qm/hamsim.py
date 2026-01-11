@@ -1,4 +1,8 @@
-import cupynumeric as np
+try:
+    import cupynumeric as np
+except ImportError:
+    import numpy as np
+
 from trovolut.mixed_fps.simulate_quantization import quantize_any, dequantize_any, NATIVE
 
 BYTES_PER_ELT = {
