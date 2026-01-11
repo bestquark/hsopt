@@ -26,6 +26,7 @@ nav:
       - Creating Hamiltonians: tutorials/dmds_hamiltonian.ipynb
       - Trotter Dynamics: tutorials/trotter_dynamics.ipynb
       - Filemaker: tutorials/filemaker.ipynb
+      - Evaluations: tutorials/evaluations.ipynb
 
 theme:
   name: material
