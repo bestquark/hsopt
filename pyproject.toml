@@ -47,6 +47,11 @@ dependencies = [
   # Linux-only GPU dependencies (platform markers)
   "legate>=25.10.0; sys_platform == 'linux'",
   "cudaq>=0.13.0; sys_platform == 'linux'",
+  "netcdf4>=1.7.4",
+  "jupyter>=1.1.1",
+  "jupyterlab>=4.5.0",
+  "moviepy>=2.2.1",
+  "imageio-ffmpeg>=0.6.0",
 ]
 
 [dependency-groups]
