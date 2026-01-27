@@ -782,7 +782,6 @@ def plot_fft_spectrum(
                 transform=ax.transAxes, fontsize=14)
     else:
         ax.plot(E_plot, P_plot, 'b-', linewidth=0.8, alpha=0.8)
-        ax.fill_between(E_plot, P_plot, alpha=0.3)
         
         if log_scale and P_plot.size > 0 and P_plot.max() > 0:
             ax.set_yscale('log')
