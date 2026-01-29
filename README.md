@@ -3,12 +3,7 @@
 > [![Docs](https://img.shields.io/badge/docs-online-blue.svg)](https://bestquark.github.io/trovolut/) &nbsp;&nbsp;&nbsp; 🔑 **Password**: `gordonbell2026`
 
 The `trovolut` package is a software for evolutionary Trotterization in quantum mechanics. 
-Here, you will find code for automatically evolving simulations of quantum systems using mixed-precision arithmetic, embedded in a classical environment. The aim is to use this technique for speeding up free-energy calculations (e.g. FEP) while maintaining accuracy.
-
-<p style="text-align:center;">
-<img src="docs/assets/traj.gif" alt="QM/MM Trajectory" width="40%">
-</p>
-
+Here, you will find code for automatically evolving simulations of quantum systems using mixed-precision arithmetic, embedded in a classical environment. 
 
 ## Installation
 

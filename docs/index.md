@@ -1,9 +1,6 @@
 # Trovolut
 
-This project provides tools for performing QM/MM simulations with mixed precision arithmetic, enabling efficient and accurate modeling of complex biological systems.
-
-
-<img src="assets/traj.gif" alt="Trajectory animation" width="500"/>
+This project provides tools for performing evolutionary quantum dynamics using GPUs. You can find some examples in the [tutorials](tutorials/index.md) directory.
 
 
 ## Installation
@@ -14,7 +11,7 @@ uv sync
 
 ## Obtaining documentation
 ```bash
-uv run mkdocs serve
+uv run --group docs mkdocs serve
 ```
 
 

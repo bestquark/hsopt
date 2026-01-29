@@ -6,8 +6,8 @@ They can be hard (must satisfy) or soft (contribute proportionally to final scor
 
 Example:
     time_hard = Time(max_seconds=10, hard=True)
-    accuracy = Accuracy(weight=1.0)
-    constraints = ConstraintSet([time_hard, accuracy])
+    error = Error(weight=1.0)
+    constraints = ConstraintSet([time_hard, error])
 """
 from __future__ import annotations
 from abc import ABC, abstractmethod
@@ -93,8 +93,11 @@ class Constraint(ABC):
     def evaluate(self, metrics: Dict[str, Any]) -> ConstraintResult:
         """Evaluate this constraint given execution metrics."""
         value = self.extract(metrics)
-        satisfied = self.is_satisfied(value)
+        satisfied = bool(self.is_satisfied(value))  # Convert numpy bool to Python bool
         score = self.hard_penalty if (self.hard and not satisfied) else self.score(value) * self.weight
+        # Convert numpy types to Python types for JSON serialization
+        value = float(value) if hasattr(value, 'item') else float(value)
+        score = float(score) if hasattr(score, 'item') else float(score)
         return ConstraintResult(self.name, value, score, satisfied, {"hard": self.hard, "weight": self.weight})
     
     def to_config(self) -> Dict[str, Any]:
@@ -103,7 +106,7 @@ class Constraint(ABC):
                   "weight": self.weight, "hard": self.hard, "hard_penalty": self.hard_penalty}
         # Add all public attributes that aren't in base
         for attr in ["max_seconds", "max_error", "max_mb", "max_gpu_seconds", 
-                     "n_gpus", "score_fn", "metric", "min_concurrency"]:
+                     "n_gpus", "score_fn", "metric", "min_concurrency", "max_count"]:
             if hasattr(self, attr):
                 config[attr] = getattr(self, attr)
         return config
@@ -111,7 +114,7 @@ class Constraint(ABC):
     def __repr__(self) -> str:
         # Collect key hyperparameters
         params = []
-        for attr in ["max_seconds", "max_error", "max_mb", "max_gpu_seconds", "min_concurrency"]:
+        for attr in ["max_seconds", "max_error", "max_mb", "max_gpu_seconds", "min_concurrency", "max_count"]:
             if hasattr(self, attr):
                 params.append(f"{getattr(self, attr)}")
                 break
@@ -167,12 +170,30 @@ class Time(Constraint):
         return _formula_str("time", self.max_seconds, self.score_fn, self.hard, self.hard_penalty, self.weight)
 
 
-class Accuracy(Constraint):
-    """Constraint on simulation accuracy (measured as error)."""
+class Error(Constraint):
+    """Constraint on simulation error (lower is better; 0 = perfect).
+    
+    Measures the error/deviation between candidate and reference results.
+    - Value of 0 = perfect match (no error)
+    - Default metric: fidelity error = 1 - |⟨ref|result⟩|²
+    """
     
     def __init__(self, max_error: float = 1.0, weight: float = 1.0, hard: bool = False,
                  hard_penalty: float = -100.0, score_fn: str = "inverse"):
-        super().__init__("accuracy", weight, hard, hard_penalty)
+        """Initialize error constraint.
+        
+        Args:
+            max_error: Maximum allowed error (default: 1.0). For hard constraints,
+                      programs with error > max_error will receive hard_penalty.
+            weight: Importance weight for soft constraints (default: 1.0).
+            hard: If True, error must be <= max_error (default: False).
+            hard_penalty: Score penalty for violating hard constraint (default: -100.0).
+            score_fn: Scoring function ('inverse', 'exponential', or 'linear').
+                     - 'inverse': 1/(1+error) - smooth, never reaches 0
+                     - 'exponential': exp(-error) - steep near 0
+                     - 'linear': max(0, 1-error/max_error) - linear decay
+        """
+        super().__init__("error", weight, hard, hard_penalty) 
         self.max_error = max_error
         self.score_fn = score_fn
     
@@ -192,7 +213,7 @@ class Accuracy(Constraint):
     def to_prompt(self) -> str:
         if self.hard:
             return f"Simulation error MUST be below {self.max_error} (hard requirement)."
-        return f"Maximize accuracy by minimizing error (weight: {self.weight})."
+        return f"Minimize error (weight: {self.weight})."
     
     def formula(self) -> str:
         formulas = {
@@ -208,8 +229,45 @@ class Accuracy(Constraint):
         return f"score = {base}"
 
 
+class CPUTime(Constraint):
+    """Constraint on CPU execution time (user + system).
+    
+    Measures actual CPU time consumed (not wall-clock time).
+    Uses process-level CPU accounting via psutil.
+    """
+    
+    def __init__(self, max_cpu_ms: float = 1000.0, weight: float = 1.0, hard: bool = False,
+                 hard_penalty: float = -100.0, score_fn: str = "exponential"):
+        super().__init__("cpu_time", weight, hard, hard_penalty)
+        self.max_cpu_ms = max_cpu_ms
+        self.score_fn = score_fn
+    
+    def extract(self, m: Dict[str, Any]) -> float:
+        return m.get("cpu_time_ms", float("inf"))
+    
+    def score(self, v: float) -> float:
+        if self.score_fn == "exponential":
+            import math
+            return math.exp(-v / self.max_cpu_ms)
+        return _score_fn(v, self.max_cpu_ms, self.score_fn)
+    
+    def is_satisfied(self, v: float) -> bool:
+        return v <= self.max_cpu_ms
+    
+    def to_prompt(self) -> str:
+        if self.hard:
+            return f"CPU time MUST be under {self.max_cpu_ms}ms (hard requirement). Use efficient algorithms, sparse operations, vectorization."
+        return f"Minimize CPU time (target: <{self.max_cpu_ms}ms, weight: {self.weight}). Prefer sparse matrices, reduced precision, efficient algorithms."
+    
+    def formula(self) -> str:
+        if self.score_fn == "exponential":
+            hard_str = f" (hard, penalty={self.hard_penalty})" if self.hard else ""
+            return f"score = exp(-cpu_ms/{self.max_cpu_ms}){hard_str}"
+        return _formula_str("cpu_time", self.max_cpu_ms, self.score_fn, self.hard, self.hard_penalty, self.weight)
+
+
 class Memory(Constraint):
-    """Constraint on memory usage."""
+    """Constraint on memory usage (RSS - resident set size)."""
     
     def __init__(self, max_mb: float = 1000.0, weight: float = 1.0, hard: bool = False,
                  hard_penalty: float = -100.0, score_fn: str = "linear"):
@@ -416,6 +474,38 @@ class LegateConcurrency(Constraint):
         return f"score = {base}"
 
 
+class MatMulCount(Constraint):
+    """Constraint on number of matrix multiplication operations.
+    
+    Tracks the count of matrix-matrix or matrix-vector multiplications.
+    Useful for optimizing algorithmic complexity in small systems where
+    wall-clock time isn't reliable.
+    """
+    
+    def __init__(self, max_count: int = 100, weight: float = 1.0, hard: bool = False,
+                 hard_penalty: float = -100.0, score_fn: str = "linear"):
+        super().__init__("matmul_count", weight, hard, hard_penalty)
+        self.max_count = max_count
+        self.score_fn = score_fn
+    
+    def extract(self, m: Dict[str, Any]) -> float:
+        return float(m.get("matmul_count", 0))
+    
+    def score(self, v: float) -> float:
+        return _score_fn(v, self.max_count, self.score_fn)
+    
+    def is_satisfied(self, v: float) -> bool:
+        return v <= self.max_count
+    
+    def to_prompt(self) -> str:
+        if self.hard:
+            return f"Number of matrix multiplications MUST stay below {self.max_count} (hard requirement)."
+        return f"Minimize matrix multiplications (target: <{self.max_count}, weight: {self.weight})."
+    
+    def formula(self) -> str:
+        return _formula_str("matmul_count", self.max_count, self.score_fn, self.hard, self.hard_penalty, self.weight)
+
+
 # =============================================================================
 # Constraint Set
 # =============================================================================
@@ -425,8 +515,8 @@ class ConstraintSet:
     
     Can be used as a decorator on Workflow to auto-generate evaluators:
     
-        constraints = ConstraintSet([Time(max_seconds=30), Accuracy()])
-        constraints.with_accuracy(exact_fn, setup_fn).entry_point("run_dynamics")
+        constraints = ConstraintSet([Time(max_seconds=30), Error()])
+        constraints.config_error(exact_fn, setup_fn).entry_point("run_dynamics")
         
         @constraints
         workflow = Workflow([...], out_path="program.py")
@@ -434,6 +524,28 @@ class ConstraintSet:
         workflow.build()  # generates program.py
         workflow.build_evaluator()  # generates evaluator.py
     """
+    
+    @classmethod
+    def _get_builtin_constraint_names(cls) -> set:
+        """Dynamically discover all built-in constraint classes in this module."""
+        import sys
+        import inspect
+        
+        # Get the current module
+        current_module = sys.modules[cls.__module__]
+        
+        # Find all classes that:
+        # 1. Are subclasses of Constraint
+        # 2. Are defined in this module (not imported)
+        # 3. Are not the abstract Constraint class itself
+        builtin_names = set()
+        for name, obj in inspect.getmembers(current_module, inspect.isclass):
+            if (issubclass(obj, Constraint) and 
+                obj is not Constraint and
+                obj.__module__ == current_module.__name__):
+                builtin_names.add(name)
+        
+        return builtin_names
     
     def __init__(self, constraints: List[Constraint]):
         self.constraints = constraints
@@ -559,13 +671,13 @@ class ConstraintSet:
     # Evaluator Decorator API
     # =========================================================================
     
-    def with_accuracy(
+    def config_error(
         self,
         exact_fn: Callable,
         setup_fn: Callable,
         error_fn: Callable | None = None,
     ) -> "ConstraintSet":
-        """Configure how accuracy is computed.
+        """Configure how error is computed.
         
         Args:
             exact_fn: Function computing exact/reference result.
@@ -589,7 +701,7 @@ class ConstraintSet:
             def exact(hams, t, psi0):
                 return scipy.linalg.expm(-1j * sum(hams) * t) @ psi0
             
-            constraints.with_accuracy(exact, setup)
+            constraints.config_error(exact, setup)
         """
         self._exact_fn = exact_fn
         self._setup_fn = setup_fn
@@ -619,9 +731,17 @@ class ConstraintSet:
         """Check if any constraint measures time."""
         return any(isinstance(c, Time) for c in self.constraints)
     
-    def _has_accuracy_constraint(self) -> bool:
-        """Check if any constraint measures accuracy."""
-        return any(isinstance(c, Accuracy) for c in self.constraints)
+    def _has_cpu_time_constraint(self) -> bool:
+        """Check if any constraint measures CPU time."""
+        return any(isinstance(c, CPUTime) for c in self.constraints)
+    
+    def _has_memory_constraint(self) -> bool:
+        """Check if any constraint measures memory."""
+        return any(isinstance(c, Memory) for c in self.constraints)
+    
+    def _has_error_constraint(self) -> bool:
+        """Check if any constraint measures error."""
+        return any(isinstance(c, Error) for c in self.constraints)
     
     def __call__(self, workflow: "Workflow") -> "Workflow":
         """Decorator to attach constraints to a Workflow.
@@ -649,30 +769,56 @@ class ConstraintSet:
     
     def _get_constraint_init_code(self) -> str:
         """Generate code to reconstruct this ConstraintSet."""
+        import inspect
+        
         lines = []
+        builtin_constraints = self._get_builtin_constraint_names()
+        
         for c in self.constraints:
             cls_name = c.__class__.__name__
-            params = []
-            # Collect relevant parameters for each constraint type
-            param_names = {
-                "Time": ["max_seconds", "weight", "hard", "hard_penalty", "score_fn"],
-                "Accuracy": ["max_error", "weight", "hard", "hard_penalty", "score_fn"],
-                "Memory": ["max_mb", "weight", "hard", "hard_penalty", "score_fn"],
-                "GPUTime": ["max_gpu_seconds", "n_gpus", "weight", "hard", "hard_penalty", "score_fn"],
-            }
-            for pname in param_names.get(cls_name, ["weight", "hard", "hard_penalty"]):
-                if hasattr(c, pname):
-                    val = getattr(c, pname)
-                    if isinstance(val, str):
-                        params.append(f'{pname}="{val}"')
-                    else:
-                        params.append(f"{pname}={val}")
-            lines.append(f"    trv.eval.{cls_name}({', '.join(params)}),")
+            is_builtin = cls_name in builtin_constraints
+            prefix = "trv.eval." if is_builtin else ""
+            
+            # Get __init__ signature and extract parameters from the instance
+            try:
+                sig = inspect.signature(c.__class__.__init__)
+                params = []
+                
+                for param_name, param in sig.parameters.items():
+                    if param_name == 'self':
+                        continue
+                    
+                    # Try to get the value from the instance
+                    if hasattr(c, param_name):
+                        val = getattr(c, param_name)
+                        if callable(val):
+                            continue
+                        
+                        # Format the value appropriately
+                        if isinstance(val, str):
+                            params.append(f'{param_name}="{val}"')
+                        elif isinstance(val, (int, float, bool, type(None))):
+                            params.append(f"{param_name}={val}")
+                        elif isinstance(val, (list, tuple)):
+                            params.append(f"{param_name}={val}")
+                        else:
+                            # For other types, use repr
+                            params.append(f"{param_name}={repr(val)}")
+                
+                lines.append(f"    {prefix}{cls_name}({', '.join(params)}),")
+            except Exception as e:
+                # Fallback: just create with minimal params
+                lines.append(f"    # WARNING: Could not reconstruct {cls_name}: {e}")
+                lines.append(f"    {prefix}{cls_name}(),")
+        
         return "constraints = trv.eval.ConstraintSet([\n" + "\n".join(lines) + "\n])"
     
     def _generate_evaluator_code(self) -> str:
         """Generate the full evaluator.py source code."""
         from trovolut.filemaker.workflow import get_source_with_deps
+        
+        # Check if we need CPU/memory monitoring
+        needs_cpu_monitoring = any(isinstance(c, (CPUTime, Memory)) for c in self.constraints)
         
         lines = [
             "import time",
@@ -680,12 +826,37 @@ class ConstraintSet:
             "from typing import List, Tuple, Dict, Any, Optional, Sequence, Union",
             "import numpy as np",
             "import scipy.linalg",
+        ]
+        
+        if needs_cpu_monitoring:
+            lines.extend([
+                "import psutil",
+                "import os",
+            ])
+        
+        lines.extend([
             "import trovolut as trv",
             "from trovolut.qm.hamiltonians import *  # noqa: F401,F403",
             "",
-        ]
+        ])
         
         visited = set()
+        
+        # Add custom constraint class definitions
+        builtin_constraints = self._get_builtin_constraint_names()
+        for c in self.constraints:
+            cls_name = c.__class__.__name__
+            if cls_name not in builtin_constraints:
+                # This is a custom constraint - include its source
+                try:
+                    src = get_source_with_deps(c.__class__, visited=visited, root_name="trv")
+                    lines.append("# Custom constraint definition")
+                    lines.append(src)
+                    lines.append("")
+                except Exception as e:
+                    # If we can't get source, at least warn
+                    lines.append(f"# WARNING: Could not extract source for {cls_name}: {e}")
+                    lines.append("")
         
         # Add setup function
         if self._setup_fn is not None:
@@ -715,7 +886,9 @@ class ConstraintSet:
         exact_fn_name = self._exact_fn.__name__ if self._exact_fn else None
         error_fn_name = self._error_fn.__name__ if self._error_fn else None
         has_time = self._has_time_constraint()
-        has_accuracy = self._has_accuracy_constraint()
+        has_cpu_time = self._has_cpu_time_constraint()
+        has_memory = self._has_memory_constraint()
+        has_error = self._has_error_constraint()
         
         eval_lines = [
             "",
@@ -744,11 +917,39 @@ class ConstraintSet:
         else:
             eval_lines.append('    inputs = ()')
         
-        # Run with timing
-        if has_time:
+        # Run with appropriate monitoring
+        if has_cpu_time or has_memory:
             eval_lines.extend([
                 '',
-                '    # Run and time',
+                '    # Monitor CPU time and memory',
+                '    process = psutil.Process(os.getpid())',
+            ])
+            if has_cpu_time:
+                eval_lines.append('    cpu_times_start = process.cpu_times()')
+            if has_memory:
+                eval_lines.append('    mem_start = process.memory_info().rss / (1024 * 1024)  # MB')
+            eval_lines.extend([
+                '    ',
+                '    result = candidate_fn(*inputs)',
+                '    ',
+            ])
+            if has_cpu_time:
+                eval_lines.extend([
+                    '    # Measure CPU time (user + system) in milliseconds',
+                    '    cpu_times_end = process.cpu_times()',
+                    '    cpu_time_s = (cpu_times_end.user - cpu_times_start.user) + (cpu_times_end.system - cpu_times_start.system)',
+                    '    metrics["cpu_time_ms"] = cpu_time_s * 1000',
+                ])
+            if has_memory:
+                eval_lines.extend([
+                    '    # Measure memory delta',
+                    '    mem_end = process.memory_info().rss / (1024 * 1024)  # MB',
+                    '    metrics["memory_mb"] = max(0, mem_end - mem_start)',
+                ])
+        elif has_time:
+            eval_lines.extend([
+                '',
+                '    # Run and time (wall clock)',
                 '    start = time.perf_counter()',
                 '    result = candidate_fn(*inputs)',
                 '    metrics["time_seconds"] = time.perf_counter() - start',
@@ -760,8 +961,8 @@ class ConstraintSet:
                 '    result = candidate_fn(*inputs)',
             ])
         
-        # Compute accuracy
-        if has_accuracy and exact_fn_name:
+        # Compute error
+        if has_error and exact_fn_name:
             eval_lines.extend([
                 '',
                 '    # Compute error',
@@ -786,8 +987,10 @@ class ConstraintSet:
 # Backward compatibility aliases
 # =============================================================================
 
+# Old-style names
 TimeConstraint = Time
-AccuracyConstraint = Accuracy
+CPUTimeConstraint = CPUTime
+ErrorConstraint = Error
 MemoryConstraint = Memory
 GPUTimeConstraint = GPUTime
 CustomConstraint = Custom
@@ -795,3 +998,4 @@ LegateGPUSecondsConstraint = LegateGPUSeconds
 LegateFramebufferConstraint = LegateFramebuffer
 LegateMakespanConstraint = LegateMakespan
 LegateConcurrencyConstraint = LegateConcurrency
+MatMulCountConstraint = MatMulCount

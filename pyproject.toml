@@ -8,12 +8,9 @@ dependencies = [
   "ase>=3.26.0",
   "imageio>=2.37.0",
   "matplotlib>=3.10.6",
-  "mdtraj>=1.11.0",
   "numpy>=2.3.3",
   "openevolve>=0.2.14",
   "openfermion>=1.7.1",
-  "openmm>=8.3.1",
-  "openmmforcefields",
   "pyscf>=2.5.0",
   "rdkit>=2025.3.6",
   "scipy>=1.13",
@@ -23,24 +20,13 @@ dependencies = [
   "ruff>=0.14.2",
   "scikit-image>=0.25.2",
   "ipykernel>=6.31.0",
-  "openff-toolkit",
-  "openff-utilities",
-  "openff-units",
   "cachetools>=6.2.1",
   "nglview==3.1.4",
   "plotly>=6.4.0",
   "nest-asyncio>=1.6.0",
-  "alchemlyb>=2.5.0",
-  "alchemtest>=1.0.0",
-  "pymbar>=4.0.3",
   "jax>=0.8.1",
-  "openmmtools",
   "python-constraint>=1.4.0",
   "pandas>=2.3.3",
-  "pdbfixer",
-  "xmltodict>=1.0.2",
-  "openforcefields",
-  "openff-interchange",
   "lxml>=6.0.2",
   "py3dmol>=2.5.3",
   "nvidia-cupynumeric>=25.10.0",
@@ -85,15 +71,7 @@ build-backend = "uv_build"
 package = true
 
 [tool.uv.sources]
-openmmforcefields = { git = "https://github.com/openmm/openmmforcefields.git" }
 legate-sparse = { git = "https://github.com/nv-legate/legate-sparse.git"}
-openff-toolkit = { git = "https://github.com/openforcefield/openff-toolkit.git" }
-openff-utilities = { git = "https://github.com/openforcefield/openff-utilities.git" }
-openff-units = { git = "https://github.com/openforcefield/openff-units.git" }
-openmmtools = { git = "https://github.com/choderalab/openmmtools.git" }
-pdbfixer = { git = "https://github.com/openmm/pdbfixer.git" }
-openforcefields = { git = "https://github.com/openforcefield/openff-forcefields.git" }
-openff-interchange = { git = "https://github.com/openforcefield/openff-interchange.git" }
 
 [tool.uv.workspace]
 members = ["."]

@@ -3,10 +3,10 @@ from trovolut.mixed_fps import simulate_quantization
 
 from trovolut import qm
 from trovolut import eval
+from trovolut import utils
 
 from trovolut import filemaker
 
-# from trovolut import mm
 from trovolut import mixed_fps
 
 __all__ = [
@@ -14,7 +14,7 @@ __all__ = [
     "simulate_quantization",
     "qm",
     "eval",
-    # "mm",
+    "utils",
     "mixed_fps",
     "filemaker"
 ]

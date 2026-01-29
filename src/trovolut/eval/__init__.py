@@ -35,10 +35,11 @@ from trovolut.eval.constraints import (
     ConstraintResult,
     # Core constraints (simplified names)
     Time,
-    Accuracy,
+    Error,
     Memory,
     GPUTime,
     Custom,
+    MatMulCount,
     # Legate GPU profiling constraints
     LegateGPUSeconds,
     LegateFramebuffer,
@@ -46,10 +47,11 @@ from trovolut.eval.constraints import (
     LegateConcurrency,
     # Backward compatibility aliases
     TimeConstraint,
-    AccuracyConstraint,
+    ErrorConstraint,
     MemoryConstraint,
     GPUTimeConstraint,
     CustomConstraint,
+    MatMulCountConstraint,
     LegateGPUSecondsConstraint,
     LegateFramebufferConstraint,
     LegateMakespanConstraint,
@@ -66,10 +68,11 @@ __all__ = [
     "ConstraintResult",
     # Core constraints (new simplified names)
     "Time",
-    "Accuracy",
+    "Error",
     "Memory",
     "GPUTime",
     "Custom",
+    "MatMulCount",
     # Legate GPU constraints (new simplified names)
     "LegateGPUSeconds",
     "LegateFramebuffer",
@@ -77,10 +80,11 @@ __all__ = [
     "LegateConcurrency",
     # Backward compatibility (old names with 'Constraint' suffix)
     "TimeConstraint",
-    "AccuracyConstraint",
+    "ErrorConstraint",
     "MemoryConstraint",
     "GPUTimeConstraint",
     "CustomConstraint",
+    "MatMulCountConstraint",
     "LegateGPUSecondsConstraint",
     "LegateFramebufferConstraint",
     "LegateMakespanConstraint",
