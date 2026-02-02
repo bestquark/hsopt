@@ -1,5 +1,11 @@
 """
-GPU backend for trovolut using NVIDIA CuPy and cuQuantum.
+GPU backend for trovolut - Hardware-specific tools for NVIDIA GPUs.
+
+This backend provides GPU-specific tools for profiling and monitoring:
+- GPUEvaluator: CUDA profiling and benchmarking
+- GPUMetrics: GPU utilization, VRAM usage, kernel timing
+
+For dynamics, use the CPU backend methods with CuPy arrays - they run on GPU automatically.
 
 This backend requires:
 - Linux operating system
@@ -7,6 +13,19 @@ This backend requires:
 - CuPy and cuQuantum Python packages
 
 Install with: uv pip install trovolut[gpu]
+
+Usage:
+    >>> # For dynamics on GPU, use CPU methods with CuPy arrays
+    >>> import cupy as cp
+    >>> from trovolut.backends.cpu.dynamics import TrotterEvolution
+    >>> 
+    >>> trotter = TrotterEvolution(order=2)
+    >>> H_gpu = cp.asarray(H)  # Move to GPU
+    >>> result = trotter.evolve(H_gpu, psi0_gpu, time=1.0)  # Runs on GPU!
+    >>> 
+    >>> # Use GPU-specific tools for profiling
+    >>> from trovolut.backends.gpu.evaluator import GPUEvaluator
+    >>> from trovolut.backends.gpu.metrics import GPUMetrics
 """
 
 import sys
@@ -44,38 +63,4 @@ def is_available() -> bool:
     return _available
 
 
-def _check_availability():
-    """Raise ImportError if backend is not available."""
-    if not is_available():
-        from trovolut.backends import BackendNotAvailableError
-        raise BackendNotAvailableError("gpu", _missing_packages)
-
-
-# Lazy imports - only import if available
-def get_dynamics():
-    """Get GPU dynamics implementation."""
-    _check_availability()
-    from trovolut.backends.gpu.dynamics import GPUDynamics
-    return GPUDynamics
-
-
-def get_evaluator():
-    """Get GPU evaluator implementation."""
-    _check_availability()
-    from trovolut.backends.gpu.evaluator import GPUEvaluator
-    return GPUEvaluator
-
-
-def get_metrics():
-    """Get GPU metrics collector."""
-    _check_availability()
-    from trovolut.backends.gpu.metrics import GPUMetrics
-    return GPUMetrics
-
-
-__all__ = [
-    "is_available",
-    "get_dynamics",
-    "get_evaluator",
-    "get_metrics",
-]
+__all__ = ["is_available"]

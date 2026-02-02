@@ -1,11 +1,29 @@
 """
-CPU backend for trovolut using NumPy and SciPy.
+CPU backend for trovolut - Dynamics methods using NumPy and SciPy.
 
-This is the default backend and is always available.
-No additional installation required.
+This backend provides the core dynamics methods that work with any array backend:
+- ExactEvolution: Matrix exponential (scipy.linalg.expm)
+- TrotterEvolution: Suzuki product formulas
+- QDriftEvolution: Randomized product formula
+
+These methods work with NumPy arrays (CPU) or CuPy arrays (GPU) automatically.
+
+Usage:
+    >>> from trovolut.backends.cpu.dynamics import ExactEvolution, TrotterEvolution
+    >>> from trovolut.backends.cpu.evaluator import CPUEvaluator
+    >>> from trovolut.backends.cpu import constraints
+    >>> 
+    >>> # Works with NumPy (CPU)
+    >>> import numpy as np
+    >>> H = np.random.randn(4, 4)
+    >>> exact = ExactEvolution()
+    >>> result = exact.evolve(H, psi0, time=1.0)
+    >>> 
+    >>> # Same code works with CuPy (GPU)
+    >>> import cupy as cp
+    >>> H_gpu = cp.asarray(H)
+    >>> result_gpu = exact.evolve(H_gpu, psi0_gpu, time=1.0)
 """
-
-from typing import Optional
 
 
 def is_available() -> bool:
@@ -13,49 +31,4 @@ def is_available() -> bool:
     return True
 
 
-# Lazy imports for dynamics classes
-def get_exact_evolution():
-    """Get exact evolution dynamics (matrix exponential)."""
-    from trovolut.backends.cpu.dynamics import ExactEvolution
-    return ExactEvolution
-
-
-def get_trotter_evolution():
-    """Get Trotter evolution dynamics (Suzuki product formulas)."""
-    from trovolut.backends.cpu.dynamics import TrotterEvolution
-    return TrotterEvolution
-
-
-def get_qdrift_evolution():
-    """Get qDRIFT evolution dynamics (randomized compilation)."""
-    from trovolut.backends.cpu.dynamics import QDriftEvolution
-    return QDriftEvolution
-
-
-def get_evaluator():
-    """Get CPU evaluator implementation."""
-    from trovolut.backends.cpu.evaluator import CPUEvaluator
-    return CPUEvaluator
-
-
-def get_metrics():
-    """Get CPU metrics collector."""
-    from trovolut.backends.cpu.metrics import CPUMetrics
-    return CPUMetrics
-
-
-def get_constraints():
-    """Get CPU-specific constraints (CPUTime, Memory, MatMulCount)."""
-    from trovolut.backends.cpu import constraints
-    return constraints
-
-
-__all__ = [
-    "is_available",
-    "get_exact_evolution",
-    "get_trotter_evolution",
-    "get_qdrift_evolution",
-    "get_evaluator",
-    "get_metrics",
-    "get_constraints",
-]
+__all__ = ["is_available"]

@@ -27,7 +27,7 @@ class QPUMetrics(BaseMetrics):
         """Initialize QPU metrics collector."""
         pass
     
-    def collect_circuit_metrics(self, circuit) -> Dict[str, Any]:
+    def collect_circuit_metrics(self, circuit: Any) -> Dict[str, Any]:
         """
         Collect metrics from a quantum circuit.
         

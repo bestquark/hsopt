@@ -11,16 +11,18 @@ Backend registry and implementations.
 ```python
 import trovolut as trv
 
-# List available
+# List available backends
 trv.backends.list_available()
 
 # Check availability
 trv.backends.is_available('gpu')
 
-# Get backend
-dynamics = trv.backends.get_dynamics('cpu')
-evaluator = trv.backends.get_evaluator('cpu')
-metrics = trv.backends.get_metrics('cpu')
+# Import dynamics methods directly
+from trovolut.backends.cpu.dynamics import ExactEvolution, TrotterEvolution
+
+# Import hardware-specific tools
+from trovolut.backends.gpu.evaluator import GPUEvaluator
+from trovolut.backends.gpu.metrics import GPUMetrics
 ```
 
 ## Backends
@@ -28,20 +30,28 @@ metrics = trv.backends.get_metrics('cpu')
 ### CPU
 ::: trovolut.backends.cpu
 
+Provides dynamics methods (ExactEvolution, TrotterEvolution, QDriftEvolution) that work with any array backend.
+
 ### GPU  
 ::: trovolut.backends.gpu
 
 Install: `uv pip install trovolut[gpu]` (Linux + NVIDIA only)
+
+Provides GPU-specific profiling tools (GPUEvaluator, GPUMetrics). For dynamics on GPU, use CPU backend methods with CuPy arrays.
 
 ### QPU
 ::: trovolut.backends.qpu
 
 Install: `uv pip install trovolut[qpu]`
 
-### GPU Emulator
-::: trovolut.backends.emulator
+Provides QPU-specific tools for circuit compilation and hardware execution.
+
+### GPU Mixed-Precision Emulator
+::: trovolut.backends.gpu_mp_emulator
 
 Install: `uv pip install trovolut[gpu-emulate]`
+
+Provides mixed-precision emulation tools for studying quantization effects (FP64 → FP32 → FP16 → FP8).
 
 ## Platform Support
 
@@ -50,4 +60,4 @@ Install: `uv pip install trovolut[gpu-emulate]`
 | CPU | ✓ | ✓ | ✓ |
 | GPU | ✓ | ✗ | ✗ |
 | QPU | ✓ | ✓ | ✓ |
-| GPU Emulator | ✓ | ✓ | ✓ |
+| GPU MP Emulator | ✓ | ✓ | ✓ |

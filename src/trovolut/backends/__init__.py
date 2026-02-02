@@ -2,18 +2,24 @@
 Backend registry and availability checking for trovolut.
 
 This module provides a plugin-style system for different computational backends:
-- cpu: Standard CPU implementation (always available)
-- gpu: NVIDIA GPU with CuPy/cuQuantum (requires trovolut[gpu])
-- qpu: Quantum processing unit via CUDA Quantum (requires trovolut[qpu])
-- gpu-mp-emulator: Mixed-precision emulator for studying quantization effects (always available)
+- cpu: Dynamics methods (ExactEvolution, TrotterEvolution, QDriftEvolution) that work with any array backend
+- gpu: GPU-specific tools (evaluator, metrics) for NVIDIA GPUs with CuPy/cuQuantum
+- qpu: QPU-specific tools (circuit compilation, hardware execution) via Qiskit/Cirq/CUDA-Q
+- gpu-mp-emulator: Mixed-precision emulator for studying quantization effects
+
+Dynamics methods are hardware-agnostic - just pass NumPy arrays for CPU or CuPy arrays for GPU.
 
 Usage:
     >>> import trovolut as trv
     >>> trv.backends.list_available()
     ['cpu', 'gpu-mp-emulator']
     
-    >>> gpu_dynamics = trv.backends.get_dynamics('gpu')
-    >>> mp_emulator = trv.backends.get_dynamics('gpu-mp-emulator')
+    >>> # Import dynamics methods (work with NumPy or CuPy)
+    >>> from trovolut.backends.cpu.dynamics import ExactEvolution, TrotterEvolution
+    >>> 
+    >>> # Import hardware-specific tools
+    >>> from trovolut.backends.gpu.evaluator import GPUEvaluator
+    >>> from trovolut.backends.gpu.metrics import GPUMetrics
 """
 
 import sys
@@ -53,25 +59,25 @@ class BackendRegistry:
         "cpu": {
             "module": "trovolut.backends.cpu",
             "required_packages": [],  # CPU is always available
-            "description": "Standard CPU implementation (NumPy/SciPy)",
+            "description": "Dynamics methods (ExactEvolution, TrotterEvolution, QDriftEvolution)",
             "platform": "all",
         },
         "gpu": {
             "module": "trovolut.backends.gpu",
             "required_packages": ["cupy", "cuquantum", "pynvml"],
-            "description": "NVIDIA GPU with CuPy and cuQuantum",
+            "description": "GPU profiling tools (evaluator, metrics) for NVIDIA GPUs",
             "platform": "linux",
         },
         "qpu": {
             "module": "trovolut.backends.qpu",
             "required_packages": ["qiskit", "cirq"],  # cudaq is optional (Linux-only)
-            "description": "Quantum processing unit (Qiskit, Cirq, CUDA-Q)",
+            "description": "QPU tools (circuit compilation, hardware execution)",
             "platform": "all",
         },
         "gpu-mp-emulator": {
             "module": "trovolut.backends.gpu_mp_emulator",
             "required_packages": [],  # No additional deps, uses NumPy
-            "description": "GPU mixed-precision emulator for studying quantized exponentials",
+            "description": "Mixed-precision emulator (mp_trotter, mp_evals)",
             "platform": "all",
         },
     }
@@ -133,6 +139,10 @@ class BackendRegistry:
         """
         Import and return the backend module, raising BackendNotAvailableError if unavailable.
         
+        Note: This function is primarily for checking backend availability.
+        For actual use, import dynamics/evaluator/metrics directly:
+            from trovolut.backends.cpu.dynamics import ExactEvolution
+        
         Args:
             backend: Backend name (e.g., 'gpu', 'qpu')
             
@@ -168,27 +178,6 @@ class BackendRegistry:
         module = import_module(info["module"])
         self._cache[backend] = module
         return module
-    
-    def get_dynamics(self, backend: str):
-        """Get the dynamics implementation for a backend."""
-        module = self.require(backend)
-        if not hasattr(module, "get_dynamics"):
-            raise AttributeError(f"Backend '{backend}' does not provide get_dynamics()")
-        return module.get_dynamics()
-    
-    def get_evaluator(self, backend: str):
-        """Get the evaluator implementation for a backend."""
-        module = self.require(backend)
-        if not hasattr(module, "get_evaluator"):
-            raise AttributeError(f"Backend '{backend}' does not provide get_evaluator()")
-        return module.get_evaluator()
-    
-    def get_metrics(self, backend: str):
-        """Get the metrics collector for a backend."""
-        module = self.require(backend)
-        if not hasattr(module, "get_metrics"):
-            raise AttributeError(f"Backend '{backend}' does not provide get_metrics()")
-        return module.get_metrics()
 
 
 # Global registry instance
@@ -199,9 +188,6 @@ is_available = _registry.is_available
 list_available = _registry.list_available
 list_all = _registry.list_all
 require = _registry.require
-get_dynamics = _registry.get_dynamics
-get_evaluator = _registry.get_evaluator
-get_metrics = _registry.get_metrics
 
 
 __all__ = [
@@ -211,7 +197,4 @@ __all__ = [
     "list_available",
     "list_all",
     "require",
-    "get_dynamics",
-    "get_evaluator",
-    "get_metrics",
 ]

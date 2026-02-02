@@ -1,59 +1,55 @@
-# Welcome to the `trovolut` repository
+# Trovolut
 
 > [![Docs](https://img.shields.io/badge/docs-online-blue.svg)](https://bestquark.github.io/trovolut/) &nbsp;&nbsp;&nbsp; 🔑 **Password**: `gordonbell2026`
 
-The `trovolut` package is a software for evolutionary Trotterization in quantum mechanics. 
-Here, you will find code for automatically evolving simulations of quantum systems using mixed-precision arithmetic, embedded in a classical environment. 
+Evolutionary Trotterization for quantum simulation with modular backends (CPU, GPU, QPU).
 
 ## Installation
 
-Make sure you have an API key for OpenEvolve and have it set in your environment:
 ```bash
-export OPENAI_API_KEY="your_key_here"  
-```
+# Base package
+uv pip install trovolut
 
-If you are only running only the QM simulations, clone the repository and sync the environment:
+# With GPU support (Linux only)
+uv pip install trovolut[gpu]
 
-```bash
+# Development
 git clone https://github.com/bestquark/trovolut.git
 cd trovolut
-uv sync
-uv run pre-commit install
+uv sync --all-extras
 ```
 
-Configure the number of GPUs to use with:
-```bash
-source ./config_gpus.sh
-echo "$CUDA_VISIBLE_DEVICES" # Check the GPUs assigned
-```
-
-## Usage
-
-### For protein-ligand binding free energy calculations:
-
-An example is provided in the [README](examples/qmmm/biocomplex/README.md) of the `examples/qmmm/biocomplex/` directory.
-
-### GPU-Accelerated Quantum Chemistry
-
-The repository now includes GPU-accelerated ground state calculations using `gpu4pyscf`. This enables fast QM calculations with optional QMMM external potentials:
+## Quick Start
 
 ```python
-from src.qm import create_molecule, compute_ground_state
+import numpy as np
+from trovolut.backends.cpu.dynamics import TrotterEvolution
 
-# Create molecule
-mol = create_molecule(atoms="H 0 0 0; H 0 0 0.74", basis="6-31g")
+# Create Hamiltonian and initial state
+H = np.random.randn(4, 4) + 1j * np.random.randn(4, 4)
+H = (H + H.T.conj()) / 2
+psi0 = np.array([1, 0, 0, 0], dtype=complex)
 
-# Compute ground state with HF, DFT, or MP2
-results = compute_ground_state(mol, method="HF")
-print(f"Energy: {results['energy']:.6f} Hartree")
+# Evolve
+trotter = TrotterEvolution(order=2, n_steps=10)
+psi = trotter.evolve(H, psi0, time=1.0)
 ```
 
+**GPU:** Same code with CuPy arrays runs on GPU automatically.
 
-### Code Evolution
+## Backends
 
-Code evolution takes place in the `code_evolution/` directory.
+- **CPU**: NumPy/SciPy dynamics (ExactEvolution, TrotterEvolution, QDriftEvolution)
+- **Emulator**: Mixed-precision simulation (FP64→FP8)
+- **GPU**: CuPy arrays + GPU profiling tools [!NOTE: Not available yet]
+- **QPU**: Quantum hardware via Qiskit/Cirq/CUDA-Q [!NOTE: Not available yet]
 
-To evolve a program, run:
-```bash
-uv run python -m code_evolution.openevolve-run code_evolution/initial_program.py code_evolution/evaluator.py --config code_evolution/config.yaml --iterations 5
-```
+## Documentation
+
+- [Full Documentation](https://bestquark.github.io/trovolut/)
+- [Tutorials](https://bestquark.github.io/trovolut/tutorials/)
+- [API Reference](https://bestquark.github.io/trovolut/api/)
+
+## License
+
+MIT License - see LICENSE file for details.

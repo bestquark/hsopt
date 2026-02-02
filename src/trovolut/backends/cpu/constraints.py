@@ -2,7 +2,7 @@
 CPU-specific constraints for performance evaluation.
 
 Hardware-agnostic constraints (Time, Error, Custom) are in:
-    trovolut.core.base_evaluator
+    trovolut.core.base_constraints
 
 This module contains CPU-specific constraints:
     - CPUTime: CPU execution time (user + system)
@@ -14,7 +14,7 @@ from typing import Any, Dict
 import math
 
 # Import hardware-agnostic base classes
-from trovolut.core.base_evaluator import (
+from trovolut.core.base_constraints import (
     Constraint,
     ConstraintResult,
     ConstraintSet,

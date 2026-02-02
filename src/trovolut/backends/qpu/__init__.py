@@ -1,7 +1,16 @@
 """
 QPU (Quantum Processing Unit) backend for trovolut.
 
-This backend provides access to real quantum hardware and simulators via:
+This backend provides QPU-specific tools for quantum hardware:
+- QPUEvaluator: Circuit compilation and hardware execution
+- QPUMetrics: Circuit depth, gate count, fidelity estimation
+
+For Hamiltonian time evolution on QPUs, this backend handles:
+- Trotter circuit compilation
+- Hardware-specific optimizations
+- Execution on real quantum devices
+
+This backend provides access to quantum hardware via:
 - Qiskit (cross-platform)
 - Cirq (cross-platform)
 - CUDA Quantum / cudaq (Linux-only, optional)
@@ -10,6 +19,14 @@ Works on all platforms with qiskit and cirq.
 CUDA Quantum provides additional GPU-accelerated simulation on Linux.
 
 Install with: uv pip install trovolut[qpu]
+
+Usage:
+    >>> from trovolut.backends.qpu.evaluator import QPUEvaluator
+    >>> from trovolut.backends.qpu.metrics import QPUMetrics
+    >>> 
+    >>> # QPU tools handle circuit compilation and execution
+    >>> evaluator = QPUEvaluator()
+    >>> metrics = QPUMetrics()
 """
 
 import sys
@@ -53,38 +70,4 @@ def is_available() -> bool:
     return _available
 
 
-def _check_availability():
-    """Raise ImportError if backend is not available."""
-    if not is_available():
-        from trovolut.backends import BackendNotAvailableError
-        raise BackendNotAvailableError("qpu", _missing_packages)
-
-
-# Lazy imports - only import if available
-def get_dynamics():
-    """Get QPU dynamics implementation (circuit-based)."""
-    _check_availability()
-    from trovolut.backends.qpu.dynamics import QPUDynamics
-    return QPUDynamics
-
-
-def get_evaluator():
-    """Get QPU evaluator implementation."""
-    _check_availability()
-    from trovolut.backends.qpu.evaluator import QPUEvaluator
-    return QPUEvaluator
-
-
-def get_metrics():
-    """Get QPU metrics collector (circuit depth, gate count, etc.)."""
-    _check_availability()
-    from trovolut.backends.qpu.metrics import QPUMetrics
-    return QPUMetrics
-
-
-__all__ = [
-    "is_available",
-    "get_dynamics",
-    "get_evaluator",
-    "get_metrics",
-]
+__all__ = ["is_available"]
