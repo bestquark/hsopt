@@ -3,7 +3,6 @@ GPU backend for trovolut - Hardware-specific tools for NVIDIA GPUs.
 
 This backend provides GPU-specific tools for profiling and monitoring:
 - GPUEvaluator: CUDA profiling and benchmarking
-- GPUMetrics: GPU utilization, VRAM usage, kernel timing
 
 For dynamics, use the CPU backend methods with CuPy arrays - they run on GPU automatically.
 
@@ -25,7 +24,6 @@ Usage:
     >>> 
     >>> # Use GPU-specific tools for profiling
     >>> from trovolut.backends.gpu.evaluator import GPUEvaluator
-    >>> from trovolut.backends.gpu.metrics import GPUMetrics
 """
 
 import sys

@@ -19,7 +19,6 @@ Usage:
     >>> 
     >>> # Import hardware-specific tools
     >>> from trovolut.backends.gpu.evaluator import GPUEvaluator
-    >>> from trovolut.backends.gpu.metrics import GPUMetrics
 """
 
 import sys

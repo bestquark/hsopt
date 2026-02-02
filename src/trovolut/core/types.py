@@ -55,22 +55,6 @@ class DynamicsConfig:
     extra: dict[str, Any] = field(default_factory=dict)
 
 
-@dataclass
-class MetricsData:
-    """Container for performance metrics from any backend."""
-    execution_time_seconds: float
-    memory_bytes: int | None = None
-    backend_specific: dict[str, Any] = field(default_factory=dict)
-    
-    def to_dict(self) -> dict[str, Any]:
-        """Convert to dictionary for serialization."""
-        return {
-            "execution_time_seconds": self.execution_time_seconds,
-            "memory_bytes": self.memory_bytes,
-            **self.backend_specific
-        }
-
-
 # =============================================================================
 # Type Aliases
 # =============================================================================

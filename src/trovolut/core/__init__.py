@@ -6,7 +6,6 @@ This module provides the base classes that all backends implement:
 - BaseEvaluator: Backend-specific evaluation interface
 - BaseEval: Performance evaluation (legacy)
 - WorkflowConstraintSet: Evaluator code generation for OpenEvolve
-- BaseMetrics: Metrics collection
 - Constraint system: Composable evaluation constraints
 - Types: Shared data structures
 """
@@ -31,11 +30,10 @@ from trovolut.core.base_constraints import (
 from trovolut.core.types import (
     Backend,
     EvaluationResult,
-    MetricsData,
     DynamicsConfig,
     StateVector,
     HamiltonianType,
-    HamiltonianMatrix,  # Legacy alias
+    HamiltonianMatrix,
 )
 
 
@@ -45,7 +43,6 @@ __all__ = [
     "BaseEvaluator",
     "BaseEval",
     "WorkflowConstraintSet",
-    "BaseMetrics",
     # Constraint system
     "Constraint",
     "ConstraintResult",
@@ -57,7 +54,6 @@ __all__ = [
     # Types
     "Backend",
     "EvaluationResult",
-    "MetricsData",
     "DynamicsConfig",
     "StateVector",
     "HamiltonianType",

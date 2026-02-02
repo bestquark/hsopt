@@ -11,7 +11,7 @@ These methods work with NumPy arrays (CPU) or CuPy arrays (GPU) automatically.
 Usage:
     >>> from trovolut.backends.cpu.dynamics import ExactEvolution, TrotterEvolution
     >>> from trovolut.backends.cpu.evaluator import CPUEvaluator
-    >>> from trovolut.backends.cpu import constraints
+    >>> from trovolut.backends.cpu.constraints import CPUTime, Memory
     >>> 
     >>> # Works with NumPy (CPU)
     >>> import numpy as np

@@ -3,7 +3,6 @@ QPU (Quantum Processing Unit) backend for trovolut.
 
 This backend provides QPU-specific tools for quantum hardware:
 - QPUEvaluator: Circuit compilation and hardware execution
-- QPUMetrics: Circuit depth, gate count, fidelity estimation
 
 For Hamiltonian time evolution on QPUs, this backend handles:
 - Trotter circuit compilation
@@ -22,11 +21,9 @@ Install with: uv pip install trovolut[qpu]
 
 Usage:
     >>> from trovolut.backends.qpu.evaluator import QPUEvaluator
-    >>> from trovolut.backends.qpu.metrics import QPUMetrics
     >>> 
     >>> # QPU tools handle circuit compilation and execution
     >>> evaluator = QPUEvaluator()
-    >>> metrics = QPUMetrics()
 """
 
 import sys
