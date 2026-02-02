@@ -60,21 +60,25 @@ def get_dynamics():
     """
     Get mixed precision dynamics implementation.
     
+    Note: This backend focuses on mixed-precision analysis tools (mp_trotter, mp_evals).
+    For standard dynamics, use the CPU or GPU backends instead.
+    
     Returns:
-        EmulatorDynamics class for mixed-precision Trotter simulation
+        Minimal dynamics class (use mp_trotter module directly for mixed-precision simulation)
     """
     _check_availability()
-    # Use EmulatorDynamics from emulator (TODO: consolidate fully)
-    try:
-        from trovolut.backends.emulator.dynamics import EmulatorDynamics
-        return EmulatorDynamics
-    except ImportError:
-        # Fallback: create a minimal dynamics class
-        from trovolut.core.base_dynamics import BaseDynamics
-        class MixedPrecisionDynamics(BaseDynamics):
-            def evolve(self, hamiltonian, initial_state, time, config=None, **kwargs):
-                raise NotImplementedError("Mixed precision dynamics not yet implemented")
-        return MixedPrecisionDynamics
+    from trovolut.core.base_dynamics import BaseDynamics
+    
+    class MixedPrecisionDynamics(BaseDynamics):
+        """Minimal dynamics class for gpu_mp_emulator backend."""
+        def evolve(self, hamiltonian, initial_state, time, config=None, **kwargs):
+            raise NotImplementedError(
+                "Standard dynamics not implemented for gpu_mp_emulator backend. "
+                "Use mp_trotter.MixedPrecisionTrotter directly for mixed-precision simulation, "
+                "or use the CPU/GPU backends for standard evolution."
+            )
+    
+    return MixedPrecisionDynamics
 
 
 def get_evaluator():
@@ -82,28 +86,23 @@ def get_evaluator():
     Get mixed precision evaluator.
     
     Returns:
-        Evaluator for mixed-precision analysis
+        Base evaluator (use mp_evals module for mixed-precision analysis)
     """
     _check_availability()
-    try:
-        from trovolut.backends.emulator.evaluator import EmulatorEvaluator
-        return EmulatorEvaluator
-    except ImportError:
-        # Fallback: use base evaluator
-        from trovolut.core.base_evaluator import BaseEval
-        return BaseEval
+    from trovolut.core.base_evaluator import BaseEval
+    return BaseEval
 
 
 def get_metrics():
-    """Get mixed precision metrics collector."""
+    """
+    Get mixed precision metrics collector.
+    
+    Returns:
+        Base metrics (use mp_evals module for mixed-precision metrics)
+    """
     _check_availability()
-    try:
-        from trovolut.backends.emulator.metrics import EmulatorMetrics
-        return EmulatorMetrics
-    except ImportError:
-        # Fallback: use base metrics
-        from trovolut.core.base_metrics import BaseMetrics
-        return BaseMetrics
+    from trovolut.core.base_metrics import BaseMetrics
+    return BaseMetrics
 
 
 def get_mp_trotter():
@@ -130,21 +129,8 @@ def get_mp_evals():
     return mp_evals
 
 
-# Make key modules available
-from . import mp_evals
-from . import mp_trotter
-from . import simulate_quantization
-from . import constraints
-from . import hamsim
-
-__all_modules = [
-    "mp_evals",
-    "mp_trotter",
-    "simulate_quantization",
-    "constraints",
-    "hamsim",
-]
-
+# Note: Submodules are available for import but not eagerly loaded to avoid circular imports
+# Use: from trovolut.backends.gpu_mp_emulator import mp_trotter, mp_evals, etc.
 
 __all__ = [
     "is_available",
@@ -153,4 +139,4 @@ __all__ = [
     "get_metrics",
     "get_mp_trotter",
     "get_mp_evals",
-] + __all_modules
+]
