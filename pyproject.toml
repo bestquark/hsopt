@@ -38,6 +38,9 @@ dependencies = [
   "jupyterlab>=4.5.0",
   "moviepy>=2.2.1",
   "imageio-ffmpeg>=0.6.0",
+  "torch>=2.10.0",
+  "brokenaxes>=0.6.2",
+  "joblib>=1.5.3",
 ]
 
 [dependency-groups]

@@ -16,6 +16,12 @@ Master the filemaker module for managing and organizing your simulation data.
 ### [Evaluations](evaluations.ipynb)
 Understand how to evaluate and analyze your quantum computations.
 
+### [Mixed Precision](mp_trotter.ipynb)
+Explore mixed precision Trotter evolution methods for time-dependent quantum simulations.
+
+### [Precision Optimization](mp_evolve.ipynb)
+Optimize the precision of your Trotter evolution methods using OpenEvolve.
+
 ## Getting Started
 
 Each tutorial is provided as an interactive Jupyter notebook. You can:

@@ -1,5 +1,5 @@
 site_name: Trovolut
-site_description: Hybrid quantum mechanics/molecular mechanics tooling.
+site_description: Evolving code for classical simulations of quantum dynamics
 repo_url: https://github.com/bestquark/trovolut
 repo_name: bestquark/trovolut
 site_dir: site
@@ -18,9 +18,6 @@ nav:
           - QM Module: api/qm.md
           - Eval Module: api/eval.md
           - Filemaker Module: api/filemaker.md
-          - MM Module: api/mm.md
-          - Mixed Precision: api/mixed_fps.md
-          - Interface: api/interface.md
           - Utils: api/utils.md
   - Tutorials:
       - Overview: tutorials/index.md
@@ -28,6 +25,8 @@ nav:
       - Trotter Dynamics: tutorials/trotter_dynamics.ipynb
       - Filemaker: tutorials/filemaker.ipynb
       - Evaluations: tutorials/evaluations.ipynb
+      - Mixed Precision: tutorials/mp_trotter.ipynb
+      - Precision Optimization: tutorials/mp_evolve.ipynb
 
 theme:
   name: material
