@@ -12,12 +12,17 @@ watch:
 
 nav:
   - Home: index.md
-  - API:
+  - Getting Started:
+      - Overview: index.md
+      - Backends: api/backends.md
+  - API Reference:
       - Overview: api/index.md
-      - Modules:
-          - QM Module: api/qm.md
-          - Eval Module: api/eval.md
-          - Filemaker Module: api/filemaker.md
+      - Core Modules:
+          - Core: api/core.md
+          - Backends: api/backends.md
+          - QM: api/qm.md
+      - Filemaker:
+          - Filemaker: api/workflow.md
           - Utils: api/utils.md
   - Tutorials:
       - Overview: tutorials/index.md

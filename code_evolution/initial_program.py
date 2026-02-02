@@ -3,7 +3,7 @@ import sys
 import cupynumeric as np
 
 # from src.mixed_fps.simulate_quantization import *
-from trovolut.qm.hamsim import simulate_hamiltonian
+from trovolut.backends.gpu_emulator.hamsim import simulate_hamiltonian
 
 
 FMT = {

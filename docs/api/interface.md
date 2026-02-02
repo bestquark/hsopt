@@ -1,3 +1,0 @@
-# `trovolut.interface`
-
-::: trovolut.interface

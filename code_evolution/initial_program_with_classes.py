@@ -3,7 +3,7 @@ import sys
 import pickle
 import argparse
 import cupynumeric as np  
-from trovolut.qm.hamsim import simulate_hamiltonian
+from trovolut.backends.gpu_emulator.hamsim import simulate_hamiltonian
 
 FMT = {
     "fp8_e5m2": dict(exp_bits=5, man_bits=2, bias=15),

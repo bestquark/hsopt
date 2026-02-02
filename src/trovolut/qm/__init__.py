@@ -1,8 +1,9 @@
 from . import hamiltonians
-from . import dynamics
 from .hamiltonians import models
 from .hamiltonians import *  # noqa: F401,F403
-from .dynamics import *  # noqa: F401,F403
 # from . import gpu4pyscf_wrapper
 
-__all__ = ["hamiltonians", "models", "dynamics"]
+# Note: dynamics have been moved to trovolut.backends
+# Use: trovolut.backends.get_dynamics('cpu'), etc.
+
+__all__ = ["hamiltonians", "models"]

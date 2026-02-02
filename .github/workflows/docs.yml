@@ -29,13 +29,19 @@ jobs:
       - name: Setup Python
         uses: actions/setup-python@v5
         with:
-          python-version: '3.11'
+          python-version: '3.12'
 
       - name: Install dependencies
-        run: uv sync --group docs
+        run: |
+          # Install base package and docs dependencies
+          uv sync --group docs
+          # Note: Backend-specific packages are optional and not needed for docs build
 
       - name: Build MkDocs site
-        run: uv run mkdocs build #--strict
+        run: uv run mkdocs build
+        env:
+          # Set to non-strict to allow optional backend imports to fail gracefully
+          PYTHONPATH: ${{ github.workspace }}/src
 
       - name: Upload artifact
         uses: actions/upload-pages-artifact@v3

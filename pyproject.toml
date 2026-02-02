@@ -29,9 +29,6 @@ dependencies = [
   "pandas>=2.3.3",
   "lxml>=6.0.2",
   "py3dmol>=2.5.3",
-  "nvidia-cupynumeric>=25.10.0",
-  # Linux-only GPU dependencies (platform markers)
-  "legate>=25.10.0; sys_platform == 'linux'",
   "cudaq>=0.13.0; sys_platform == 'linux'",
   "netcdf4>=1.7.4",
   "jupyter>=1.1.1",
@@ -41,6 +38,34 @@ dependencies = [
   "torch>=2.10.0",
   "brokenaxes>=0.6.2",
   "joblib>=1.5.3",
+]
+
+[project.optional-dependencies]
+# GPU backend - requires NVIDIA hardware and Linux
+gpu = [
+  "cudaq>=0.13.0; sys_platform == 'linux'",
+  "nvidia-cupynumeric>=25.10.0",
+  "legate>=25.10.0; sys_platform == 'linux'",
+  "pynvml>=11.5.0; sys_platform == 'linux'",
+]
+
+# QPU backend - quantum hardware access
+qpu = [
+  "cudaq>=0.13.0; sys_platform == 'linux'",
+  "qiskit>=1.0.0",
+  "cirq>=1.4.0",
+]
+
+# GPU emulator - CPU-based emulation for studying quantized exponentials
+# Uses mixed-precision Trotter methods to simulate GPU low-precision behavior
+gpu-emulate = [
+  # No additional dependencies required - uses NumPy + optional cupynumeric
+  # Optional: torch for additional bfloat16 support
+]
+
+# All backends
+all = [
+  "trovolut[gpu,qpu,gpu-emulate]",
 ]
 
 [dependency-groups]
@@ -58,12 +83,6 @@ docs = [
   "griffe",
   "pymdown-extensions>=10.16.1",
   "mkdocs-jupyter>=0.25.1",
-]
-
-gpu = [
-  "nvidia-cupynumeric>=25.8.0",
-  "legate>=25.8.0",
-  "legate-profiler>=0.0.0",
 ]
 
 [build-system]

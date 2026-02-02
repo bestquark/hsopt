@@ -1,37 +1,18 @@
 # Tutorials
 
-Welcome to the Trovolut tutorials! These hands-on guides will help you get started with various features of the library.
+## Overview
 
-## Available Tutorials
+- [Creating Hamiltonians](dmds_hamiltonian.ipynb) - Built-in models and electronic structure
+- [Trotter Dynamics](trotter_dynamics.ipynb) - Suzuki-Trotter algorithms
+- [Filemaker](filemaker.ipynb) - Generate evaluator files for OpenEvolve
+- [Evaluations](evaluations.ipynb) - Performance metrics and optimization
+- [Mixed Precision](mp_trotter.ipynb) - Quantized exponentials (FP64→FP8)
+- [Precision Optimization](mp_evolve.ipynb) - Evolutionary precision allocation
 
-### [Creating Hamiltonians](dmds_hamiltonian.ipynb)
-Learn how to construct and work with Hamiltonians for your quantum systems.
+## Backend Requirements
 
-### [Trotter Dynamics](trotter_dynamics.ipynb)
-Explore Trotter evolution methods for time-dependent quantum simulations.
-
-### [Filemaker](filemaker.ipynb)
-Master the filemaker module for managing and organizing your simulation data.
-
-### [Evaluations](evaluations.ipynb)
-Understand how to evaluate and analyze your quantum computations.
-
-### [Mixed Precision](mp_trotter.ipynb)
-Explore mixed precision Trotter evolution methods for time-dependent quantum simulations.
-
-### [Precision Optimization](mp_evolve.ipynb)
-Optimize the precision of your Trotter evolution methods using OpenEvolve.
-
-## Getting Started
-
-Each tutorial is provided as an interactive Jupyter notebook. You can:
-- View them directly in the documentation
-- Download and run them locally
-- Modify them to fit your specific use case
-
-## Prerequisites
-
-Before starting these tutorials, make sure you have:
-- Installed trovolut: `uv pip install trovolut`
-- Basic familiarity with Python and quantum computing concepts
-- Jupyter notebook environment set up (optional for local execution)
+| Tutorial | Backend | Install Command |
+|----------|---------|-----------------|
+| Hamiltonians, Filemaker, Evaluations | CPU | `uv pip install trovolut` |
+| Trotter Dynamics | CPU | `uv pip install trovolut` |
+| Mixed Precision, Optimization | GPU Emulator | `uv pip install trovolut[gpu-emulate]` |

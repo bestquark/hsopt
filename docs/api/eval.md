@@ -1,3 +1,0 @@
-# `trovolut.eval`
-
-::: trovolut.eval

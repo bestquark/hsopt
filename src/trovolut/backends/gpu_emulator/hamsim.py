@@ -3,7 +3,7 @@ try:
 except ImportError:
     import numpy as np
 
-from trovolut.mixed_fps.simulate_quantization import quantize_any, dequantize_any, NATIVE
+from trovolut.backends.gpu_emulator.mixed_fps.simulate_quantization import quantize_any, dequantize_any, NATIVE
 
 BYTES_PER_ELT = {
     "fp4_e2m1": 0.5,
