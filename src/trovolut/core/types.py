@@ -1,15 +1,31 @@
 # src/trovolut/core/types.py
+"""
+Core type definitions for trovolut.
+
+This module defines types that follow the structure from trovolut.qm.hamiltonians:
+- Hamiltonian: Deterministic Hermitian operators
+- HamiltonianEnsemble: Stochastic Hamiltonian families
+- StateVector: Quantum state vectors
+"""
+from __future__ import annotations
 from dataclasses import dataclass, field
-from typing import Any
+from typing import Any, Union, TYPE_CHECKING
 from enum import Enum, auto
 import numpy as np
 from numpy.typing import NDArray
 
+# Import Hamiltonian types from qm module
+if TYPE_CHECKING:
+    from trovolut.qm.hamiltonians import Hamiltonian, HamiltonianEnsemble
+
+
 class Backend(Enum):
+    """Available backend types for quantum dynamics."""
     CPU = auto()
     GPU = auto()
     QPU = auto()
     EMULATOR = auto()
+
 
 @dataclass(frozen=True)
 class EvaluationResult:
@@ -28,6 +44,7 @@ class EvaluationResult:
             w.get("memory", 0) * (self.memory_bytes or 0)
         )
 
+
 @dataclass
 class DynamicsConfig:
     """Configuration for dynamics computation."""
@@ -36,6 +53,7 @@ class DynamicsConfig:
     tolerance: float = 1e-10
     max_iterations: int = 1000
     extra: dict[str, Any] = field(default_factory=dict)
+
 
 @dataclass
 class MetricsData:
@@ -52,6 +70,33 @@ class MetricsData:
             **self.backend_specific
         }
 
-# Type aliases
+
+# =============================================================================
+# Type Aliases
+# =============================================================================
+
+# Quantum state vector (complex-valued)
 StateVector = NDArray[np.complexfloating]
+
+# Hamiltonian can be:
+# - A Hamiltonian object (deterministic, has .terms(), .to_matrix(), .hilbert_dim)
+# - A HamiltonianEnsemble object (stochastic, has .sample(rng) -> Hamiltonian)
+# - A list of numpy arrays (terms of decomposed Hamiltonian [H1, H2, ...])
+# - A single numpy array (full Hamiltonian matrix)
+if TYPE_CHECKING:
+    HamiltonianType = Union[
+        "Hamiltonian",
+        "HamiltonianEnsemble", 
+        list[NDArray[np.complexfloating]],
+        NDArray[np.complexfloating]
+    ]
+else:
+    HamiltonianType = Union[
+        Any,  # Hamiltonian
+        Any,  # HamiltonianEnsemble
+        list[NDArray[np.complexfloating]],
+        NDArray[np.complexfloating]
+    ]
+
+# Legacy alias for backward compatibility
 HamiltonianMatrix = NDArray[np.complexfloating]

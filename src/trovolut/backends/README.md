@@ -52,38 +52,39 @@ if trv.backends.is_available('qpu'):
     qpu_dynamics = trv.backends.get_dynamics('qpu')
 ```
 
-### GPU Emulator
-CPU-based emulation for studying quantized exponentials and mixed-precision Trotter methods.
+### GPU MP Emulator
+CPU-based emulation for studying GPU mixed-precision arithmetic and quantized exponentials.
 
-This backend simulates GPU low-precision arithmetic without requiring actual GPU hardware.
+This backend simulates GPU low-precision behavior without requiring actual GPU hardware.
 It's useful for:
 - Studying numerical precision effects on quantum dynamics
 - Testing mixed-precision algorithms (FP64, FP32, FP16, BF16, FP8, INT8)
 - Developing quantization-aware algorithms
+- Analyzing precision vs. accuracy tradeoffs
 
 **Requirements:**
-- Install with: `uv pip install trovolut[gpu-emulate]`
+- Install with: `uv pip install trovolut[gpu-mp-emulator]`
 - No additional dependencies (uses NumPy)
 
 ```python
 import trovolut as trv
-from trovolut.backends.gpu_emulator.mixed_fps.mp_trotter import Precision
+from trovolut.backends.gpu_mp_emulator.mp_trotter import Precision, ExpTerm
 
-# Get emulator dynamics
-dynamics = trv.backends.get_dynamics('gpu-emulate')
+# Get mixed precision tools
+mp_backend = trv.backends.require('gpu-mp-emulator')
 
-# Standard Suzuki-Trotter
-psi_final = dynamics.evolve(H_terms, psi0, time=1.0, order=2, steps=100)
+# Create mixed-precision exponential terms
+exp_terms = [
+    ExpTerm(H1, Precision.FP32, "exact"),
+    ExpTerm(H2, Precision.FP16, "exact"),
+    ExpTerm(H3, Precision.FP8_E4M3, "exact"),
+]
 
-# Mixed-precision Trotter
-from trovolut.backends.emulator.dynamics import create_exp_terms_from_hamiltonian
-exp_terms = create_exp_terms_from_hamiltonian(
-    H_terms,
-    precisions=[Precision.FP32, Precision.FP16, Precision.FP8_E4M3],
-)
-psi_final, metrics = dynamics.evolve_mixed_precision(
-    exp_terms, psi0, time=1.0, steps=100
-)
+# Use the mixed precision evaluations
+from trovolut.backends.gpu_mp_emulator import mp_evals
+
+# Evaluate with different precisions
+results = mp_evals.evaluate_precision_sweep(H_terms, psi0, time=1.0, steps=100)
 ```
 
 ## Usage Examples
@@ -148,10 +149,10 @@ uv pip install trovolut[all]
 # Install with specific backends
 uv pip install trovolut[gpu]
 uv pip install trovolut[qpu]
-uv pip install trovolut[gpu-emulate]
+uv pip install trovolut[gpu-mp-emulator]
 
 # Install multiple backends
-uv pip install "trovolut[gpu,gpu-emulate]"
+uv pip install "trovolut[gpu,gpu-mp-emulator]"
 
 # CPU backend is included by default
 uv pip install trovolut
@@ -175,12 +176,12 @@ Each backend implements three main components:
 
 ## Platform Requirements
 
-| Backend       | Linux | macOS | Windows | Hardware | Notes |
-|---------------|-------|-------|---------|----------|-------|
-| CPU           | ✓     | ✓     | ✓       | Any      | Always available |
-| GPU           | ✓     | ✗     | ✗       | NVIDIA   | CUDA required |
-| QPU           | ✓     | ✓     | ✓       | Optional | cudaq Linux-only |
-| GPU Emulator  | ✓     | ✓     | ✓       | Any      | NumPy-based |
+| Backend         | Linux | macOS | Windows | Hardware | Notes |
+|-----------------|-------|-------|---------|----------|-------|
+| CPU             | ✓     | ✓     | ✓       | Any      | Always available |
+| GPU             | ✓     | ✗     | ✗       | NVIDIA   | CUDA required |
+| QPU             | ✓     | ✓     | ✓       | Optional | cudaq Linux-only |
+| GPU MP Emulator | ✓     | ✓     | ✓       | Any      | NumPy-based emulation |
 
 ## Adding Custom Backends
 

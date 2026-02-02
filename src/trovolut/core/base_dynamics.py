@@ -5,8 +5,8 @@ This module defines the abstract interface that all backend dynamics must implem
 """
 
 from abc import ABC, abstractmethod
-from typing import Any, Dict, Optional
-from trovolut.core.types import StateVector, HamiltonianMatrix, DynamicsConfig
+from typing import Optional
+from trovolut.core.types import StateVector, HamiltonianType, DynamicsConfig
 
 
 class BaseDynamics(ABC):
@@ -24,12 +24,19 @@ class BaseDynamics(ABC):
         - GPU: CuPy/cuQuantum matrix exponentials
         - QPU: Trotterization and circuit compilation
         - Emulator: Software simulation of GPU behavior
+    
+    Hamiltonian Input Formats:
+        The hamiltonian argument can be any of:
+        - Hamiltonian object (from trovolut.qm.hamiltonians)
+        - HamiltonianEnsemble object (stochastic, use .sample(rng) first)
+        - List of numpy arrays [H1, H2, ...] (decomposed terms)
+        - Single numpy array (full Hamiltonian matrix)
     """
     
     @abstractmethod
     def evolve(
         self,
-        hamiltonian: HamiltonianMatrix,
+        hamiltonian: HamiltonianType,
         initial_state: StateVector,
         time: float,
         config: Optional[DynamicsConfig] = None,
@@ -39,7 +46,11 @@ class BaseDynamics(ABC):
         Evolve a quantum state under a Hamiltonian.
         
         Args:
-            hamiltonian: Hamiltonian operator (backend-specific array type)
+            hamiltonian: Hamiltonian operator in any supported format:
+                - Hamiltonian object: Use .terms() or .to_matrix()
+                - HamiltonianEnsemble: Sample first with .sample(rng)
+                - List of arrays: [H1, H2, ...] for Trotterization
+                - Single array: Full Hamiltonian matrix
             initial_state: Initial quantum state vector
             time: Evolution time (dimensionless, scaled by ℏ=1)
             config: Optional configuration for the dynamics method
@@ -50,36 +61,13 @@ class BaseDynamics(ABC):
             
         Raises:
             RuntimeError: If evolution fails
+            
+        Note:
+            Backends should handle different Hamiltonian formats gracefully.
+            For Hamiltonian objects, use .terms() for decomposed methods or
+            .to_matrix() for exact evolution.
         """
         pass
-    
-    def evolve_with_metrics(
-        self,
-        hamiltonian: HamiltonianMatrix,
-        initial_state: StateVector,
-        time: float,
-        config: Optional[DynamicsConfig] = None,
-        **kwargs
-    ) -> tuple[StateVector, Dict[str, Any]]:
-        """
-        Evolve state and return both result and performance metrics.
-        
-        This is an optional method that backends can override to provide
-        detailed performance metrics alongside the evolution result.
-        
-        Args:
-            hamiltonian: Hamiltonian operator
-            initial_state: Initial quantum state
-            time: Evolution time
-            config: Optional configuration
-            **kwargs: Backend-specific options
-            
-        Returns:
-            Tuple of (final_state, metrics_dict)
-        """
-        # Default implementation: just call evolve() and return empty metrics
-        final_state = self.evolve(hamiltonian, initial_state, time, config, **kwargs)
-        return final_state, {}
 
 
 __all__ = ["BaseDynamics"]

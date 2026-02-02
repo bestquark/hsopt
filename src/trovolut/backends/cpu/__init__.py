@@ -13,11 +13,23 @@ def is_available() -> bool:
     return True
 
 
-# Lazy imports
-def get_dynamics():
-    """Get CPU dynamics implementation."""
-    from trovolut.backends.cpu.dynamics import CPUDynamics
-    return CPUDynamics
+# Lazy imports for dynamics classes
+def get_exact_evolution():
+    """Get exact evolution dynamics (matrix exponential)."""
+    from trovolut.backends.cpu.dynamics import ExactEvolution
+    return ExactEvolution
+
+
+def get_trotter_evolution():
+    """Get Trotter evolution dynamics (Suzuki product formulas)."""
+    from trovolut.backends.cpu.dynamics import TrotterEvolution
+    return TrotterEvolution
+
+
+def get_qdrift_evolution():
+    """Get qDRIFT evolution dynamics (randomized compilation)."""
+    from trovolut.backends.cpu.dynamics import QDriftEvolution
+    return QDriftEvolution
 
 
 def get_evaluator():
@@ -32,9 +44,18 @@ def get_metrics():
     return CPUMetrics
 
 
+def get_constraints():
+    """Get CPU-specific constraints (CPUTime, Memory, MatMulCount)."""
+    from trovolut.backends.cpu import constraints
+    return constraints
+
+
 __all__ = [
     "is_available",
-    "get_dynamics",
+    "get_exact_evolution",
+    "get_trotter_evolution",
+    "get_qdrift_evolution",
     "get_evaluator",
     "get_metrics",
+    "get_constraints",
 ]

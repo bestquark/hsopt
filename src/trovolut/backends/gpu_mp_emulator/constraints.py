@@ -1,297 +1,41 @@
 """
-Constraint system for composable evaluation.
+GPU-specific constraints for Legate/Legion profiling.
 
-Constraints measure specific aspects of program execution and convert them to scores.
-They can be hard (must satisfy) or soft (contribute proportionally to final score).
+Hardware-agnostic constraints (Time, Error, Custom) are in:
+    trovolut.core.base_evaluator
 
-Example:
-    time_hard = Time(max_seconds=10, hard=True)
-    error = Error(weight=1.0)
-    constraints = ConstraintSet([time_hard, error])
+This module contains GPU-specific constraints:
+    - GPUTime: GPU compute time (space-time product)
+    - LegateGPUSeconds: GPU kernel time via Legion profiler
+    - LegateFramebuffer: GPU VRAM usage via Legion profiler
+    - LegateMakespan: Wall-clock makespan via Legion profiler
+    - LegateConcurrency: GPU utilization via Legion profiler
 """
 from __future__ import annotations
-from abc import ABC, abstractmethod
-from dataclasses import dataclass, field
-from typing import Any, Callable, Dict, List, Union, TYPE_CHECKING
-import math
+from typing import Any, Dict, TYPE_CHECKING
 import inspect
 import textwrap
+
+# Import hardware-agnostic base classes
+from trovolut.core.base_evaluator import (
+    Constraint,
+    ConstraintResult,
+    ConstraintSet,
+    _score_fn,
+    _formula_str,
+    # Re-export common constraints for convenience
+    Time,
+    Error,
+    Custom,
+)
 
 if TYPE_CHECKING:
     from trovolut.filemaker.workflow import Workflow
 
 
-@dataclass
-class ConstraintResult:
-    """Result from evaluating a single constraint."""
-    name: str
-    value: float
-    score: float
-    satisfied: bool
-    details: Dict[str, Any] = field(default_factory=dict)
-
-
-def _score_fn(value: float, max_val: float, fn: str) -> float:
-    """Common scoring function."""
-    if fn == "linear":
-        return max(0, 1.0 - value / max_val)
-    elif fn == "inverse":
-        return 1.0 / (1.0 + value / max_val)
-    elif fn == "threshold":
-        return 1.0 if value <= max_val else 0.0
-    elif fn == "exponential":
-        return math.exp(-value / max_val)
-    return 0.0
-
-
-def _formula_str(var: str, max_val: float, fn: str, hard: bool = False, 
-                 penalty: float = None, weight: float = None) -> str:
-    """Generate formula string for a scoring function."""
-    formulas = {
-        "linear": f"max(0, 1 - {var}/{max_val})",
-        "inverse": f"1 / (1 + {var}/{max_val})",
-        "threshold": f"𝟙({var} ≤ {max_val})",
-        "exponential": f"exp(-{var}/{max_val})",
-    }
-    base = formulas.get(fn, f"f({var})")
-    if hard and penalty is not None:
-        return f"score = {base} · 𝟙({var} ≤ {max_val}) + ({penalty}) · 𝟙({var} > {max_val})"
-    if weight is not None and weight != 1.0:
-        return f"score = {base}  (×{weight} weight)"
-    return f"score = {base}"
-
-
-class Constraint(ABC):
-    """Base class for all constraints."""
-    
-    def __init__(self, name: str, weight: float = 1.0, hard: bool = False, hard_penalty: float = -100.0):
-        self.name = name
-        self.weight = weight
-        self.hard = hard
-        self.hard_penalty = hard_penalty
-    
-    @abstractmethod
-    def extract(self, metrics: Dict[str, Any]) -> float:
-        """Extract the relevant metric value from execution results."""
-        pass
-    
-    @abstractmethod
-    def score(self, value: float) -> float:
-        """Convert the raw value to a score (higher = better)."""
-        pass
-    
-    @abstractmethod
-    def is_satisfied(self, value: float) -> bool:
-        """Check if this constraint is satisfied."""
-        pass
-    
-    @abstractmethod
-    def to_prompt(self) -> str:
-        """Generate description for LLM prompts."""
-        pass
-    
-    def evaluate(self, metrics: Dict[str, Any]) -> ConstraintResult:
-        """Evaluate this constraint given execution metrics."""
-        value = self.extract(metrics)
-        satisfied = bool(self.is_satisfied(value))  # Convert numpy bool to Python bool
-        score = self.hard_penalty if (self.hard and not satisfied) else self.score(value) * self.weight
-        # Convert numpy types to Python types for JSON serialization
-        value = float(value) if hasattr(value, 'item') else float(value)
-        score = float(score) if hasattr(score, 'item') else float(score)
-        return ConstraintResult(self.name, value, score, satisfied, {"hard": self.hard, "weight": self.weight})
-    
-    def to_config(self) -> Dict[str, Any]:
-        """Export constraint parameters for template serialization."""
-        config = {"type": self.__class__.__name__, "name": self.name, 
-                  "weight": self.weight, "hard": self.hard, "hard_penalty": self.hard_penalty}
-        # Add all public attributes that aren't in base
-        for attr in ["max_seconds", "max_error", "max_mb", "max_gpu_seconds", 
-                     "n_gpus", "score_fn", "metric", "min_concurrency", "max_count"]:
-            if hasattr(self, attr):
-                config[attr] = getattr(self, attr)
-        return config
-    
-    def __repr__(self) -> str:
-        # Collect key hyperparameters
-        params = []
-        for attr in ["max_seconds", "max_error", "max_mb", "max_gpu_seconds", "min_concurrency", "max_count"]:
-            if hasattr(self, attr):
-                params.append(f"{getattr(self, attr)}")
-                break
-        if hasattr(self, "n_gpus") and self.n_gpus > 1:
-            params.append(f"n_gpus={self.n_gpus}")
-        params.append("hard" if self.hard else f"w={self.weight}")
-        return f"{self.__class__.__name__}({', '.join(params)})"
-    
-    def formula(self) -> str:
-        """Return a human-readable explanation of the scoring formula."""
-        raise NotImplementedError("Subclasses should implement formula()")
-    
-    def explain(self) -> None:
-        """Print a detailed explanation of this constraint."""
-        print(f"┌─ {self.__class__.__name__} ─")
-        print(f"│  {self.formula()}")
-        if self.hard:
-            print(f"│  Mode: HARD (penalty={self.hard_penalty} if violated)")
-        else:
-            print(f"│  Mode: soft (weight={self.weight})")
-            print(f"│  Contribution: score × {self.weight}")
-        print(f"└─")
-
-
 # =============================================================================
-# Core Constraints
+# GPU-Specific Constraints
 # =============================================================================
-
-class Time(Constraint):
-    """Constraint on execution time."""
-    
-    def __init__(self, max_seconds: float = 30.0, weight: float = 1.0, hard: bool = False,
-                 hard_penalty: float = -100.0, score_fn: str = "linear"):
-        super().__init__("time", weight, hard, hard_penalty)
-        self.max_seconds = max_seconds
-        self.score_fn = score_fn
-    
-    def extract(self, m: Dict[str, Any]) -> float:
-        return m.get("time_seconds", float("inf"))
-    
-    def score(self, v: float) -> float:
-        return _score_fn(v, self.max_seconds, self.score_fn)
-    
-    def is_satisfied(self, v: float) -> bool:
-        return v <= self.max_seconds
-    
-    def to_prompt(self) -> str:
-        if self.hard:
-            return f"Code MUST execute in under {self.max_seconds}s (hard requirement)."
-        return f"Prefer faster execution (target: <{self.max_seconds}s, weight: {self.weight})."
-    
-    def formula(self) -> str:
-        return _formula_str("time", self.max_seconds, self.score_fn, self.hard, self.hard_penalty, self.weight)
-
-
-class Error(Constraint):
-    """Constraint on simulation error (lower is better; 0 = perfect).
-    
-    Measures the error/deviation between candidate and reference results.
-    - Value of 0 = perfect match (no error)
-    - Default metric: fidelity error = 1 - |⟨ref|result⟩|²
-    """
-    
-    def __init__(self, max_error: float = 1.0, weight: float = 1.0, hard: bool = False,
-                 hard_penalty: float = -100.0, score_fn: str = "inverse"):
-        """Initialize error constraint.
-        
-        Args:
-            max_error: Maximum allowed error (default: 1.0). For hard constraints,
-                      programs with error > max_error will receive hard_penalty.
-            weight: Importance weight for soft constraints (default: 1.0).
-            hard: If True, error must be <= max_error (default: False).
-            hard_penalty: Score penalty for violating hard constraint (default: -100.0).
-            score_fn: Scoring function ('inverse', 'exponential', or 'linear').
-                     - 'inverse': 1/(1+error) - smooth, never reaches 0
-                     - 'exponential': exp(-error) - steep near 0
-                     - 'linear': max(0, 1-error/max_error) - linear decay
-        """
-        super().__init__("error", weight, hard, hard_penalty) 
-        self.max_error = max_error
-        self.score_fn = score_fn
-    
-    def extract(self, m: Dict[str, Any]) -> float:
-        return m.get("mean_error", float("inf"))
-    
-    def score(self, v: float) -> float:
-        if self.score_fn == "inverse":
-            return 1.0 / (1.0 + v)
-        elif self.score_fn == "exponential":
-            return math.exp(-v)
-        return max(0, 1.0 - v / self.max_error)
-    
-    def is_satisfied(self, v: float) -> bool:
-        return v <= self.max_error
-    
-    def to_prompt(self) -> str:
-        if self.hard:
-            return f"Simulation error MUST be below {self.max_error} (hard requirement)."
-        return f"Minimize error (weight: {self.weight})."
-    
-    def formula(self) -> str:
-        formulas = {
-            "inverse": "1 / (1 + error)",
-            "exponential": "exp(-error)",
-            "linear": f"max(0, 1 - error/{self.max_error})",
-        }
-        base = formulas.get(self.score_fn, "f(error)")
-        if self.hard:
-            return f"score = {base} · 𝟙(error ≤ {self.max_error}) + ({self.hard_penalty}) · 𝟙(error > {self.max_error})"
-        if self.weight != 1.0:
-            return f"score = {base}  (×{self.weight} weight)"
-        return f"score = {base}"
-
-
-class CPUTime(Constraint):
-    """Constraint on CPU execution time (user + system).
-    
-    Measures actual CPU time consumed (not wall-clock time).
-    Uses process-level CPU accounting via psutil.
-    """
-    
-    def __init__(self, max_cpu_ms: float = 1000.0, weight: float = 1.0, hard: bool = False,
-                 hard_penalty: float = -100.0, score_fn: str = "exponential"):
-        super().__init__("cpu_time", weight, hard, hard_penalty)
-        self.max_cpu_ms = max_cpu_ms
-        self.score_fn = score_fn
-    
-    def extract(self, m: Dict[str, Any]) -> float:
-        return m.get("cpu_time_ms", float("inf"))
-    
-    def score(self, v: float) -> float:
-        if self.score_fn == "exponential":
-            import math
-            return math.exp(-v / self.max_cpu_ms)
-        return _score_fn(v, self.max_cpu_ms, self.score_fn)
-    
-    def is_satisfied(self, v: float) -> bool:
-        return v <= self.max_cpu_ms
-    
-    def to_prompt(self) -> str:
-        if self.hard:
-            return f"CPU time MUST be under {self.max_cpu_ms}ms (hard requirement). Use efficient algorithms, sparse operations, vectorization."
-        return f"Minimize CPU time (target: <{self.max_cpu_ms}ms, weight: {self.weight}). Prefer sparse matrices, reduced precision, efficient algorithms."
-    
-    def formula(self) -> str:
-        if self.score_fn == "exponential":
-            hard_str = f" (hard, penalty={self.hard_penalty})" if self.hard else ""
-            return f"score = exp(-cpu_ms/{self.max_cpu_ms}){hard_str}"
-        return _formula_str("cpu_time", self.max_cpu_ms, self.score_fn, self.hard, self.hard_penalty, self.weight)
-
-
-class Memory(Constraint):
-    """Constraint on memory usage (RSS - resident set size)."""
-    
-    def __init__(self, max_mb: float = 1000.0, weight: float = 1.0, hard: bool = False,
-                 hard_penalty: float = -100.0, score_fn: str = "linear"):
-        super().__init__("memory", weight, hard, hard_penalty)
-        self.max_mb = max_mb
-        self.score_fn = score_fn
-    
-    def extract(self, m: Dict[str, Any]) -> float:
-        return m.get("memory_mb", 0.0)
-    
-    def score(self, v: float) -> float:
-        return _score_fn(v, self.max_mb, self.score_fn)
-    
-    def is_satisfied(self, v: float) -> bool:
-        return v <= self.max_mb
-    
-    def to_prompt(self) -> str:
-        if self.hard:
-            return f"Memory usage MUST stay below {self.max_mb} MB (hard requirement)."
-        return f"Prefer lower memory (target: <{self.max_mb} MB, weight: {self.weight})."
-    
-    def formula(self) -> str:
-        return _formula_str("memory", self.max_mb, self.score_fn, self.hard, self.hard_penalty, self.weight)
-
 
 class GPUTime(Constraint):
     """Constraint on GPU compute time (space-time product)."""
@@ -324,41 +68,8 @@ class GPUTime(Constraint):
         return _formula_str(var, self.max_gpu_seconds, self.score_fn, self.hard, self.hard_penalty, self.weight)
 
 
-class Custom(Constraint):
-    """User-defined constraint with custom extraction and scoring."""
-    
-    def __init__(self, name: str, extract_fn: Callable[[Dict[str, Any]], float],
-                 score_fn: Callable[[float], float], satisfy_fn: Callable[[float], bool],
-                 weight: float = 1.0, hard: bool = False, hard_penalty: float = -100.0):
-        super().__init__(name, weight, hard, hard_penalty)
-        self._extract = extract_fn
-        self._score = score_fn
-        self._satisfy = satisfy_fn
-    
-    def extract(self, m: Dict[str, Any]) -> float:
-        return self._extract(m)
-    
-    def score(self, v: float) -> float:
-        return self._score(v)
-    
-    def is_satisfied(self, v: float) -> bool:
-        return self._satisfy(v)
-    
-    def to_prompt(self) -> str:
-        mode = "hard requirement" if self.hard else f"weight: {self.weight}"
-        return f"Optimize for '{self.name}' ({mode})."
-    
-    def formula(self) -> str:
-        base = f"custom_fn({self.name})"
-        if self.hard:
-            return f"score = {base} · 𝟙(satisfied) + ({self.hard_penalty}) · 𝟙(violated)"
-        if self.weight != 1.0:
-            return f"score = {base}  (×{self.weight} weight)"
-        return f"score = {base}"
-
-
 # =============================================================================
-# Legate GPU Profiling Constraints
+# Legate GPU Profiling Constraints  
 # =============================================================================
 
 class LegateGPUSeconds(Constraint):
@@ -474,48 +185,16 @@ class LegateConcurrency(Constraint):
         return f"score = {base}"
 
 
-class MatMulCount(Constraint):
-    """Constraint on number of matrix multiplication operations.
-    
-    Tracks the count of matrix-matrix or matrix-vector multiplications.
-    Useful for optimizing algorithmic complexity in small systems where
-    wall-clock time isn't reliable.
+# =============================================================================
+# Extended ConstraintSet with Workflow Integration
+# =============================================================================
+
+class WorkflowConstraintSet(ConstraintSet):
     """
+    Extended ConstraintSet with Workflow integration for auto-generating evaluators.
     
-    def __init__(self, max_count: int = 100, weight: float = 1.0, hard: bool = False,
-                 hard_penalty: float = -100.0, score_fn: str = "linear"):
-        super().__init__("matmul_count", weight, hard, hard_penalty)
-        self.max_count = max_count
-        self.score_fn = score_fn
-    
-    def extract(self, m: Dict[str, Any]) -> float:
-        return float(m.get("matmul_count", 0))
-    
-    def score(self, v: float) -> float:
-        return _score_fn(v, self.max_count, self.score_fn)
-    
-    def is_satisfied(self, v: float) -> bool:
-        return v <= self.max_count
-    
-    def to_prompt(self) -> str:
-        if self.hard:
-            return f"Number of matrix multiplications MUST stay below {self.max_count} (hard requirement)."
-        return f"Minimize matrix multiplications (target: <{self.max_count}, weight: {self.weight})."
-    
-    def formula(self) -> str:
-        return _formula_str("matmul_count", self.max_count, self.score_fn, self.hard, self.hard_penalty, self.weight)
-
-
-# =============================================================================
-# Constraint Set
-# =============================================================================
-
-class ConstraintSet:
-    """A collection of constraints evaluated together.
-    
-    Can be used as a decorator on Workflow to auto-generate evaluators:
-    
-        constraints = ConstraintSet([Time(max_seconds=30), Error()])
+    Example:
+        constraints = WorkflowConstraintSet([Time(max_seconds=30), Error()])
         constraints.config_error(exact_fn, setup_fn).entry_point("run_dynamics")
         
         @constraints
@@ -524,6 +203,14 @@ class ConstraintSet:
         workflow.build()  # generates program.py
         workflow.build_evaluator()  # generates evaluator.py
     """
+    
+    def __init__(self, constraints):
+        super().__init__(constraints)
+        # Evaluator configuration
+        self._setup_fn = None
+        self._exact_fn = None
+        self._error_fn = None
+        self._entry_point_name = "run_dynamics"
     
     @classmethod
     def _get_builtin_constraint_names(cls) -> set:
@@ -547,38 +234,6 @@ class ConstraintSet:
         
         return builtin_names
     
-    def __init__(self, constraints: List[Constraint]):
-        self.constraints = constraints
-        # Evaluator configuration
-        self._setup_fn: Callable | None = None
-        self._exact_fn: Callable | None = None
-        self._error_fn: Callable | None = None
-        self._entry_point_name: str = "run_dynamics"
-    
-    def evaluate(self, metrics: Dict[str, Any]) -> Dict[str, Any]:
-        """Evaluate all constraints and compute combined score."""
-        results, total_score, total_weight = [], 0.0, 0.0
-        
-        for c in self.constraints:
-            result = c.evaluate(metrics)
-            results.append(result)
-            
-            if c.hard and not result.satisfied:
-                return {
-                    "combined_score": c.hard_penalty, "std_score": 0.0,
-                    "all_satisfied": False, "failed_constraint": c.name,
-                    "details": {r.name: {"value": r.value, "score": r.score, "satisfied": r.satisfied} for r in results},
-                }
-            if not c.hard:
-                total_score += result.score
-                total_weight += c.weight
-        
-        return {
-            "combined_score": total_score / total_weight if total_weight > 0 else total_score,
-            "std_score": 0.0, "all_satisfied": True,
-            "details": {r.name: {"value": r.value, "score": r.score, "satisfied": r.satisfied} for r in results},
-        }
-    
     def generate_prompt(self) -> str:
         """Generate description of all constraints for LLM prompts."""
         if not self.constraints:
@@ -595,13 +250,6 @@ class ConstraintSet:
             lines.append("\n**Optimization goals (weighted):**")
             lines.extend(f"- {c.to_prompt()}" for c in soft)
         return "\n".join(lines)
-    
-    def __add__(self, other: Union[Constraint, "ConstraintSet"]) -> "ConstraintSet":
-        if isinstance(other, Constraint):
-            return ConstraintSet(self.constraints + [other])
-        if isinstance(other, ConstraintSet):
-            return ConstraintSet(self.constraints + other.constraints)
-        raise TypeError(f"Cannot add ConstraintSet with {type(other)}")
     
     def formula(self) -> str:
         """Generate formula showing how constraints combine into final score."""
@@ -664,19 +312,16 @@ class ConstraintSet:
         
         print()
     
-    def __repr__(self) -> str:
-        return f"ConstraintSet({self.constraints})"
-    
     # =========================================================================
     # Evaluator Decorator API
     # =========================================================================
     
     def config_error(
         self,
-        exact_fn: Callable,
-        setup_fn: Callable,
-        error_fn: Callable | None = None,
-    ) -> "ConstraintSet":
+        exact_fn,
+        setup_fn,
+        error_fn = None,
+    ) -> "WorkflowConstraintSet":
         """Configure how error is computed.
         
         Args:
@@ -708,7 +353,7 @@ class ConstraintSet:
         self._error_fn = error_fn
         return self
     
-    def entry_point(self, name: str) -> "ConstraintSet":
+    def entry_point(self, name: str) -> "WorkflowConstraintSet":
         """Set the function name to call in candidate programs.
         
         Args:
@@ -984,18 +629,38 @@ class ConstraintSet:
 
 
 # =============================================================================
-# Backward compatibility aliases
+# Exports and Backward Compatibility
 # =============================================================================
 
-# Old-style names
+# For backward compatibility, make ConstraintSet available from this module
+# (WorkflowConstraintSet is the extended version with filemaker integration)
+ConstraintSet = WorkflowConstraintSet
+
+# Old-style names (backward compatibility)
 TimeConstraint = Time
-CPUTimeConstraint = CPUTime
 ErrorConstraint = Error
-MemoryConstraint = Memory
-GPUTimeConstraint = GPUTime
 CustomConstraint = Custom
+GPUTimeConstraint = GPUTime
 LegateGPUSecondsConstraint = LegateGPUSeconds
 LegateFramebufferConstraint = LegateFramebuffer
 LegateMakespanConstraint = LegateMakespan
 LegateConcurrencyConstraint = LegateConcurrency
-MatMulCountConstraint = MatMulCount
+
+__all__ = [
+    # Base classes (imported from core)
+    "Constraint",
+    "ConstraintResult",
+    "ConstraintSet",
+    # Hardware-agnostic constraints (imported from core)
+    "Time",
+    "Error",
+    "Custom",
+    # GPU-specific constraints (defined here)
+    "GPUTime",
+    "LegateGPUSeconds",
+    "LegateFramebuffer",
+    "LegateMakespan",
+    "LegateConcurrency",
+    # Extended workflow integration
+    "WorkflowConstraintSet",
+]

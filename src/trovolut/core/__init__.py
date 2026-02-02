@@ -5,12 +5,23 @@ This module provides the base classes that all backends implement:
 - BaseDynamics: Time evolution of quantum systems
 - BaseEval: Performance evaluation (legacy)
 - BaseMetrics: Metrics collection
+- Constraint system: Composable evaluation constraints
 - Types: Shared data structures
 """
 
 # Import base classes
 from trovolut.core.base_dynamics import BaseDynamics
-from trovolut.core.base_evaluator import BaseEval
+from trovolut.core.base_evaluator import (
+    BaseEval,
+    # Constraint system
+    Constraint,
+    ConstraintResult,
+    ConstraintSet,
+    # Hardware-agnostic constraints
+    Time,
+    Error,
+    Custom,
+)
 from trovolut.core.base_metrics import BaseMetrics
 from trovolut.core.types import (
     Backend,
@@ -18,7 +29,8 @@ from trovolut.core.types import (
     MetricsData,
     DynamicsConfig,
     StateVector,
-    HamiltonianMatrix,
+    HamiltonianType,
+    HamiltonianMatrix,  # Legacy alias
 )
 
 # Try to import Hamiltonian if it exists
@@ -30,15 +42,26 @@ except ImportError:
     _has_hamiltonian = False
 
 __all__ = [
+    # Base classes
     "BaseDynamics",
     "BaseEval",
     "BaseMetrics",
+    # Constraint system
+    "Constraint",
+    "ConstraintResult",
+    "ConstraintSet",
+    # Hardware-agnostic constraints
+    "Time",
+    "Error",
+    "Custom",
+    # Types
     "Backend",
     "EvaluationResult",
     "MetricsData",
     "DynamicsConfig",
     "StateVector",
-    "HamiltonianMatrix",
+    "HamiltonianType",
+    "HamiltonianMatrix",  # Legacy alias
 ]
 
 if _has_hamiltonian:

@@ -5,15 +5,15 @@ This module provides a plugin-style system for different computational backends:
 - cpu: Standard CPU implementation (always available)
 - gpu: NVIDIA GPU with CuPy/cuQuantum (requires trovolut[gpu])
 - qpu: Quantum processing unit via CUDA Quantum (requires trovolut[qpu])
-- gpu-emulate: Software emulation of GPU behavior (requires trovolut[gpu-emulate])
+- gpu-mp-emulator: Mixed-precision emulator for studying quantization effects (always available)
 
 Usage:
     >>> import trovolut as trv
     >>> trv.backends.list_available()
-    ['cpu', 'gpu']
+    ['cpu', 'gpu-mp-emulator']
     
     >>> gpu_dynamics = trv.backends.get_dynamics('gpu')
-    >>> gpu_evaluator = trv.backends.get_evaluator('gpu')
+    >>> mp_emulator = trv.backends.get_dynamics('gpu-mp-emulator')
 """
 
 import sys
@@ -68,10 +68,10 @@ class BackendRegistry:
             "description": "Quantum processing unit (Qiskit, Cirq, CUDA-Q)",
             "platform": "all",
         },
-        "gpu-emulate": {
-            "module": "trovolut.backends.emulator",
+        "gpu-mp-emulator": {
+            "module": "trovolut.backends.gpu_mp_emulator",
             "required_packages": [],  # No additional deps, uses NumPy
-            "description": "CPU emulator for studying quantized exponentials (mixed-precision Trotter)",
+            "description": "GPU mixed-precision emulator for studying quantized exponentials",
             "platform": "all",
         },
     }

@@ -11,14 +11,13 @@ from trovolut.core.base_dynamics import BaseDynamics
 from trovolut.core.types import StateVector, DynamicsConfig
 
 # Import mixed-precision Trotter tools
-from trovolut.backends.gpu_emulator.mixed_fps.mp_trotter import (
+from trovolut.backends.gpu_mixed_precision.mixed_fps.mp_trotter import (
     Precision,
     PrecisionConfig,
     ExpTerm,
     MixedPrecisionTrotter,
     TrotterConfig,
 )
-from trovolut.backends.gpu_emulator.dynamics import suzuki_step
 
 
 class EmulatorDynamics(BaseDynamics):
@@ -98,6 +97,8 @@ class EmulatorDynamics(BaseDynamics):
         if isinstance(hamiltonian, (list, tuple)):
             H_terms = [self._np.asarray(H, dtype=complex) for H in hamiltonian]
             
+            # Use suzuki_step from CPU backend (or implement here)
+            from trovolut.backends.cpu.dynamics import suzuki_step
             for _ in range(steps):
                 U = suzuki_step(H_terms, dt, order=order)
                 psi = U @ psi
@@ -180,33 +181,6 @@ class EmulatorDynamics(BaseDynamics):
             psi = simulator.step(psi, dt)
         
         return psi, metrics
-    
-    def evolve_with_metrics(
-        self,
-        hamiltonian,
-        initial_state: StateVector,
-        time: float,
-        config: Optional[DynamicsConfig] = None,
-        **kwargs
-    ) -> tuple[StateVector, Dict[str, Any]]:
-        """
-        Evolve and return metrics.
-        
-        For standard evolution, metrics are minimal.
-        For mixed-precision, use evolve_mixed_precision() directly.
-        """
-        import time as time_module
-        
-        start = time_module.perf_counter()
-        psi_final = self.evolve(hamiltonian, initial_state, time, config, **kwargs)
-        elapsed = time_module.perf_counter() - start
-        
-        metrics = {
-            "execution_time_seconds": elapsed,
-            "state_dimension": len(psi_final),
-        }
-        
-        return psi_final, metrics
 
 
 # Convenience function for creating ExpTerms from Hamiltonian terms
