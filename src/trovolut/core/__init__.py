@@ -3,7 +3,7 @@ Core abstractions for trovolut - backend-agnostic interfaces.
 
 This module provides the base classes that all backends implement:
 - BaseDynamics: Time evolution of quantum systems
-- BaseEvaluator: Backend-specific evaluation interface
+- BaseMetrics: Backend-specific metrics measurement interface
 - BaseEval: Performance evaluation (legacy)
 - WorkflowConstraintSet: Evaluator code generation for OpenEvolve
 - Constraint system: Composable evaluation constraints
@@ -12,16 +12,12 @@ This module provides the base classes that all backends implement:
 
 # Import base classes
 from trovolut.core.base_dynamics import BaseDynamics
-from trovolut.core.base_evaluator import (
-    BaseEvaluator,
-    BaseEval,
-    WorkflowConstraintSet,
-)
+from trovolut.core.base_metrics import BaseMetrics
 from trovolut.core.base_constraints import (
     # Constraint system
     Constraint,
     ConstraintResult,
-    ConstraintSet,
+    Group,
     # Hardware-agnostic constraints
     Time,
     Error,
@@ -40,13 +36,11 @@ from trovolut.core.types import (
 __all__ = [
     # Base classes
     "BaseDynamics",
-    "BaseEvaluator",
-    "BaseEval",
-    "WorkflowConstraintSet",
+    "BaseMetrics",
     # Constraint system
     "Constraint",
     "ConstraintResult",
-    "ConstraintSet",
+    "Group",
     # Hardware-agnostic constraints
     "Time",
     "Error",

@@ -20,7 +20,7 @@ import textwrap
 from trovolut.core.base_constraints import (
     Constraint,
     ConstraintResult,
-    ConstraintSet,
+    Group,
     _score_fn,
     _formula_str,
     # Re-export common constraints for convenience
@@ -186,10 +186,10 @@ class LegateConcurrency(Constraint):
 
 
 # =============================================================================
-# WorkflowConstraintSet moved to trovolut.core.base_evaluator
+# WorkflowConstraintSet moved to trovolut.core.base_metrics
 # =============================================================================
 # For backwards compatibility, re-export from core
-from trovolut.core.base_evaluator import WorkflowConstraintSet  # noqa: E402
+from trovolut.core.base_metrics import WorkflowConstraintSet  # noqa: E402
 
 
 # =============================================================================
@@ -197,7 +197,6 @@ from trovolut.core.base_evaluator import WorkflowConstraintSet  # noqa: E402
 # =============================================================================
 
 # For backward compatibility, make basic ConstraintSet available from this module
-# Note: WorkflowConstraintSet wraps ConstraintSet and adds evaluator generation
 
 # Old-style names (backward compatibility)
 TimeConstraint = Time
@@ -213,7 +212,7 @@ __all__ = [
     # Base classes (imported from core)
     "Constraint",
     "ConstraintResult",
-    "ConstraintSet",
+    "Group",
     # Hardware-agnostic constraints (imported from core)
     "Time",
     "Error",
@@ -224,6 +223,4 @@ __all__ = [
     "LegateFramebuffer",
     "LegateMakespan",
     "LegateConcurrency",
-    # Extended workflow integration
-    "WorkflowConstraintSet",
 ]

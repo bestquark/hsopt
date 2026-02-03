@@ -17,7 +17,7 @@ import math
 from trovolut.core.base_constraints import (
     Constraint,
     ConstraintResult,
-    ConstraintSet,
+    Group,
     _score_fn,
     _formula_str,
     # Re-export common constraints for convenience
@@ -125,7 +125,7 @@ __all__ = [
     # Base classes (imported from core)
     "Constraint",
     "ConstraintResult",
-    "ConstraintSet",
+    "Group",
     # Hardware-agnostic constraints (imported from core)
     "Time",
     "Error",

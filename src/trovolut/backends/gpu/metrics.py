@@ -9,10 +9,10 @@ This module provides evaluation infrastructure that measures:
 """
 
 from typing import Dict, Any
-from trovolut.core.base_evaluator import BaseEvaluator
+from trovolut.core.base_metrics import BaseMetrics
 
 
-class GPUEvaluator(BaseEvaluator):
+class GPUMetrics(BaseMetrics):
     """
     Evaluator for GPU backend with actual hardware metrics.
     
@@ -65,4 +65,4 @@ class GPUEvaluator(BaseEvaluator):
         )
 
 
-__all__ = ["GPUEvaluator"]
+__all__ = ["GPUMetrics"]

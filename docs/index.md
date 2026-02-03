@@ -21,15 +21,18 @@ uv pip install trovolut[all]         # All backends
 import trovolut as trv
 from trovolut import qm
 
-# Check available backends
-print(trv.backends.list_available())
+# Set backend
+trv.set_backend('cpu')
 
 # Create Hamiltonian
 H = qm.models.hubbard_2d(Lx=3, Ly=3, t_hop=1.0, U_onsite=4.0)
 
-# Use dynamics methods
-from trovolut.backends.cpu.dynamics import TrotterEvolution
+# Use dynamics directly
+from trovolut.dynamics import TrotterEvolution
 dynamics = TrotterEvolution(order=2)
+
+# Or use module functions
+psi = trv.dynamics.suzuki_step([H], dt=0.1, order=2) @ psi0
 ```
 
 ## Backends

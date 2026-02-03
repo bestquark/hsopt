@@ -8,14 +8,20 @@ A framework for optimizing quantum simulation algorithms across different backen
 - Emulator: Software GPU emulation (trovolut[gpu-emulate])
 
 Quick Start:
-    >>> import trovolut as trv
-    >>> # Check available backends
-    >>> trv.backends.list_available()
-    ['cpu', 'gpu']
+    ```python
+    import trovolut as trv
     
-    >>> # Get GPU dynamics implementation
-    >>> gpu_dynamics = trv.backends.get_dynamics('gpu')
+    # Set active backend
+    trv.set_backend('cpu')
+    
+    # Now access modules directly
+    from trovolut.backends.cpu.dynamics import TrotterEvolution
+    trotter = TrotterEvolution(order=2)
+    ```
 """
+
+from typing import Optional
+from importlib import import_module
 
 # Core abstractions (always available)
 from trovolut import core
@@ -34,6 +40,94 @@ except ImportError:
 # Version info
 __version__ = "0.1.0"
 
+# Active backend tracking
+_active_backend: Optional[str] = None
+_backend_modules: dict = {}
+
+
+def set_backend(backend_name: str) -> None:
+    """
+    Set the active backend and make its modules accessible via trv.dynamics, trv.evaluator, etc.
+    
+    Args:
+        backend_name: Name of backend ('cpu', 'gpu', 'qpu', 'gpu-mp-emulator')
+    
+    Example:
+        ```python
+        import trovolut as trv
+        
+        # Set CPU backend
+        trv.set_backend('cpu')
+        
+        # Access dynamics directly
+        from trovolut.dynamics import TrotterEvolution
+        trotter = TrotterEvolution(order=2)
+        ```
+    
+    Raises:
+        ValueError: If backend is not available
+    """
+    global _active_backend, _backend_modules
+    
+    # Check if backend is available
+    if not backends.is_available(backend_name):
+        available = backends.list_available()
+        raise ValueError(
+            f"Backend '{backend_name}' is not available. "
+            f"Available backends: {available}"
+        )
+    
+    # Map backend names to module paths
+    backend_map = {
+        'cpu': 'trovolut.backends.cpu',
+        'gpu': 'trovolut.backends.gpu',
+        'qpu': 'trovolut.backends.qpu',
+        'gpu-mp-emulator': 'trovolut.backends.gpu_mp_emulator',
+    }
+    
+    if backend_name not in backend_map:
+        raise ValueError(f"Unknown backend: {backend_name}")
+    
+    backend_module_path = backend_map[backend_name]
+    
+    # Import backend modules
+    _backend_modules = {}
+    
+    # Try to import common submodules
+    for submodule in ['dynamics', 'metrics', 'constraints']:
+        try:
+            mod = import_module(f"{backend_module_path}.{submodule}")
+            _backend_modules[submodule] = mod
+        except (ImportError, AttributeError):
+            # Not all backends have all submodules
+            pass
+    
+    _active_backend = backend_name
+    
+    # Inject modules into trovolut namespace
+    import sys
+    current_module = sys.modules[__name__]
+    for name, mod in _backend_modules.items():
+        setattr(current_module, name, mod)
+
+
+def get_active_backend() -> Optional[str]:
+    """
+    Get the name of the currently active backend.
+    
+    Returns:
+        Name of active backend, or None if no backend is set
+    
+    Example:
+        ```python
+        import trovolut as trv
+        trv.set_backend('cpu')
+        print(trv.get_active_backend())  # 'cpu'
+        ```
+    """
+    return _active_backend
+
+
 __all__ = [
     # Core modules
     "core",
@@ -41,6 +135,9 @@ __all__ = [
     "qm",
     "utils",
     "filemaker",
+    # Backend management
+    "set_backend",
+    "get_active_backend",
     # Version
     "__version__",
 ]

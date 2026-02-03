@@ -9,10 +9,10 @@ This module provides evaluation infrastructure that measures:
 """
 
 from typing import Dict, Any
-from trovolut.core.base_evaluator import BaseEvaluator
+from trovolut.core.base_metrics import BaseMetrics
 
 
-class QPUEvaluator(BaseEvaluator):
+class QPUMetrics(BaseMetrics):
     """
     Evaluator for QPU backend with circuit metrics.
     
@@ -61,4 +61,4 @@ class QPUEvaluator(BaseEvaluator):
         )
 
 
-__all__ = ["QPUEvaluator"]
+__all__ = ["QPUMetrics"]

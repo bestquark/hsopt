@@ -278,7 +278,7 @@ class Custom(Constraint):
         return f"score = {base}"
 
 
-class ConstraintSet:
+class Group:
     """A collection of constraints evaluated together."""
     
     def __init__(self, constraints: List[Constraint]):
@@ -309,14 +309,75 @@ class ConstraintSet:
             "details": {r.name: {"value": r.value, "score": r.score, "satisfied": r.satisfied} for r in results},
         }
     
-    def __add__(self, other: Union[Constraint, "ConstraintSet"]) -> "ConstraintSet":
+    def __add__(self, other: Union[Constraint, "Group"]) -> "Group":
         """Compose constraints using + operator."""
         if isinstance(other, Constraint):
-            return ConstraintSet(self.constraints + [other])
-        if isinstance(other, ConstraintSet):
-            return ConstraintSet(self.constraints + other.constraints)
+            return Group(self.constraints + [other])
+        if isinstance(other, Group):
+            return Group(self.constraints + other.constraints)
         raise TypeError(f"Cannot add ConstraintSet with {type(other)}")
     
     def __repr__(self) -> str:
         return f"ConstraintSet({self.constraints})"
 
+    def formula(self) -> str:
+        """Generate formula showing how constraints combine into final score."""
+        if not self.constraints:
+            return "score = 0 (no constraints)"
+        
+        hard = [c for c in self.constraints if c.hard]
+        soft = [c for c in self.constraints if not c.hard]
+        
+        lines = []
+        
+        # Show hard constraint guards
+        if hard:
+            guards = " ∧ ".join(f"({c.name} satisfied)" for c in hard)
+            penalties = ", ".join(f"{c.hard_penalty}" for c in hard)
+            lines.append(f"Hard guards: {guards}")
+            lines.append(f"  → If any violated: score = penalty ({penalties})")
+        
+        # Show soft constraint weighted average
+        if soft:
+            total_weight = sum(c.weight for c in soft)
+            terms = []
+            for c in soft:
+                # Simplified score name
+                terms.append(f"{c.weight}·s_{c.name}")
+            numerator = " + ".join(terms)
+            lines.append(f"Soft score: ({numerator}) / {total_weight}")
+        
+        if not soft and hard:
+            lines.append("Final: score = 1.0 if all hard constraints satisfied")
+        
+        return "\n".join(lines)
+    
+    def explain(self) -> None:
+        """Print detailed explanation of the constraint set scoring."""
+        print("╔══════════════════════════════════════════════════════════════╗")
+        print("║                    CONSTRAINT SET SCORING                    ║")
+        print("╚══════════════════════════════════════════════════════════════╝")
+        
+        hard = [c for c in self.constraints if c.hard]
+        soft = [c for c in self.constraints if not c.hard]
+        
+        if hard:
+            print("\n┌─ HARD CONSTRAINTS (must all pass) ─────────────────────────┐")
+            for c in hard:
+                print(f"│  • {c.name}")
+                print(f"│      penalty: {c.hard_penalty}")
+            print("└─────────────────────────────────────────────────────────────┘")
+        
+        if soft:
+            total_weight = sum(c.weight for c in soft)
+            print("\n┌─ SOFT CONSTRAINTS (weighted average) ──────────────────────┐")
+            for c in soft:
+                pct = 100 * c.weight / total_weight
+                print(f"│  • {c.name} ({pct:.0f}%)")
+            print("├─────────────────────────────────────────────────────────────┤")
+            terms = " + ".join(f"{c.weight}·s_{c.name}" for c in soft)
+            print(f"│  combined = ({terms}) / {total_weight}")
+            print("└─────────────────────────────────────────────────────────────┘")
+        
+        print()
+    

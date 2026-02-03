@@ -23,14 +23,21 @@ uv sync --all-extras
 
 ```python
 import numpy as np
-from trovolut.backends.cpu.dynamics import TrotterEvolution
+import trovolut as trv
+
+# Set backend (enables trv.dynamics.* shortcuts)
+trv.set_backend('cpu')
 
 # Create Hamiltonian and initial state
 H = np.random.randn(4, 4) + 1j * np.random.randn(4, 4)
 H = (H + H.T.conj()) / 2
 psi0 = np.array([1, 0, 0, 0], dtype=complex)
 
-# Evolve
+# Evolve using Suzuki-Trotter
+psi = trv.dynamics.suzuki_step([H], dt=1.0, order=2) @ psi0
+
+# Or use class-based interface
+from trovolut.dynamics import TrotterEvolution
 trotter = TrotterEvolution(order=2, n_steps=10)
 psi = trotter.evolve(H, psi0, time=1.0)
 ```

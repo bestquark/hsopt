@@ -12,7 +12,7 @@ These methods work with NumPy arrays (CPU) or cupynumeric arrays (GPU) automatic
 Example:
     ```python
     from trovolut.backends.cpu.dynamics import ExactEvolution, TrotterEvolution
-    from trovolut.backends.cpu.evaluator import CPUEvaluator
+    from trovolut.backends.cpu.metrics import CPUMetrics
     from trovolut.backends.cpu.constraints import CPUTime, Memory
     
     # Works with NumPy (CPU)
@@ -21,10 +21,9 @@ Example:
     exact = ExactEvolution()
     result = exact.evolve(H, psi0, time=1.0)
     
-    # Same code works with cupynumeric (GPU)
-    import cupynumeric as cn
-    H_gpu = cn.asarray(H)
-    result_gpu = exact.evolve(H_gpu, psi0_gpu, time=1.0)
+    # Measure metrics
+    metrics = CPUMetrics(constraints=[CPUTime(1.0)])
+    result = metrics(my_dynamics, test_cases=[(hams, psi0, t)])
     ```
 """
 

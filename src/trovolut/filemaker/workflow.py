@@ -1,8 +1,8 @@
 import inspect
 import textwrap
+import ast
+import re
 from pathlib import Path
-
-
 
 
 class Comment:
@@ -14,12 +14,6 @@ class Comment:
 
 EVO_START = Comment("EVOLVE-BLOCK-START")
 EVO_END = Comment("EVOLVE-BLOCK-END")
-
-
-import inspect
-import textwrap
-import ast
-from pathlib import Path
 
 # ---------- helpers ----------
 
@@ -62,6 +56,44 @@ def _find_prefixed_attr_functions(func, root_name="trv"):
         if inspect.isfunction(obj):
             out[dotted] = obj
     return out
+
+
+def _extract_imports_from_function(func):
+    """
+    Extract import statements from a function's source code.
+    
+    Returns:
+        Set of import statement strings
+    """
+    try:
+        src = inspect.getsource(func)
+        src = textwrap.dedent(src)
+        tree = ast.parse(src)
+        
+        imports = set()
+        
+        class ImportFinder(ast.NodeVisitor):
+            def visit_Import(self, node):
+                for alias in node.names:
+                    if alias.asname:
+                        imports.add(f"import {alias.name} as {alias.asname}")
+                    else:
+                        imports.add(f"import {alias.name}")
+            
+            def visit_ImportFrom(self, node):
+                module = node.module or ""
+                for alias in node.names:
+                    if alias.name == '*':
+                        imports.add(f"from {module} import *")
+                    elif alias.asname:
+                        imports.add(f"from {module} import {alias.name} as {alias.asname}")
+                    else:
+                        imports.add(f"from {module} import {alias.name}")
+        
+        ImportFinder().visit(tree)
+        return imports
+    except Exception:
+        return set()
 
 
 def get_source_with_deps(func, visited=None, root_name="trv"):
@@ -110,35 +142,65 @@ def get_source_with_deps(func, visited=None, root_name="trv"):
 # ---------- Workflow ----------
 
 class Workflow:
-    def __init__(self, parts, out_path="initial_program.py", imports=None, main_func=None, constraints=None):
+    def __init__(self, parts, out_path="initial_program.py", imports=None, main_func=None, auto_imports=True):
         """
         Build standalone Python files from functions and objects.
         
         Args:
             parts: list of callables, comments, or code strings
             out_path: output file path
-            imports: list of import statements
+            imports: list of import statements (if None, auto-detected if auto_imports=True)
             main_func: callable (optional)
-            constraints: ConstraintSet for auto-generating evaluator files
+            auto_imports: if True and imports=None, automatically extract imports from functions
         
         Example:
             workflow = Workflow(
                 [EVO_START, run_dynamics, EVO_END],
                 out_path="program.py",
-                constraints=constraints,  # enables build_evaluator()
             )
-            workflow.build()  # generates program.py
-            workflow.build_evaluator()  # generates evaluator.py
+            workflow.build()  # Auto-detects imports from run_dynamics function
         """
         self.parts = parts
         self.out_path = Path(out_path)
-        self.imports = imports or [
-            "import numpy as np",
-            "import scipy",
-            "import trovolut as trv",
-        ]
         self.main_func = main_func
-        self._constraints = constraints
+        
+        # Auto-detect imports if not provided
+        if imports is None and auto_imports:
+            self.imports = self._auto_detect_imports()
+        else:
+            self.imports = imports or [
+                "import numpy as np",
+                "import scipy",
+                "import trovolut as trv",
+            ]
+    
+    def _auto_detect_imports(self):
+        """Auto-detect imports from all callable parts and main_func."""
+        detected = set()
+        
+        # Always include core imports
+        detected.add("import numpy as np")
+        detected.add("import scipy")
+        detected.add("import trovolut as trv")
+        
+        # Extract from all callable parts
+        for part in self.parts:
+            if callable(part):
+                detected.update(_extract_imports_from_function(part))
+        
+        # Extract from main function
+        if self.main_func is not None:
+            detected.update(_extract_imports_from_function(self.main_func))
+        
+        # Sort for consistency (stdlib first, then third-party, then trovolut)
+        imports_list = sorted(detected, key=lambda x: (
+            0 if x.startswith('import sys') or x.startswith('import os') or x.startswith('import time') else
+            1 if x.startswith('import numpy') or x.startswith('import scipy') else
+            2 if x.startswith('import trovolut') or x.startswith('from trovolut') else
+            3
+        ))
+        
+        return imports_list
 
     def build(self):
         self.out_path.parent.mkdir(parents=True, exist_ok=True)
@@ -172,92 +234,3 @@ class Workflow:
                 f.write(body.rstrip() + "\n\n")
 
         return self.out_path
-    
-    def build_evaluator(self, out_path=None) -> Path:
-        """Generate an evaluator file from attached constraints.
-        
-        Args:
-            out_path: Output path for evaluator. Defaults to same dir as main file
-                      with name 'evaluator.py'.
-        
-        Returns:
-            Path to generated evaluator file.
-        
-        Raises:
-            ValueError: If no constraints were passed to the Workflow constructor.
-        
-        Example:
-            workflow = trv.filemaker.Workflow(
-                [trv.filemaker.EVO_START, run_dynamics, trv.filemaker.EVO_END],
-                out_path="opt/program.py",
-                constraints=constraints,  # enables build_evaluator()
-            )
-            
-            workflow.build()  # Creates opt/program.py
-            workflow.build_evaluator()  # Creates opt/evaluator.py
-        """
-        if self._constraints is None:
-            raise ValueError(
-                "No constraints attached. Pass constraints to Workflow:\n\n"
-                "    workflow = trv.filemaker.Workflow(\n"
-                "        [...],\n"
-                "        constraints=constraints,\n"
-                "    )"
-            )
-        
-        eval_path = Path(out_path) if out_path else self.out_path.parent / "evaluator.py"
-        eval_path.parent.mkdir(parents=True, exist_ok=True)
-        
-        code = self._constraints._generate_evaluator_code()
-        eval_path.write_text(code)
-        
-        return eval_path
-    
-# class Workflow:
-#     def __init__(self, parts, out_path="initial_program.py", imports=None, main_func=None):
-#         """
-#         parts: list of callables, comments, or code strings
-#         main_func: callable (optional)
-#         """
-#         self.parts = parts
-#         self.out_path = Path(out_path)
-#         self.imports = imports or [
-#             "import numpy as np",
-#             "import scipy",
-#             "import trovolut as trv",
-#         ]
-#         self.main_func = main_func
-
-#     def build(self):
-#         # ensure folder exists
-#         self.out_path.parent.mkdir(parents=True, exist_ok=True)
-
-#         with self.out_path.open("w") as f:
-#             # header / imports
-#             for line in self.imports:
-#                 f.write(line + "\n")
-#             f.write("\n")
-
-#             visited = set()
-
-#             # code sections
-#             for part in self.parts:
-#                 if isinstance(part, Comment):
-#                     f.write(f"# {part.name}\n\n")
-#                 elif callable(part):
-#                     src = get_source_with_deps(part, visited=visited)
-#                     f.write(src + "\n\n")
-#                 else:
-#                     f.write(str(part).rstrip() + "\n\n")
-
-#             # optional main block
-#             if self.main_func is not None:
-#                 f.write('if __name__ == "__main__":\n')
-#                 src = inspect.getsource(self.main_func)
-#                 src = textwrap.dedent(src)
-#                 lines = src.splitlines()
-#                 body = "\n".join(lines[1:])
-#                 body = textwrap.indent(body, "    ")
-#                 f.write(body.rstrip() + "\n\n")
-
-#         return self.out_path
