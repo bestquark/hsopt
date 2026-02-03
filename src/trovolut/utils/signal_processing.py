@@ -754,7 +754,7 @@ def plot_fft_spectrum(
         zero_pad_factor: Zero padding factor for FFT resolution
         
     Returns:
-        fig, ax, (energies_plot, power_plot)
+        Tuple[Figure, Axes, Tuple[ndarray, ndarray]]: fig, ax, (energies_plot, power_plot)
     """
     import matplotlib.pyplot as plt
     
