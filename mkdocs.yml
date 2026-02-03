@@ -21,9 +21,8 @@ nav:
           - Core: api/core.md
           - Backends: api/backends.md
           - QM: api/qm.md
-      - Filemaker:
-          - Filemaker: api/workflow.md
-          - Utils: api/utils.md
+      - Filemaker: api/filemaker.md
+      - Utils: api/utils.md
   - Tutorials:
       - Overview: tutorials/index.md
       - Creating Hamiltonians: tutorials/dmds_hamiltonian.ipynb

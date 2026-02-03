@@ -1,25 +1,17 @@
-visualization/pareto_points.csv
-visualization/pareto_plot.png
 openevolve_output/
-code_evolution/__pycache__/
-code_evolution/legate_*.prof
-code_evolution/openevolve_output*
-code_evolution/*.sqlite
-code_evolution/*.nsys-rep
-code_evolution/*.json
-code_evolution/legion_prof
-testing_scripts/notebooks/protein-ligand-benchmark/
-testing_scripts/notebooks/Uni-FEP-Benchmarks
-cupynum_test.ipynb
-sims/
+deprecated/__pycache__/
+deprecated/legate_*.prof
+deprecated/openevolve_output*
+deprecated/*.sqlite
+deprecated/*.nsys-rep
+deprecated/*.json
+deprecated/legion_prof
 encryptcontent.cache
 
 docs/tutorials/opt/
 docs/tutorials/data/
 docs/tutorials/mp_opt/
 docs/tutorials/ignore.ipynb
-
-p2rank_2.5.1/
 
 # Byte-compiled / optimized / DLL files
 __pycache__/
