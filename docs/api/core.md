@@ -6,17 +6,13 @@ Base classes and types for backend implementations.
 
 ::: trovolut.core.BaseDynamics
 
-::: trovolut.core.BaseEvaluator
-
-::: trovolut.core.BaseEval
-
-::: trovolut.core.WorkflowConstraintSet
+::: trovolut.core.BaseMetrics
 
 ## Constraint System
 
 ::: trovolut.core.Constraint
 
-::: trovolut.core.ConstraintSet
+::: trovolut.core.Group
 
 ## Types
 
