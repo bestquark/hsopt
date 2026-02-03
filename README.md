@@ -35,13 +35,13 @@ trotter = TrotterEvolution(order=2, n_steps=10)
 psi = trotter.evolve(H, psi0, time=1.0)
 ```
 
-**GPU:** Same code with CuPy arrays runs on GPU automatically.
+**GPU:** Same code with cupynumeric arrays runs on GPU automatically.
 
 ## Backends
 
 - **CPU**: NumPy/SciPy dynamics (ExactEvolution, TrotterEvolution, QDriftEvolution)
 - **Emulator**: Mixed-precision simulation (FP64→FP8)
-- **GPU**: CuPy arrays + GPU profiling tools [!NOTE: Not available yet]
+- **GPU**: cupynumeric arrays + GPU profiling tools [!NOTE: Not available yet]
 - **QPU**: Quantum hardware via Qiskit/Cirq/CUDA-Q [!NOTE: Not available yet]
 
 ## Documentation

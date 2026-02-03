@@ -6,23 +6,27 @@ and mixed-precision Trotter methods. It simulates GPU low-precision arithmetic
 without requiring actual GPU hardware.
 
 Key Features:
+
 - Mixed-precision Trotter decomposition (FP64, FP32, FP16, BF16, FP8, INT8)
 - Quantization simulation for studying numerical precision effects
 - CPU-based implementation using NumPy (or cupynumeric on GPU systems)
 - Evaluations with mp_evals for analyzing precision tradeoffs
 
 Core Modules:
-- mp_trotter: Mixed-precision Trotter framework
-- simulate_quantization: Quantization utilities
-- mp_evals: Mixed-precision evaluation functions
-- constraints: GPU-specific constraints
-- hamsim: Hamiltonian simulation utilities
 
-Usage:
-    >>> from trovolut.backends.gpu_mp_emulator.mp_trotter import (
-    ...     Precision, ExpTerm, MixedPrecisionTrotter
-    ... )
-    >>> from trovolut.backends.gpu_mp_emulator import mp_evals
+- `mp_trotter`: Mixed-precision Trotter framework
+- `simulate_quantization`: Quantization utilities
+- `mp_evals`: Mixed-precision evaluation functions
+- `constraints`: GPU-specific constraints
+- `hamsim`: Hamiltonian simulation utilities
+
+Example:
+    ```python
+    from trovolut.backends.gpu_mp_emulator.mp_trotter import (
+        Precision, ExpTerm, MixedPrecisionTrotter
+    )
+    from trovolut.backends.gpu_mp_emulator import mp_evals
+    ```
 """
 
 from typing import Optional

@@ -2,23 +2,28 @@
 Backend registry and availability checking for trovolut.
 
 This module provides a plugin-style system for different computational backends:
-- cpu: Dynamics methods (ExactEvolution, TrotterEvolution, QDriftEvolution) that work with any array backend
-- gpu: GPU-specific tools (evaluator, metrics) for NVIDIA GPUs with CuPy/cuQuantum
-- qpu: QPU-specific tools (circuit compilation, hardware execution) via Qiskit/Cirq/CUDA-Q
-- gpu-mp-emulator: Mixed-precision emulator for studying quantization effects
 
-Dynamics methods are hardware-agnostic - just pass NumPy arrays for CPU or CuPy arrays for GPU.
+- **cpu**: Dynamics methods (ExactEvolution, TrotterEvolution, QDriftEvolution) that work with any array backend
+- **gpu**: GPU-specific tools (evaluator) for NVIDIA GPUs with cupynumeric/CUDA Quantum
+- **qpu**: QPU-specific tools (circuit compilation, hardware execution) via Qiskit/Cirq/CUDA Quantum
+- **gpu-mp-emulator**: Mixed-precision emulator for studying quantization effects
 
-Usage:
-    >>> import trovolut as trv
-    >>> trv.backends.list_available()
-    ['cpu', 'gpu-mp-emulator']
+Dynamics methods are hardware-agnostic - just pass NumPy arrays for CPU or cupynumeric arrays for GPU.
+
+Example:
+    ```python
+    import trovolut as trv
     
-    >>> # Import dynamics methods (work with NumPy or CuPy)
-    >>> from trovolut.backends.cpu.dynamics import ExactEvolution, TrotterEvolution
-    >>> 
-    >>> # Import hardware-specific tools
-    >>> from trovolut.backends.gpu.evaluator import GPUEvaluator
+    # List available backends
+    trv.backends.list_available()
+    # ['cpu', 'gpu-mp-emulator']
+    
+    # Import dynamics methods (work with NumPy or cupynumeric)
+    from trovolut.backends.cpu.dynamics import ExactEvolution, TrotterEvolution
+    
+    # Import hardware-specific tools
+    from trovolut.backends.gpu.evaluator import GPUEvaluator
+    ```
 """
 
 import sys
@@ -63,7 +68,7 @@ class BackendRegistry:
         },
         "gpu": {
             "module": "trovolut.backends.gpu",
-            "required_packages": ["cupy", "cuquantum", "pynvml"],
+            "required_packages": ["cupynumeric", "cudaq", "pynvml"],
             "description": "GPU profiling tools (evaluator, metrics) for NVIDIA GPUs",
             "platform": "linux",
         },

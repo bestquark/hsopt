@@ -54,7 +54,7 @@ class GPUEvaluator(BaseEvaluator):
         Returns:
             Dictionary with evaluation metrics
         """
-        import cupy as cp
+        import cupynumeric as cn
         import pynvml
         
         # TODO: Implement full GPU evaluation logic

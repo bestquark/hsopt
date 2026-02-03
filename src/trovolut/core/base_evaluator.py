@@ -34,15 +34,29 @@ def _load_module_from_file(path: str):
     return mod
 
 def _is_cupy_array(x) -> bool:
+    """Check if array is cupynumeric or cupy array."""
+    try:
+        import cupynumeric as cn
+        if isinstance(x, cn.ndarray):
+            return True
+    except Exception:
+        pass
     try:
         import cupy
-        return isinstance(x, cupy.ndarray)
+        if isinstance(x, cupy.ndarray):
+            return True
     except Exception:
-        return False
+        pass
+    return False
 
 def _to_numpy(a):
     if _is_cupy_array(a):
-        return np.asarray(a.get())
+        # Convert GPU array to NumPy
+        if hasattr(a, 'get'):
+            return np.asarray(a.get())
+        else:
+            # cupynumeric uses different method
+            return np.asarray(a)
     return np.asarray(a)
 
 def _bytes_of(*objs) -> int:

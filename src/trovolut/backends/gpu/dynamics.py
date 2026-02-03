@@ -1,5 +1,5 @@
 """
-GPU-accelerated dynamics implementations using CuPy and cuQuantum.
+GPU-accelerated dynamics implementations using cupynumeric and CUDA Quantum.
 
 This module provides matrix exponential methods optimized for NVIDIA GPUs.
 """
@@ -11,7 +11,7 @@ class GPUDynamics(BaseDynamics):
     """
     GPU-accelerated quantum dynamics implementation.
     
-    Uses CuPy and cuQuantum for efficient matrix operations on NVIDIA GPUs.
+    Uses cupynumeric and CUDA Quantum for efficient matrix operations on NVIDIA GPUs.
     
     Methods:
         - Padé approximation
@@ -20,12 +20,12 @@ class GPUDynamics(BaseDynamics):
         - Mixed-precision Trotter decomposition
     """
     
-    def __init__(self, backend="cupy"):
+    def __init__(self, backend="cupynumeric"):
         """
         Initialize GPU dynamics.
         
         Args:
-            backend: GPU backend to use ('cupy', 'cuquantum')
+            backend: GPU backend to use ('cupynumeric', 'cudaq')
         """
         self.backend = backend
         self._validate_gpu_availability()
@@ -33,9 +33,10 @@ class GPUDynamics(BaseDynamics):
     def _validate_gpu_availability(self):
         """Check if GPU is available."""
         try:
-            import cupy as cp
-            # Test GPU access
-            cp.cuda.Device(0).compute_capability
+            import cupynumeric as cn
+            # Test GPU access with cupynumeric
+            # cupynumeric automatically uses GPU if available
+            _ = cn.array([1.0])
         except Exception as e:
             raise RuntimeError(f"GPU not accessible: {e}")
     
@@ -44,15 +45,15 @@ class GPUDynamics(BaseDynamics):
         Evolve quantum state using GPU-accelerated methods.
         
         Args:
-            hamiltonian: Hamiltonian operator (CuPy array)
-            initial_state: Initial quantum state (CuPy array)
+            hamiltonian: Hamiltonian operator (cupynumeric array)
+            initial_state: Initial quantum state (cupynumeric array)
             time: Evolution time
             **kwargs: Backend-specific options
             
         Returns:
             Final quantum state
         """
-        import cupy as cp
+        import cupynumeric as cn
         
         # TODO: Implement full GPU evolution logic
         # This is a placeholder for the actual implementation

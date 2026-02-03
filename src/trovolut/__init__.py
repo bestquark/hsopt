@@ -3,7 +3,7 @@ Trovolut: Evolutionary Trotterization for Quantum Simulation
 
 A framework for optimizing quantum simulation algorithms across different backends:
 - CPU: NumPy/SciPy (always available)
-- GPU: NVIDIA CuPy/cuQuantum (trovolut[gpu])
+- GPU: NVIDIA cupynumeric/CUDA Quantum (trovolut[gpu])
 - QPU: Quantum hardware via CUDA Quantum (trovolut[qpu])
 - Emulator: Software GPU emulation (trovolut[gpu-emulate])
 

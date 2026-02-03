@@ -2,28 +2,32 @@
 GPU backend for trovolut - Hardware-specific tools for NVIDIA GPUs.
 
 This backend provides GPU-specific tools for profiling and monitoring:
+
 - GPUEvaluator: CUDA profiling and benchmarking
 
-For dynamics, use the CPU backend methods with CuPy arrays - they run on GPU automatically.
+For dynamics, use the CPU backend methods with cupynumeric arrays - they run on GPU automatically.
 
-This backend requires:
+Requirements:
+
 - Linux operating system
 - NVIDIA GPU with CUDA support
-- CuPy and cuQuantum Python packages
+- cupynumeric and CUDA Quantum Python packages
 
-Install with: uv pip install trovolut[gpu]
+Install with: `uv pip install trovolut[gpu]`
 
-Usage:
-    >>> # For dynamics on GPU, use CPU methods with CuPy arrays
-    >>> import cupy as cp
-    >>> from trovolut.backends.cpu.dynamics import TrotterEvolution
-    >>> 
-    >>> trotter = TrotterEvolution(order=2)
-    >>> H_gpu = cp.asarray(H)  # Move to GPU
-    >>> result = trotter.evolve(H_gpu, psi0_gpu, time=1.0)  # Runs on GPU!
-    >>> 
-    >>> # Use GPU-specific tools for profiling
-    >>> from trovolut.backends.gpu.evaluator import GPUEvaluator
+Example:
+    ```python
+    # For dynamics on GPU, use CPU methods with cupynumeric arrays
+    import cupynumeric as cn
+    from trovolut.backends.cpu.dynamics import TrotterEvolution
+    
+    trotter = TrotterEvolution(order=2)
+    H_gpu = cn.asarray(H)  # Move to GPU
+    result = trotter.evolve(H_gpu, psi0_gpu, time=1.0)  # Runs on GPU!
+    
+    # Use GPU-specific tools for profiling
+    from trovolut.backends.gpu.evaluator import GPUEvaluator
+    ```
 """
 
 import sys
@@ -48,7 +52,7 @@ def is_available() -> bool:
         return False
     
     # Check required packages
-    required = ["cupy", "cuquantum", "pynvml"]
+    required = ["cupynumeric", "cudaq", "pynvml"]
     _missing_packages = []
     
     for pkg in required:

@@ -27,8 +27,9 @@ print(trv.backends.list_available())
 # Create Hamiltonian
 H = qm.models.hubbard_2d(Lx=3, Ly=3, t_hop=1.0, U_onsite=4.0)
 
-# Get backend dynamics
-dynamics = trv.backends.get_dynamics('cpu')
+# Use dynamics methods
+from trovolut.backends.cpu.dynamics import TrotterEvolution
+dynamics = TrotterEvolution(order=2)
 ```
 
 ## Backends
@@ -36,7 +37,7 @@ dynamics = trv.backends.get_dynamics('cpu')
 | Backend | Platform | Dependencies | Use Case |
 |---------|----------|--------------|----------|
 | `cpu` | All | NumPy/SciPy | Standard dynamics (always available) |
-| `gpu` | Linux | CuPy, cuQuantum | NVIDIA GPU acceleration |
+| `gpu` | Linux | cupynumeric, CUDA Quantum | NVIDIA GPU acceleration |
 | `qpu` | All | Qiskit, Cirq | Quantum hardware/simulators |
 | `gpu-emulate` | All | None | Mixed-precision studies (FP64→FP8) |
 

@@ -21,7 +21,7 @@ class BaseDynamics(ABC):
     
     Different backends may use different methods:
         - CPU: scipy.linalg.expm, Krylov, etc.
-        - GPU: CuPy/cuQuantum matrix exponentials
+        - GPU: cupynumeric/CUDA Quantum matrix exponentials
         - QPU: Trotterization and circuit compilation
         - Emulator: Software simulation of GPU behavior
     

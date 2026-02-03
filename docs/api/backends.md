@@ -36,7 +36,7 @@ Provides dynamics methods (ExactEvolution, TrotterEvolution, QDriftEvolution) th
 
 Install: `uv pip install trovolut[gpu]` (Linux + NVIDIA only)
 
-Provides GPU-specific profiling tools (GPUEvaluator). For dynamics on GPU, use CPU backend methods with CuPy arrays.
+Provides GPU-specific profiling tools (GPUEvaluator). For dynamics on GPU, use CPU backend methods with cupynumeric arrays.
 
 ### QPU
 ::: trovolut.backends.qpu
