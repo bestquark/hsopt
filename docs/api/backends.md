@@ -21,7 +21,7 @@ trv.backends.is_available('gpu')
 from trovolut.backends.cpu.dynamics import ExactEvolution, TrotterEvolution
 
 # Import hardware-specific tools
-from trovolut.backends.gpu.metrics import GPUMetrics
+from trovolut.backends.gpu.measure import Metrics
 ```
 
 ## Backends

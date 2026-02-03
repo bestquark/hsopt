@@ -11,74 +11,6 @@ import scipy.linalg as la
 if TYPE_CHECKING:
     from trovolut.qm.hamiltonians import Hamiltonian, HamiltonianEnsemble
 
-# ------------- utils -------------
-def _load_module_from_file(path: str):
-    spec = importlib.util.spec_from_file_location("candidate", path)
-    mod = importlib.util.module_from_spec(spec)
-    spec.loader.exec_module(mod)  # type: ignore[attr-defined]
-    return mod
-
-def _is_cupy_array(x) -> bool:
-    """Check if array is cupynumeric or cupy array."""
-    try:
-        import cupynumeric as cn
-        if isinstance(x, cn.ndarray):
-            return True
-    except Exception:
-        pass
-    try:
-        import cupy
-        if isinstance(x, cupy.ndarray):
-            return True
-    except Exception:
-        pass
-    return False
-
-def _to_numpy(a):
-    if _is_cupy_array(a):
-        # Convert GPU array to NumPy
-        if hasattr(a, 'get'):
-            return np.asarray(a.get())
-        else:
-            # cupynumeric uses different method
-            return np.asarray(a)
-    return np.asarray(a)
-
-def _bytes_of(*objs) -> int:
-    total = 0
-    for o in objs:
-        if isinstance(o, (list, tuple)):
-            total += _bytes_of(*o)
-        else:
-            try:
-                total += int(getattr(o, "nbytes"))
-            except Exception:
-                pass
-    return total
-
-def _safe_float(x: Any, default: float = 0.0) -> float:
-    try:
-        v = float(x)
-        return v if np.isfinite(v) else default
-    except Exception:
-        return default
-
-def _random_state(dim: int, seed: int) -> np.ndarray:
-    rng = np.random.default_rng(seed)
-    psi0 = rng.standard_normal(dim) + 1j * rng.standard_normal(dim)
-    psi0 /= np.linalg.norm(psi0)
-    return psi0
-
-def _coerce_terms_from_hamiltonian(ham) -> List[np.ndarray]:
-    # ham.terms() -> [{"coef": scalar, "matrix": Hermitian array}]
-    out = []
-    for t in ham.terms():
-        out.append(_safe_float(t["coef"], 1.0) * _to_numpy(t["matrix"]))
-    return out
-
-def _dim_from_terms(terms: Sequence[np.ndarray]) -> int:
-    return terms[0].shape[0] if terms else 0
-
 
 # =============================================================================
 # Constraint System (Hardware-Agnostic)
@@ -173,7 +105,11 @@ class Constraint(ABC):
             if hasattr(self, attr):
                 params.append(f"{getattr(self, attr)}")
                 break
-        params.append("hard" if self.hard else f"w={self.weight}")
+        # Use proper parameter names that match __init__ signatures
+        if self.hard:
+            params.append("hard=True")
+        elif self.weight != 1.0:
+            params.append(f"weight={self.weight}")
         return f"{self.__class__.__name__}({', '.join(params)})"
 
 
@@ -187,7 +123,8 @@ class Time(Constraint):
         self.score_fn = score_fn
     
     def extract(self, m: Dict[str, Any]) -> float:
-        return m.get("time_seconds", float("inf"))
+        # Try multiple possible key names
+        return m.get("time", m.get("time_seconds", float("inf")))
     
     def score(self, v: float) -> float:
         return _score_fn(v, self.max_seconds, self.score_fn)
@@ -214,7 +151,8 @@ class Error(Constraint):
         self.score_fn = score_fn
     
     def extract(self, m: Dict[str, Any]) -> float:
-        return m.get("mean_error", float("inf"))
+        # Try multiple possible key names
+        return m.get("error", m.get("mean_error", float("inf")))
     
     def score(self, v: float) -> float:
         if self.score_fn == "inverse":
@@ -309,16 +247,33 @@ class Group:
             "details": {r.name: {"value": r.value, "score": r.score, "satisfied": r.satisfied} for r in results},
         }
     
+    def generate_llm_instructions(self) -> str:
+        """Generate description of all constraints for LLM prompts."""
+        if not self.constraints:
+            return "Optimize the code for best performance."
+        
+        hard = [c for c in self.constraints if c.hard]
+        soft = [c for c in self.constraints if not c.hard]
+        
+        lines = ["You are optimizing quantum simulation code. Your objectives are:"]
+        if hard:
+            lines.append("\n**Hard requirements (MUST satisfy):**")
+            lines.extend(f"- {c.to_prompt()}" for c in hard)
+        if soft:
+            lines.append("\n**Optimization goals (weighted):**")
+            lines.extend(f"- {c.to_prompt()}" for c in soft)
+        return "\n".join(lines)
+    
     def __add__(self, other: Union[Constraint, "Group"]) -> "Group":
         """Compose constraints using + operator."""
         if isinstance(other, Constraint):
             return Group(self.constraints + [other])
         if isinstance(other, Group):
             return Group(self.constraints + other.constraints)
-        raise TypeError(f"Cannot add ConstraintSet with {type(other)}")
+        raise TypeError(f"Cannot add Group with {type(other)}")
     
     def __repr__(self) -> str:
-        return f"ConstraintSet({self.constraints})"
+        return f"Group({self.constraints})"
 
     def formula(self) -> str:
         """Generate formula showing how constraints combine into final score."""

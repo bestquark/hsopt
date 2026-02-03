@@ -105,16 +105,18 @@ class BaseMetrics:
     1. Takes constraints at initialization
     2. Is callable: when called with a dynamics function, measures and returns metrics
     
-    Hardware-specific metrics (CPUMetrics, GPUMetrics, etc.) inherit from this
+    Hardware-specific metrics (Metrics class in each backend) inherit from this
     and override measurement methods as needed.
     
     Example:
         ```python
+        import trovolut as trv
+        trv.set_backend('cpu')
+        from trovolut.measure import Metrics
         from trovolut.constraints import Time, Error
-        from trovolut.backends.cpu.metrics import CPUMetrics
         
         # Initialize with constraints
-        metrics = CPUMetrics(constraints=[Time(max_seconds=1.0), Error(max_error=0.01)])
+        metrics = Metrics(constraints=[Time(max_seconds=1.0), Error(max_error=0.01)])
         
         # Define dynamics function
         def my_dynamics(hams, t, psi0):
@@ -126,18 +128,41 @@ class BaseMetrics:
         ```
     """
     
-    def __init__(self, constraints=None):
+    def __init__(
+        self, 
+        constraints=None,
+        test_generator=None,
+        exact_fn=None,
+        n_trials=10,
+        timeout=30,
+        backend='unknown'
+    ):
         """
-        Initialize metrics with constraints.
+        Initialize metrics with constraints and test configuration.
         
         Args:
-            constraints: List of Constraint objects or ConstraintSet
+            constraints: List of Constraint objects or Group
+            test_generator: Function that returns (hams, psi0) or (hams, psi0, t) tuple
+            exact_fn: Function(hams, t, psi0) -> psi_exact for error calculation
+            n_trials: Number of trials to run
+            timeout: Maximum time per trial in seconds
+            backend: Backend name ('cpu', 'gpu', 'qpu', etc.) for identification
         """
         self.constraints = constraints or []
         if hasattr(constraints, '__iter__') and not isinstance(constraints, str):
             self.constraints = list(constraints)
         else:
             self.constraints = [constraints] if constraints else []
+        
+        self.test_generator = test_generator
+        self.exact_fn = exact_fn
+        self.n_trials = n_trials
+        self.timeout = timeout
+        self.backend = backend
+    
+    def __repr__(self) -> str:
+        """String representation showing backend."""
+        return f"Metrics(backend='{self.backend}', n_trials={self.n_trials})"
     
     def __call__(
         self,
@@ -163,7 +188,8 @@ class BaseMetrics:
             mod = _load_module_from_file(program_path)
             dynamics_func = getattr(mod, kwargs.get('function_name', 'run_dynamics'))
         
-        return self.measure(dynamics_func, test_cases, **kwargs)
+        # Don't pass test_cases as positional arg - let measure() use kwargs or instance attributes
+        return self.measure(dynamics_func, **kwargs)
     
     def measure(
         self,

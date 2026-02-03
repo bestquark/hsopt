@@ -36,7 +36,7 @@ matmul_hard = trv.eval.MatMulCount(
 
 ```python
 # Optimize for both low matmul count and low error
-constraints = trv.eval.ConstraintSet([
+constraints = trv.constraints.Group([
     trv.eval.MatMulCount(max_count=50, weight=1.0),
     trv.eval.Error(max_error=0.1, weight=2.0)  # Prioritize accuracy
 ])
@@ -134,7 +134,7 @@ def exact(hams, t, psi0):
     """Compute exact solution."""
     return scipy.linalg.expm(-1j * sum(hams) * t) @ psi0
 
-constraints = trv.eval.ConstraintSet([
+constraints = trv.constraints.Group([
     trv.eval.MatMulCount(max_count=50, weight=1.0),
     trv.eval.Error(max_error=0.1, weight=2.0),
 ])
@@ -226,7 +226,7 @@ def exact(hams, t, psi0):
     return scipy.linalg.expm(-1j * sum(hams) * t) @ psi0
 
 # 2. Define constraints
-constraints = trv.eval.ConstraintSet([
+constraints = trv.constraints.Group([
     trv.eval.MatMulCount(max_count=30, weight=1.0),  # Algorithmic complexity
     trv.eval.Error(max_error=0.05, weight=2.0),       # Accuracy
     trv.eval.Time(max_seconds=1.0, weight=0.5),       # Still track time

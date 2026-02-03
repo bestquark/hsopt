@@ -24,10 +24,10 @@ Install with: `uv pip install trovolut[qpu]`
 
 Example:
     ```python
-    from trovolut.backends.qpu.evaluator import QPUEvaluator
+    from trovolut.backends.qpu.measure import Metrics
     
     # QPU tools handle circuit compilation and execution
-    evaluator = QPUEvaluator()
+    metrics = Metrics()
     ```
 """
 

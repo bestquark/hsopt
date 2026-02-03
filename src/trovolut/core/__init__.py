@@ -5,8 +5,7 @@ This module provides the base classes that all backends implement:
 - BaseDynamics: Time evolution of quantum systems
 - BaseMetrics: Backend-specific metrics measurement interface
 - BaseEval: Performance evaluation (legacy)
-- WorkflowConstraintSet: Evaluator code generation for OpenEvolve
-- Constraint system: Composable evaluation constraints
+- Constraint system: Composable evaluation constraints (Group)
 - Types: Shared data structures
 """
 

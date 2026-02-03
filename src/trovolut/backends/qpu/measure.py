@@ -12,7 +12,7 @@ from typing import Dict, Any
 from trovolut.core.base_metrics import BaseMetrics
 
 
-class QPUMetrics(BaseMetrics):
+class Metrics(BaseMetrics):
     """
     Evaluator for QPU backend with circuit metrics.
     
@@ -24,14 +24,36 @@ class QPUMetrics(BaseMetrics):
         - Hardware/simulator execution time
     """
     
-    def __init__(self, target="nvidia-mgpu", shots=1000):
+    def __init__(
+        self, 
+        constraints=None,
+        test_generator=None,
+        exact_fn=None,
+        n_trials=10,
+        timeout=30,
+        target="nvidia-mgpu",
+        shots=1000
+    ):
         """
-        Initialize QPU evaluator.
+        Initialize QPU metrics.
         
         Args:
+            constraints: List of Constraint objects or Group
+            test_generator: Function that returns (hams, psi0) or (hams, psi0, t) tuple
+            exact_fn: Function(hams, t, psi0) -> psi_exact for error calculation
+            n_trials: Number of trials to run
+            timeout: Maximum time per trial in seconds
             target: CUDA Quantum target backend
             shots: Number of measurement shots
         """
+        super().__init__(
+            constraints=constraints,
+            test_generator=test_generator,
+            exact_fn=exact_fn,
+            n_trials=n_trials,
+            timeout=timeout,
+            backend='qpu'
+        )
         self.target = target
         self.shots = shots
     
@@ -61,4 +83,4 @@ class QPUMetrics(BaseMetrics):
         )
 
 
-__all__ = ["QPUMetrics"]
+__all__ = ["Metrics"]

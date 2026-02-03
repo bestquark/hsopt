@@ -26,7 +26,7 @@ Example:
     result = trotter.evolve(H_gpu, psi0_gpu, time=1.0)  # Runs on GPU!
     
     # Use GPU-specific tools for profiling
-    from trovolut.backends.gpu.evaluator import GPUEvaluator
+    from trovolut.backends.gpu.measure import Metrics
     ```
 """
 

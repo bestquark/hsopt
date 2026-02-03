@@ -186,17 +186,10 @@ class LegateConcurrency(Constraint):
 
 
 # =============================================================================
-# WorkflowConstraintSet moved to trovolut.core.base_metrics
-# =============================================================================
-# For backwards compatibility, re-export from core
-from trovolut.core.base_metrics import WorkflowConstraintSet  # noqa: E402
-
-
-# =============================================================================
 # Exports and Backward Compatibility
 # =============================================================================
 
-# For backward compatibility, make basic ConstraintSet available from this module
+# For backward compatibility, Group is the main constraint container
 
 # Old-style names (backward compatibility)
 TimeConstraint = Time

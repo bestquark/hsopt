@@ -32,13 +32,18 @@ from trovolut import qm
 from trovolut import utils
 
 # Workflow and high-level interfaces
-try:
-    from trovolut import filemaker
-except ImportError:
-    filemaker = None  # Optional module
+from trovolut import filemaker
 
 # Version info
 __version__ = "0.1.0"
+
+# Lazy import for constraints to avoid circular import
+def __getattr__(name):
+    """Lazy loading for submodules to avoid circular imports."""
+    if name == "constraints":
+        from trovolut.core import base_constraints
+        return base_constraints
+    raise AttributeError(f"module '{__name__}' has no attribute '{name}'")
 
 # Active backend tracking
 _active_backend: Optional[str] = None
@@ -47,7 +52,7 @@ _backend_modules: dict = {}
 
 def set_backend(backend_name: str) -> None:
     """
-    Set the active backend and make its modules accessible via trv.dynamics, trv.evaluator, etc.
+    Set the active backend and make its modules accessible via trv.dynamics, trv.measure, etc.
     
     Args:
         backend_name: Name of backend ('cpu', 'gpu', 'qpu', 'gpu-mp-emulator')
@@ -94,7 +99,7 @@ def set_backend(backend_name: str) -> None:
     _backend_modules = {}
     
     # Try to import common submodules
-    for submodule in ['dynamics', 'metrics', 'constraints']:
+    for submodule in ['dynamics', 'measure', 'constraints']:
         try:
             mod = import_module(f"{backend_module_path}.{submodule}")
             _backend_modules[submodule] = mod
@@ -138,6 +143,7 @@ __all__ = [
     # Backend management
     "set_backend",
     "get_active_backend",
+    "constraints",
     # Version
     "__version__",
 ]

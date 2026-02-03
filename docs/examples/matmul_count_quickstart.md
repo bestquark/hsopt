@@ -17,8 +17,8 @@ matmul_constraint = trv.eval.MatMulCount(
     score_fn="linear"     # Scoring function
 )
 
-# 2. Use in a ConstraintSet
-constraints = trv.eval.ConstraintSet([
+# 2. Use in a Group
+constraints = trv.constraints.Group([
     trv.eval.MatMulCount(max_count=30, weight=1.0),
     trv.eval.Error(max_error=0.05, weight=2.0)
 ])

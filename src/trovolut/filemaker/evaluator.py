@@ -1,271 +1,321 @@
 """
 Evaluator generator for OpenEvolve.
 
-Creates standalone evaluator.py files that test evolved dynamics programs.
+Creates evaluator files that measure program performance using trovolut's metric system.
 """
 
+import ast
 import inspect
-import textwrap
 from pathlib import Path
+from typing import Callable, Optional, List, Dict, Set, Any
 
-from .workflow import _extract_imports_from_function, EVO_START, EVO_END
+from trovolut.filemaker.workflow import Workflow
+
+
+def _extract_function_calls(func) -> Set[str]:
+    """Extract all function calls from a function's source code using AST."""
+    try:
+        source = inspect.getsource(func)
+        tree = ast.parse(source)
+        
+        calls = set()
+        for node in ast.walk(tree):
+            if isinstance(node, ast.Call):
+                if isinstance(node.func, ast.Name):
+                    calls.add(node.func.id)
+                elif isinstance(node.func, ast.Attribute):
+                    # For calls like obj.method(), we track the base name
+                    if isinstance(node.func.value, ast.Name):
+                        calls.add(node.func.value.id)
+        
+        return calls
+    except Exception:
+        return set()
+
+
+def _get_function_dependencies(func, caller_globals: Dict) -> Dict[str, Callable]:
+    """
+    Recursively find all function dependencies from a function's globals.
+    
+    Args:
+        func: The function to analyze
+        caller_globals: The globals dict where the function was defined
+        
+    Returns:
+        Dict mapping function names to their callable objects
+    """
+    dependencies = {}
+    to_process = [func]
+    processed = set()
+    
+    while to_process:
+        current_func = to_process.pop(0)
+        
+        # Skip if already processed
+        func_name = getattr(current_func, '__name__', None)
+        if func_name in processed:
+            continue
+        processed.add(func_name)
+        
+        # Extract function calls from this function
+        calls = _extract_function_calls(current_func)
+        
+        # Find callables in globals that match these calls
+        for call_name in calls:
+            if call_name in caller_globals and callable(caller_globals[call_name]):
+                potential_dep = caller_globals[call_name]
+                
+                # Only include user-defined functions (not builtins or imports)
+                if (hasattr(potential_dep, '__code__') and 
+                    call_name not in dependencies and
+                    call_name != func_name):
+                    
+                    dependencies[call_name] = potential_dep
+                    to_process.append(potential_dep)
+    
+    return dependencies
 
 
 class Evaluator:
-    """Generate evaluator files for OpenEvolve that test dynamics programs.
+    """
+    Generates OpenEvolve-compatible evaluator files.
     
-    The Evaluator class creates standalone evaluator.py files that:
-    - Load test cases (Hamiltonian, state pairs)
-    - Import and run the generated dynamics program
-    - Compare results against ground truth
-    - Return scores for OpenEvolve
-    
-    Args:
-        test_generator: Function that returns (hamiltonian, state) pairs for testing.
-                       Can return a single pair or a list of pairs.
-        workflow: Workflow object containing the dynamics function to test
-        metric_function: Function(program_path) -> dict with 'combined_score' and 'std_score'
-        out_path: Path for generated evaluator.py file
-        timeout: Timeout in seconds for evaluation (default: 30)
-        n_trials: Number of test trials (default: 10)
-    
-    Example:
-        ```python
-        import trovolut as trv
-        
-        # Define test case generator
-        def get_test_cases():
-            H = trv.qm.models.hubbard_1d(Lx=4, t_hop=1.0, U_onsite=4.0)
-            hams = [t["coef"] * t["matrix"] for t in H.terms()]
-            psi0 = np.zeros(2**8, dtype=complex)
-            psi0[0] = 1.0
-            return hams, psi0
-        
-        # Define dynamics
-        def run_dynamics(Hs, t, psi0):
-            return trv.dynamics.product_formula(Hs, t, r=10) @ psi0
-        
-        # Create workflow
-        workflow = trv.filemaker.Workflow(
-            [trv.filemaker.EVO_START, run_dynamics, trv.filemaker.EVO_END],
-            out_path="opt/program.py"
-        )
-        
-        # Create evaluator
-        evaluator = trv.filemaker.Evaluator(
-            test_generator=get_test_cases,
-            workflow=workflow,
-            out_path="opt/evaluator.py"
-        )
-        
-        # Build both files
-        workflow.build()
-        evaluator.build()
-        ```
+    The evaluator measures program performance using trovolut's automatic metrics system.
     """
     
     def __init__(
         self,
-        test_generator,
-        workflow,
-        metric_function=None,
-        out_path="evaluator.py",
-        timeout=30,
-        n_trials=10
+        test_generator: Callable,
+        workflow: Workflow,
+        constraints: Optional[Any] = None,
+        exact_fn: Optional[Callable] = None,
+        backend: Optional[str] = None,
+        out_path: str = "evaluator.py",
+        n_trials: int = 10,
+        timeout: int = 30,
+        metric_function: Optional[Callable] = None,
     ):
+        """
+        Initialize the Evaluator generator.
+        
+        Args:
+            test_generator: Function that returns test cases (hams, psi0) or (hams, psi0, t)
+            workflow: Workflow object that defines the program structure
+            constraints: Optional constraint or Group of constraints
+            exact_fn: Optional function for computing exact solution
+            backend: Backend to use ('cpu', 'gpu', 'qpu'). If None, auto-detects.
+            out_path: Path where evaluator file will be generated
+            n_trials: Number of trials to run
+            timeout: Timeout in seconds for evaluation
+            metric_function: Optional custom metric function (deprecated, use constraints instead)
+        """
         self.test_generator = test_generator
         self.workflow = workflow
-        self.metric_function = metric_function
+        self.constraints = constraints
+        self.exact_fn = exact_fn
         self.out_path = Path(out_path)
-        self.timeout = timeout
         self.n_trials = n_trials
+        self.timeout = timeout
+        self.metric_function = metric_function
         
-        # Extract dynamics function name from workflow
-        self._dynamics_func_name = self._extract_dynamics_function_name()
+        # Auto-detect backend if not specified
+        if backend is None:
+            try:
+                import trovolut as trv
+                backend = trv.get_active_backend()
+                if backend is None:
+                    backend = 'cpu'  # Default fallback
+            except Exception:
+                backend = 'cpu'
+        
+        self.backend = backend
+        
+        # Collect function dependencies
+        self._function_dependencies = self._collect_function_dependencies()
     
-    def _extract_dynamics_function_name(self):
-        """Extract the name of the dynamics function from workflow parts."""
-        for part in self.workflow.parts:
-            if callable(part) and part not in [EVO_START, EVO_END]:
-                return part.__name__
-        raise ValueError("Could not find dynamics function in workflow.parts")
+    def _collect_function_dependencies(self) -> Dict[str, Callable]:
+        """Collect all helper functions needed by test_generator and exact_fn."""
+        dependencies = {}
+        
+        # Get globals from test_generator
+        if self.test_generator:
+            test_gen_globals = self.test_generator.__globals__
+            deps = _get_function_dependencies(self.test_generator, test_gen_globals)
+            dependencies.update(deps)
+        
+        # Get globals from exact_fn
+        if self.exact_fn:
+            exact_fn_globals = self.exact_fn.__globals__
+            deps = _get_function_dependencies(self.exact_fn, exact_fn_globals)
+            dependencies.update(deps)
+        
+        # Get globals from metric_function if provided
+        if self.metric_function:
+            metric_globals = self.metric_function.__globals__
+            deps = _get_function_dependencies(self.metric_function, metric_globals)
+            dependencies.update(deps)
+        
+        return dependencies
     
-    def build(self):
-        """Generate the evaluator.py file."""
-        self.out_path.parent.mkdir(parents=True, exist_ok=True)
-        
-        with self.out_path.open("w", encoding="utf-8") as f:
-            # Write imports
-            f.write(self._generate_imports())
-            f.write("\n\n")
-            
-            # Write test generator function
-            f.write(self._generate_test_generator())
-            f.write("\n\n")
-            
-            # Write metric function (if custom) or default
-            if self.metric_function is not None:
-                f.write(self._generate_custom_metric())
-            else:
-                f.write(self._generate_default_metric())
-            f.write("\n\n")
-            
-            # Write timeout wrapper
-            f.write(self._generate_timeout_wrapper())
-            f.write("\n\n")
-            
-            # Write main evaluate function
-            f.write(self._generate_evaluate_function())
-            f.write("\n\n")
-            
-            # Write CLI main block
-            f.write(self._generate_main_block())
-        
-        return self.out_path
+    def _generate_function_source(self, func: Callable) -> str:
+        """Generate source code for a function."""
+        try:
+            source = inspect.getsource(func)
+            # Remove any leading indentation
+            lines = source.split('\n')
+            if lines:
+                # Find minimum indentation (excluding empty lines)
+                min_indent = min(
+                    (len(line) - len(line.lstrip()) 
+                     for line in lines if line.strip()),
+                    default=0
+                )
+                # Remove that indentation from all lines
+                dedented = '\n'.join(
+                    line[min_indent:] if len(line) > min_indent else line
+                    for line in lines
+                )
+                return dedented
+            return source
+        except Exception as e:
+            return f"# Could not extract source for {func.__name__}: {e}\n"
     
-    def _generate_imports(self):
-        """Generate import statements for evaluator."""
-        imports = [
-            "import concurrent.futures",
-            "import numpy as np",
-            "import scipy",
-            "import trovolut as trv",
-        ]
+    def _generate_imports(self) -> str:
+        """Generate import statements."""
+        imports = """import concurrent.futures
+import numpy as np
+import scipy
+import trovolut as trv
+"""
         
-        # Extract imports from test generator
-        detected = _extract_imports_from_function(self.test_generator)
-        imports.extend(sorted(detected))
-        
-        # Remove duplicates while preserving order
-        seen = set()
-        unique_imports = []
-        for imp in imports:
-            if imp not in seen:
-                seen.add(imp)
-                unique_imports.append(imp)
-        
-        return "\n".join(unique_imports)
-    
-    def _generate_test_generator(self):
-        """Generate the test case generator function."""
-        src = inspect.getsource(self.test_generator)
-        src = textwrap.dedent(src).rstrip()
-        return src
-    
-    def _generate_custom_metric(self):
-        """Generate custom metric function."""
-        src = inspect.getsource(self.metric_function)
-        src = textwrap.dedent(src).rstrip()
-        return src
-    
-    def _generate_default_metric(self):
-        """Generate default metrics class (inherits from BaseMetrics)."""
-        func_name = self._dynamics_func_name
-        test_gen = self.test_generator.__name__
-        n_trials = self.n_trials
-        
-        return f'''class ProgramMetrics(trv.core.BaseMetrics):
-    """Metrics for measuring program performance against exact evolution."""
-    
-    def measure(self, dynamics_func, test_cases=None, **kwargs):
-        """Measure accuracy and performance of dynamics function."""
-        # Get test cases
-        if test_cases is None:
-            test_result = {test_gen}()
-            if isinstance(test_result, tuple) and len(test_result) == 2:
-                hams, psi0 = test_result
-                test_cases = [(hams, psi0, 1.0) for _ in range({n_trials})]
-            else:
-                test_cases = test_result
-        
-        errors = []
-        times = []
-        
-        for test_case in test_cases:
-            if len(test_case) == 3:
-                hams, psi0, t = test_case
-            else:
-                hams, psi0 = test_case
-                t = 1.0
+        # Add constraint imports based on what's actually used
+        if self.constraints is not None:
+            # Extract constraint class names from the repr
+            constraint_repr = repr(self.constraints)
             
-            # Measure time
-            import time as time_module
-            start = time_module.perf_counter()
-            psi_program = dynamics_func(hams, t, psi0)
-            elapsed = time_module.perf_counter() - start
-            times.append(elapsed)
+            # Detect which constraint classes are used
+            needed_classes = set()
+            if 'Group(' in constraint_repr:
+                needed_classes.add('Group')
+            if 'Time(' in constraint_repr:
+                needed_classes.add('Time')
+            if 'Error(' in constraint_repr:
+                needed_classes.add('Error')
+            if 'Memory(' in constraint_repr:
+                needed_classes.add('Memory')
+            if 'MatMulCount(' in constraint_repr:
+                needed_classes.add('MatMulCount')
             
-            # Compute exact evolution
-            H_full = sum(hams) if isinstance(hams, list) else hams
-            U_exact = scipy.linalg.expm(-1j * H_full * t)
-            psi_exact = U_exact @ psi0
-            
-            # Compute error
-            error = np.linalg.norm(psi_program - psi_exact)
-            errors.append(error)
+            # Only import what's needed
+            if needed_classes:
+                imports += "\n# Import constraint classes for constraint definitions\n"
+                imports += f"from trovolut.core.base_constraints import {', '.join(sorted(needed_classes))}\n"
         
-        # Aggregate measurements
-        mean_err = np.mean(errors)
-        acc = 1.0 / (1.0 + mean_err)
-        var_err = np.var(errors) / len(errors)
-        std_acc = np.sqrt(var_err) / (1.0 + mean_err)**2
+        return imports
+    
+    def _generate_default_metric(self) -> str:
+        """Generate the compute_accuracy function using trovolut.measure.Metrics."""
+        constraints_repr = "None"
+        if self.constraints is not None:
+            # Import constraints in the generated file
+            constraints_repr = repr(self.constraints)
         
-        return {{
-            "combined_score": acc,
-            "std_score": std_acc,
-            "error": mean_err,
-            "time": np.mean(times)
-        }}
-
-def compute_accuracy(program_path):
-    """Load program and measure metrics."""
+        code = f"""def compute_accuracy(program_path):
+    \"\"\"Load program and measure metrics using backend metrics class.\"\"\"
     import importlib.util
     spec = importlib.util.spec_from_file_location("program", program_path)
     module = importlib.util.module_from_spec(spec)
     spec.loader.exec_module(module)
     
-    # Create metrics instance
-    metrics = ProgramMetrics()
+    # Set backend and access the injected measure module
+    trv.set_backend('{self.backend}')
+    Metrics = trv.measure.Metrics
+    
+    metrics = Metrics(
+        constraints={constraints_repr},
+        test_generator=get_test_cases,
+        exact_fn=exact_evolution,
+        n_trials={self.n_trials}
+    )
     
     # Measure using the program's function
-    result = metrics(getattr(module, "{func_name}"))
-    return result'''
+    result = metrics(getattr(module, "run_dynamics"))
     
-    def _generate_timeout_wrapper(self):
+    # Let constraints evaluate the results and add details
+    if metrics.constraints:
+        constraints = metrics.constraints
+        
+        # Unwrap list if it contains a single Group
+        if isinstance(constraints, list) and len(constraints) == 1:
+            constraints = constraints[0]
+        
+        # Use Group's evaluate method if it's a Group
+        if isinstance(constraints, Group):
+            eval_result = constraints.evaluate(result)
+            result.update(eval_result)
+        else:
+            # Single constraint or list of constraints
+            if not isinstance(constraints, list):
+                constraints = [constraints]
+            
+            all_satisfied = True
+            details = {{}}
+            for constraint in constraints:
+                cr = constraint.evaluate(result)
+                details[cr.name] = {{
+                    'value': cr.value,
+                    'score': cr.score,
+                    'satisfied': cr.satisfied
+                }}
+                if not cr.satisfied:
+                    all_satisfied = False
+            
+            result['all_satisfied'] = all_satisfied
+            result['details'] = details
+    
+    return result
+"""
+        return code
+    
+    def _generate_timeout_wrapper(self) -> str:
         """Generate timeout wrapper function."""
-        timeout = self.timeout
-        return f'''def run_with_timeout(func, args=(), kwargs=None, timeout_seconds={timeout}):
-    """Execute function with timeout."""
+        return """def run_with_timeout(func, args=(), kwargs=None, timeout_seconds=30):
+    \"\"\"Execute function with timeout.\"\"\"
     if kwargs is None:
-        kwargs = {{}}
+        kwargs = {}
     
     with concurrent.futures.ThreadPoolExecutor(max_workers=1) as executor:
         future = executor.submit(func, *args, **kwargs)
         try:
             return future.result(timeout=timeout_seconds)
         except concurrent.futures.TimeoutError:
-            raise TimeoutError(f"Function timed out after {{timeout_seconds}} seconds")'''
+            raise TimeoutError(f"Function timed out after {timeout_seconds} seconds")
+"""
     
-    def _generate_evaluate_function(self):
-        """Generate main evaluate function for OpenEvolve."""
-        metric_name = self.metric_function.__name__ if self.metric_function else "compute_accuracy"
-        timeout = self.timeout
-        
-        return f'''def evaluate(program_path):
-    """OpenEvolve evaluator with timeout and error handling."""
+    def _generate_evaluate_function(self) -> str:
+        """Generate the main evaluate function."""
+        code = f"""def evaluate(program_path):
+    \"\"\"OpenEvolve evaluator with timeout and error handling.\"\"\"
     try:
         result = run_with_timeout(
-            {metric_name},
+            compute_accuracy,
             args=(program_path,),
-            timeout_seconds={timeout},
+            timeout_seconds={self.timeout},
         )
         
         combined = float(result.get("combined_score", -100.0))
         std = float(result.get("std_score", 0.0))
+        all_satisfied = result.get("all_satisfied", True)
+        details = result.get("details", {{}})
         
         return {{
             "combined_score": combined,
             "std_score": std,
+            "all_satisfied": all_satisfied,
+            "details": details,
+            "time": result.get("time", 0.0),
+            "error": result.get("error", 0.0),
+            "memory_peak_bytes": result.get("memory_peak_bytes", 0),
         }}
     
     except Exception as e:
@@ -273,15 +323,93 @@ def compute_accuracy(program_path):
         return {{
             "combined_score": -100.0,
             "std_score": 0.0,
-        }}'''
+            "all_satisfied": False,
+            "details": {{}},
+            "time": 0.0,
+            "error": float('inf'),
+            "memory_peak_bytes": 0,
+        }}
+
+# Alias for direct calling: evaluator(path) same as evaluate(path)
+evaluator = evaluate
+"""
+        return code
     
-    def _generate_main_block(self):
-        """Generate CLI main block."""
-        return '''if __name__ == "__main__":
-    import argparse
-    parser = argparse.ArgumentParser()
-    parser.add_argument("--program_path", type=str, required=True)
-    args = parser.parse_args()
-    result = evaluate(args.program_path)
-    print(f"combined_score: {result['combined_score']}")
-    print(f"std_score: {result['std_score']}")'''
+    def _generate_main_block(self) -> str:
+        """Generate the CLI main block."""
+        return """
+if __name__ == "__main__":
+    import sys
+    
+    # Don't run CLI in Jupyter/IPython or when exec'd
+    try:
+        # Check if we're in IPython/Jupyter
+        get_ipython()
+        _in_notebook = True
+    except NameError:
+        _in_notebook = False
+    
+    # Also check if running via ipykernel
+    if 'ipykernel_launcher' in sys.argv[0]:
+        _in_notebook = True
+    
+    # Only run CLI if not in notebook and arguments are provided
+    if not _in_notebook and len(sys.argv) > 1:
+        import argparse
+        parser = argparse.ArgumentParser()
+        parser.add_argument("--program_path", type=str, required=True)
+        args = parser.parse_args()
+        result = evaluate(args.program_path)
+        print(f"combined_score: {result['combined_score']}")
+        print(f"std_score: {result['std_score']}")
+"""
+    
+    def build(self) -> str:
+        """
+        Generate the evaluator file.
+        
+        Returns:
+            Path to the generated evaluator file
+        """
+        parts = []
+        
+        # 1. Imports
+        parts.append(self._generate_imports())
+        
+        # 2. Helper function dependencies (auto-detected)
+        if self._function_dependencies:
+            parts.append("\n# Helper functions (auto-detected dependencies)")
+            for func_name, func in self._function_dependencies.items():
+                parts.append(self._generate_function_source(func))
+                parts.append("")  # Blank line between functions
+        
+        # 3. Test generator
+        if self.test_generator:
+            parts.append(self._generate_function_source(self.test_generator))
+            parts.append("")
+        
+        # 4. Exact evolution function
+        if self.exact_fn:
+            parts.append(self._generate_function_source(self.exact_fn))
+            parts.append("")
+        
+        # 5. Metric computation
+        parts.append(self._generate_default_metric())
+        parts.append("")
+        
+        # 6. Timeout wrapper
+        parts.append(self._generate_timeout_wrapper())
+        parts.append("")
+        
+        # 7. Main evaluate function
+        parts.append(self._generate_evaluate_function())
+        
+        # 8. CLI main block
+        parts.append(self._generate_main_block())
+        
+        # Write to file
+        content = "\n".join(parts)
+        self.out_path.parent.mkdir(parents=True, exist_ok=True)
+        self.out_path.write_text(content, encoding="utf-8")
+        
+        return str(self.out_path)
