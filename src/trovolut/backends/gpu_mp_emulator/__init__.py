@@ -14,20 +14,29 @@ Key Features:
 
 Core Modules:
 
-- `dynamics`: Mixed-precision evolution (unified API: evolve(hamiltonian, state, time))
-- `dynamics`: Mixed-precision evolution and low-level Trotter components
-- `constraints`: GPU-specific constraints (including DynamicsMemory)
-- `measure`: CostAnalyzer, SpacetimeCost for memory/depth
+- `dynamics`: Mixed-precision evolution methods (Trotter, QDrift, Taylor, Pade)
+  All inherit from MPEvolution and share the same precision infrastructure.
+- `constraints`: GPU-specific constraints (SpaceCost, TimeCost, SpaceTimeCost, DynamicsMemory, ...)
+- `measure`: Unified Metrics class, CostProfile, CostAnalyzer (low-level)
 - `hamsim`: Hamiltonian simulation utilities
 
 Example (unified API, no manual quantization):
     ```python
-    from trovolut.backends.gpu_mp_emulator.dynamics import MixedPrecisionTrotterEvolution, Precision
-    dyn = MixedPrecisionTrotterEvolution(
-        trotter_steps=100,
-        precision_schedule=[Precision.FP32, Precision.FP16, Precision.FP8_E4M3],  # per term
+    from trovolut.backends.gpu_mp_emulator.dynamics import (
+        MPTrotterEvolution, MPPadeEvolution, Precision,
     )
-    state = dyn.evolve(hamiltonian, psi0, time=1.0)
+    from trovolut.backends.gpu_mp_emulator.measure import Metrics
+    from trovolut.backends.gpu_mp_emulator.constraints import SpaceCost, TimeCost
+
+    dyn = MPTrotterEvolution(
+        trotter_steps=100,
+        precision_schedule=[Precision.FP32, Precision.FP16, Precision.FP8_E4M3],
+    )
+    metrics = Metrics(
+        constraints=[SpaceCost(max_memory_bytes=50e6), TimeCost(max_flops=1e12)],
+        test_generator=lambda: (hamiltonian, psi0, 1.0),
+    )
+    result = metrics(dyn)
     ```
 """
 

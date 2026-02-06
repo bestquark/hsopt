@@ -4,8 +4,8 @@ Backend registry and availability checking for trovolut.
 This module provides a plugin-style system for different computational backends:
 
 - **cpu**: Dynamics methods (ExactEvolution, TrotterEvolution, QDriftEvolution) that work with any array backend
-- **gpu**: GPU-specific tools (evaluator) for NVIDIA GPUs with cupynumeric/CUDA Quantum
-- **qpu**: QPU-specific tools (circuit compilation, hardware execution) via Qiskit/Cirq/CUDA Quantum
+- **gpu**: GPU-accelerated dynamics (ExactEvolution, TrotterEvolution, QDriftEvolution) for NVIDIA GPUs
+- **qpu**: QPU dynamics (TrotterEvolution, QDriftEvolution) via circuit compilation on quantum hardware
 - **gpu-mp-emulator**: Mixed-precision emulator for studying quantization effects
 
 Dynamics methods are hardware-agnostic - just pass NumPy arrays for CPU or cupynumeric arrays for GPU.

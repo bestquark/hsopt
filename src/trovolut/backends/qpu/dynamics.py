@@ -1,69 +1,84 @@
 """
 QPU dynamics implementations using CUDA Quantum.
 
-This module provides circuit-based Hamiltonian simulation for quantum hardware.
+Class names mirror the CPU/GPU backends so that ``trv.set_backend('qpu')``
+gives a consistent API.  QPU methods compile product formulas into quantum
+circuits for execution on real quantum hardware or high-performance simulators.
 """
 
-from trovolut.core.base_dynamics import BaseDynamics
+from trovolut.core.base_dynamics import BaseDynamics, ProductFormula, SuzukiTrotter
 
 
-class QPUDynamics(BaseDynamics):
+class TrotterEvolution(BaseDynamics):
     """
-    QPU-based quantum dynamics implementation.
-    
-    Uses CUDA Quantum for circuit compilation and execution on:
-        - Real quantum hardware
-        - High-performance quantum simulators
-        - Noise models for NISQ devices
-    
-    Methods:
-        - Trotterization (first-order, second-order, higher-order)
-        - Product formula decomposition
-        - Hamiltonian simulation circuits
+    QPU-based Suzuki-Trotter evolution via circuit compilation.
+
+    QPU counterpart of ``trovolut.backends.cpu.dynamics.TrotterEvolution``.
+    Compiles the product formula into a quantum circuit and executes it on
+    the specified CUDA Quantum target.
+
+    Parameters
+    ----------
+    trotter_steps : int
+        Number of Trotter steps (default 10).
+    formula : ProductFormula
+        Product formula instance (default ``SuzukiTrotter()``).
+    target : str
+        CUDA Quantum target backend (default ``"nvidia-mgpu"``).
+    shots : int
+        Number of measurement shots (default 1000).
     """
-    
-    def __init__(self, target="nvidia-mgpu", shots=1000):
-        """
-        Initialize QPU dynamics.
-        
-        Args:
-            target: CUDA Quantum target backend
-            shots: Number of measurement shots
-        """
+
+    def __init__(
+        self,
+        trotter_steps: int = 10,
+        formula: ProductFormula | None = None,
+        target: str = "nvidia-mgpu",
+        shots: int = 1000,
+    ):
+        self.trotter_steps = trotter_steps
+        self.formula = formula if formula is not None else SuzukiTrotter()
         self.target = target
         self.shots = shots
-        self._validate_cudaq()
-    
-    def _validate_cudaq(self):
-        """Check if CUDA Quantum is available."""
-        try:
-            import cudaq
-        except ImportError:
-            raise RuntimeError(
-                "CUDA Quantum not available. Install with: uv pip install trovolut[qpu]"
-            )
-    
+
     def evolve(self, hamiltonian, initial_state, time, **kwargs):
-        """
-        Evolve quantum state using circuit-based methods.
-        
-        Args:
-            hamiltonian: Hamiltonian operator (will be compiled to circuits)
-            initial_state: Initial quantum state preparation circuit
-            time: Evolution time
-            **kwargs: Backend-specific options (e.g., trotter_steps)
-            
-        Returns:
-            Measurement results or state vector (depending on target)
-        """
-        import cudaq
-        
-        # TODO: Implement circuit compilation and execution
-        # This is a placeholder for the actual implementation
         raise NotImplementedError(
-            "QPU dynamics implementation in progress. "
+            "QPU TrotterEvolution is not yet implemented. "
             "Will include Hamiltonian -> circuit compilation."
         )
 
 
-__all__ = ["QPUDynamics"]
+class QDriftEvolution(BaseDynamics):
+    """
+    QPU-based qDRIFT evolution via randomized circuit compilation.
+
+    QPU counterpart of ``trovolut.backends.cpu.dynamics.QDriftEvolution``.
+
+    Parameters
+    ----------
+    n_samples : int
+        Number of random samples (default 100).
+    target : str
+        CUDA Quantum target backend (default ``"nvidia-mgpu"``).
+    shots : int
+        Number of measurement shots (default 1000).
+    """
+
+    def __init__(
+        self,
+        n_samples: int = 100,
+        target: str = "nvidia-mgpu",
+        shots: int = 1000,
+    ):
+        self.n_samples = n_samples
+        self.target = target
+        self.shots = shots
+
+    def evolve(self, hamiltonian, initial_state, time, **kwargs):
+        raise NotImplementedError(
+            "QPU QDriftEvolution is not yet implemented. "
+            "Will include randomized circuit compilation."
+        )
+
+
+__all__ = ["TrotterEvolution", "QDriftEvolution"]

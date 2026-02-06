@@ -4,8 +4,8 @@ Core abstractions for trovolut - backend-agnostic interfaces.
 This module provides the base classes that all backends implement:
 - BaseDynamics: Time evolution of quantum systems
 - BaseMetrics: Backend-specific metrics measurement interface
-- BaseEval: Performance evaluation (legacy)
 - Constraint system: Composable evaluation constraints (Group)
+- Product formulas: Suzuki-Trotter decompositions (ProductFormula, suzuki)
 - Types: Shared data structures
 """
 
@@ -21,6 +21,13 @@ from trovolut.core.base_constraints import (
     Time,
     Error,
     Custom,
+)
+from trovolut.core.base_dynamics import (
+    ProductFormula,
+    LieTrotter,
+    SuzukiTrotter,
+    SuzukiHighOrder,
+    suzuki,
 )
 from trovolut.core.types import (
     Backend,
@@ -44,6 +51,12 @@ __all__ = [
     "Time",
     "Error",
     "Custom",
+    # Product formulas
+    "ProductFormula",
+    "LieTrotter",
+    "SuzukiTrotter",
+    "SuzukiHighOrder",
+    "suzuki",
     # Types
     "Backend",
     "EvaluationResult",

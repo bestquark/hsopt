@@ -1,66 +1,82 @@
 """
 GPU-accelerated dynamics implementations using cupynumeric and CUDA Quantum.
 
-This module provides matrix exponential methods optimized for NVIDIA GPUs.
+Class names mirror the CPU backend so that ``trv.set_backend('gpu')`` gives
+the same API as ``trv.set_backend('cpu')`` -- the GPU backend simply runs
+the operations on NVIDIA GPUs.
 """
 
-from trovolut.core.base_dynamics import BaseDynamics
+from trovolut.core.base_dynamics import BaseDynamics, ProductFormula, SuzukiTrotter
 
 
-class GPUDynamics(BaseDynamics):
+class ExactEvolution(BaseDynamics):
     """
-    GPU-accelerated quantum dynamics implementation.
-    
-    Uses cupynumeric and CUDA Quantum for efficient matrix operations on NVIDIA GPUs.
-    
-    Methods:
-        - Padé approximation
-        - Taylor series expansion
-        - Krylov subspace methods
-        - Mixed-precision Trotter decomposition
+    GPU-accelerated exact evolution via matrix exponential.
+
+    GPU counterpart of ``trovolut.backends.cpu.dynamics.ExactEvolution``.
+    Uses cupynumeric for GPU-accelerated matrix operations.
     """
-    
-    def __init__(self, backend="cupynumeric"):
-        """
-        Initialize GPU dynamics.
-        
-        Args:
-            backend: GPU backend to use ('cupynumeric', 'cudaq')
-        """
-        self.backend = backend
-        self._validate_gpu_availability()
-    
-    def _validate_gpu_availability(self):
-        """Check if GPU is available."""
-        try:
-            import cupynumeric as cn
-            # Test GPU access with cupynumeric
-            # cupynumeric automatically uses GPU if available
-            _ = cn.array([1.0])
-        except Exception as e:
-            raise RuntimeError(f"GPU not accessible: {e}")
-    
+
+    def __init__(self):
+        pass
+
     def evolve(self, hamiltonian, initial_state, time, **kwargs):
-        """
-        Evolve quantum state using GPU-accelerated methods.
-        
-        Args:
-            hamiltonian: Hamiltonian operator (cupynumeric array)
-            initial_state: Initial quantum state (cupynumeric array)
-            time: Evolution time
-            **kwargs: Backend-specific options
-            
-        Returns:
-            Final quantum state
-        """
-        import cupynumeric as cn
-        
-        # TODO: Implement full GPU evolution logic
-        # This is a placeholder for the actual implementation
         raise NotImplementedError(
-            "GPU dynamics implementation in progress. "
-            "See trovolut.backends.gpu.templates for code generation templates."
+            "GPU ExactEvolution is not yet implemented. "
+            "Use trv.set_backend('cpu') for CPU-based exact evolution."
         )
 
 
-__all__ = ["GPUDynamics"]
+class TrotterEvolution(BaseDynamics):
+    """
+    GPU-accelerated Suzuki-Trotter product formula evolution.
+
+    GPU counterpart of ``trovolut.backends.cpu.dynamics.TrotterEvolution``.
+    Accepts the same ``ProductFormula`` objects and parameters.
+
+    Parameters
+    ----------
+    trotter_steps : int
+        Number of Trotter steps (default 10).
+    formula : ProductFormula
+        Product formula instance (default ``SuzukiTrotter()``).
+    """
+
+    def __init__(
+        self,
+        trotter_steps: int = 10,
+        formula: ProductFormula | None = None,
+    ):
+        self.trotter_steps = trotter_steps
+        self.formula = formula if formula is not None else SuzukiTrotter()
+
+    def evolve(self, hamiltonian, initial_state, time, **kwargs):
+        raise NotImplementedError(
+            "GPU TrotterEvolution is not yet implemented. "
+            "Use trv.set_backend('cpu') for CPU-based Trotter evolution."
+        )
+
+
+class QDriftEvolution(BaseDynamics):
+    """
+    GPU-accelerated qDRIFT randomized product formula evolution.
+
+    GPU counterpart of ``trovolut.backends.cpu.dynamics.QDriftEvolution``.
+
+    Parameters
+    ----------
+    n_samples : int
+        Number of random samples (default 100).
+    """
+
+    def __init__(self, n_samples: int = 100):
+        self.n_samples = n_samples
+
+    def evolve(self, hamiltonian, initial_state, time, **kwargs):
+        raise NotImplementedError(
+            "GPU QDriftEvolution is not yet implemented. "
+            "Use trv.set_backend('cpu') for CPU-based qDRIFT evolution."
+        )
+
+
+__all__ = ["ExactEvolution", "TrotterEvolution", "QDriftEvolution"]
