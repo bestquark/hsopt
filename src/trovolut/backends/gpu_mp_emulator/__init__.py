@@ -16,7 +16,7 @@ Core Modules:
 
 - `dynamics`: Mixed-precision evolution methods (Trotter, QDrift, Taylor, Pade)
   All inherit from MPEvolution and share the same precision infrastructure.
-- `constraints`: GPU-specific constraints (SpaceCost, TimeCost, SpaceTimeCost, DynamicsMemory, ...)
+- `constraints`: Cost constraints (MemoryCost, FlopsCost, SpaceTimeCost, MatMulCount)
 - `measure`: Unified Metrics class, CostProfile, CostAnalyzer (low-level)
 - `hamsim`: Hamiltonian simulation utilities
 
@@ -26,14 +26,14 @@ Example (unified API, no manual quantization):
         MPTrotterEvolution, MPPadeEvolution, Precision,
     )
     from trovolut.backends.gpu_mp_emulator.measure import Metrics
-    from trovolut.backends.gpu_mp_emulator.constraints import SpaceCost, TimeCost
+    from trovolut.backends.gpu_mp_emulator.constraints import MemoryCost, FlopsCost
 
     dyn = MPTrotterEvolution(
         trotter_steps=100,
         precision_schedule=[Precision.FP32, Precision.FP16, Precision.FP8_E4M3],
     )
     metrics = Metrics(
-        constraints=[SpaceCost(max_memory_bytes=50e6), TimeCost(max_flops=1e12)],
+        constraints=[MemoryCost(max_memory_bytes=50e6), FlopsCost(max_flops=1e12)],
         test_generator=lambda: (hamiltonian, psi0, 1.0),
     )
     result = metrics(dyn)

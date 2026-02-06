@@ -99,7 +99,7 @@ def set_backend(backend_name: str) -> None:
     _backend_modules = {}
     
     # Try to import common submodules
-    for submodule in ['dynamics', 'measure', 'constraints', 'utils']:
+    for submodule in ['dynamics', 'measure', 'constraints', 'hardware', 'utils']:
         try:
             mod = import_module(f"{backend_module_path}.{submodule}")
             _backend_modules[submodule] = mod

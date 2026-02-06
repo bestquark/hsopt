@@ -27,7 +27,7 @@ class CostProfile:
     Method-agnostic cost profile for any mixed-precision evolution.
 
     Returned by ``MPEvolution.cost_profile()`` and consumed by
-    ``SpaceCost``, ``TimeCost``, ``SpaceTimeCost`` constraints via the
+    ``MemoryCost``, ``FlopsCost``, ``SpaceTimeCost`` constraints via the
     ``Metrics`` class.
     """
 
@@ -121,7 +121,7 @@ class Metrics(BaseMetrics):
             MPTrotterEvolution, Precision,
         )
         from trovolut.backends.gpu_mp_emulator.measure import Metrics
-        from trovolut.backends.gpu_mp_emulator.constraints import SpaceCost, TimeCost
+        from trovolut.backends.gpu_mp_emulator.constraints import MemoryCost, FlopsCost
 
         dyn = MPTrotterEvolution(
             trotter_steps=100,
@@ -129,7 +129,7 @@ class Metrics(BaseMetrics):
         )
 
         metrics = Metrics(
-            constraints=[SpaceCost(max_memory_bytes=50*1024*1024), TimeCost(max_flops=1e12)],
+            constraints=[MemoryCost(max_memory_bytes=50*1024*1024), FlopsCost(max_flops=1e12)],
             test_generator=lambda: (H_qubit, psi0, 1.0),
         )
         result = metrics(dyn)

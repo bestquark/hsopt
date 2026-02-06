@@ -1,33 +1,51 @@
 """
-GPU backend for trovolut - Hardware-specific tools for NVIDIA GPUs.
+GPU backend for trovolut -- real GPU execution via cupynumeric + Legate.
 
-This backend provides GPU-specific tools for profiling and monitoring:
+This backend mirrors the CPU backend API but executes all linear-algebra
+operations on NVIDIA GPUs via **cupynumeric**.  Programs are launched via
+the **Legate** runtime, and profiling is done with **legion_prof**.
 
-- GPUEvaluator: CUDA profiling and benchmarking
+Modules
+-------
+dynamics
+    ``ExactEvolution``, ``TrotterEvolution``, ``QDriftEvolution`` --
+    same API as the CPU backend, running on GPU arrays.
+measure
+    ``Metrics`` -- runs dynamics under Legate with ``--profile`` and
+    returns real GPU metrics (kernel time, VRAM, concurrency).
+profiler
+    ``LegateProfiler`` -- low-level profiling infrastructure
+    (run -> load profile -> query DuckDB).
+constraints
+    ``LegateGPUSeconds``, ``LegateFramebuffer``, ``LegateMakespan``,
+    ``LegateConcurrency`` -- constraint classes for the Legate profiler
+    metrics.
+utils
+    ``to_gpu``, ``to_cpu``, ``is_gpu_array`` -- array conversion helpers.
 
-For dynamics, use the CPU backend methods with cupynumeric arrays - they run on GPU automatically.
+Requirements
+------------
+- cupynumeric (``pip install cupynumeric``)
+- legate runtime (for GPU execution and profiling)
+- legion_prof CLI (for profile analysis)
+- duckdb (for profile queries)
 
-Requirements:
+Example::
 
-- Linux operating system
-- NVIDIA GPU with CUDA support
-- cupynumeric and CUDA Quantum Python packages
+    import trovolut as trv
+    trv.set_backend("gpu")
 
-Install with: `uv pip install trovolut[gpu]`
+    from trovolut.dynamics import TrotterEvolution
+    from trovolut.measure import Metrics
+    from trovolut.constraints import LegateGPUSeconds
 
-Example:
-    ```python
-    # For dynamics on GPU, use CPU methods with cupynumeric arrays
-    import cupynumeric as cn
-    from trovolut.backends.cpu.dynamics import TrotterEvolution
-    
-    trotter = TrotterEvolution(order=2)
-    H_gpu = cn.asarray(H)  # Move to GPU
-    result = trotter.evolve(H_gpu, psi0_gpu, time=1.0)  # Runs on GPU!
-    
-    # Use GPU-specific tools for profiling
-    from trovolut.backends.gpu.measure import Metrics
-    ```
+    dyn = TrotterEvolution(trotter_steps=100)
+    metrics = Metrics(
+        constraints=[LegateGPUSeconds(max_gpu_seconds=5.0)],
+        test_generator=my_test_gen,
+        gpus=4,
+    )
+    result = metrics(dyn)
 """
 
 import sys
@@ -39,28 +57,30 @@ _missing_packages: list[str] = []
 
 
 def is_available() -> bool:
-    """Check if GPU backend dependencies are available."""
+    """Check if GPU backend dependencies are available.
+
+    The GPU backend requires only ``cupynumeric`` as its core dependency.
+    Optional packages (``duckdb``, ``legate``) are needed for profiling
+    but are not required for basic dynamics execution.
+    """
     global _available, _missing_packages
-    
+
     if _available is not None:
         return _available
-    
-    # Check platform
+
+    # Check platform -- Legate currently requires Linux
     if sys.platform != "linux":
         _available = False
         _missing_packages = [f"requires Linux (current: {sys.platform})"]
         return False
-    
-    # Check required packages
-    required = ["cupynumeric", "cudaq", "pynvml"]
+
+    # Only cupynumeric is essential for dynamics
     _missing_packages = []
-    
-    for pkg in required:
-        try:
-            __import__(pkg)
-        except ImportError:
-            _missing_packages.append(pkg)
-    
+    try:
+        __import__("cupynumeric")
+    except ImportError:
+        _missing_packages.append("cupynumeric")
+
     _available = len(_missing_packages) == 0
     return _available
 

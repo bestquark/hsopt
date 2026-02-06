@@ -29,6 +29,10 @@ from trovolut.core.base_dynamics import (
     SuzukiHighOrder,
     suzuki,
 )
+from trovolut.core.base_hardware import (
+    BaseHardware,
+    HardwareCluster,
+)
 from trovolut.core.types import (
     Backend,
     EvaluationResult,
@@ -57,6 +61,9 @@ __all__ = [
     "SuzukiTrotter",
     "SuzukiHighOrder",
     "suzuki",
+    # Hardware
+    "BaseHardware",
+    "HardwareCluster",
     # Types
     "Backend",
     "EvaluationResult",

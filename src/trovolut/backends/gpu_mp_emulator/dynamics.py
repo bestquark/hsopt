@@ -425,7 +425,7 @@ class MPEvolution(BaseDynamics):
 
     All subclasses share the same precision infrastructure and support
     per-term precision schedules.  The ``cost_profile()`` method returns a
-    standardised ``CostProfile`` so that ``SpaceCost`` / ``TimeCost`` /
+    standardised ``CostProfile`` so that ``MemoryCost`` / ``FlopsCost`` /
     ``SpaceTimeCost`` constraints work interchangeably across methods.
 
     Subclasses: ``MPTrotterEvolution``, ``MPQDriftEvolution``,
