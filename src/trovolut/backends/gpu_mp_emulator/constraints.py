@@ -7,6 +7,7 @@ Hardware-agnostic constraints (Time, Error, Custom) are in:
 This module contains GPU-specific constraints:
     - GPUTime: GPU compute time (space-time product)
     - DynamicsMemory: Peak memory (bytes) for one dynamics method (emulator)
+    - MatMulCount: Matrix multiplication operation count (emulator)
     - LegateGPUSeconds: GPU kernel time via Legion profiler
     - LegateFramebuffer: GPU VRAM usage via Legion profiler
     - LegateMakespan: Wall-clock makespan via Legion profiler
@@ -94,6 +95,34 @@ class DynamicsMemory(Constraint):
     
     def formula(self) -> str:
         return _formula_str("memory_bytes", self.max_memory_bytes, self.score_fn, self.hard, self.hard_penalty, self.weight)
+
+
+# Emulator-specific static operation counter
+class MatMulCount(Constraint):
+    """Constraint on number of matrix multiplication operations."""
+    
+    def __init__(self, max_count: int = 100, weight: float = 1.0, hard: bool = False,
+                 hard_penalty: float = -100.0, score_fn: str = "linear"):
+        super().__init__("matmul_count", weight, hard, hard_penalty)
+        self.max_count = max_count
+        self.score_fn = score_fn
+    
+    def extract(self, m: Dict[str, Any]) -> float:
+        return float(m.get("matmul_count", 0))
+    
+    def score(self, v: float) -> float:
+        return _score_fn(v, self.max_count, self.score_fn)
+    
+    def is_satisfied(self, v: float) -> bool:
+        return v <= self.max_count
+    
+    def to_prompt(self) -> str:
+        if self.hard:
+            return f"Matrix multiplications MUST stay below {self.max_count} (hard requirement)."
+        return f"Minimize matrix multiplications (target: <{self.max_count}, weight: {self.weight})."
+    
+    def formula(self) -> str:
+        return _formula_str("matmul_count", self.max_count, self.score_fn, self.hard, self.hard_penalty, self.weight)
 
 
 # =============================================================================
@@ -242,6 +271,7 @@ __all__ = [
     # GPU-specific constraints (defined here)
     "GPUTime",
     "DynamicsMemory",
+    "MatMulCount",
     "LegateGPUSeconds",
     "LegateFramebuffer",
     "LegateMakespan",

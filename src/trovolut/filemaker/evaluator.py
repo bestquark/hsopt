@@ -209,12 +209,14 @@ import trovolut as trv
                 needed_classes.add('EmulatorMemory')
             
             # Only import what's needed (base_constraints vs gpu_mp_emulator)
-            base_only = needed_classes - {'EmulatorMemory'}
+            base_only = needed_classes - {'EmulatorMemory', 'MatMulCount'}
             if base_only:
                 imports += "\n# Import constraint classes for constraint definitions\n"
                 imports += f"from trovolut.core.base_constraints import {', '.join(sorted(base_only))}\n"
             if 'EmulatorMemory' in needed_classes:
                 imports += "from trovolut.backends.gpu_mp_emulator.constraints import EmulatorMemory\n"
+            if 'MatMulCount' in needed_classes:
+                imports += "from trovolut.backends.gpu_mp_emulator.constraints import MatMulCount\n"
         
         return imports
     

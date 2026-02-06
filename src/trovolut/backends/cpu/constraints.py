@@ -7,7 +7,6 @@ Hardware-agnostic constraints (Time, Error, Custom) are in:
 This module contains CPU-specific constraints:
     - CPUTime: CPU execution time (user + system)
     - Memory: RAM usage (resident set size)
-    - MatMulCount: Matrix multiplication operation count
 """
 from __future__ import annotations
 from typing import Any, Dict
@@ -90,33 +89,6 @@ class Memory(Constraint):
         return _formula_str("memory", self.max_mb, self.score_fn, self.hard, self.hard_penalty, self.weight)
 
 
-class MatMulCount(Constraint):
-    """Constraint on number of matrix multiplication operations."""
-    
-    def __init__(self, max_count: int = 100, weight: float = 1.0, hard: bool = False,
-                 hard_penalty: float = -100.0, score_fn: str = "linear"):
-        super().__init__("matmul_count", weight, hard, hard_penalty)
-        self.max_count = max_count
-        self.score_fn = score_fn
-    
-    def extract(self, m: Dict[str, Any]) -> float:
-        return float(m.get("matmul_count", 0))
-    
-    def score(self, v: float) -> float:
-        return _score_fn(v, self.max_count, self.score_fn)
-    
-    def is_satisfied(self, v: float) -> bool:
-        return v <= self.max_count
-    
-    def to_prompt(self) -> str:
-        if self.hard:
-            return f"Matrix multiplications MUST stay below {self.max_count} (hard requirement)."
-        return f"Minimize matrix multiplications (target: <{self.max_count}, weight: {self.weight})."
-    
-    def formula(self) -> str:
-        return _formula_str("matmul_count", self.max_count, self.score_fn, self.hard, self.hard_penalty, self.weight)
-
-
 # =============================================================================
 # Exports
 # =============================================================================
@@ -133,5 +105,4 @@ __all__ = [
     # CPU-specific constraints (defined here)
     "CPUTime",
     "Memory",
-    "MatMulCount",
 ]

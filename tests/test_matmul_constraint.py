@@ -3,11 +3,12 @@ Test the MatMulCount constraint and operation counter.
 """
 import numpy as np
 import trovolut as trv
+from trovolut.backends.gpu_mp_emulator.constraints import MatMulCount
 
 
 def test_matmul_count_constraint():
     """Test MatMulCount constraint creation and evaluation."""
-    constraint = trv.constraints.MatMulCount(max_count=10, weight=1.0, score_fn="linear")
+    constraint = MatMulCount(max_count=10, weight=1.0, score_fn="linear")
     
     # Test with acceptable count
     metrics = {"matmul_count": 5}
@@ -51,7 +52,7 @@ def test_operation_counter():
 def test_constraint_with_counter():
     """Test full integration of constraint with counter."""
     # Create constraint
-    constraint = trv.constraints.MatMulCount(max_count=5, weight=1.0, score_fn="linear")
+    constraint = MatMulCount(max_count=5, weight=1.0, score_fn="linear")
     
     # Setup counter
     counter = trv.utils.OperationCounter()
@@ -99,7 +100,7 @@ def compute(A, B, C):
 
 def test_constraint_formulas():
     """Test constraint formula generation."""
-    constraint = trv.constraints.MatMulCount(max_count=50, weight=1.5, score_fn="inverse")
+    constraint = MatMulCount(max_count=50, weight=1.5, score_fn="inverse")
     
     formula = constraint.formula()
     prompt = constraint.to_prompt()
@@ -114,7 +115,7 @@ def test_constraint_formulas():
 def test_constraint_set_with_matmul():
     """Test Group with MatMulCount."""
     constraints = trv.constraints.Group([
-        trv.constraints.MatMulCount(max_count=30, weight=1.0),
+        MatMulCount(max_count=30, weight=1.0),
         trv.constraints.Error(max_error=0.1, weight=2.0),
     ])
     
