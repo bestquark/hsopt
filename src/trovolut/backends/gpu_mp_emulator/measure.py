@@ -87,8 +87,8 @@ class SpacetimeCost:
     @property
     def effective_flops_adjusted(self) -> float:
         """FLOPs adjusted for precision (FP16 = 2x throughput on modern GPUs)."""
-        # Rough GPU throughput multipliers vs FP32
-        multipliers = {64: 0.5, 32: 1.0, 16: 2.0, 8: 4.0}
+        # Rough GPU throughput multipliers vs FP32 (4-bit as for FP8)
+        multipliers = {64: 0.5, 32: 1.0, 16: 2.0, 8: 4.0, 4: 4.0}
         adjusted = 0
         for term_name, term_cost in self.cost_by_term.items():
             mult = multipliers.get(term_cost.compute_bits, 1.0)
@@ -109,7 +109,7 @@ class DecompositionCostModel:
         Cost of scipy.linalg.expm via Padé approximation.
         Typically uses ~13 matrix multiplications for Padé(13,13).
         """
-        bytes_per_element = precision_bits // 8
+        bytes_per_element = max(1, precision_bits // 8)
         
         # expm stores: input matrix, scaled matrix, powers, Padé numerator/denominator
         auxiliary_matrices = 6  # rough estimate
@@ -124,7 +124,7 @@ class DecompositionCostModel:
     @staticmethod
     def taylor_cost(n: int, order: int, precision_bits: int) -> dict:
         """Cost of Taylor series: sum_{k=0}^{order} (-iHt)^k / k!"""
-        bytes_per_element = precision_bits // 8
+        bytes_per_element = max(1, precision_bits // 8)
         
         return {
             "matvec_count": order,      # One H|ψ⟩ per term
@@ -136,7 +136,7 @@ class DecompositionCostModel:
     @staticmethod
     def krylov_cost(n: int, krylov_dim: int, precision_bits: int) -> dict:
         """Cost of Krylov subspace method."""
-        bytes_per_element = precision_bits // 8
+        bytes_per_element = max(1, precision_bits // 8)
         m = min(krylov_dim, n)
         
         return {
@@ -152,7 +152,7 @@ class DecompositionCostModel:
     @staticmethod 
     def sparse_cost(n: int, nnz: int, order: int, precision_bits: int) -> dict:
         """Cost for sparse matrix methods."""
-        bytes_per_element = precision_bits // 8
+        bytes_per_element = max(1, precision_bits // 8)
         
         return {
             "matvec_count": order,
@@ -266,7 +266,8 @@ class CostAnalyzer:
         """Analyze cost of a single ExpTerm."""
         prec = term.precision
         bits = prec.compute.bits
-        bytes_per_element = bits // 8
+        # Emulated low-precision (e.g. 4-bit) still use at least 1 byte per element in practice
+        bytes_per_element = max(1, bits // 8)
         
         # Generator storage
         gen = term.get_generator(0) if not callable(term.generator) else None
@@ -334,6 +335,130 @@ class CostAnalyzer:
         
         simulator.n_steps = original_steps
         return results
+
+
+def cost_from_dynamics_config(
+    hamiltonian,
+    dynamics_evolution,
+    config=None,
+    state_dim: int | None = None,
+    **kwargs,
+) -> SpacetimeCost | None:
+    """
+    Compute SpacetimeCost for a dynamics method and schedule without running evolution.
+    Use when dynamics_evolution is MixedPrecisionTrotterEvolution (or any object
+    with get_simulator(hamiltonian, config, **kwargs) returning TrotterSimulator).
+    Puts cost.peak_memory_bytes in scope for EmulatorMemory constraint.
+    """
+    if not hasattr(dynamics_evolution, "get_simulator"):
+        return None
+    try:
+        sim = dynamics_evolution.get_simulator(hamiltonian, config=config, **kwargs)
+    except Exception:
+        return None
+    return CostAnalyzer().analyze(sim, state_dim=state_dim)
+
+
+# ============================================================
+# Metrics (for filemaker evaluator: time, error, memory_peak_bytes)
+# ============================================================
+
+from typing import Dict, Any
+from trovolut.core.base_metrics import BaseMetrics
+
+
+class Metrics(BaseMetrics):
+    """
+    Metrics for gpu-mp-emulator backend.
+    Measures time, error vs exact evolution, and memory (tracemalloc).
+    Spacetime cost (peak_memory_bytes from CostAnalyzer) is injected by the
+    generated evaluator when the program exposes an `evolution` object.
+    """
+
+    def __init__(
+        self,
+        constraints=None,
+        test_generator=None,
+        exact_fn=None,
+        n_trials=10,
+        timeout=30,
+    ):
+        super().__init__(
+            constraints=constraints,
+            test_generator=test_generator,
+            exact_fn=exact_fn,
+            n_trials=n_trials,
+            timeout=timeout,
+            backend="gpu-mp-emulator",
+        )
+
+    def measure(self, dynamics_func, **kwargs) -> Dict[str, Any]:
+        import time
+        import tracemalloc
+        import scipy.linalg as la
+
+        test_gen = kwargs.get("test_generator", self.test_generator)
+        exact_fn = kwargs.get("exact_fn", self.exact_fn)
+        n_trials = kwargs.get("n_trials", self.n_trials)
+
+        if not test_gen:
+            return {"error": "No test_generator provided", "combined_score": -100.0, "std_score": 0.0}
+
+        times = []
+        errors = []
+        memory_peaks = []
+
+        for _ in range(n_trials):
+            try:
+                test_case = test_gen()
+                if len(test_case) == 3:
+                    hams, psi0, t = test_case
+                elif len(test_case) == 2:
+                    hams, psi0 = test_case
+                    t = 1.0
+                else:
+                    return {"error": "test_generator must return (hams, psi0) or (hams, psi0, t)", "combined_score": -100.0, "std_score": 0.0}
+
+                tracemalloc.start()
+                start = time.perf_counter()
+                psi_final = dynamics_func(hams, t, psi0)
+                elapsed = time.perf_counter() - start
+                _, peak = tracemalloc.get_traced_memory()
+                tracemalloc.stop()
+
+                times.append(elapsed)
+                memory_peaks.append(peak)
+
+                if exact_fn:
+                    psi_exact = exact_fn(hams, t, psi0)
+                else:
+                    if hasattr(hams, "to_matrix"):
+                        H = hams.to_matrix()
+                    elif isinstance(hams, (list, tuple)):
+                        H = sum(hams)
+                    else:
+                        H = np.asarray(hams)
+                    if hasattr(H, "toarray"):
+                        H = H.toarray()
+                    psi_exact = la.expm(-1j * H * t) @ psi0
+                err = float(np.linalg.norm(psi_final - psi_exact))
+                errors.append(err)
+            except Exception as e:
+                tracemalloc.stop()
+                return {"error": str(e), "combined_score": -100.0, "std_score": 0.0, "time": 0.0, "error": float("inf")}
+
+        mean_time = float(np.mean(times))
+        mean_error = float(np.mean(errors))
+        mean_memory = float(np.mean(memory_peaks))
+
+        return {
+            "combined_score": 0.0,
+            "std_score": float(np.std(errors)) / (1.0 + mean_error) ** 2,
+            "time": mean_time,
+            "error": mean_error,
+            "memory_peak_bytes": mean_memory,
+            "peak_memory_bytes": mean_memory,
+        }
 
 
 # ============================================================

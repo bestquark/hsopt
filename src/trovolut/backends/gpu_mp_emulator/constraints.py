@@ -1,11 +1,12 @@
 """
-GPU-specific constraints for Legate/Legion profiling.
+GPU-specific constraints for Legate/Legion profiling and mixed-precision emulator.
 
 Hardware-agnostic constraints (Time, Error, Custom) are in:
     trovolut.core.base_constraints
 
 This module contains GPU-specific constraints:
     - GPUTime: GPU compute time (space-time product)
+    - DynamicsMemory: Peak memory (bytes) for one dynamics method (emulator)
     - LegateGPUSeconds: GPU kernel time via Legion profiler
     - LegateFramebuffer: GPU VRAM usage via Legion profiler
     - LegateMakespan: Wall-clock makespan via Legion profiler
@@ -66,6 +67,33 @@ class GPUTime(Constraint):
     def formula(self) -> str:
         var = f"gpu_time × {self.n_gpus}" if self.n_gpus > 1 else "gpu_time"
         return _formula_str(var, self.max_gpu_seconds, self.score_fn, self.hard, self.hard_penalty, self.weight)
+
+
+class DynamicsMemory(Constraint):
+    """Constraint on peak memory (bytes) used by one dynamics method (e.g. mixed-precision Trotter)."""
+    
+    def __init__(self, max_memory_bytes: float = 100 * 1024 * 1024, weight: float = 1.0,
+                 hard: bool = False, hard_penalty: float = -100.0, score_fn: str = "linear"):
+        super().__init__("memory_bytes", weight, hard, hard_penalty)
+        self.max_memory_bytes = max_memory_bytes
+        self.score_fn = score_fn
+    
+    def extract(self, m: Dict[str, Any]) -> float:
+        return float(m.get("memory_bytes", m.get("memory_peak_bytes", float("inf"))))
+    
+    def score(self, v: float) -> float:
+        return _score_fn(v, self.max_memory_bytes, self.score_fn)
+    
+    def is_satisfied(self, v: float) -> bool:
+        return v <= self.max_memory_bytes
+    
+    def to_prompt(self) -> str:
+        if self.hard:
+            return f"Dynamics memory MUST stay below {self.max_memory_bytes / (1024**2):.0f} MB (hard)."
+        return f"Minimize dynamics memory (target: <{self.max_memory_bytes / (1024**2):.0f} MB, weight: {self.weight})."
+    
+    def formula(self) -> str:
+        return _formula_str("memory_bytes", self.max_memory_bytes, self.score_fn, self.hard, self.hard_penalty, self.weight)
 
 
 # =============================================================================
@@ -196,6 +224,7 @@ TimeConstraint = Time
 ErrorConstraint = Error
 CustomConstraint = Custom
 GPUTimeConstraint = GPUTime
+DynamicsMemoryConstraint = DynamicsMemory
 LegateGPUSecondsConstraint = LegateGPUSeconds
 LegateFramebufferConstraint = LegateFramebuffer
 LegateMakespanConstraint = LegateMakespan
@@ -212,6 +241,7 @@ __all__ = [
     "Custom",
     # GPU-specific constraints (defined here)
     "GPUTime",
+    "DynamicsMemory",
     "LegateGPUSeconds",
     "LegateFramebuffer",
     "LegateMakespan",

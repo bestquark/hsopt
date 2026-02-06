@@ -14,18 +14,20 @@ Key Features:
 
 Core Modules:
 
-- `mp_trotter`: Mixed-precision Trotter framework
-- `simulate_quantization`: Quantization utilities
-- `mp_evals`: Mixed-precision evaluation functions
-- `constraints`: GPU-specific constraints
+- `dynamics`: Mixed-precision evolution (unified API: evolve(hamiltonian, state, time))
+- `mp_trotter`: Low-level Precision, ExpTerm, TrotterSimulator
+- `constraints`: GPU-specific constraints (including DynamicsMemory)
+- `measure`: CostAnalyzer, SpacetimeCost for memory/depth
 - `hamsim`: Hamiltonian simulation utilities
 
-Example:
+Example (unified API, no manual quantization):
     ```python
-    from trovolut.backends.gpu_mp_emulator.mp_trotter import (
-        Precision, ExpTerm, MixedPrecisionTrotter
+    from trovolut.backends.gpu_mp_emulator.dynamics import MixedPrecisionTrotterEvolution, Precision
+    dyn = MixedPrecisionTrotterEvolution(
+        trotter_steps=100,
+        precision_schedule=[Precision.FP32, Precision.FP16, Precision.FP8_E4M3],  # per term
     )
-    from trovolut.backends.gpu_mp_emulator import mp_evals
+    state = dyn.evolve(hamiltonian, psi0, time=1.0)
     ```
 """
 

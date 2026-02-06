@@ -205,11 +205,16 @@ import trovolut as trv
                 needed_classes.add('Memory')
             if 'MatMulCount(' in constraint_repr:
                 needed_classes.add('MatMulCount')
+            if 'EmulatorMemory(' in constraint_repr:
+                needed_classes.add('EmulatorMemory')
             
-            # Only import what's needed
-            if needed_classes:
+            # Only import what's needed (base_constraints vs gpu_mp_emulator)
+            base_only = needed_classes - {'EmulatorMemory'}
+            if base_only:
                 imports += "\n# Import constraint classes for constraint definitions\n"
-                imports += f"from trovolut.core.base_constraints import {', '.join(sorted(needed_classes))}\n"
+                imports += f"from trovolut.core.base_constraints import {', '.join(sorted(base_only))}\n"
+            if 'EmulatorMemory' in needed_classes:
+                imports += "from trovolut.backends.gpu_mp_emulator.constraints import EmulatorMemory\n"
         
         return imports
     
@@ -240,6 +245,22 @@ import trovolut as trv
     
     # Measure using the program's function
     result = metrics(getattr(module, "run_dynamics"))
+    
+    # Spacetime cost (gpu-mp-emulator): if program exposes evolution, add peak_memory_bytes from CostAnalyzer
+    if hasattr(module, 'evolution'):
+        try:
+            from trovolut.backends.gpu_mp_emulator.measure import cost_from_dynamics_config
+            tc = get_test_cases()
+            if isinstance(tc, (list, tuple)) and len(tc) and isinstance(tc[0], (list, tuple)):
+                hams, psi0, t = tc[0]
+            else:
+                hams, psi0, t = tc
+            cost = cost_from_dynamics_config(hams, module.evolution)
+            if cost is not None:
+                result['peak_memory_bytes'] = cost.peak_memory_bytes
+                result['memory_peak_bytes'] = cost.peak_memory_bytes
+        except Exception:
+            pass
     
     # Let constraints evaluate the results and add details
     if metrics.constraints:
