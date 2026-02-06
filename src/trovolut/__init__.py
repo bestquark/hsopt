@@ -99,7 +99,7 @@ def set_backend(backend_name: str) -> None:
     _backend_modules = {}
     
     # Try to import common submodules
-    for submodule in ['dynamics', 'measure', 'constraints']:
+    for submodule in ['dynamics', 'measure', 'constraints', 'utils']:
         try:
             mod = import_module(f"{backend_module_path}.{submodule}")
             _backend_modules[submodule] = mod
@@ -113,7 +113,15 @@ def set_backend(backend_name: str) -> None:
     import sys
     current_module = sys.modules[__name__]
     for name, mod in _backend_modules.items():
-        setattr(current_module, name, mod)
+        if name != "utils":
+            setattr(current_module, name, mod)
+
+    # Wire backend-specific utils into the base utils namespace
+    try:
+        from trovolut import utils as _core_utils
+        _core_utils._set_backend_utils(_backend_modules.get("utils"))
+    except Exception:
+        pass
 
 
 def get_active_backend() -> Optional[str]:

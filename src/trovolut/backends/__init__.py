@@ -81,7 +81,7 @@ class BackendRegistry:
         "gpu-mp-emulator": {
             "module": "trovolut.backends.gpu_mp_emulator",
             "required_packages": [],  # No additional deps, uses NumPy
-            "description": "Mixed-precision emulator (mp_trotter, mp_evals)",
+            "description": "Mixed-precision emulator (dynamics, mp_evals)",
             "platform": "all",
         },
     }

@@ -3,7 +3,7 @@ Demo of mixed-precision Trotter methods using the GPU emulator backend.
 
 This script demonstrates how to use the gpu-emulate backend to study
 quantized exponentials and mixed-precision quantum dynamics, similar to
-the tutorial in docs/tutorials/mp_trotter.ipynb
+the mixed-precision tutorial.
 """
 
 import sys
@@ -59,7 +59,7 @@ def demo_precision_sweep():
     print("=" * 70)
     
     # Import mixed-precision tools
-    from trovolut.backends.gpu_emulator.mixed_fps.mp_trotter import Precision
+    from trovolut.backends.gpu_mp_emulator.dynamics import Precision
     from trovolut.backends.emulator.evaluator import EmulatorEvaluator
     
     # Create test Hamiltonian
@@ -111,7 +111,7 @@ def demo_step_convergence():
     print("Mixed-Precision Trotter Demo: Step Convergence")
     print("=" * 70)
     
-    from trovolut.backends.gpu_emulator.mixed_fps.mp_trotter import Precision
+    from trovolut.backends.gpu_mp_emulator.dynamics import Precision
     from trovolut.backends.emulator.evaluator import EmulatorEvaluator
     
     # Create test Hamiltonian
@@ -155,7 +155,7 @@ def demo_mixed_precision_config():
     print("Mixed-Precision Trotter Demo: Mixed-Precision Configurations")
     print("=" * 70)
     
-    from trovolut.backends.gpu_emulator.mixed_fps.mp_trotter import Precision
+    from trovolut.backends.gpu_mp_emulator.dynamics import Precision
     from trovolut.backends.emulator.evaluator import EmulatorEvaluator
     
     # Create test Hamiltonian
@@ -217,7 +217,7 @@ def demo_trotter_orders():
     print("Mixed-Precision Trotter Demo: Trotter Order Comparison")
     print("=" * 70)
     
-    from trovolut.backends.gpu_emulator.mixed_fps.mp_trotter import Precision
+    from trovolut.backends.gpu_mp_emulator.dynamics import Precision
     from trovolut.backends.emulator.evaluator import EmulatorEvaluator
     
     # Create test Hamiltonian

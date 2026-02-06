@@ -15,7 +15,7 @@ Key Features:
 Core Modules:
 
 - `dynamics`: Mixed-precision evolution (unified API: evolve(hamiltonian, state, time))
-- `mp_trotter`: Low-level Precision, ExpTerm, TrotterSimulator
+- `dynamics`: Mixed-precision evolution and low-level Trotter components
 - `constraints`: GPU-specific constraints (including DynamicsMemory)
 - `measure`: CostAnalyzer, SpacetimeCost for memory/depth
 - `hamsim`: Hamiltonian simulation utilities

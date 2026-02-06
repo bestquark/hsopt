@@ -3,7 +3,7 @@ Internal mixed-precision Trotter utilities.
 
 Used by dynamics.py and measure.py. Not part of the public API; users should
 use trovolut.backends.gpu_mp_emulator.dynamics for evolution and
-trovolut.backends.gpu_mp_emulator.mp_trotter for low-level Precision/ExpTerm/TrotterSimulator.
+trovolut.backends.gpu_mp_emulator.dynamics for low-level Precision/ExpTerm/TrotterSimulator.
 """
 
 from abc import ABC, abstractmethod
