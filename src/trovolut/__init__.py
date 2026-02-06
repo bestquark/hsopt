@@ -37,24 +37,29 @@ from trovolut import filemaker
 # Version info
 __version__ = "0.1.0"
 
-# Lazy import for constraints to avoid circular import
-_BACKEND_SUBMODULES = {"dynamics", "measure", "constraints", "hardware"}
-
-def __getattr__(name):
-    """Lazy loading for submodules to avoid circular imports."""
-    if name == "constraints":
-        from trovolut.core import base_constraints
-        return base_constraints
-    if name in _BACKEND_SUBMODULES:
-        raise AttributeError(
-            f"'trovolut.{name}' is not available -- call "
-            f"trv.set_backend(...) first to activate a backend."
-        )
-    raise AttributeError(f"module '{__name__}' has no attribute '{name}'")
-
 # Active backend tracking
 _active_backend: Optional[str] = None
 _backend_modules: dict = {}
+
+
+# ── Backend proxy modules ────────────────────────────────────
+# Real Python files (dynamics.py, measure.py, constraints.py,
+# hardware.py) live next to this __init__.py.  They provide
+# TYPE_CHECKING imports for Pylance (Ctrl+Click / autocomplete)
+# and __getattr__ for runtime dispatch.  set_backend() wires them
+# up by setting each module's _backend_module attribute.
+
+from trovolut import dynamics  # noqa: E402
+from trovolut import measure  # noqa: E402
+from trovolut import hardware  # noqa: E402
+from trovolut import constraints  # noqa: E402
+
+_proxy_modules = {
+    "dynamics": dynamics,
+    "measure": measure,
+    "hardware": hardware,
+    "constraints": constraints,
+}
 
 
 def set_backend(backend_name: str) -> None:
@@ -115,16 +120,10 @@ def set_backend(backend_name: str) -> None:
             pass
     
     _active_backend = backend_name
-    
-    # Inject modules into trovolut namespace so both attribute access
-    # (trv.hardware) and the import system (from trovolut.hardware import gpus)
-    # resolve to the active backend's module.
-    import sys
-    current_module = sys.modules[__name__]
-    for name, mod in _backend_modules.items():
-        if name != "utils":
-            setattr(current_module, name, mod)
-            sys.modules[f"trovolut.{name}"] = mod
+
+    # Wire each proxy module to the real backend submodule
+    for name, proxy in _proxy_modules.items():
+        proxy._backend_module = _backend_modules.get(name)
 
     # Wire backend-specific utils into the base utils namespace
     try:
@@ -158,10 +157,14 @@ __all__ = [
     "qm",
     "utils",
     "filemaker",
+    # Backend proxy modules (Ctrl+Click navigable)
+    "dynamics",
+    "measure",
+    "constraints",
+    "hardware",
     # Backend management
     "set_backend",
     "get_active_backend",
-    "constraints",
     # Version
     "__version__",
 ]

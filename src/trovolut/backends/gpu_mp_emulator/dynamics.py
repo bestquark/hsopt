@@ -615,6 +615,7 @@ class MPTrotterEvolution(MPEvolution):
             memory_by_precision=dict(cost.memory_by_precision),
             total_flops=cost.total_flops,
             total_depth=cost.total_depth,
+            flops_by_precision=dict(cost.flops_by_precision),
             n_terms=cost.n_terms,
             n_steps=cost.n_steps,
         )
