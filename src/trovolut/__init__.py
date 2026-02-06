@@ -14,8 +14,8 @@ Quick Start:
     # Set active backend
     trv.set_backend('cpu')
     
-    # Now access modules directly
-    from trovolut.backends.cpu.dynamics import TrotterEvolution
+    # Now access modules directly via short paths
+    from trovolut.dynamics import TrotterEvolution
     trotter = TrotterEvolution(order=2)
     ```
 """
@@ -38,11 +38,18 @@ from trovolut import filemaker
 __version__ = "0.1.0"
 
 # Lazy import for constraints to avoid circular import
+_BACKEND_SUBMODULES = {"dynamics", "measure", "constraints", "hardware"}
+
 def __getattr__(name):
     """Lazy loading for submodules to avoid circular imports."""
     if name == "constraints":
         from trovolut.core import base_constraints
         return base_constraints
+    if name in _BACKEND_SUBMODULES:
+        raise AttributeError(
+            f"'trovolut.{name}' is not available -- call "
+            f"trv.set_backend(...) first to activate a backend."
+        )
     raise AttributeError(f"module '{__name__}' has no attribute '{name}'")
 
 # Active backend tracking
@@ -109,12 +116,15 @@ def set_backend(backend_name: str) -> None:
     
     _active_backend = backend_name
     
-    # Inject modules into trovolut namespace
+    # Inject modules into trovolut namespace so both attribute access
+    # (trv.hardware) and the import system (from trovolut.hardware import gpus)
+    # resolve to the active backend's module.
     import sys
     current_module = sys.modules[__name__]
     for name, mod in _backend_modules.items():
         if name != "utils":
             setattr(current_module, name, mod)
+            sys.modules[f"trovolut.{name}"] = mod
 
     # Wire backend-specific utils into the base utils namespace
     try:

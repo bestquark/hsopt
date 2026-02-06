@@ -34,7 +34,7 @@ flowchart TB
         MPTy[MPTaylorEvolution]
         MPP[MPPadeEvolution]
         EM[Metrics]
-        HW[GPUSpec / GPUCluster]
+        HW[GPU / GPUCluster]
     end
 
     subgraph qpu [QPU Backend]

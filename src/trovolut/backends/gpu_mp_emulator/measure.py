@@ -43,6 +43,7 @@ class CostProfile:
     # === TIME ===
     total_flops: int = 0
     total_depth: int = 0
+    flops_by_precision: dict[str, int] = field(default_factory=dict)
 
     # === PARAMETERS ===
     n_terms: int = 0
@@ -57,6 +58,45 @@ class CostProfile:
     def memory_mb(self) -> float:
         return self.peak_memory_bytes / (1024 ** 2)
 
+    def emulated_time(self, hardware) -> float:
+        """Emulated wall-clock time (seconds) on *hardware*.
+
+        Divides FLOPs at each precision by the hardware's throughput at
+        that precision and sums the results.  This gives a physically
+        meaningful execution-time estimate for mixed-precision workloads.
+
+        Parameters
+        ----------
+        hardware : HardwareCluster or BaseHardware
+            Must expose ``total_spec(key)`` (clusters) or ``spec(key)``
+            (single units).
+        """
+        _BITS_TO_HW = {
+            "float64": "fp64_flops", "float32": "fp32_flops",
+            "float16": "fp16_flops", "bfloat16": "bf16_flops",
+            "float8_e4m3": "fp8_flops", "float8_e5m2": "fp8_flops",
+            "int8": "fp8_flops", "float4": "fp4_flops",
+        }
+        _spec = getattr(hardware, "total_spec", None) or hardware.spec
+        total_s = 0.0
+        for prec_key, flops in self.flops_by_precision.items():
+            hw_key = _BITS_TO_HW.get(prec_key, "fp32_flops")
+            throughput = _spec(hw_key)
+            if throughput > 0:
+                total_s += flops / throughput
+            else:
+                # Fallback: use FP32 throughput if this precision is
+                # unsupported on the hardware.
+                total_s += flops / max(_spec("fp32_flops"), 1.0)
+        return total_s
+
+    def emulated_spacetime(self, hardware) -> float:
+        """Emulated spacetime cost (byte-seconds) on *hardware*.
+
+        ``peak_memory_bytes * emulated_time(hardware)``
+        """
+        return self.peak_memory_bytes * self.emulated_time(hardware)
+
     def to_dict(self) -> Dict[str, Any]:
         """Flatten into a dict suitable for constraint evaluation."""
         return {
@@ -69,6 +109,7 @@ class CostProfile:
             "memory_by_precision": dict(self.memory_by_precision),
             "total_flops": self.total_flops,
             "total_depth": self.total_depth,
+            "flops_by_precision": dict(self.flops_by_precision),
             "space_time_product": self.space_time_product,
             "memory_mb": self.memory_mb,
             "n_terms": self.n_terms,
@@ -272,6 +313,8 @@ class SpacetimeCost:
     total_depth: int = 0
     parallel_depth: int = 0
 
+    flops_by_precision: dict[str, int] = field(default_factory=dict)
+
     # === BREAKDOWN ===
     cost_by_term: dict[str, TermCost] = field(default_factory=dict)
     n_steps: int = 0
@@ -295,6 +338,39 @@ class SpacetimeCost:
             mult = multipliers.get(tc.compute_bits, 1.0)
             adjusted += tc.flops / mult
         return adjusted * self.n_steps
+
+    def emulated_time(self, hardware) -> float:
+        """Emulated wall-clock time (seconds) on *hardware*.
+
+        Uses per-term precision info to divide FLOPs by the hardware's
+        throughput at each term's compute precision.
+
+        Parameters
+        ----------
+        hardware : HardwareCluster or BaseHardware
+            Must expose ``total_spec(key)`` (clusters) or ``spec(key)``.
+        """
+        _BITS_TO_HW = {
+            64: "fp64_flops", 32: "fp32_flops", 16: "fp16_flops",
+            8: "fp8_flops", 4: "fp4_flops",
+        }
+        _spec = getattr(hardware, "total_spec", None) or hardware.spec
+        total_s = 0.0
+        for _name, tc in self.cost_by_term.items():
+            hw_key = _BITS_TO_HW.get(tc.compute_bits, "fp32_flops")
+            throughput = _spec(hw_key)
+            if throughput > 0:
+                total_s += tc.flops * self.n_steps / throughput
+            else:
+                total_s += tc.flops * self.n_steps / max(_spec("fp32_flops"), 1.0)
+        return total_s
+
+    def emulated_spacetime(self, hardware) -> float:
+        """Emulated spacetime cost (byte-seconds) on *hardware*.
+
+        ``peak_memory_bytes * emulated_time(hardware)``
+        """
+        return self.peak_memory_bytes * self.emulated_time(hardware)
 
 
 # ============================================================
@@ -386,18 +462,28 @@ class CostAnalyzer:
 
         step_matvecs = step_depth = step_flops = 0
         step_aux_memory = 0
+        step_flops_by_prec: dict[str, int] = {}
         for term, _ in sequence:
             tc = cost.cost_by_term[term.name]
             step_matvecs += tc.matvec_count
             step_depth += tc.depth
             step_flops += tc.flops
             step_aux_memory = max(step_aux_memory, tc.auxiliary_memory)
+            # Accumulate per-precision FLOPs for this step
+            prec_key = next(
+                (t.precision.compute.value for t in simulator.terms if t.name == term.name),
+                "float32",
+            )
+            step_flops_by_prec[prec_key] = step_flops_by_prec.get(prec_key, 0) + tc.flops
 
         cost.depth_per_step = step_depth
         cost.auxiliary_memory_bytes = step_aux_memory
         cost.total_matvec_products = step_matvecs * simulator.n_steps
         cost.total_depth = step_depth * simulator.n_steps
         cost.total_flops = step_flops * simulator.n_steps
+        cost.flops_by_precision = {
+            k: v * simulator.n_steps for k, v in step_flops_by_prec.items()
+        }
         cost.total_matrix_exponentials = sum(
             1 for term, _ in sequence if cost.cost_by_term[term.name].matmat_count > 0
         ) * simulator.n_steps

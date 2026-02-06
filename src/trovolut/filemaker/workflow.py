@@ -15,6 +15,55 @@ class Comment:
 EVO_START = Comment("EVOLVE-BLOCK-START")
 EVO_END = Comment("EVOLVE-BLOCK-END")
 
+# Registry of all Comment markers so we can recognise them in source code.
+# Maps every way a marker can appear in source → the comment text to emit.
+_MARKER_REGISTRY: dict[str, str] = {}
+
+
+def _register_marker(obj: Comment, *aliases: str) -> None:
+    """Register source-level patterns that should be replaced with ``# obj.name``."""
+    for alias in aliases:
+        _MARKER_REGISTRY[alias] = f"# {obj.name}"
+
+
+_register_marker(
+    EVO_START,
+    "EVO_START",
+    "trv.filemaker.EVO_START",
+    "trovolut.filemaker.EVO_START",
+    "trovolut.filemaker.workflow.EVO_START",
+)
+_register_marker(
+    EVO_END,
+    "EVO_END",
+    "trv.filemaker.EVO_END",
+    "trovolut.filemaker.EVO_END",
+    "trovolut.filemaker.workflow.EVO_END",
+)
+
+# Pre-compile a regex that matches any registered marker as a standalone
+# expression on its own line (preserving leading whitespace).
+_MARKER_RE = re.compile(
+    r"^(?P<indent>\s*)(?P<marker>"
+    + "|".join(re.escape(k) for k in sorted(_MARKER_REGISTRY, key=len, reverse=True))
+    + r")\s*$",
+    re.MULTILINE,
+)
+
+
+def _replace_inline_markers(source: str) -> str:
+    """Replace bare marker expressions in source with comment lines.
+
+    A line like ``    trv.filemaker.EVO_START`` becomes
+    ``    # EVOLVE-BLOCK-START`` (preserving indentation).
+    """
+    def _sub(m: re.Match) -> str:
+        indent = m.group("indent")
+        marker = m.group("marker")
+        return f"{indent}{_MARKER_REGISTRY[marker]}"
+    return _MARKER_RE.sub(_sub, source)
+
+
 # ---------- helpers ----------
 
 def _find_prefixed_attr_functions(func, root_name="trv"):
@@ -133,6 +182,8 @@ def get_source_with_deps(func, visited=None, root_name="trv"):
         src = textwrap.dedent(src).rstrip()
         for dotted, dep_f in attr_funcs.items():
             src = src.replace(dotted, dep_f.__name__)
+        # 4) convert inline EVO_START / EVO_END expressions to comments
+        src = _replace_inline_markers(src)
         out.append(src)
 
     walk(func)

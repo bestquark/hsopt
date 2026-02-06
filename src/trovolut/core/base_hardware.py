@@ -3,7 +3,7 @@ Generic hardware abstraction for trovolut.
 
 Provides backend-agnostic base classes for describing hardware units and
 composable clusters.  The core layer only stores a ``name`` and a free-form
-``specs`` dictionary -- backend subclasses (GPUSpec, CPUSpec, QPUSpec, ...)
+``specs`` dictionary -- backend subclasses (GPU, CPUSpec, QPUSpec, ...)
 add domain-specific typed accessors.
 
 Example (raw ``BaseHardware``)::
@@ -79,8 +79,8 @@ class HardwareCluster:
 
     Supports arithmetic composition::
 
-        cluster = 4 * GPU.A100               # homogeneous
-        cluster = 2 * GPU.A100 + 2 * GPU.H100  # heterogeneous
+        cluster = 4 * gpus.A100               # homogeneous
+        cluster = 2 * gpus.A100 + 2 * gpus.H100  # heterogeneous
 
     And aggregation queries::
 

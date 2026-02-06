@@ -118,9 +118,19 @@ class FlopsCost(Constraint):
 
 
 class SpaceTimeCost(Constraint):
-    """Constraint on the space-time product (peak_memory_bytes * total_depth).
+    """Constraint on emulated spacetime cost.
 
-    Scores the ``space_time_product`` key returned by ``CostProfile.to_dict()``.
+    **Hardware-aware mode** (recommended for GPU emulation):
+        Pass a ``hardware`` cluster (e.g. ``5 * gpus.A100``).  The cost is
+        computed as ``peak_memory_bytes * emulated_time`` where emulated
+        time divides FLOPs at each precision by the hardware's throughput
+        at that precision and sums (byte-seconds).
+
+    **Abstract mode** (backward-compatible, for QPU analysis):
+        When ``hardware`` is *None*, falls back to the abstract metric
+        ``peak_memory_bytes * total_depth`` (bytes * circuit-depth).
+
+    Scores the result against ``max_product``.
     """
 
     def __init__(
@@ -130,13 +140,45 @@ class SpaceTimeCost(Constraint):
         hard: bool = False,
         hard_penalty: float = -100.0,
         score_fn: str = "linear",
+        hardware=None,
     ):
         super().__init__("space_time_cost", weight, hard, hard_penalty)
         self.max_product = max_product
         self.score_fn = score_fn
+        self.hardware = hardware
 
     def extract(self, m: Dict[str, Any]) -> float:
+        if self.hardware is not None:
+            return self._extract_emulated(m)
         return float(m.get("space_time_product", float("inf")))
+
+    def _extract_emulated(self, m: Dict[str, Any]) -> float:
+        """Compute precision-aware emulated spacetime (byte-seconds)."""
+        peak_mem = float(m.get("peak_memory_bytes", 0))
+        flops_by_prec = m.get("flops_by_precision", {})
+        if not flops_by_prec:
+            # Fallback: treat all FLOPs as FP32
+            total_flops = float(m.get("total_flops", 0))
+            _spec = getattr(self.hardware, "total_spec", None) or self.hardware.spec
+            throughput = _spec("fp32_flops")
+            return peak_mem * (total_flops / max(throughput, 1.0))
+
+        _PREC_TO_HW = {
+            "float64": "fp64_flops", "float32": "fp32_flops",
+            "float16": "fp16_flops", "bfloat16": "bf16_flops",
+            "float8_e4m3": "fp8_flops", "float8_e5m2": "fp8_flops",
+            "int8": "fp8_flops", "float4": "fp4_flops",
+        }
+        _spec = getattr(self.hardware, "total_spec", None) or self.hardware.spec
+        emulated_time = 0.0
+        for prec_key, flops in flops_by_prec.items():
+            hw_key = _PREC_TO_HW.get(prec_key, "fp32_flops")
+            throughput = _spec(hw_key)
+            if throughput > 0:
+                emulated_time += flops / throughput
+            else:
+                emulated_time += flops / max(_spec("fp32_flops"), 1.0)
+        return peak_mem * emulated_time
 
     def score(self, v: float) -> float:
         return _score_fn(v, self.max_product, self.score_fn)
@@ -145,13 +187,18 @@ class SpaceTimeCost(Constraint):
         return v <= self.max_product
 
     def to_prompt(self) -> str:
+        mode = "byte-seconds" if self.hardware else "bytes*depth"
         if self.hard:
-            return f"Space x Time product MUST stay below {self.max_product:.2e} (hard)."
-        return f"Minimize Space x Time (target: <{self.max_product:.2e}, weight: {self.weight})."
+            return f"Spacetime cost ({mode}) MUST stay below {self.max_product:.2e} (hard)."
+        return (
+            f"Minimize spacetime cost ({mode})"
+            f" (target: <{self.max_product:.2e}, weight: {self.weight})."
+        )
 
     def formula(self) -> str:
+        metric = "emulated_spacetime" if self.hardware else "space_time_product"
         return _formula_str(
-            "space_time_product", self.max_product,
+            metric, self.max_product,
             self.score_fn, self.hard, self.hard_penalty, self.weight,
         )
 

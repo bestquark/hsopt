@@ -29,8 +29,7 @@ nav:
       - Trotter Dynamics: tutorials/trotter_dynamics.ipynb
       - Filemaker: tutorials/filemaker.ipynb
       - Evaluations: tutorials/evaluations.ipynb
-      - Mixed Precision: tutorials/mp_trotter.ipynb
-      - Precision Optimization: tutorials/mp_evolve.ipynb
+      - GPU Optimization: tutorials/mp_optimization.ipynb
 
 theme:
   name: material
