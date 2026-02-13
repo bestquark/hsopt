@@ -17,6 +17,9 @@ uv pip install trovolut[gpu]
 git clone https://github.com/bestquark/trovolut.git
 cd trovolut
 uv sync --all-extras
+
+# Run tests
+uv run pytest tests/
 ```
 
 ## Quick Start

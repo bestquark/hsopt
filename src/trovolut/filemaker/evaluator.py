@@ -34,6 +34,7 @@ The generated ``opt/evaluator.py`` looks like::
 
 import ast
 import inspect
+import types as _types
 from pathlib import Path
 from typing import Callable, Optional, List, Dict, Set, Any
 
@@ -41,7 +42,7 @@ from trovolut.filemaker.workflow import Workflow
 
 
 # ============================================================
-# AST helpers (unchanged from previous version)
+# AST helpers
 # ============================================================
 
 def _extract_function_calls(func) -> Set[str]:
@@ -61,6 +62,19 @@ def _extract_function_calls(func) -> Set[str]:
         return calls
     except Exception:
         return set()
+
+
+def _extract_used_names(source: str) -> Set[str]:
+    """Extract every top-level name referenced in *source* (via AST)."""
+    try:
+        tree = ast.parse(source)
+    except SyntaxError:
+        return set()
+    names: Set[str] = set()
+    for node in ast.walk(tree):
+        if isinstance(node, ast.Name):
+            names.add(node.id)
+    return names
 
 
 def _get_function_dependencies(func, caller_globals: Dict) -> Dict[str, Callable]:
@@ -88,6 +102,32 @@ def _get_function_dependencies(func, caller_globals: Dict) -> Dict[str, Callable
                     dependencies[call_name] = potential_dep
                     to_process.append(potential_dep)
     return dependencies
+
+
+def _classify_import(name: str, obj: Any) -> Optional[str]:
+    """Return the import statement needed to bring *name* into scope.
+
+    Returns ``None`` when the object cannot be turned into an import.
+    """
+    # ── Module objects ──────────────────────────────────────────
+    if isinstance(obj, _types.ModuleType):
+        mod_name = getattr(obj, "__name__", name)
+        if mod_name == name:
+            return f"import {name}"
+        if mod_name.endswith(f".{name}"):
+            parent = mod_name.rsplit(".", 1)[0]
+            return f"from {parent} import {name}"
+        return f"import {mod_name} as {name}"
+
+    # ── Classes / functions with a known origin ─────────────────
+    obj_module = getattr(obj, "__module__", None)
+    obj_name = getattr(obj, "__name__", None)
+    if obj_module and obj_name and not obj_module.startswith("__"):
+        if obj_name == name:
+            return f"from {obj_module} import {name}"
+        return f"from {obj_module} import {obj_name} as {name}"
+
+    return None
 
 
 # ============================================================
@@ -214,17 +254,74 @@ class Evaluator:
 
     # -- code generation ---------------------------------------------------
 
+    def _collect_function_imports(self) -> List[str]:
+        """Auto-detect import statements needed by serialized user functions.
+
+        Inspects the AST of every user function (``test_generator``,
+        ``exact_fn``, and their transitive helpers) to find which names
+        they reference, then looks each name up in the function's
+        ``__globals__`` to determine the correct import statement.
+        """
+        # Gather all user functions
+        all_funcs: List[Callable] = list(self._function_dependencies.values())
+        for func in (self.test_generator, self.exact_fn, self.metric_function):
+            if func is not None:
+                all_funcs.append(func)
+        if not all_funcs:
+            return []
+
+        # Names of functions being serialized as source (skip importing them)
+        serialized_names = {
+            getattr(f, "__name__", None) for f in all_funcs
+        }
+        serialized_names.discard(None)
+
+        # Modules already emitted by the base import block
+        _ALWAYS_IMPORTED = {"np", "numpy", "scipy", "trv", "trovolut"}
+        skip = serialized_names | _ALWAYS_IMPORTED
+
+        # Collect (name -> object) for every name referenced by the functions
+        needed: Dict[str, Any] = {}
+        for func in all_funcs:
+            if not hasattr(func, "__globals__"):
+                continue
+            source = self._generate_function_source(func)
+            for name in _extract_used_names(source):
+                if name in skip or name.startswith("_"):
+                    continue
+                if name in func.__globals__:
+                    needed[name] = func.__globals__[name]
+
+        # Classify each name into an import statement
+        imports: List[str] = []
+        seen: Set[str] = set()
+        for name in sorted(needed):
+            if name in seen:
+                continue
+            stmt = _classify_import(name, needed[name])
+            if stmt is not None:
+                imports.append(stmt)
+                seen.add(name)
+
+        return imports
+
     def _generate_imports(self) -> str:
         """Generate import block for the evaluator file."""
         lines = [
             "import numpy as np",
             "import scipy",
             "import trovolut as trv",
+            f"trv.set_backend({self.backend!r})",
         ]
 
         # Runner import
         runner_cls = type(self.runner).__name__
         lines.append(f"from trovolut.filemaker.runners import {runner_cls}")
+
+        # Auto-detected imports from user functions
+        func_imports = self._collect_function_imports()
+        if func_imports:
+            lines.extend(func_imports)
 
         # Constraint imports
         if self.constraints is not None:
@@ -265,6 +362,12 @@ class Evaluator:
             if needed_gpu:
                 lines.append(
                     f"from trovolut.backends.gpu.constraints import {', '.join(sorted(needed_gpu))}"
+                )
+
+            # Hardware imports (for SpaceTimeCost with hardware=5 * gpus.A100)
+            if "gpus." in constraint_repr:
+                lines.append(
+                    "from trovolut.backends.gpu_mp_emulator.hardware import gpus"
                 )
 
         return "\n".join(lines) + "\n"

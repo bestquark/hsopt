@@ -190,10 +190,154 @@ def get_source_with_deps(func, visited=None, root_name="trv"):
     return "\n\n".join(out)
 
 
+# ---------- API reference helpers ----------
+
+def _find_prefixed_attr_objects(func, root_name="trv"):
+    """
+    Find attribute chains in *func* starting with *root_name* and resolve
+    them to **classes or functions** (not just functions).
+
+    Returns ``dict[dotted_name -> object]``, preserving source-code order.
+    """
+    src = inspect.getsource(func)
+    src = textwrap.dedent(src)
+    tree = ast.parse(src)
+
+    seen: set[str] = set()
+    chains: list[str] = []
+
+    class AttrFinder(ast.NodeVisitor):
+        def visit_Attribute(self, node):
+            names: list[str] = []
+            cur = node
+            while isinstance(cur, ast.Attribute):
+                names.append(cur.attr)
+                cur = cur.value
+            if isinstance(cur, ast.Name):
+                names.append(cur.id)
+                names_rev = list(reversed(names))
+                if names_rev[0] == root_name:
+                    full = ".".join(names_rev)
+                    if full not in seen:
+                        seen.add(full)
+                        chains.append(full)
+            self.generic_visit(node)
+
+    AttrFinder().visit(tree)
+
+    out: dict[str, object] = {}
+    globs = func.__globals__
+    for dotted in chains:
+        try:
+            obj = eval(dotted, globs)
+        except Exception:
+            continue
+        if inspect.isclass(obj) or inspect.isfunction(obj):
+            out[dotted] = obj
+    return out
+
+
+def _get_class_bases(cls):
+    """Return *cls* and its bases in **base-first** order.
+
+    Excludes ``object``, ``ABC``, and anything from stdlib modules like
+    ``builtins``, ``abc``, ``enum``, ``typing``.
+    """
+    _SKIP_MODULES = frozenset({"builtins", "abc", "enum", "typing", "_py_abc"})
+    _SKIP_NAMES = frozenset({"object", "ABC"})
+    result: list[type] = []
+    for c in reversed(cls.__mro__):
+        mod = (getattr(c, "__module__", "") or "").split(".")[0]
+        if c.__name__ in _SKIP_NAMES or mod in _SKIP_MODULES:
+            continue
+        if c not in result:
+            result.append(c)
+    return result
+
+
+def _collect_api_references(funcs, root_name="trv"):
+    """Collect ``trv.*`` class/function definitions from *funcs*.
+
+    For every class found the full base-class hierarchy (excluding builtins)
+    is included so the LLM sees the abstract interface as well.
+
+    Returns a list of ``(qualified_name, obj, dedented_source)`` triples
+    ordered base-first.
+    """
+    all_refs: dict[str, object] = {}
+    for func in funcs:
+        if func is not None and callable(func) and hasattr(func, "__globals__"):
+            refs = _find_prefixed_attr_objects(func, root_name=root_name)
+            all_refs.update(refs)
+
+    collected: dict[int, tuple[str, object, str]] = {}  # keyed by id(obj)
+
+    for _dotted, obj in all_refs.items():
+        if inspect.isclass(obj):
+            for cls in _get_class_bases(obj):
+                key = id(cls)
+                if key not in collected:
+                    try:
+                        src = textwrap.dedent(inspect.getsource(cls)).rstrip()
+                    except (OSError, TypeError):
+                        continue
+                    mod = getattr(cls, "__module__", "")
+                    name = f"{mod}.{cls.__qualname__}" if mod else cls.__qualname__
+                    collected[key] = (name, cls, src)
+        elif inspect.isfunction(obj):
+            key = id(obj)
+            if key not in collected:
+                try:
+                    src = textwrap.dedent(inspect.getsource(obj)).rstrip()
+                except (OSError, TypeError):
+                    continue
+                mod = getattr(obj, "__module__", "")
+                name = f"{mod}.{obj.__qualname__}" if mod else obj.__qualname__
+                collected[key] = (name, obj, src)
+
+    return list(collected.values())
+
+
+def _format_api_reference(references):
+    """Format collected API references as a Python comment block."""
+    if not references:
+        return ""
+
+    lines = [
+        "# " + "=" * 70,
+        "# API Reference (auto-generated for LLM context)",
+        "# These are the trovolut classes and functions used in this program.",
+        "# You may use or modify calls to any of these in the EVOLVE-BLOCK.",
+        "# " + "=" * 70,
+    ]
+
+    for name, obj, source in references:
+        lines.append("#")
+        kind = "class" if inspect.isclass(obj) else "function"
+        short = getattr(obj, "__qualname__", getattr(obj, "__name__", name))
+        mod = getattr(obj, "__module__", "")
+        header = f"# --- {kind} {short}"
+        if mod:
+            header += f" (from {mod})"
+        header += " ---"
+        lines.append(header)
+        lines.append("#")
+        for src_line in source.split("\n"):
+            if src_line.strip():
+                lines.append(f"#   {src_line}")
+            else:
+                lines.append("#")
+
+    lines.append("#")
+    lines.append("# " + "=" * 70)
+    lines.append("")
+    return "\n".join(lines) + "\n"
+
+
 # ---------- Workflow ----------
 
 class Workflow:
-    def __init__(self, parts, out_path="initial_program.py", imports=None, main_func=None, auto_imports=True):
+    def __init__(self, parts, out_path="initial_program.py", imports=None, main_func=None, auto_imports=True, backend=None, include_api_reference=False):
         """
         Build standalone Python files from functions and objects.
         
@@ -203,17 +347,34 @@ class Workflow:
             imports: list of import statements (if None, auto-detected if auto_imports=True)
             main_func: callable (optional)
             auto_imports: if True and imports=None, automatically extract imports from functions
+            backend: backend name (e.g. 'cpu', 'gpu-mp-emulator').
+                If None, auto-detected from the active backend.
+            include_api_reference: if True, prepend a comment block with the
+                source definitions of every ``trv.*`` class/function referenced
+                by callable *parts* (and their base classes).  This gives
+                LLM-based optimisers full context about the available API.
         
         Example:
             workflow = Workflow(
                 [EVO_START, run_dynamics, EVO_END],
                 out_path="program.py",
+                include_api_reference=True,
             )
             workflow.build()  # Auto-detects imports from run_dynamics function
         """
         self.parts = parts
         self.out_path = Path(out_path)
         self.main_func = main_func
+        self.include_api_reference = include_api_reference
+
+        # Backend detection
+        if backend is None:
+            try:
+                import trovolut as trv
+                backend = trv.get_active_backend()
+            except Exception:
+                backend = None
+        self.backend = backend
         
         # Auto-detect imports if not provided
         if imports is None and auto_imports:
@@ -260,7 +421,17 @@ class Workflow:
             # header / imports
             for line in self.imports:
                 f.write(line + "\n")
+            if self.backend is not None:
+                f.write(f"trv.set_backend({self.backend!r})\n")
             f.write("\n")
+
+            # API reference block (gives the LLM full context)
+            if self.include_api_reference:
+                callable_parts = [p for p in self.parts if callable(p)]
+                refs = _collect_api_references(callable_parts)
+                ref_block = _format_api_reference(refs)
+                if ref_block:
+                    f.write(ref_block)
 
             visited = set()
 

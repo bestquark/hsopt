@@ -155,11 +155,7 @@ class Error(Constraint):
         return m.get("error", m.get("mean_error", float("inf")))
     
     def score(self, v: float) -> float:
-        if self.score_fn == "inverse":
-            return 1.0 / (1.0 + v)
-        elif self.score_fn == "exponential":
-            return math.exp(-v)
-        return max(0, 1.0 - v / self.max_error)
+        return _score_fn(v, self.max_error, self.score_fn)
     
     def is_satisfied(self, v: float) -> bool:
         return v <= self.max_error
@@ -171,8 +167,8 @@ class Error(Constraint):
     
     def formula(self) -> str:
         formulas = {
-            "inverse": "1 / (1 + error)",
-            "exponential": "exp(-error)",
+            "inverse": f"1 / (1 + error/{self.max_error})",
+            "exponential": f"exp(-error/{self.max_error})",
             "linear": f"max(0, 1 - error/{self.max_error})",
         }
         base = formulas.get(self.score_fn, "f(error)")

@@ -56,6 +56,18 @@ class MemoryCost(Constraint):
         self.max_memory_bytes = max_memory_bytes
         self.score_fn = score_fn
 
+    def __repr__(self) -> str:
+        parts = [f"{self.max_memory_bytes!r}"]
+        if self.weight != 1.0:
+            parts.append(f"weight={self.weight!r}")
+        if self.hard:
+            parts.append("hard=True")
+        if self.hard_penalty != -100.0:
+            parts.append(f"hard_penalty={self.hard_penalty!r}")
+        if self.score_fn != "linear":
+            parts.append(f"score_fn={self.score_fn!r}")
+        return f"MemoryCost({', '.join(parts)})"
+
     def extract(self, m: Dict[str, Any]) -> float:
         return float(m.get("peak_memory_bytes", m.get("memory_bytes", float("inf"))))
 
@@ -95,6 +107,18 @@ class FlopsCost(Constraint):
         super().__init__("flops_cost", weight, hard, hard_penalty)
         self.max_flops = max_flops
         self.score_fn = score_fn
+
+    def __repr__(self) -> str:
+        parts = [f"{self.max_flops!r}"]
+        if self.weight != 1.0:
+            parts.append(f"weight={self.weight!r}")
+        if self.hard:
+            parts.append("hard=True")
+        if self.hard_penalty != -100.0:
+            parts.append(f"hard_penalty={self.hard_penalty!r}")
+        if self.score_fn != "linear":
+            parts.append(f"score_fn={self.score_fn!r}")
+        return f"FlopsCost({', '.join(parts)})"
 
     def extract(self, m: Dict[str, Any]) -> float:
         return float(m.get("total_flops", float("inf")))
@@ -146,6 +170,22 @@ class SpaceTimeCost(Constraint):
         self.max_product = max_product
         self.score_fn = score_fn
         self.hardware = hardware
+
+    def __repr__(self) -> str:
+        parts = []
+        if self.max_product != 1e15:
+            parts.append(f"max_product={self.max_product!r}")
+        if self.weight != 1.0:
+            parts.append(f"weight={self.weight!r}")
+        if self.hard:
+            parts.append("hard=True")
+        if self.hard_penalty != -100.0:
+            parts.append(f"hard_penalty={self.hard_penalty!r}")
+        if self.score_fn != "linear":
+            parts.append(f"score_fn={self.score_fn!r}")
+        if self.hardware is not None:
+            parts.append(f"hardware={self.hardware!r}")
+        return f"SpaceTimeCost({', '.join(parts)})"
 
     def extract(self, m: Dict[str, Any]) -> float:
         if self.hardware is not None:
@@ -221,6 +261,18 @@ class MatMulCount(Constraint):
         super().__init__("matmul_count", weight, hard, hard_penalty)
         self.max_count = max_count
         self.score_fn = score_fn
+
+    def __repr__(self) -> str:
+        parts = [f"{self.max_count!r}"]
+        if self.weight != 1.0:
+            parts.append(f"weight={self.weight!r}")
+        if self.hard:
+            parts.append("hard=True")
+        if self.hard_penalty != -100.0:
+            parts.append(f"hard_penalty={self.hard_penalty!r}")
+        if self.score_fn != "linear":
+            parts.append(f"score_fn={self.score_fn!r}")
+        return f"MatMulCount({', '.join(parts)})"
 
     def extract(self, m: Dict[str, Any]) -> float:
         return float(m.get("matmul_count", 0))

@@ -158,6 +158,17 @@ class GPU(BaseHardware):
         return self.spec(f"{precision}_flops")
 
     def __repr__(self) -> str:
+        # Try to return a reference to a predefined GPU (eval-able code)
+        try:
+            from trovolut.backends.gpu_mp_emulator.hardware import gpus as _gpus
+            for attr in dir(_gpus):
+                if attr.startswith("_"):
+                    continue
+                candidate = getattr(_gpus, attr, None)
+                if isinstance(candidate, GPU) and candidate.name == self.name:
+                    return f"gpus.{attr}"
+        except Exception:
+            pass
         return f"GPU({self.name!r})"
 
     # -- composability: return GPUCluster instead of HardwareCluster ------
@@ -260,11 +271,13 @@ class GPUCluster(HardwareCluster):
     # -- display ----------------------------------------------------------
 
     def __repr__(self) -> str:
+        # Produce eval-able code: ``5 * gpus.A100`` or ``(2 * gpus.A100 + 3 * gpus.H100)``
         parts = []
         for u, c in self.units:
-            parts.append(f"{c}x {u.name}")
-        ic = f", {self.intra_node.name}" if self.intra_node else ""
-        return f"GPUCluster({', '.join(parts)}{ic})"
+            parts.append(f"{c} * {u!r}")
+        if len(parts) == 1:
+            return parts[0]
+        return f"({' + '.join(parts)})"
 
 
 # ============================================================

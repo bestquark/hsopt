@@ -271,6 +271,10 @@ class CPURunner(BaseRunner):
             elapsed = _time.perf_counter() - start
             times.append(elapsed)
 
+            # Handle tuple returns (e.g. TrotterSimulator returns (state, stats))
+            if isinstance(psi_out, tuple):
+                psi_out = psi_out[0]
+
             # Compute error
             psi_exact = exact_fn(hams, t, psi0)
             err = float(np.linalg.norm(np.asarray(psi_out) - np.asarray(psi_exact)))
@@ -279,30 +283,56 @@ class CPURunner(BaseRunner):
         mean_error = float(np.mean(errors))
         std_error = float(np.std(errors))
 
-        # Spacetime cost (gpu-mp-emulator) if program exposes an 'evolution' object
-        memory_peak_bytes = 0
-        if hasattr(module, "evolution"):
-            try:
-                from trovolut.backends.gpu_mp_emulator.measure import (
-                    cost_from_dynamics_config,
-                )
-                tc = test_generator()
-                hams = tc[0]
-                cost = cost_from_dynamics_config(hams, module.evolution)
-                if cost is not None:
-                    memory_peak_bytes = cost.peak_memory_bytes
-            except Exception:
-                pass
-
-        return {
+        metrics: Dict[str, Any] = {
             "time_seconds": float(np.mean(times)),
             "time": float(np.mean(times)),
             "error": mean_error,
             "mean_error": mean_error,
             "std_error": std_error,
             "std_score": std_error / (1.0 + mean_error) ** 2,
-            "memory_peak_bytes": memory_peak_bytes,
+            "memory_peak_bytes": 0,
         }
+
+        # Spacetime cost (gpu-mp-emulator): find any object with a
+        # cost_profile() method and merge the full cost data.
+        #
+        # Strategy:
+        #   1. Check module-level attributes (evolution, simulator, ...)
+        #   2. Fallback: check TrotterSimulator._last_instance which is
+        #      set automatically when a TrotterSimulator is created
+        #      (even inside a local function scope).
+        cost_source = None
+        for attr_name in ("evolution", "simulator", "evo", "sim"):
+            obj = getattr(module, attr_name, None)
+            if obj is not None and hasattr(obj, "cost_profile"):
+                cost_source = obj
+                break
+
+        if cost_source is None:
+            try:
+                from trovolut.backends.gpu_mp_emulator.dynamics import TrotterSimulator
+                if TrotterSimulator._last_instance is not None:
+                    cost_source = TrotterSimulator._last_instance
+            except ImportError:
+                pass
+
+        if cost_source is not None:
+            try:
+                tc = test_generator()
+                hams = tc[0]
+                profile = cost_source.cost_profile(hams)
+                if profile is not None:
+                    # Merge full cost data so all constraints can score
+                    if hasattr(profile, "to_dict"):
+                        metrics.update(profile.to_dict())
+                    else:
+                        metrics["peak_memory_bytes"] = getattr(
+                            profile, "peak_memory_bytes", 0
+                        )
+            except Exception:
+                pass
+
+        return metrics
 
 
 # ============================================================
