@@ -100,6 +100,7 @@ class Metrics(BaseMetrics):
         fbmem_mb: int = 256,
         workdir: Path | str = ".",
         t: float = 0.05,
+        enable_nvml: bool = False,
     ) -> None:
         super().__init__(
             constraints=constraints,
@@ -113,6 +114,7 @@ class Metrics(BaseMetrics):
             gpus=gpus, cpus=cpus, fbmem_mb=fbmem_mb, workdir=workdir,
         )
         self.t = t
+        self.enable_nvml = enable_nvml
 
     # -- callable API ---------------------------------------------------------
 
@@ -153,6 +155,7 @@ class Metrics(BaseMetrics):
             result = self.profiler.run(
                 str(script_path),
                 (H_terms, psi0, t),
+                enable_nvml=self.enable_nvml,
             )
         except RuntimeError as e:
             return {

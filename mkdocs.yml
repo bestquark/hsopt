@@ -30,6 +30,7 @@ nav:
       - Filemaker: tutorials/filemaker.ipynb
       - Evaluations: tutorials/evaluations.ipynb
       - GPU Optimization: tutorials/mp_optimization.ipynb
+      - Roofline & Calibration: tutorials/roofline_calibration.ipynb
 
 theme:
   name: material

@@ -34,6 +34,9 @@ from trovolut import utils
 # Workflow and high-level interfaces
 from trovolut import filemaker
 
+# Calibration
+from trovolut.calibration import calibrate
+
 # Version info
 __version__ = "0.1.0"
 
@@ -165,6 +168,8 @@ __all__ = [
     # Backend management
     "set_backend",
     "get_active_backend",
+    # Calibration
+    "calibrate",
     # Version
     "__version__",
 ]

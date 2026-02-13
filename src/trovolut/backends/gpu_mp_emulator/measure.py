@@ -45,6 +45,10 @@ class CostProfile:
     total_depth: int = 0
     flops_by_precision: dict[str, int] = field(default_factory=dict)
 
+    # === BANDWIDTH ===
+    total_bytes_accessed: int = 0
+    bytes_by_precision: dict[str, int] = field(default_factory=dict)
+
     # === PARAMETERS ===
     n_terms: int = 0
     n_steps: int = 0
@@ -58,12 +62,21 @@ class CostProfile:
     def memory_mb(self) -> float:
         return self.peak_memory_bytes / (1024 ** 2)
 
+    @property
+    def arithmetic_intensity(self) -> float:
+        """Arithmetic intensity (FLOPs / byte) — higher = more compute-bound."""
+        if self.total_bytes_accessed > 0:
+            return self.total_flops / self.total_bytes_accessed
+        return float("inf")
+
     def emulated_time(self, hardware) -> float:
         """Emulated wall-clock time (seconds) on *hardware*.
 
-        Divides FLOPs at each precision by the hardware's throughput at
-        that precision and sums the results.  This gives a physically
-        meaningful execution-time estimate for mixed-precision workloads.
+        Uses a **roofline model**: the execution time is the maximum of
+        the compute-bound time (FLOPs / throughput) and the memory-bound
+        time (bytes_accessed / memory_bandwidth).  When
+        ``total_bytes_accessed`` is 0 (default), the result is purely
+        compute-bound — preserving backward compatibility.
 
         Parameters
         ----------
@@ -78,17 +91,23 @@ class CostProfile:
             "int8": "fp8_flops", "float4": "fp4_flops",
         }
         _spec = getattr(hardware, "total_spec", None) or hardware.spec
-        total_s = 0.0
+        compute_s = 0.0
         for prec_key, flops in self.flops_by_precision.items():
             hw_key = _BITS_TO_HW.get(prec_key, "fp32_flops")
             throughput = _spec(hw_key)
             if throughput > 0:
-                total_s += flops / throughput
+                compute_s += flops / throughput
             else:
                 # Fallback: use FP32 throughput if this precision is
                 # unsupported on the hardware.
-                total_s += flops / max(_spec("fp32_flops"), 1.0)
-        return total_s
+                compute_s += flops / max(_spec("fp32_flops"), 1.0)
+
+        # Roofline: pick the bottleneck (compute vs memory)
+        memory_bw = _spec("memory_bandwidth")
+        if memory_bw > 0 and self.total_bytes_accessed > 0:
+            memory_s = self.total_bytes_accessed / memory_bw
+            return max(compute_s, memory_s)
+        return compute_s
 
     def emulated_spacetime(self, hardware) -> float:
         """Emulated spacetime cost (byte-seconds) on *hardware*.
@@ -110,6 +129,9 @@ class CostProfile:
             "total_flops": self.total_flops,
             "total_depth": self.total_depth,
             "flops_by_precision": dict(self.flops_by_precision),
+            "total_bytes_accessed": self.total_bytes_accessed,
+            "bytes_by_precision": dict(self.bytes_by_precision),
+            "arithmetic_intensity": self.arithmetic_intensity,
             "space_time_product": self.space_time_product,
             "memory_mb": self.memory_mb,
             "n_terms": self.n_terms,
@@ -272,6 +294,9 @@ class TermCost:
     # Effective FLOPs
     flops: int = 0
 
+    # Bandwidth (bytes transferred to/from memory)
+    bytes_accessed: int = 0
+
     # Precision info
     compute_bits: int = 64
 
@@ -315,6 +340,10 @@ class SpacetimeCost:
 
     flops_by_precision: dict[str, int] = field(default_factory=dict)
 
+    # === BANDWIDTH ===
+    total_bytes_accessed: int = 0
+    bytes_by_precision: dict[str, int] = field(default_factory=dict)
+
     # === BREAKDOWN ===
     cost_by_term: dict[str, TermCost] = field(default_factory=dict)
     n_steps: int = 0
@@ -339,11 +368,19 @@ class SpacetimeCost:
             adjusted += tc.flops / mult
         return adjusted * self.n_steps
 
+    @property
+    def arithmetic_intensity(self) -> float:
+        """Arithmetic intensity (FLOPs / byte) — higher = more compute-bound."""
+        if self.total_bytes_accessed > 0:
+            return self.total_flops / self.total_bytes_accessed
+        return float("inf")
+
     def emulated_time(self, hardware) -> float:
         """Emulated wall-clock time (seconds) on *hardware*.
 
-        Uses per-term precision info to divide FLOPs by the hardware's
-        throughput at each term's compute precision.
+        Uses a **roofline model**: the execution time is the maximum of
+        the compute-bound time (FLOPs / throughput) and the memory-bound
+        time (bytes_accessed / memory_bandwidth).
 
         Parameters
         ----------
@@ -355,15 +392,21 @@ class SpacetimeCost:
             8: "fp8_flops", 4: "fp4_flops",
         }
         _spec = getattr(hardware, "total_spec", None) or hardware.spec
-        total_s = 0.0
+        compute_s = 0.0
         for _name, tc in self.cost_by_term.items():
             hw_key = _BITS_TO_HW.get(tc.compute_bits, "fp32_flops")
             throughput = _spec(hw_key)
             if throughput > 0:
-                total_s += tc.flops * self.n_steps / throughput
+                compute_s += tc.flops * self.n_steps / throughput
             else:
-                total_s += tc.flops * self.n_steps / max(_spec("fp32_flops"), 1.0)
-        return total_s
+                compute_s += tc.flops * self.n_steps / max(_spec("fp32_flops"), 1.0)
+
+        # Roofline: pick the bottleneck (compute vs memory)
+        memory_bw = _spec("memory_bandwidth")
+        if memory_bw > 0 and self.total_bytes_accessed > 0:
+            memory_s = self.total_bytes_accessed / memory_bw
+            return max(compute_s, memory_s)
+        return compute_s
 
     def emulated_spacetime(self, hardware) -> float:
         """Emulated spacetime cost (byte-seconds) on *hardware*.
@@ -384,27 +427,35 @@ class DecompositionCostModel:
     def exact_expm_cost(n: int, precision_bits: int) -> dict:
         bpe = max(1, precision_bits // 8)
         auxiliary_matrices = 6
+        # 13 matmuls, each reads 2 n×n matrices
+        bytes_accessed = 26 * n * n * bpe * 2
         return {
             "matvec_count": 0,
             "matmat_count": 13,
             "auxiliary_memory": auxiliary_matrices * n * n * bpe * 2,
             "flops": 13 * (2 * n ** 3),
+            "bytes_accessed": bytes_accessed,
         }
 
     @staticmethod
     def taylor_cost(n: int, order: int, precision_bits: int) -> dict:
         bpe = max(1, precision_bits // 8)
+        # Each Taylor term: read generator (n*n) + read/write vector (n)
+        bytes_accessed = (n * n + order * n) * bpe * 2 * 2
         return {
             "matvec_count": order,
             "matmat_count": 0,
             "auxiliary_memory": 2 * n * bpe * 2,
             "flops": order * (2 * n ** 2),
+            "bytes_accessed": bytes_accessed,
         }
 
     @staticmethod
     def krylov_cost(n: int, krylov_dim: int, precision_bits: int) -> dict:
         bpe = max(1, precision_bits // 8)
         m = min(krylov_dim, n)
+        # m generator reads + basis vector I/O
+        bytes_accessed = (m * n * n + n * m) * bpe * 2 * 2
         return {
             "matvec_count": m,
             "matmat_count": 1,
@@ -413,16 +464,20 @@ class DecompositionCostModel:
                 + (m + 1) * m * bpe * 2
             ),
             "flops": m * (2 * n ** 2) + 13 * (2 * m ** 3),
+            "bytes_accessed": bytes_accessed,
         }
 
     @staticmethod
     def sparse_cost(n: int, nnz: int, order: int, precision_bits: int) -> dict:
         bpe = max(1, precision_bits // 8)
+        # Each sparse matvec: read nnz entries + read/write vector
+        bytes_accessed = order * nnz * bpe * 2 * 2
         return {
             "matvec_count": order,
             "matmat_count": 0,
             "auxiliary_memory": 2 * n * bpe * 2,
             "flops": order * (2 * nnz),
+            "bytes_accessed": bytes_accessed,
         }
 
 
@@ -462,27 +517,35 @@ class CostAnalyzer:
 
         step_matvecs = step_depth = step_flops = 0
         step_aux_memory = 0
+        step_bytes_accessed = 0
         step_flops_by_prec: dict[str, int] = {}
+        step_bytes_by_prec: dict[str, int] = {}
         for term, _ in sequence:
             tc = cost.cost_by_term[term.name]
             step_matvecs += tc.matvec_count
             step_depth += tc.depth
             step_flops += tc.flops
+            step_bytes_accessed += tc.bytes_accessed
             step_aux_memory = max(step_aux_memory, tc.auxiliary_memory)
-            # Accumulate per-precision FLOPs for this step
+            # Accumulate per-precision FLOPs and bytes for this step
             prec_key = next(
                 (t.precision.compute.value for t in simulator.terms if t.name == term.name),
                 "float32",
             )
             step_flops_by_prec[prec_key] = step_flops_by_prec.get(prec_key, 0) + tc.flops
+            step_bytes_by_prec[prec_key] = step_bytes_by_prec.get(prec_key, 0) + tc.bytes_accessed
 
         cost.depth_per_step = step_depth
         cost.auxiliary_memory_bytes = step_aux_memory
         cost.total_matvec_products = step_matvecs * simulator.n_steps
         cost.total_depth = step_depth * simulator.n_steps
         cost.total_flops = step_flops * simulator.n_steps
+        cost.total_bytes_accessed = step_bytes_accessed * simulator.n_steps
         cost.flops_by_precision = {
             k: v * simulator.n_steps for k, v in step_flops_by_prec.items()
+        }
+        cost.bytes_by_precision = {
+            k: v * simulator.n_steps for k, v in step_bytes_by_prec.items()
         }
         cost.total_matrix_exponentials = sum(
             1 for term, _ in sequence if cost.cost_by_term[term.name].matmat_count > 0
@@ -536,6 +599,7 @@ class CostAnalyzer:
             matvec_count=mc["matvec_count"],
             matmat_count=mc["matmat_count"],
             flops=mc["flops"],
+            bytes_accessed=mc.get("bytes_accessed", 0),
             compute_bits=bits,
         )
 
@@ -588,6 +652,8 @@ def cost_from_dynamics_config(
                 memory_by_precision=profile.memory_by_precision,
                 total_flops=profile.total_flops,
                 total_depth=profile.total_depth,
+                total_bytes_accessed=profile.total_bytes_accessed,
+                bytes_by_precision=dict(profile.bytes_by_precision),
                 n_steps=profile.n_steps,
                 n_terms=profile.n_terms,
             )
@@ -665,6 +731,13 @@ def print_cost_report(cost: SpacetimeCost, title: str = "SPACETIME COST ANALYSIS
             f"{format_bytes(tc.total_memory):>12} {format_flops(tc.flops):>12}  │"
         )
     print("└" + "─" * 69 + "┘")
+
+    if cost.total_bytes_accessed > 0:
+        print("\n┌─ BANDWIDTH " + "─" * 57 + "┐")
+        print(f"│  Total bytes accessed:    {format_bytes(cost.total_bytes_accessed):>15}          │")
+        ai = cost.arithmetic_intensity
+        print(f"│  Arithmetic intensity:    {ai:>15.2f} FLOP/B    │")
+        print("└" + "─" * 69 + "┘")
 
     print("\n┌─ COMPOSITE METRICS " + "─" * 49 + "┐")
     print(f"│  Space × Time product:    {cost.space_time_product:>20,}         │")

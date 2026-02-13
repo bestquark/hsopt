@@ -180,6 +180,122 @@ class LegateConcurrency(Constraint):
 
 
 # ============================================================
+# NVML Hardware Counter Constraints
+# ============================================================
+
+class NVMLPeakMemory(Constraint):
+    """Peak GPU memory (VRAM) usage via pynvml hardware counters."""
+
+    def __init__(
+        self,
+        max_bytes: int = 80 * 1024 ** 3,
+        weight: float = 1.0,
+        hard: bool = False,
+        hard_penalty: float = -100.0,
+        score_fn: str = "linear",
+    ):
+        super().__init__("nvml_peak_memory", weight, hard, hard_penalty)
+        self.max_bytes = max_bytes
+        self.score_fn = score_fn
+
+    def extract(self, m: Dict[str, Any]) -> float:
+        return float(m.get("nvml_peak_memory_bytes", 0))
+
+    def score(self, v: float) -> float:
+        return _score_fn(v, self.max_bytes, self.score_fn)
+
+    def is_satisfied(self, v: float) -> bool:
+        return v <= self.max_bytes
+
+    def to_prompt(self) -> str:
+        max_gb = self.max_bytes / (1024 ** 3)
+        if self.hard:
+            return f"GPU VRAM (NVML) MUST stay below {max_gb:.1f} GB (hard)."
+        return f"Minimize GPU VRAM usage (target: <{max_gb:.1f} GB, weight: {self.weight})."
+
+    def formula(self) -> str:
+        return _formula_str(
+            "nvml_peak_memory_bytes", self.max_bytes, self.score_fn,
+            self.hard, self.hard_penalty, self.weight,
+        )
+
+
+class NVMLPowerBudget(Constraint):
+    """Average GPU power draw via pynvml hardware counters."""
+
+    def __init__(
+        self,
+        max_watts: float = 300.0,
+        weight: float = 1.0,
+        hard: bool = False,
+        hard_penalty: float = -100.0,
+        score_fn: str = "linear",
+    ):
+        super().__init__("nvml_power_budget", weight, hard, hard_penalty)
+        self.max_watts = max_watts
+        self.score_fn = score_fn
+
+    def extract(self, m: Dict[str, Any]) -> float:
+        return float(m.get("nvml_avg_power_watts", 0.0))
+
+    def score(self, v: float) -> float:
+        return _score_fn(v, self.max_watts, self.score_fn)
+
+    def is_satisfied(self, v: float) -> bool:
+        return v <= self.max_watts
+
+    def to_prompt(self) -> str:
+        if self.hard:
+            return f"GPU power (NVML) MUST stay below {self.max_watts} W (hard)."
+        return f"Minimize GPU power draw (target: <{self.max_watts} W, weight: {self.weight})."
+
+    def formula(self) -> str:
+        return _formula_str(
+            "nvml_avg_power_watts", self.max_watts, self.score_fn,
+            self.hard, self.hard_penalty, self.weight,
+        )
+
+
+class NVMLUtilization(Constraint):
+    """GPU utilization via pynvml hardware counters (higher is better)."""
+
+    def __init__(
+        self,
+        target_utilization: float = 80.0,
+        weight: float = 1.0,
+        hard: bool = False,
+        hard_penalty: float = -100.0,
+    ):
+        super().__init__("nvml_utilization", weight, hard, hard_penalty)
+        self.target_utilization = target_utilization
+
+    def extract(self, m: Dict[str, Any]) -> float:
+        return float(m.get("nvml_avg_gpu_utilization", 0.0))
+
+    def score(self, v: float) -> float:
+        return min(1.0, v / self.target_utilization)
+
+    def is_satisfied(self, v: float) -> bool:
+        return v >= self.target_utilization
+
+    def to_prompt(self) -> str:
+        if self.hard:
+            return f"GPU utilization (NVML) MUST be at least {self.target_utilization}% (hard)."
+        return f"Maximize GPU utilization (target: >={self.target_utilization}%, weight: {self.weight})."
+
+    def formula(self) -> str:
+        base = f"min(1, utilization/{self.target_utilization})"
+        if self.hard:
+            return (
+                f"score = {base} * 1(utilization >= {self.target_utilization}) "
+                f"+ ({self.hard_penalty}) * 1(utilization < {self.target_utilization})"
+            )
+        if self.weight != 1.0:
+            return f"score = {base}  (x{self.weight} weight)"
+        return f"score = {base}"
+
+
+# ============================================================
 # Exports
 # ============================================================
 
@@ -196,4 +312,8 @@ __all__ = [
     "LegateFramebuffer",
     "LegateMakespan",
     "LegateConcurrency",
+    # NVML constraints
+    "NVMLPeakMemory",
+    "NVMLPowerBudget",
+    "NVMLUtilization",
 ]

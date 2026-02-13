@@ -192,7 +192,15 @@ class TrotterSimulator:
     )
     exponentiators: dict[str, _Exponentiator] = field(default=None)
 
+    # Class-level registry so the CPURunner can discover the most recently
+    # created simulator even when it lives inside a local function scope.
+    _last_instance: "TrotterSimulator | None" = field(
+        default=None, init=False, repr=False, compare=False,
+    )
+
     def __post_init__(self):
+        # Register this instance so runners can find it.
+        TrotterSimulator._last_instance = self
         if self.exponentiators is None:
             self.exponentiators = {
                 "exact": _ExactExponentiator(self.caster),
@@ -233,6 +241,32 @@ class TrotterSimulator:
                 if track_stats:
                     stats.precision_transitions += 1
         return state, stats
+
+    def cost_profile(self, hamiltonian=None):
+        """Return a :class:`~trovolut.backends.gpu_mp_emulator.measure.CostProfile`.
+
+        The *hamiltonian* argument is accepted for API compatibility with
+        ``MPEvolution.cost_profile()`` but is ignored -- the simulator
+        already carries its ``terms`` (which embed the generators).
+        """
+        from trovolut.backends.gpu_mp_emulator.measure import CostProfile, CostAnalyzer
+
+        cost = CostAnalyzer().analyze(self)
+        return CostProfile(
+            method="trotter",
+            peak_memory_bytes=cost.peak_memory_bytes,
+            generator_memory_bytes=cost.generator_memory_bytes,
+            state_memory_bytes=cost.state_memory_bytes,
+            auxiliary_memory_bytes=cost.auxiliary_memory_bytes,
+            memory_by_precision=dict(cost.memory_by_precision),
+            total_flops=cost.total_flops,
+            total_depth=cost.total_depth,
+            flops_by_precision=dict(cost.flops_by_precision),
+            total_bytes_accessed=cost.total_bytes_accessed,
+            bytes_by_precision=dict(cost.bytes_by_precision),
+            n_terms=cost.n_terms,
+            n_steps=cost.n_steps,
+        )
 
     def print_precision_summary(self):
         """Print summary of precision configuration."""
@@ -616,6 +650,8 @@ class MPTrotterEvolution(MPEvolution):
             total_flops=cost.total_flops,
             total_depth=cost.total_depth,
             flops_by_precision=dict(cost.flops_by_precision),
+            total_bytes_accessed=cost.total_bytes_accessed,
+            bytes_by_precision=dict(cost.bytes_by_precision),
             n_terms=cost.n_terms,
             n_steps=cost.n_steps,
         )
@@ -726,6 +762,7 @@ class MPQDriftEvolution(MPEvolution):
         probs = [norm / lambda_total for norm in norms] if lambda_total > 0 else [1.0 / len(terms)] * len(terms)
 
         expected_flops = 0.0
+        expected_bytes = 0.0
         max_aux = 0
         max_depth = 0
         for j, term in enumerate(terms):
@@ -738,6 +775,7 @@ class MPQDriftEvolution(MPEvolution):
             else:
                 mc = cost_model.exact_expm_cost(n, bits)
             expected_flops += probs[j] * mc["flops"]
+            expected_bytes += probs[j] * mc.get("bytes_accessed", 0)
             max_aux = max(max_aux, mc["auxiliary_memory"])
             max_depth = max(max_depth, mc["matvec_count"] + mc["matmat_count"] * 10)
 
@@ -749,6 +787,7 @@ class MPQDriftEvolution(MPEvolution):
             auxiliary_memory_bytes=max_aux,
             memory_by_precision=mem_by_prec,
             total_flops=int(n_samples * expected_flops),
+            total_bytes_accessed=int(n_samples * expected_bytes),
             total_depth=n_samples * max_depth,
             n_terms=len(terms),
             n_steps=n_samples,
@@ -819,6 +858,9 @@ class MPTaylorEvolution(MPEvolution):
         h_mp_bytes = n * n * 16
         aux_bytes = h_mp_bytes + 2 * state_bytes
 
+        # Bytes accessed: H_mp (n*n) reads + per-order vector I/O, at FP128 complex (16 bytes)
+        total_bytes_accessed = (n * n + order * n) * 16 * 2
+
         return CostProfile(
             method="taylor",
             peak_memory_bytes=gen_memory + state_bytes + aux_bytes,
@@ -827,6 +869,7 @@ class MPTaylorEvolution(MPEvolution):
             auxiliary_memory_bytes=aux_bytes,
             memory_by_precision=mem_by_prec,
             total_flops=order * (2 * n ** 2),
+            total_bytes_accessed=total_bytes_accessed,
             total_depth=order,
             n_terms=len(terms),
             n_steps=order,
@@ -876,6 +919,9 @@ class MPPadeEvolution(MPEvolution):
         h_mp_bytes = n * n * 16
         aux_bytes = h_mp_bytes + 6 * n * n * 16 + state_bytes
 
+        # Bytes accessed: 13 matmuls each reading 2 n×n matrices at accumulate precision (16 bytes complex)
+        total_bytes_accessed = 26 * n * n * 16
+
         return CostProfile(
             method="pade",
             peak_memory_bytes=gen_memory + state_bytes + aux_bytes,
@@ -884,6 +930,7 @@ class MPPadeEvolution(MPEvolution):
             auxiliary_memory_bytes=aux_bytes,
             memory_by_precision=mem_by_prec,
             total_flops=13 * (2 * n ** 3),
+            total_bytes_accessed=total_bytes_accessed,
             total_depth=13 * 10,
             n_terms=len(terms),
             n_steps=1,

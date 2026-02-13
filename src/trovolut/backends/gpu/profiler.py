@@ -53,21 +53,49 @@ class LegateResult:
 
 @dataclass
 class GPUMetrics:
-    """GPU metrics extracted from a legion_prof profile."""
+    """GPU metrics extracted from a legion_prof profile.
+
+    Optional NVML fields are populated when ``enable_nvml=True`` is passed
+    to :meth:`LegateProfiler.run`.  They default to ``None`` and are
+    excluded from :meth:`to_dict` when absent.
+    """
     gpu_seconds: float = 0.0
     makespan_seconds: float = 0.0
     avg_concurrency: float = 0.0
     peak_fb_mb: float = 0.0
     avg_fb_mb: float = 0.0
 
-    def to_dict(self) -> Dict[str, float]:
-        return {
+    # Optional NVML hardware counter fields
+    nvml_peak_memory_bytes: int | None = None
+    nvml_avg_memory_bytes: float | None = None
+    nvml_peak_power_watts: float | None = None
+    nvml_avg_power_watts: float | None = None
+    nvml_avg_gpu_utilization: float | None = None
+    nvml_avg_memory_utilization: float | None = None
+    nvml_energy_joules: float | None = None
+    nvml_max_temperature_c: int | None = None
+    nvml_n_samples: int | None = None
+
+    def to_dict(self) -> Dict[str, Any]:
+        d: Dict[str, Any] = {
             "gpu_seconds": self.gpu_seconds,
             "makespan_seconds": self.makespan_seconds,
             "avg_concurrency": self.avg_concurrency,
             "peak_fb_mb": self.peak_fb_mb,
             "avg_fb_mb": self.avg_fb_mb,
         }
+        # Conditionally include NVML fields
+        for attr in (
+            "nvml_peak_memory_bytes", "nvml_avg_memory_bytes",
+            "nvml_peak_power_watts", "nvml_avg_power_watts",
+            "nvml_avg_gpu_utilization", "nvml_avg_memory_utilization",
+            "nvml_energy_joules", "nvml_max_temperature_c",
+            "nvml_n_samples",
+        ):
+            val = getattr(self, attr)
+            if val is not None:
+                d[attr] = val
+        return d
 
 
 # ============================================================
@@ -115,6 +143,7 @@ class LegateProfiler:
         input_data: Tuple[Sequence[np.ndarray], np.ndarray, float],
         *,
         env: Dict[str, str] | None = None,
+        enable_nvml: bool = False,
     ) -> LegateResult:
         """Run a program via ``uv run legate --profile`` with pickle I/O.
 
@@ -126,6 +155,9 @@ class LegateProfiler:
             ``(H_terms, psi0, t)`` -- Hamiltonian terms, initial state, time.
         env : dict, optional
             Extra environment variables.
+        enable_nvml : bool
+            If True, wrap the subprocess call with an :class:`NVMLMonitor`
+            to collect real-time hardware counters (VRAM, power, utilization).
 
         Returns
         -------
@@ -144,7 +176,7 @@ class LegateProfiler:
         for p in self.workdir.glob("legate_*.prof"):
             shutil.rmtree(p, ignore_errors=True)
 
-        # 3. Launch Legate with profiling
+        # 3. Launch Legate with profiling (optionally with NVML monitoring)
         cmd = [
             "uv", "run", "legate", "--profile",
             "--gpus", str(self.gpus),
@@ -157,7 +189,15 @@ class LegateProfiler:
         if env:
             envp.update(env)
 
-        proc = subprocess.run(cmd, cwd=str(self.workdir), env=envp, capture_output=True)
+        nvml_metrics = None
+        if enable_nvml:
+            from trovolut.backends.gpu.hardware_counters import NVMLMonitor
+            with NVMLMonitor() as mon:
+                proc = subprocess.run(cmd, cwd=str(self.workdir), env=envp, capture_output=True)
+            nvml_metrics = mon.metrics()
+        else:
+            proc = subprocess.run(cmd, cwd=str(self.workdir), env=envp, capture_output=True)
+
         if proc.returncode != 0:
             raise RuntimeError(
                 f"Legate run failed (exit {proc.returncode}).\n"
@@ -168,7 +208,11 @@ class LegateProfiler:
         # 4. Parse output pickle
         psi_final, meta = _parse_pickle_output(proc.stdout)
 
-        # 5. Find newest profile directory
+        # 5. Merge NVML metrics into meta
+        if nvml_metrics is not None:
+            meta.update(nvml_metrics.to_dict())
+
+        # 6. Find newest profile directory
         prof_dirs = sorted(
             self.workdir.glob("legate_*.prof"),
             key=lambda p: p.stat().st_mtime,
