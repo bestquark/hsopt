@@ -69,7 +69,7 @@ class CostProfile:
             return self.total_flops / self.total_bytes_accessed
         return float("inf")
 
-    def emulated_time(self, hardware) -> float:
+    def emulated_time(self, hardware, sparse: bool = False) -> float:
         """Emulated wall-clock time (seconds) on *hardware*.
 
         Uses a **roofline model**: the execution time is the maximum of
@@ -83,6 +83,10 @@ class CostProfile:
         hardware : HardwareCluster or BaseHardware
             Must expose ``total_spec(key)`` (clusters) or ``spec(key)``
             (single units).
+        sparse : bool
+            If *True*, use structured-sparsity (2:4) throughput for
+            tensor-core precisions (fp16, bf16, fp8, fp4, int8).
+            Falls back to the dense value when the sparse key is 0.
         """
         _BITS_TO_HW = {
             "float64": "fp64_flops", "float32": "fp32_flops",
@@ -90,11 +94,21 @@ class CostProfile:
             "float8_e4m3": "fp8_flops", "float8_e5m2": "fp8_flops",
             "int8": "fp8_flops", "float4": "fp4_flops",
         }
+        # Precisions eligible for sparse throughput (tensor-core only)
+        _SPARSE_ELIGIBLE = {
+            "float16", "bfloat16", "float8_e4m3", "float8_e5m2",
+            "int8", "float4",
+        }
         _spec = getattr(hardware, "total_spec", None) or hardware.spec
         compute_s = 0.0
         for prec_key, flops in self.flops_by_precision.items():
             hw_key = _BITS_TO_HW.get(prec_key, "fp32_flops")
-            throughput = _spec(hw_key)
+            # Try sparse throughput first when requested
+            throughput = 0.0
+            if sparse and prec_key in _SPARSE_ELIGIBLE:
+                throughput = _spec(hw_key.replace("_flops", "_flops_sparse"))
+            if throughput <= 0:
+                throughput = _spec(hw_key)
             if throughput > 0:
                 compute_s += flops / throughput
             else:
@@ -109,12 +123,12 @@ class CostProfile:
             return max(compute_s, memory_s)
         return compute_s
 
-    def emulated_spacetime(self, hardware) -> float:
+    def emulated_spacetime(self, hardware, sparse: bool = False) -> float:
         """Emulated spacetime cost (byte-seconds) on *hardware*.
 
-        ``peak_memory_bytes * emulated_time(hardware)``
+        ``peak_memory_bytes * emulated_time(hardware, sparse)``
         """
-        return self.peak_memory_bytes * self.emulated_time(hardware)
+        return self.peak_memory_bytes * self.emulated_time(hardware, sparse=sparse)
 
     def to_dict(self) -> Dict[str, Any]:
         """Flatten into a dict suitable for constraint evaluation."""
@@ -375,7 +389,7 @@ class SpacetimeCost:
             return self.total_flops / self.total_bytes_accessed
         return float("inf")
 
-    def emulated_time(self, hardware) -> float:
+    def emulated_time(self, hardware, sparse: bool = False) -> float:
         """Emulated wall-clock time (seconds) on *hardware*.
 
         Uses a **roofline model**: the execution time is the maximum of
@@ -386,16 +400,26 @@ class SpacetimeCost:
         ----------
         hardware : HardwareCluster or BaseHardware
             Must expose ``total_spec(key)`` (clusters) or ``spec(key)``.
+        sparse : bool
+            If *True*, use structured-sparsity (2:4) throughput for
+            tensor-core precisions (16, 8, 4 bit).
         """
         _BITS_TO_HW = {
             64: "fp64_flops", 32: "fp32_flops", 16: "fp16_flops",
             8: "fp8_flops", 4: "fp4_flops",
         }
+        # Bit widths eligible for sparse throughput (tensor-core only)
+        _SPARSE_ELIGIBLE = {16, 8, 4}
         _spec = getattr(hardware, "total_spec", None) or hardware.spec
         compute_s = 0.0
         for _name, tc in self.cost_by_term.items():
             hw_key = _BITS_TO_HW.get(tc.compute_bits, "fp32_flops")
-            throughput = _spec(hw_key)
+            # Try sparse throughput first when requested
+            throughput = 0.0
+            if sparse and tc.compute_bits in _SPARSE_ELIGIBLE:
+                throughput = _spec(hw_key.replace("_flops", "_flops_sparse"))
+            if throughput <= 0:
+                throughput = _spec(hw_key)
             if throughput > 0:
                 compute_s += tc.flops * self.n_steps / throughput
             else:
@@ -408,12 +432,12 @@ class SpacetimeCost:
             return max(compute_s, memory_s)
         return compute_s
 
-    def emulated_spacetime(self, hardware) -> float:
+    def emulated_spacetime(self, hardware, sparse: bool = False) -> float:
         """Emulated spacetime cost (byte-seconds) on *hardware*.
 
-        ``peak_memory_bytes * emulated_time(hardware)``
+        ``peak_memory_bytes * emulated_time(hardware, sparse)``
         """
-        return self.peak_memory_bytes * self.emulated_time(hardware)
+        return self.peak_memory_bytes * self.emulated_time(hardware, sparse=sparse)
 
 
 # ============================================================

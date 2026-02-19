@@ -14,6 +14,11 @@ Predefined interconnect constants:
     ``NVLINK_2``, ``NVLINK_3``, ``NVLINK_4``, ``NVLINK_5``,
     ``PCIE_GEN4``, ``PCIE_GEN5``
 
+All Tensor Core throughput values are stored as **dense** (non-sparsity)
+numbers.  Structured-sparsity (2:4) variants are available via the
+``_sparse`` suffix keys (e.g. ``fp16_flops_sparse``) and through
+``max_flops(precision, sparse=True)``.
+
 Example::
 
     import trovolut as trv
@@ -36,6 +41,8 @@ from trovolut.core.base_hardware import BaseHardware, HardwareCluster
 
 # -- unit helpers ---------------------------------------------------------
 
+KB = 1024
+MB = 1024 ** 2
 GB = 1024 ** 3
 TB = 1024 ** 4
 TFLOPS = 1e12
@@ -153,8 +160,49 @@ class GPU(BaseHardware):
         """Memory bandwidth in bytes/s."""
         return self.spec("memory_bandwidth")
 
-    def max_flops(self, precision: str = "fp32") -> float:
-        """Peak FLOP/s for the given precision string (e.g. ``'fp16'``)."""
+    # -- architectural spec accessors -------------------------------------
+
+    @property
+    def cuda_cores(self) -> int:
+        return int(self.spec("cuda_cores"))
+
+    @property
+    def tensor_cores(self) -> int:
+        return int(self.spec("tensor_cores"))
+
+    @property
+    def sm_count(self) -> int:
+        return int(self.spec("sm_count"))
+
+    @property
+    def shared_mem_per_sm(self) -> int:
+        return int(self.spec("shared_mem_per_sm"))
+
+    @property
+    def max_shared_mem_per_block(self) -> int:
+        return int(self.spec("max_shared_mem_per_block"))
+
+    @property
+    def l2_cache_bytes(self) -> int:
+        return int(self.spec("l2_cache_bytes"))
+
+    @property
+    def tdp_watts(self) -> int:
+        return int(self.spec("tdp_watts"))
+
+    def max_flops(self, precision: str = "fp32", sparse: bool = False) -> float:
+        """Peak FLOP/s for the given precision string (e.g. ``'fp16'``).
+
+        Parameters
+        ----------
+        sparse : bool
+            If *True*, return the structured-sparsity (2:4) throughput
+            when available; falls back to the dense value otherwise.
+        """
+        if sparse:
+            val = self.spec(f"{precision}_flops_sparse")
+            if val > 0:
+                return val
         return self.spec(f"{precision}_flops")
 
     def __repr__(self) -> str:
@@ -233,8 +281,19 @@ class GPUCluster(HardwareCluster):
 
     # -- convenience ------------------------------------------------------
 
-    def total_flops(self, precision: str = "fp32") -> float:
-        """Sum of per-GPU ``max_flops(precision)`` across all units."""
+    def total_flops(self, precision: str = "fp32", sparse: bool = False) -> float:
+        """Sum of per-GPU ``max_flops(precision)`` across all units.
+
+        Parameters
+        ----------
+        sparse : bool
+            If *True*, use the structured-sparsity (2:4) throughput.
+        """
+        if sparse:
+            key = f"{precision}_flops_sparse"
+            val = self.total_spec(key)
+            if val > 0:
+                return val
         return self.total_spec(f"{precision}_flops")
 
     @property
@@ -283,13 +342,17 @@ class GPUCluster(HardwareCluster):
 # ============================================================
 # Predefined NVIDIA GPU specifications
 # ============================================================
+# All Tensor Core FLOP/s values are **dense** (non-sparsity).
+# Sparse (2:4 structured sparsity) variants are stored in
+# ``*_flops_sparse`` keys and equal 2x the dense value for
+# GPUs that support it (Ampere and later).
 
 gpus = SimpleNamespace(
 
     # -- Volta -----------------------------------------------------------
     # Datasheet: https://images.nvidia.com/content/technologies/volta/pdf/volta-v100-datasheet-update-us-1165301-r5.pdf
     # SXM2 variant. FP16 Tensor Core perf = 125 TFLOPS (dense).
-    # V100 pre-dates BF16/FP8/FP4 Tensor Core support.
+    # V100 pre-dates BF16/FP8/FP4 Tensor Core support and structured sparsity.
 
     V100=GPU(
         "V100-32GB",
@@ -302,15 +365,29 @@ gpus = SimpleNamespace(
             "fp8_flops": 0.0,                  # not supported
             "fp4_flops": 0.0,                  # not supported
             "int8_tops": 0.0,                  # not supported
+            # No sparse keys — V100 does not support structured sparsity
+            "fp16_flops_sparse": 0.0,
+            "bf16_flops_sparse": 0.0,
+            "fp8_flops_sparse": 0.0,
+            "fp4_flops_sparse": 0.0,
+            "int8_tops_sparse": 0.0,
             "memory_bandwidth": 900e9,          # 900 GB/s HBM2
             "default_interconnect": "nvlink_2",
+            # Architectural specs
+            "cuda_cores": 5120,
+            "tensor_cores": 640,
+            "sm_count": 80,
+            "shared_mem_per_sm": 96 * KB,
+            "max_shared_mem_per_block": 96 * KB,
+            "l2_cache_bytes": 6 * MB,
+            "tdp_watts": 300,
         },
     ),
 
     # -- Ampere ----------------------------------------------------------
     # Datasheet (40 GB): https://www.nvidia.com/content/dam/en-zz/Solutions/Data-Center/a100/pdf/nvidia-a100-datasheet.pdf
     # Datasheet (80 GB): https://www.nvidia.com/content/dam/en-zz/Solutions/Data-Center/a100/pdf/a100-80gb-datasheet-update-nvidia-us-1521051-r2-web.pdf
-    # SXM variants. FP16/BF16 Tensor Core perf includes sparsity (312 dense).
+    # SXM variants. All Tensor Core values are dense.
 
     A100_40=GPU(
         "A100-40GB",
@@ -323,8 +400,22 @@ gpus = SimpleNamespace(
             "fp8_flops": 0.0,                  # not supported
             "fp4_flops": 0.0,                  # not supported
             "int8_tops": 624 * TFLOPS,         # INT8 Tensor Core (dense)
-            "memory_bandwidth": 2.0e12,         # ~2 TB/s HBM2e (SXM)
+            # Sparse (2:4) = 2x dense
+            "fp16_flops_sparse": 624 * TFLOPS,
+            "bf16_flops_sparse": 624 * TFLOPS,
+            "fp8_flops_sparse": 0.0,
+            "fp4_flops_sparse": 0.0,
+            "int8_tops_sparse": 1248 * TFLOPS,
+            "memory_bandwidth": 1.555e12,       # 1.555 TB/s HBM2e (40GB SXM)
             "default_interconnect": "nvlink_3",
+            # Architectural specs
+            "cuda_cores": 6912,
+            "tensor_cores": 432,
+            "sm_count": 108,
+            "shared_mem_per_sm": 164 * KB,
+            "max_shared_mem_per_block": 163 * KB,
+            "l2_cache_bytes": 40 * MB,
+            "tdp_watts": 400,
         },
     ),
 
@@ -339,8 +430,22 @@ gpus = SimpleNamespace(
             "fp8_flops": 0.0,                  # not supported
             "fp4_flops": 0.0,                  # not supported
             "int8_tops": 624 * TFLOPS,         # INT8 Tensor Core (dense)
-            "memory_bandwidth": 2.0e12,         # ~2 TB/s HBM2e (SXM)
+            # Sparse (2:4) = 2x dense
+            "fp16_flops_sparse": 624 * TFLOPS,
+            "bf16_flops_sparse": 624 * TFLOPS,
+            "fp8_flops_sparse": 0.0,
+            "fp4_flops_sparse": 0.0,
+            "int8_tops_sparse": 1248 * TFLOPS,
+            "memory_bandwidth": 2.039e12,       # 2.039 TB/s HBM2e (80GB SXM)
             "default_interconnect": "nvlink_3",
+            # Architectural specs
+            "cuda_cores": 6912,
+            "tensor_cores": 432,
+            "sm_count": 108,
+            "shared_mem_per_sm": 164 * KB,
+            "max_shared_mem_per_block": 163 * KB,
+            "l2_cache_bytes": 40 * MB,
+            "tdp_watts": 400,
         },
     ),
 
@@ -348,7 +453,8 @@ gpus = SimpleNamespace(
     # Datasheet: https://resources.nvidia.com/en-us-tensor-core/nvidia-tensor-core-gpu-datasheet
     # Product page: https://www.nvidia.com/en-us/data-center/h100/
     # H200 datasheet: https://nvidia.com/en-us/data-center/h200/
-    # SXM variants. FP16/BF16/FP8 Tensor Core perf with sparsity.
+    # SXM variants. All Tensor Core values are dense (halved from datasheet
+    # sparsity numbers).
     # H200 shares the Hopper compute die with H100 but has HBM3e memory.
 
     H100=GPU(
@@ -357,13 +463,27 @@ gpus = SimpleNamespace(
             "memory_bytes": 80 * GB,           # 80 GB HBM3
             "fp64_flops": 33.5 * TFLOPS,       # FP64 Tensor Core
             "fp32_flops": 66.9 * TFLOPS,       # FP32
-            "fp16_flops": 1979 * TFLOPS,       # FP16 Tensor Core (w/ sparsity)
-            "bf16_flops": 1979 * TFLOPS,       # BF16 Tensor Core (w/ sparsity)
-            "fp8_flops": 3958 * TFLOPS,        # FP8 Tensor Core (w/ sparsity)
+            "fp16_flops": 990 * TFLOPS,        # FP16 Tensor Core (dense)
+            "bf16_flops": 990 * TFLOPS,        # BF16 Tensor Core (dense)
+            "fp8_flops": 1979 * TFLOPS,        # FP8 Tensor Core (dense)
             "fp4_flops": 0.0,                  # not supported
-            "int8_tops": 3958 * TFLOPS,        # INT8 Tensor Core (w/ sparsity)
+            "int8_tops": 1979 * TFLOPS,        # INT8 Tensor Core (dense)
+            # Sparse (2:4) = 2x dense
+            "fp16_flops_sparse": 1979 * TFLOPS,
+            "bf16_flops_sparse": 1979 * TFLOPS,
+            "fp8_flops_sparse": 3958 * TFLOPS,
+            "fp4_flops_sparse": 0.0,
+            "int8_tops_sparse": 3958 * TFLOPS,
             "memory_bandwidth": 3.35e12,        # 3.35 TB/s HBM3 (SXM)
             "default_interconnect": "nvlink_4",
+            # Architectural specs
+            "cuda_cores": 16896,
+            "tensor_cores": 528,
+            "sm_count": 132,
+            "shared_mem_per_sm": 228 * KB,
+            "max_shared_mem_per_block": 227 * KB,
+            "l2_cache_bytes": 50 * MB,
+            "tdp_watts": 700,
         },
     ),
 
@@ -373,13 +493,27 @@ gpus = SimpleNamespace(
             "memory_bytes": 141 * GB,          # 141 GB HBM3e
             "fp64_flops": 33.5 * TFLOPS,       # same Hopper compute die as H100
             "fp32_flops": 66.9 * TFLOPS,
-            "fp16_flops": 1979 * TFLOPS,       # FP16 Tensor Core (w/ sparsity)
-            "bf16_flops": 1979 * TFLOPS,       # BF16 Tensor Core (w/ sparsity)
-            "fp8_flops": 3958 * TFLOPS,        # FP8 Tensor Core (w/ sparsity)
+            "fp16_flops": 990 * TFLOPS,        # FP16 Tensor Core (dense)
+            "bf16_flops": 990 * TFLOPS,        # BF16 Tensor Core (dense)
+            "fp8_flops": 1979 * TFLOPS,        # FP8 Tensor Core (dense)
             "fp4_flops": 0.0,                  # not supported
-            "int8_tops": 3958 * TFLOPS,        # INT8 Tensor Core (w/ sparsity)
+            "int8_tops": 1979 * TFLOPS,        # INT8 Tensor Core (dense)
+            # Sparse (2:4) = 2x dense
+            "fp16_flops_sparse": 1979 * TFLOPS,
+            "bf16_flops_sparse": 1979 * TFLOPS,
+            "fp8_flops_sparse": 3958 * TFLOPS,
+            "fp4_flops_sparse": 0.0,
+            "int8_tops_sparse": 3958 * TFLOPS,
             "memory_bandwidth": 4.8e12,         # 4.8 TB/s HBM3e
             "default_interconnect": "nvlink_4",
+            # Architectural specs
+            "cuda_cores": 16896,
+            "tensor_cores": 528,
+            "sm_count": 132,
+            "shared_mem_per_sm": 228 * KB,
+            "max_shared_mem_per_block": 227 * KB,
+            "l2_cache_bytes": 50 * MB,
+            "tdp_watts": 700,
         },
     ),
 
@@ -388,6 +522,7 @@ gpus = SimpleNamespace(
     # B100 specs: https://flopper.io/gpu/nvidia-b100-sxm-192gb
     # Architecture overview: https://cudocompute.com/blog/nvidias-blackwell-architecture-breaking-down-the-b100-b200-and-gb200
     # SXM variants. 2nd-gen Transformer Engine with FP4. 208B transistors.
+    # All Tensor Core values are dense (halved from datasheet sparsity numbers).
 
     B100=GPU(
         "B100-192GB",
@@ -395,13 +530,27 @@ gpus = SimpleNamespace(
             "memory_bytes": 192 * GB,          # 192 GB HBM3e
             "fp64_flops": 30 * TFLOPS,         # FP64
             "fp32_flops": 60 * TFLOPS,         # FP32
-            "fp16_flops": 3500 * TFLOPS,       # FP16 Tensor Core
-            "bf16_flops": 3500 * TFLOPS,       # BF16 Tensor Core
-            "fp8_flops": 7000 * TFLOPS,        # FP8 Tensor Core
-            "fp4_flops": 14_000 * TFLOPS,      # FP4 Tensor Core (NVFP4)
-            "int8_tops": 7000 * TFLOPS,        # INT8 Tensor Core
+            "fp16_flops": 1750 * TFLOPS,       # FP16 Tensor Core (dense)
+            "bf16_flops": 1750 * TFLOPS,       # BF16 Tensor Core (dense)
+            "fp8_flops": 3500 * TFLOPS,        # FP8 Tensor Core (dense)
+            "fp4_flops": 7000 * TFLOPS,        # FP4 Tensor Core (dense, NVFP4)
+            "int8_tops": 3500 * TFLOPS,        # INT8 Tensor Core (dense)
+            # Sparse (2:4) = 2x dense
+            "fp16_flops_sparse": 3500 * TFLOPS,
+            "bf16_flops_sparse": 3500 * TFLOPS,
+            "fp8_flops_sparse": 7000 * TFLOPS,
+            "fp4_flops_sparse": 14_000 * TFLOPS,
+            "int8_tops_sparse": 7000 * TFLOPS,
             "memory_bandwidth": 8.0e12,         # 8 TB/s HBM3e
             "default_interconnect": "nvlink_5",
+            # Architectural specs
+            "cuda_cores": 18432,
+            "tensor_cores": 528,
+            "sm_count": 144,
+            "shared_mem_per_sm": 228 * KB,
+            "max_shared_mem_per_block": 227 * KB,
+            "l2_cache_bytes": 64 * MB,
+            "tdp_watts": 700,
         },
     ),
 
@@ -411,13 +560,27 @@ gpus = SimpleNamespace(
             "memory_bytes": 192 * GB,          # 192 GB HBM3e
             "fp64_flops": 45 * TFLOPS,         # FP64
             "fp32_flops": 90 * TFLOPS,         # FP32
-            "fp16_flops": 4500 * TFLOPS,       # FP16 Tensor Core
-            "bf16_flops": 4500 * TFLOPS,       # BF16 Tensor Core
-            "fp8_flops": 9000 * TFLOPS,        # FP8 Tensor Core
-            "fp4_flops": 18_000 * TFLOPS,      # FP4 Tensor Core (NVFP4)
-            "int8_tops": 9000 * TFLOPS,        # INT8 Tensor Core
+            "fp16_flops": 2250 * TFLOPS,       # FP16 Tensor Core (dense)
+            "bf16_flops": 2250 * TFLOPS,       # BF16 Tensor Core (dense)
+            "fp8_flops": 4500 * TFLOPS,        # FP8 Tensor Core (dense)
+            "fp4_flops": 9000 * TFLOPS,        # FP4 Tensor Core (dense, NVFP4)
+            "int8_tops": 4500 * TFLOPS,        # INT8 Tensor Core (dense)
+            # Sparse (2:4) = 2x dense
+            "fp16_flops_sparse": 4500 * TFLOPS,
+            "bf16_flops_sparse": 4500 * TFLOPS,
+            "fp8_flops_sparse": 9000 * TFLOPS,
+            "fp4_flops_sparse": 18_000 * TFLOPS,
+            "int8_tops_sparse": 9000 * TFLOPS,
             "memory_bandwidth": 8.0e12,         # 8 TB/s HBM3e
             "default_interconnect": "nvlink_5",
+            # Architectural specs
+            "cuda_cores": 18432,
+            "tensor_cores": 528,
+            "sm_count": 144,
+            "shared_mem_per_sm": 228 * KB,
+            "max_shared_mem_per_block": 227 * KB,
+            "l2_cache_bytes": 64 * MB,
+            "tdp_watts": 1000,
         },
     ),
 
@@ -437,16 +600,66 @@ gpus = SimpleNamespace(
             "fp8_flops": 4500 * TFLOPS,        # FP8 Tensor Core (dense)
             "fp4_flops": 14_000 * TFLOPS,      # FP4 Tensor Core (dense)
             "int8_tops": 4500 * TFLOPS,        # INT8 Tensor Core (dense)
+            # Sparse (2:4) = 2x dense
+            "fp16_flops_sparse": 4500 * TFLOPS,
+            "bf16_flops_sparse": 4500 * TFLOPS,
+            "fp8_flops_sparse": 9000 * TFLOPS,
+            "fp4_flops_sparse": 28_000 * TFLOPS,
+            "int8_tops_sparse": 9000 * TFLOPS,
             "memory_bandwidth": 8.0e12,         # 8 TB/s HBM3e
             "default_interconnect": "nvlink_5",
+            # Architectural specs
+            "cuda_cores": 18432,
+            "tensor_cores": 528,
+            "sm_count": 144,
+            "shared_mem_per_sm": 228 * KB,
+            "max_shared_mem_per_block": 227 * KB,
+            "l2_cache_bytes": 64 * MB,
+            "tdp_watts": 1400,
+        },
+    ),
+
+    # -- GeForce RTX 5090 ------------------------------------------------
+    # Blackwell consumer flagship. GDDR7, PCIe Gen5.
+    # Sources:
+    #   https://www.nvidia.com/en-us/geforce/graphics-cards/50-series/rtx-5090/
+    #   https://www.techpowerup.com/gpu-specs/geforce-rtx-5090.c4216
+
+    RTX_5090=GPU(
+        "RTX 5090-32GB",
+        specs={
+            "memory_bytes": 32 * GB,           # 32 GB GDDR7
+            "fp64_flops": 3.3 * TFLOPS,        # FP64 (1:32 rate)
+            "fp32_flops": 105 * TFLOPS,        # FP32
+            "fp16_flops": 210 * TFLOPS,        # FP16 Tensor Core (dense)
+            "bf16_flops": 210 * TFLOPS,        # BF16 Tensor Core (dense)
+            "fp8_flops": 420 * TFLOPS,         # FP8 Tensor Core (dense)
+            "fp4_flops": 840 * TFLOPS,         # FP4 Tensor Core (dense)
+            "int8_tops": 420 * TFLOPS,         # INT8 Tensor Core (dense)
+            # Sparse (2:4) = 2x dense
+            "fp16_flops_sparse": 420 * TFLOPS,
+            "bf16_flops_sparse": 420 * TFLOPS,
+            "fp8_flops_sparse": 840 * TFLOPS,
+            "fp4_flops_sparse": 1680 * TFLOPS,
+            "int8_tops_sparse": 840 * TFLOPS,
+            "memory_bandwidth": 1.792e12,       # 1.792 TB/s GDDR7
+            "default_interconnect": "pcie_gen5",
+            # Architectural specs
+            "cuda_cores": 21760,
+            "tensor_cores": 680,
+            "sm_count": 170,
+            "shared_mem_per_sm": 228 * KB,
+            "max_shared_mem_per_block": 227 * KB,
+            "l2_cache_bytes": 98 * MB,
+            "tdp_watts": 575,
         },
     ),
 )
 """Predefined NVIDIA GPU specifications.
 
 All values are for the SXM / data-center variants where applicable.
-Tensor Core throughput is listed with sparsity for Hopper (H100/H200)
-and dense for other architectures unless noted.
+Tensor Core throughput is consistently listed as **dense** (non-sparsity).
+Structured-sparsity (2:4) values are in ``*_flops_sparse`` keys.
 
 Usage::
 
@@ -454,6 +667,7 @@ Usage::
 
     gpus.A100          # GPU('A100-80GB')
     gpus.H100          # GPU('H100-80GB')
+    gpus.RTX_5090      # GPU('RTX 5090-32GB')
     cluster = 5 * gpus.A100
 """
 
@@ -468,6 +682,12 @@ __all__ = [
     "GPUCluster",
     "Interconnect",
     "gpus",
+    # Unit helpers
+    "KB",
+    "MB",
+    "GB",
+    "TB",
+    "TFLOPS",
     # Predefined interconnects
     "NVLINK_2",
     "NVLINK_3",

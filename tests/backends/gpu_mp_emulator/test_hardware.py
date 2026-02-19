@@ -11,6 +11,8 @@ from trovolut.backends.gpu_mp_emulator.hardware import (
     GPUCluster,
     gpus,
     NVLINK_3,
+    KB,
+    MB,
     GB,
     TFLOPS,
 )
@@ -146,3 +148,126 @@ class TestEmulatedTime:
         t_fp32 = cp_fp32.emulated_time(gpus.A100)
         t_fp16 = cp_fp16.emulated_time(gpus.A100)
         assert t_fp16 < t_fp32
+
+
+# ============================================================
+# 5. Normalized dense FLOPS
+# ============================================================
+
+class TestGPUSpecsNormalized:
+    """Verify that H100/H200/B100/B200 use dense (non-sparsity) values."""
+
+    def test_h100_fp16_dense(self):
+        assert gpus.H100.fp16_flops == 990 * TFLOPS
+
+    def test_h100_fp8_dense(self):
+        assert gpus.H100.fp8_flops == 1979 * TFLOPS
+
+    def test_b200_fp16_dense(self):
+        assert gpus.B200.fp16_flops == 2250 * TFLOPS
+
+    def test_b200_fp8_dense(self):
+        assert gpus.B200.fp8_flops == 4500 * TFLOPS
+
+    def test_b200_fp4_dense(self):
+        assert gpus.B200.fp4_flops == 9000 * TFLOPS
+
+    def test_a100_80gb_bandwidth(self):
+        assert gpus.A100.memory_bandwidth == 2.039e12
+
+    def test_a100_40gb_bandwidth(self):
+        assert gpus.A100_40.memory_bandwidth == 1.555e12
+
+
+# ============================================================
+# 6. Sparse FLOPS via max_flops()
+# ============================================================
+
+class TestSparseFlops:
+    """Verify max_flops(sparse=True) returns 2x dense for supported GPUs."""
+
+    def test_h100_fp16_sparse(self):
+        assert gpus.H100.max_flops("fp16", sparse=True) == 1979 * TFLOPS
+
+    def test_a100_fp16_sparse(self):
+        assert gpus.A100.max_flops("fp16", sparse=True) == 624 * TFLOPS
+
+    def test_v100_fp16_sparse_fallback(self):
+        """V100 has no sparse support — should fall back to dense."""
+        assert gpus.V100.max_flops("fp16", sparse=True) == 31.4 * TFLOPS
+
+    def test_b200_fp4_sparse(self):
+        assert gpus.B200.max_flops("fp4", sparse=True) == 18_000 * TFLOPS
+
+    def test_cluster_sparse_flops(self):
+        cluster = 2 * gpus.H100
+        assert cluster.total_flops("fp16", sparse=True) == 2 * 1979 * TFLOPS
+
+    def test_dense_equals_no_sparse_flag(self):
+        """max_flops without sparse flag returns dense value."""
+        assert gpus.H100.max_flops("fp16") == 990 * TFLOPS
+        assert gpus.H100.max_flops("fp16", sparse=False) == 990 * TFLOPS
+
+
+# ============================================================
+# 7. Architectural specs
+# ============================================================
+
+class TestArchitecturalSpecs:
+
+    def test_a100_cuda_cores(self):
+        assert gpus.A100.cuda_cores == 6912
+
+    def test_a100_tensor_cores(self):
+        assert gpus.A100.tensor_cores == 432
+
+    def test_a100_sm_count(self):
+        assert gpus.A100.sm_count == 108
+
+    def test_h100_cuda_cores(self):
+        assert gpus.H100.cuda_cores == 16896
+
+    def test_v100_tdp(self):
+        assert gpus.V100.tdp_watts == 300
+
+    def test_b200_tdp(self):
+        assert gpus.B200.tdp_watts == 1000
+
+    def test_h100_l2_cache(self):
+        assert gpus.H100.l2_cache_bytes == 50 * MB
+
+    def test_a100_shared_mem_per_sm(self):
+        assert gpus.A100.shared_mem_per_sm == 164 * KB
+
+
+# ============================================================
+# 8. RTX 5090
+# ============================================================
+
+class TestRTX5090:
+
+    def test_memory(self):
+        assert gpus.RTX_5090.memory_bytes == 32 * GB
+
+    def test_fp32_flops(self):
+        assert gpus.RTX_5090.fp32_flops == 105 * TFLOPS
+
+    def test_fp16_dense(self):
+        assert gpus.RTX_5090.fp16_flops == 210 * TFLOPS
+
+    def test_fp16_sparse(self):
+        assert gpus.RTX_5090.max_flops("fp16", sparse=True) == 420 * TFLOPS
+
+    def test_interconnect(self):
+        cluster = 2 * gpus.RTX_5090
+        assert cluster.intra_node is not None
+        assert cluster.intra_node.name == "PCIe Gen5"
+
+    def test_cuda_cores(self):
+        assert gpus.RTX_5090.cuda_cores == 21760
+
+    def test_tensor_cores(self):
+        assert gpus.RTX_5090.tensor_cores == 680
+
+    def test_tdp(self):
+        assert gpus.RTX_5090.tdp_watts == 575

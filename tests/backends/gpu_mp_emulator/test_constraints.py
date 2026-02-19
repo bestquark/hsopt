@@ -151,6 +151,35 @@ class TestSpaceTimeCost:
         assert "gpus.A100" in r
         assert "exponential" in r
 
+    def test_hardware_mode_sparse(self):
+        """Sparse mode should yield lower emulated spacetime for fp16 workloads.
+
+        Dense FP16 on A100: 312 TFLOPS → time = flops / 312e12
+        Sparse FP16 on A100: 624 TFLOPS → time = flops / 624e12  (faster)
+        """
+        hw = gpus.A100
+        fp16_flops = int(312e12)
+        metrics = {
+            "peak_memory_bytes": 1000,
+            "flops_by_precision": {"float16": fp16_flops},
+            "total_flops": fp16_flops,
+        }
+        c_dense = SpaceTimeCost(max_product=1e15, hardware=hw, sparse=False)
+        c_sparse = SpaceTimeCost(max_product=1e15, hardware=hw, sparse=True)
+
+        v_dense = c_dense.extract(metrics)
+        v_sparse = c_sparse.extract(metrics)
+        assert v_sparse < v_dense
+        # Dense: 1000 * (312e12 / 312e12) = 1000
+        # Sparse: 1000 * (312e12 / 624e12) = 500
+        assert v_dense == pytest.approx(1000.0, rel=1e-6)
+        assert v_sparse == pytest.approx(500.0, rel=1e-6)
+
+    def test_repr_with_sparse(self):
+        c = SpaceTimeCost(hardware=gpus.A100, sparse=True)
+        r = repr(c)
+        assert "sparse=True" in r
+
 
 # ============================================================
 # 4. MatMulCount

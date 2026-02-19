@@ -13,6 +13,7 @@ from trovolut.backends.gpu_mp_emulator.measure import (
     SpacetimeCost,
     TermCost,
 )
+from trovolut.backends.gpu_mp_emulator.hardware import gpus
 
 
 # ============================================================
@@ -87,12 +88,12 @@ class TestRooflineBottleneck:
             total_bytes_accessed=1,  # negligible
         )
         t = cp.emulated_time(a100_gpu)
-        # compute_s ≈ 1.0, memory_s ≈ 1 / 2e12 ≈ tiny → max is compute
+        # compute_s ≈ 1.0, memory_s ≈ 1 / 2.039e12 ≈ tiny → max is compute
         assert t == pytest.approx(1.0, rel=1e-6)
 
     def test_memory_bound_when_flops_tiny(self, a100_gpu):
         """Tiny FLOPs → memory-bound (memory_s > compute_s)."""
-        bw = 2.0e12  # A100 memory bandwidth
+        bw = 2.039e12  # A100-80GB memory bandwidth
         bytes_accessed = int(bw)  # exactly 1 second of bandwidth
         cp = CostProfile(
             total_flops=1,  # negligible
@@ -131,7 +132,7 @@ class TestSpacetimeCostRoofline:
 
     def test_spacetimecost_memory_bound(self, a100_gpu):
         """SpacetimeCost picks memory-bound when bytes >> flops."""
-        bw = 2.0e12
+        bw = 2.039e12  # A100-80GB memory bandwidth
         sc = SpacetimeCost(
             n_steps=1,
             total_bytes_accessed=int(bw),  # 1 sec of bandwidth
@@ -180,3 +181,54 @@ class TestToDictNewKeys:
         assert d["total_bytes_accessed"] == 50
         assert d["bytes_by_precision"] == {"float32": 50}
         assert d["arithmetic_intensity"] == pytest.approx(2.0)
+
+
+# ============================================================
+# 7. Sparse emulated time
+# ============================================================
+
+class TestSparseEmulatedTime:
+    """Verify that sparse=True yields faster emulated time for tensor-core precisions."""
+
+    def test_costprofile_sparse_faster_fp16(self):
+        """Sparse FP16 throughput (2x) halves emulated time for FP16 workloads."""
+        flops = int(624e12)  # A100 sparse FP16 rate
+        cp = CostProfile(
+            total_flops=flops,
+            flops_by_precision={"float16": flops},
+        )
+        t_dense = cp.emulated_time(gpus.A100, sparse=False)
+        t_sparse = cp.emulated_time(gpus.A100, sparse=True)
+        assert t_sparse < t_dense
+        # Dense: 624e12 / 312e12 = 2.0s; Sparse: 624e12 / 624e12 = 1.0s
+        assert t_dense == pytest.approx(2.0, rel=1e-6)
+        assert t_sparse == pytest.approx(1.0, rel=1e-6)
+
+    def test_costprofile_sparse_no_effect_fp32(self):
+        """FP32 is a CUDA-core precision — sparse flag has no effect."""
+        flops = int(19.5e12)
+        cp = CostProfile(
+            total_flops=flops,
+            flops_by_precision={"float32": flops},
+        )
+        t_dense = cp.emulated_time(gpus.A100, sparse=False)
+        t_sparse = cp.emulated_time(gpus.A100, sparse=True)
+        assert t_dense == pytest.approx(t_sparse, rel=1e-9)
+
+    def test_spacetimecost_sparse_faster_16bit(self):
+        """SpacetimeCost with 16-bit terms should be faster with sparse=True."""
+        sc = SpacetimeCost(n_steps=1)
+        tc = TermCost(name="t0", flops=int(624e12), compute_bits=16)
+        sc.cost_by_term["t0"] = tc
+        t_dense = sc.emulated_time(gpus.A100, sparse=False)
+        t_sparse = sc.emulated_time(gpus.A100, sparse=True)
+        assert t_sparse < t_dense
+
+    def test_spacetimecost_sparse_no_effect_32bit(self):
+        """SpacetimeCost with 32-bit terms — sparse has no effect."""
+        sc = SpacetimeCost(n_steps=1)
+        tc = TermCost(name="t0", flops=int(19.5e12), compute_bits=32)
+        sc.cost_by_term["t0"] = tc
+        t_dense = sc.emulated_time(gpus.A100, sparse=False)
+        t_sparse = sc.emulated_time(gpus.A100, sparse=True)
+        assert t_dense == pytest.approx(t_sparse, rel=1e-9)

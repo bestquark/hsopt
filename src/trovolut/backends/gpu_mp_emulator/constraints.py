@@ -165,11 +165,13 @@ class SpaceTimeCost(Constraint):
         hard_penalty: float = -100.0,
         score_fn: str = "linear",
         hardware=None,
+        sparse: bool = False,
     ):
         super().__init__("space_time_cost", weight, hard, hard_penalty)
         self.max_product = max_product
         self.score_fn = score_fn
         self.hardware = hardware
+        self.sparse = sparse
 
     def __repr__(self) -> str:
         parts = []
@@ -185,6 +187,8 @@ class SpaceTimeCost(Constraint):
             parts.append(f"score_fn={self.score_fn!r}")
         if self.hardware is not None:
             parts.append(f"hardware={self.hardware!r}")
+        if self.sparse:
+            parts.append("sparse=True")
         return f"SpaceTimeCost({', '.join(parts)})"
 
     def extract(self, m: Dict[str, Any]) -> float:
@@ -209,11 +213,21 @@ class SpaceTimeCost(Constraint):
             "float8_e4m3": "fp8_flops", "float8_e5m2": "fp8_flops",
             "int8": "fp8_flops", "float4": "fp4_flops",
         }
+        # Precisions eligible for sparse throughput (tensor-core only)
+        _SPARSE_ELIGIBLE = {
+            "float16", "bfloat16", "float8_e4m3", "float8_e5m2",
+            "int8", "float4",
+        }
         _spec = getattr(self.hardware, "total_spec", None) or self.hardware.spec
         emulated_time = 0.0
         for prec_key, flops in flops_by_prec.items():
             hw_key = _PREC_TO_HW.get(prec_key, "fp32_flops")
-            throughput = _spec(hw_key)
+            # Try sparse throughput first when requested
+            throughput = 0.0
+            if self.sparse and prec_key in _SPARSE_ELIGIBLE:
+                throughput = _spec(hw_key.replace("_flops", "_flops_sparse"))
+            if throughput <= 0:
+                throughput = _spec(hw_key)
             if throughput > 0:
                 emulated_time += flops / throughput
             else:
