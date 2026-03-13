@@ -38,7 +38,11 @@ dependencies = [
   "torch>=2.10.0",
   "brokenaxes>=0.6.2",
   "joblib>=1.5.3",
+  "textual>=1.0.0",
 ]
+
+[project.scripts]
+trovolut = "trovolut.tui.__main__:main"
 
 [project.optional-dependencies]
 # GPU backend - requires NVIDIA hardware and Linux

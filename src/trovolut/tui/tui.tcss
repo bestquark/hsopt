@@ -1,0 +1,217 @@
+/* ── Global ───────────────────────────────────────────── */
+Screen {
+    background: $surface;
+}
+
+/* ── Home Screen ─────────────────────────────────────── */
+#home-container {
+    layout: vertical;
+    padding: 1 2;
+}
+
+#banner {
+    text-align: center;
+    width: 100%;
+    margin-bottom: 1;
+    color: $accent;
+    text-style: bold;
+}
+
+#system-info {
+    text-align: center;
+    width: 100%;
+    margin-bottom: 1;
+    color: $text-muted;
+}
+
+#quick-actions {
+    layout: horizontal;
+    height: auto;
+    align: center middle;
+    margin-top: 1;
+}
+
+#quick-actions Button {
+    margin: 0 1;
+    min-width: 24;
+}
+
+/* ── Backend Explorer ────────────────────────────────── */
+#backend-explorer {
+    layout: horizontal;
+    height: 1fr;
+}
+
+#backend-list-panel {
+    width: 30;
+    height: 100%;
+    border-right: solid $primary;
+    padding: 1;
+}
+
+#backend-detail-panel {
+    width: 1fr;
+    height: 100%;
+    padding: 1 2;
+    overflow-y: auto;
+}
+
+#backend-detail-panel Static {
+    margin-bottom: 1;
+}
+
+#set-active-btn {
+    margin-top: 1;
+}
+
+/* ── Wizard Screens (Evaluator / Workflow) ───────────── */
+.wizard-container {
+    layout: vertical;
+    height: 1fr;
+    padding: 1 2;
+}
+
+.wizard-container TabbedContent {
+    height: 1fr;
+}
+
+.wizard-tab {
+    padding: 1 2;
+    height: auto;
+    overflow-y: auto;
+}
+
+.form-group {
+    layout: vertical;
+    height: auto;
+    margin-bottom: 1;
+}
+
+.form-group Label {
+    margin-bottom: 0;
+}
+
+.form-group Input, .form-group Select {
+    margin-bottom: 1;
+}
+
+#preview-area {
+    height: 1fr;
+    min-height: 12;
+    border: solid $primary;
+}
+
+#generate-btn {
+    margin-top: 1;
+    width: auto;
+}
+
+/* ── Constraint Editor ───────────────────────────────── */
+#constraint-editor {
+    layout: vertical;
+    height: auto;
+}
+
+#constraint-add-row {
+    layout: horizontal;
+    height: auto;
+    margin-bottom: 1;
+}
+
+#constraint-add-row Select {
+    width: 1fr;
+}
+
+#constraint-add-row Button {
+    margin-left: 1;
+}
+
+#constraint-params {
+    layout: vertical;
+    height: auto;
+    margin-bottom: 1;
+}
+
+/* ── Backend Table ───────────────────────────────────── */
+BackendTable {
+    height: auto;
+    max-height: 12;
+    margin-bottom: 1;
+}
+
+/* ── AutoResearch Dashboard ─────────────────────────── */
+#ar-container {
+    layout: horizontal;
+    height: 1fr;
+}
+
+#ar-left-col {
+    width: 2fr;
+    height: 100%;
+    padding: 1;
+    border-right: solid $primary;
+}
+
+#ar-right-col {
+    width: 1fr;
+    height: 100%;
+    padding: 1;
+    overflow-y: auto;
+}
+
+ExperimentTable {
+    height: 1fr;
+    min-height: 8;
+    margin-bottom: 1;
+    border: solid $primary;
+}
+
+ScoreChart {
+    height: auto;
+    min-height: 4;
+    padding: 1;
+    border: solid $accent;
+    margin-top: 1;
+}
+
+#ar-config-title {
+    margin-bottom: 0;
+}
+
+#ar-config-summary {
+    padding: 1;
+    margin-bottom: 1;
+    border: solid $primary;
+    height: auto;
+    min-height: 5;
+}
+
+#ar-controls {
+    height: auto;
+    margin-bottom: 1;
+}
+
+#ar-controls Label {
+    margin-bottom: 0;
+}
+
+#ar-controls Input, #ar-controls Select {
+    margin-bottom: 1;
+}
+
+#ar-btn-row {
+    layout: horizontal;
+    height: auto;
+    margin-top: 1;
+}
+
+#ar-btn-row Button {
+    margin-right: 1;
+}
+
+#ar-log {
+    height: 1fr;
+    min-height: 6;
+    border: solid $primary;
+    padding: 0 1;
+}
