@@ -34,6 +34,9 @@ from trovolut import utils
 # Workflow and high-level interfaces
 from trovolut import filemaker
 
+# Autoresearch module
+from trovolut import autoresearch
+
 # Calibration
 from trovolut.calibration import calibrate
 
@@ -103,6 +106,7 @@ def set_backend(backend_name: str) -> None:
         'gpu': 'trovolut.backends.gpu',
         'qpu': 'trovolut.backends.qpu',
         'gpu-mp-emulator': 'trovolut.backends.gpu_mp_emulator',
+        'pytorch': 'trovolut.backends.pytorch',
     }
     
     if backend_name not in backend_map:
@@ -160,6 +164,7 @@ __all__ = [
     "qm",
     "utils",
     "filemaker",
+    "autoresearch",
     # Backend proxy modules (Ctrl+Click navigable)
     "dynamics",
     "measure",

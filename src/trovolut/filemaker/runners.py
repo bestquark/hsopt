@@ -448,6 +448,326 @@ class LegateRunner(BaseRunner):
 # QPURunner
 # ============================================================
 
+# ============================================================
+# GenericRunner
+# ============================================================
+
+class GenericRunner(BaseRunner):
+    """Run ANY Python script as a subprocess and parse metrics from stdout.
+
+    This runner enables the autoresearch loop to optimize arbitrary quantum
+    simulation code — not just trovolut's ``run_dynamics`` signature.  The
+    target script is executed as a subprocess; metrics are parsed from its
+    stdout as JSON (``{"time": 1.5, "error": 0.01}``) or key-value lines
+    (``time: 1.5``).
+
+    Parameters
+    ----------
+    timeout : int
+        Hard timeout per execution in seconds (default 300).
+    metric_parser : str
+        ``"json"`` or ``"keyvalue"`` (default ``"json"``).
+    env : dict, optional
+        Extra environment variables to pass to the subprocess.
+    """
+
+    def __init__(
+        self,
+        timeout: int = 300,
+        metric_parser: str = "json",
+        env: Optional[dict] = None,
+    ) -> None:
+        self._timeout = timeout
+        self._metric_parser = metric_parser
+        self._env = env or {}
+
+    # -- metric parsing ----------------------------------------------------
+
+    @staticmethod
+    def _parse_json(stdout: str) -> Dict[str, Any]:
+        """Parse JSON metrics from the last JSON object in stdout."""
+        import json as _json
+
+        # Find the last line that looks like JSON
+        for line in reversed(stdout.strip().splitlines()):
+            line = line.strip()
+            if line.startswith("{"):
+                try:
+                    return _json.loads(line)
+                except _json.JSONDecodeError:
+                    continue
+        return {}
+
+    @staticmethod
+    def _parse_keyvalue(stdout: str) -> Dict[str, Any]:
+        """Parse key-value metrics from stdout (``key: value`` lines)."""
+        metrics: Dict[str, Any] = {}
+        for line in stdout.strip().splitlines():
+            if ":" in line:
+                key, _, val = line.partition(":")
+                key = key.strip().lower().replace(" ", "_")
+                val = val.strip()
+                try:
+                    metrics[key] = float(val)
+                except ValueError:
+                    metrics[key] = val
+        return metrics
+
+    def _parse_metrics(self, stdout: str) -> Dict[str, Any]:
+        if self._metric_parser == "keyvalue":
+            return self._parse_keyvalue(stdout)
+        return self._parse_json(stdout)
+
+    # -- execution ---------------------------------------------------------
+
+    def _run_script(self, program_path: str) -> str:
+        """Execute the script as a subprocess and return stdout."""
+        import subprocess
+        import os
+
+        env = {**os.environ, **self._env}
+        result = subprocess.run(
+            ["python", program_path],
+            capture_output=True,
+            text=True,
+            timeout=self._timeout,
+            env=env,
+        )
+        if result.returncode != 0:
+            raise RuntimeError(
+                f"Script failed (exit {result.returncode}):\n{result.stderr[:2000]}"
+            )
+        return result.stdout
+
+    def _collect_metrics(
+        self,
+        program_path: str,
+        test_generator: Callable,
+        exact_fn: Optional[Callable],
+        n_trials: int,
+        run_fn_name: str,
+    ) -> Dict[str, Any]:
+        """Run script as subprocess and parse metrics from stdout."""
+        stdout = self._run_script(program_path)
+        metrics = self._parse_metrics(stdout)
+
+        # Ensure required keys exist
+        metrics.setdefault("time_seconds", metrics.get("time", 0.0))
+        metrics.setdefault("time", metrics.get("time_seconds", 0.0))
+        metrics.setdefault("error", metrics.get("mean_error", 0.0))
+        metrics.setdefault("mean_error", metrics.get("error", 0.0))
+        metrics.setdefault("std_error", 0.0)
+        metrics.setdefault("std_score", 0.0)
+        metrics.setdefault("memory_peak_bytes", 0)
+
+        return metrics
+
+    def evaluate(
+        self,
+        program_path: str,
+        test_generator: Optional[Callable] = None,
+        exact_fn: Optional[Callable] = None,
+        constraints=None,
+        n_trials: int = 1,
+        timeout: int = 300,
+        run_fn_name: str = "run_dynamics",
+    ) -> Dict[str, Any]:
+        """Run candidate and parse metrics.
+
+        Overrides base to simplify signature — ``test_generator`` and
+        ``exact_fn`` are optional since the script handles its own I/O.
+        """
+        try:
+            metrics = _run_with_timeout(
+                self._collect_metrics,
+                args=(program_path, test_generator, exact_fn, n_trials, run_fn_name),
+                timeout_seconds=timeout or self._timeout,
+            )
+        except TimeoutError:
+            return {
+                "combined_score": -100.0,
+                "std_score": 0.0,
+                "all_satisfied": False,
+                "details": {},
+                "error": "Timeout",
+            }
+        except Exception as e:
+            return {
+                "combined_score": -100.0,
+                "std_score": 0.0,
+                "all_satisfied": False,
+                "details": {},
+                "error": str(e),
+            }
+
+        metrics = _score_constraints(constraints, metrics)
+
+        combined = float(metrics.get("combined_score", -100.0))
+        std = float(metrics.get("std_score", 0.0))
+        all_sat = metrics.get("all_satisfied", True)
+        details = metrics.get("details", {})
+
+        return {
+            "combined_score": combined,
+            "std_score": std,
+            "all_satisfied": all_sat,
+            "details": details,
+            "time": metrics.get("time", 0.0),
+            "error": metrics.get("error", 0.0),
+            "memory_peak_bytes": metrics.get("memory_peak_bytes", 0),
+            "gpu_memory_mb": metrics.get("gpu_memory_mb", None),
+            "cuda_time_seconds": metrics.get("cuda_time_seconds", None),
+        }
+
+    def __repr__(self) -> str:
+        return f"GenericRunner(metric_parser={self._metric_parser!r})"
+
+
+# ============================================================
+# PyTorchRunner
+# ============================================================
+
+class PyTorchRunner(GenericRunner):
+    """Run PyTorch scripts with automatic CUDA instrumentation.
+
+    Inherits from GenericRunner but wraps the target script to inject
+    ``torch.cuda.reset_peak_memory_stats()`` / timing, adding
+    ``gpu_memory_mb`` and ``cuda_time_seconds`` to parsed metrics.
+
+    Parameters
+    ----------
+    timeout : int
+        Hard timeout per execution in seconds.
+    metric_parser : str
+        ``"json"`` or ``"keyvalue"``.
+    device : str
+        CUDA device identifier (default ``"cuda:0"``).
+    """
+
+    def __init__(
+        self,
+        timeout: int = 300,
+        metric_parser: str = "json",
+        device: str = "cuda:0",
+        env: Optional[dict] = None,
+    ) -> None:
+        super().__init__(timeout=timeout, metric_parser=metric_parser, env=env)
+        self._device = device
+
+    def _run_script(self, program_path: str) -> str:
+        """Execute the script with CUDA instrumentation wrapper."""
+        import subprocess
+        import os
+        import tempfile
+
+        # Generate wrapper script that adds CUDA instrumentation
+        wrapper_code = f"""\
+import sys, time, json, torch
+
+device = torch.device("{self._device}" if torch.cuda.is_available() else "cpu")
+use_cuda = device.type == "cuda"
+
+if use_cuda:
+    torch.cuda.reset_peak_memory_stats(device)
+    start_event = torch.cuda.Event(enable_timing=True)
+    end_event = torch.cuda.Event(enable_timing=True)
+    start_event.record()
+
+wall_start = time.perf_counter()
+
+# Execute the target script
+exec(open("{program_path}").read())
+
+wall_time = time.perf_counter() - wall_start
+
+cuda_metrics = {{}}
+if use_cuda:
+    end_event.record()
+    torch.cuda.synchronize(device)
+    cuda_ms = start_event.elapsed_time(end_event)
+    mem_stats = torch.cuda.memory_stats(device)
+    peak_bytes = mem_stats.get("allocated_bytes.all.peak", 0)
+    cuda_metrics["cuda_time_seconds"] = cuda_ms / 1000.0
+    cuda_metrics["gpu_memory_mb"] = peak_bytes / (1024 * 1024)
+    cuda_metrics["gpu_memory_peak_bytes"] = peak_bytes
+
+cuda_metrics["wall_time_seconds"] = wall_time
+print("CUDA_INSTRUMENTATION:" + json.dumps(cuda_metrics))
+"""
+        env = {**os.environ, **self._env}
+        # Write wrapper to temp file
+        with tempfile.NamedTemporaryFile(
+            mode="w", suffix=".py", delete=False, dir=os.environ.get("TMPDIR", "/tmp")
+        ) as f:
+            f.write(wrapper_code)
+            wrapper_path = f.name
+
+        try:
+            result = subprocess.run(
+                ["python", wrapper_path],
+                capture_output=True,
+                text=True,
+                timeout=self._timeout,
+                env=env,
+            )
+        finally:
+            os.unlink(wrapper_path)
+
+        if result.returncode != 0:
+            raise RuntimeError(
+                f"Script failed (exit {result.returncode}):\n{result.stderr[:2000]}"
+            )
+        return result.stdout
+
+    def _collect_metrics(
+        self,
+        program_path: str,
+        test_generator: Callable,
+        exact_fn: Optional[Callable],
+        n_trials: int,
+        run_fn_name: str,
+    ) -> Dict[str, Any]:
+        """Run script and merge CUDA instrumentation metrics."""
+        stdout = self._run_script(program_path)
+
+        # Extract CUDA instrumentation line
+        import json as _json
+        cuda_metrics: Dict[str, Any] = {}
+        remaining_lines = []
+        for line in stdout.splitlines():
+            if line.startswith("CUDA_INSTRUMENTATION:"):
+                try:
+                    cuda_metrics = _json.loads(line[len("CUDA_INSTRUMENTATION:"):])
+                except _json.JSONDecodeError:
+                    pass
+            else:
+                remaining_lines.append(line)
+
+        # Parse user metrics from remaining stdout
+        metrics = self._parse_metrics("\n".join(remaining_lines))
+
+        # Merge CUDA metrics (CUDA instrumentation takes precedence)
+        metrics.update(cuda_metrics)
+
+        # Ensure required keys
+        metrics.setdefault("time_seconds", metrics.get("time", metrics.get("wall_time_seconds", 0.0)))
+        metrics.setdefault("time", metrics.get("time_seconds", 0.0))
+        metrics.setdefault("error", metrics.get("mean_error", 0.0))
+        metrics.setdefault("mean_error", metrics.get("error", 0.0))
+        metrics.setdefault("std_error", 0.0)
+        metrics.setdefault("std_score", 0.0)
+        metrics.setdefault("memory_peak_bytes", metrics.get("gpu_memory_peak_bytes", 0))
+
+        return metrics
+
+    def __repr__(self) -> str:
+        return f"PyTorchRunner(device={self._device!r}, metric_parser={self._metric_parser!r})"
+
+
+# ============================================================
+# QPURunner
+# ============================================================
+
 class QPURunner(BaseRunner):
     """Placeholder runner for QPU (quantum processing unit) backends.
 
@@ -503,6 +823,10 @@ def runner_for_backend(backend: str, **kwargs) -> BaseRunner:
         return LegateRunner(**kwargs)
     if backend == "qpu":
         return QPURunner(**kwargs)
+    if backend == "pytorch":
+        return PyTorchRunner(**kwargs)
+    if backend == "generic":
+        return GenericRunner(**kwargs)
     # cpu, gpu-mp-emulator all use in-process execution
     return CPURunner()
 
@@ -515,6 +839,8 @@ __all__ = [
     "BaseRunner",
     "CPURunner",
     "LegateRunner",
+    "GenericRunner",
+    "PyTorchRunner",
     "QPURunner",
     "runner_for_backend",
 ]

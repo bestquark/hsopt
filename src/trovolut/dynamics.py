@@ -19,6 +19,7 @@ if TYPE_CHECKING:
     from trovolut.backends.gpu.dynamics import *  # noqa: F403
     from trovolut.backends.qpu.dynamics import *  # noqa: F403
     from trovolut.backends.gpu_mp_emulator.dynamics import *  # noqa: F403
+    from trovolut.backends.pytorch.dynamics import *  # noqa: F403
 
 # ── Runtime backend reference (set by trovolut.set_backend()) ───
 _backend_module = None
@@ -29,6 +30,7 @@ _BACKEND_SUBMODULES = [
     "trovolut.backends.gpu.dynamics",
     "trovolut.backends.qpu.dynamics",
     "trovolut.backends.gpu_mp_emulator.dynamics",
+    "trovolut.backends.pytorch.dynamics",
 ]
 
 

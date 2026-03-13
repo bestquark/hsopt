@@ -19,6 +19,7 @@ if TYPE_CHECKING:
     from trovolut.backends.cpu.constraints import *  # noqa: F403
     from trovolut.backends.gpu.constraints import *  # noqa: F403
     from trovolut.backends.gpu_mp_emulator.constraints import *  # noqa: F403
+    from trovolut.backends.pytorch.constraints import *  # noqa: F403
 
 # ── Runtime backend reference (set by trovolut.set_backend()) ───
 _backend_module = None
@@ -27,6 +28,7 @@ _BACKEND_SUBMODULES = [
     "trovolut.backends.cpu.constraints",
     "trovolut.backends.gpu.constraints",
     "trovolut.backends.gpu_mp_emulator.constraints",
+    "trovolut.backends.pytorch.constraints",
 ]
 
 

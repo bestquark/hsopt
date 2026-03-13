@@ -19,6 +19,7 @@ if TYPE_CHECKING:
     from trovolut.backends.gpu.measure import *  # noqa: F403
     from trovolut.backends.qpu.measure import *  # noqa: F403
     from trovolut.backends.gpu_mp_emulator.measure import *  # noqa: F403
+    from trovolut.backends.pytorch.measure import *  # noqa: F403
 
 # ── Runtime backend reference (set by trovolut.set_backend()) ───
 _backend_module = None
@@ -28,6 +29,7 @@ _BACKEND_SUBMODULES = [
     "trovolut.backends.gpu.measure",
     "trovolut.backends.qpu.measure",
     "trovolut.backends.gpu_mp_emulator.measure",
+    "trovolut.backends.pytorch.measure",
 ]
 
 

@@ -16,12 +16,14 @@ from typing import TYPE_CHECKING
 
 if TYPE_CHECKING:
     from trovolut.backends.gpu_mp_emulator.hardware import *  # noqa: F403
+    from trovolut.backends.pytorch.hardware import *  # noqa: F403
 
 # ── Runtime backend reference (set by trovolut.set_backend()) ───
 _backend_module = None
 
 _BACKEND_SUBMODULES = [
     "trovolut.backends.gpu_mp_emulator.hardware",
+    "trovolut.backends.pytorch.hardware",
 ]
 
 

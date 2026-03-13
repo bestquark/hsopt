@@ -6,6 +6,8 @@ from trovolut.filemaker.runners import (
     BaseRunner,
     CPURunner,
     LegateRunner,
+    GenericRunner,
+    PyTorchRunner,
     QPURunner,
     runner_for_backend,
 )
@@ -20,6 +22,8 @@ __all__ = [
     "BaseRunner",
     "CPURunner",
     "LegateRunner",
+    "GenericRunner",
+    "PyTorchRunner",
     "QPURunner",
     "runner_for_backend",
 ]

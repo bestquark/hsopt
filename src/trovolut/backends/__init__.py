@@ -84,6 +84,12 @@ class BackendRegistry:
             "description": "Mixed-precision emulator (dynamics, mp_evals)",
             "platform": "all",
         },
+        "pytorch": {
+            "module": "trovolut.backends.pytorch",
+            "required_packages": ["torch"],
+            "description": "PyTorch TEBD tensor network engine (MPS, mixed-precision tensor cores)",
+            "platform": "all",
+        },
     }
     
     def __init__(self):
