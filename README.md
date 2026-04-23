@@ -60,6 +60,18 @@ psi = trotter.evolve(H, psi0, time=1.0)
 - [Tutorials](https://bestquark.github.io/trovolut/tutorials/)
 - [API Reference](https://bestquark.github.io/trovolut/api/)
 
+## Fault-Tolerant Protocol Examples
+
+`examples/ft_protocols/` contains small, self-contained H2 examples for
+fault-tolerant chemistry protocol resource estimates:
+
+- `pfs/`: product-formula/Trotter dynamics
+- `taylor_lcu/`: segmented truncated Taylor/LCU dynamics
+- `qsvt/`: qubitized QSVT/QSP dynamics
+- `qubitization/`: QPE energy readout over a qubitized walk
+
+Install the optional dependency set with `uv sync --extra ft-protocols`.
+
 ## License
 
 MIT License - see LICENSE file for details.
