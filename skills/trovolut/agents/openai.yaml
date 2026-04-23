@@ -1,0 +1,4 @@
+interface:
+  display_name: "Trovolut"
+  short_description: "Run resource-aware mutation loops"
+  default_prompt: "Use $trovolut to scaffold and run a fixed-budget mutation loop against one editable benchmark file and one fixed evaluator, especially for resource objectives such as T-gate count under fidelity constraints."

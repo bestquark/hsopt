@@ -4,6 +4,34 @@
 
 Evolutionary Trotterization for quantum simulation with modular backends (CPU, GPU, QPU).
 
+## Agent Skill
+
+This repo now ships a `trovolut` agent skill under `skills/trovolut/` for
+fixed-budget mutation loops against a fixed evaluator.
+
+Install it locally with:
+
+```bash
+npx skills add .
+```
+
+The shell fallback from the repo root is:
+
+```bash
+python3 skills/trovolut/scripts/trovolut_cli.py <iterations> <benchmark_dir> "mutation guidance"
+```
+
+The runtime is aimed at resource-aware optimization problems where the
+evaluator returns a scalar `score`, including T-gate or other cost objectives
+with hard fidelity or accuracy constraints.
+
+## T-Count Dependencies
+
+The migrated T-gate estimation benchmarks depend directly on `pygridsynth` for
+Clifford+T synthesis and T-count extraction. Its own transitive dependencies,
+including `mpmath`, come in through `pygridsynth`; `trovolut` does not need to
+declare them separately.
+
 ## Installation
 
 ```bash
