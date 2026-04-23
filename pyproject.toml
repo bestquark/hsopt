@@ -11,6 +11,7 @@ dependencies = [
   "numpy>=2.3.3",
   "openevolve>=0.2.14",
   "openfermion>=1.7.1",
+  "pygridsynth>=1.1.0,<2",
   "pyscf>=2.5.0",
   "rdkit>=2025.3.6",
   "scipy>=1.13",
@@ -58,6 +59,11 @@ qpu = [
   "cudaq>=0.13.0; sys_platform == 'linux'",
   "qiskit>=1.0.0",
   "cirq>=1.4.0",
+]
+
+# Fault-tolerant chemistry protocol examples in examples/ft_protocols
+ft-protocols = [
+  "qualtran>=0.7,<0.8",
 ]
 
 # GPU emulator - CPU-based emulation for studying quantized exponentials
