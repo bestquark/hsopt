@@ -20,7 +20,7 @@ Energy-estimation method:
 Coefficient-distribution diagnostic:
 
 - `hamiltonian_factorization_histograms.py`: builds four similar-size localized
-  CAS(4e,4o) hydride Hamiltonians and compares `|alpha_i|` coefficient/data-entry
+  CAS(6e,6o) molecular Hamiltonians and compares `|alpha_i|` coefficient/data-entry
   histograms for the unfactorized, SF, DF, and THC representations.
 
 Install the optional Qualtran dependency with:

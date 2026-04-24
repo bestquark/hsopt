@@ -26,30 +26,29 @@ class MoleculeSpec:
 
 MOLECULES = (
     MoleculeSpec(
-        label="LiH",
-        latex_label=r"\ce{LiH}",
-        geometry="Li 0 0 0; H 0 0 1.595",
+        label="N2",
+        latex_label=r"\ce{N2}",
+        geometry="N 0 0 0; N 0 0 1.098",
     ),
     MoleculeSpec(
-        label="BeH2",
-        latex_label=r"\ce{BeH2}",
-        geometry="H 0 0 -1.326; Be 0 0 0; H 0 0 1.326",
+        label="CO",
+        latex_label=r"\ce{CO}",
+        geometry="C 0 0 0; O 0 0 1.128",
     ),
     MoleculeSpec(
-        label="BH3",
-        latex_label=r"\ce{BH3}",
-        geometry="B 0 0 0; H 1.190 0 0; H -0.595 1.0307 0; H -0.595 -1.0307 0",
-    ),
-    MoleculeSpec(
-        label="CH4",
-        latex_label=r"\ce{CH4}",
+        label="NH3",
+        latex_label=r"\ce{NH3}",
         geometry=(
-            "C 0 0 0; "
-            "H 0.629 0.629 0.629; "
-            "H -0.629 -0.629 0.629; "
-            "H -0.629 0.629 -0.629; "
-            "H 0.629 -0.629 -0.629"
+            "N 0 0 0; "
+            "H 0.000 0.937 0.382; "
+            "H 0.812 -0.469 0.382; "
+            "H -0.812 -0.469 0.382"
         ),
+    ),
+    MoleculeSpec(
+        label="HCN",
+        latex_label=r"\ce{HCN}",
+        geometry="H 0 0 0; C 0 0 1.064; N 0 0 2.220",
     ),
 )
 
@@ -453,8 +452,8 @@ def main() -> None:
         )
     )
     parser.add_argument("--basis", default="sto-3g")
-    parser.add_argument("--active-occupied", type=int, default=2)
-    parser.add_argument("--active-virtual", type=int, default=2)
+    parser.add_argument("--active-occupied", type=int, default=3)
+    parser.add_argument("--active-virtual", type=int, default=3)
     parser.add_argument("--bins", type=int, default=36)
     parser.add_argument("--thc-rank", type=int, default=None)
     parser.add_argument("--thc-max-nfev", type=int, default=120)
