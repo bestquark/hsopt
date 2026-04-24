@@ -368,7 +368,15 @@ def plot_factorization_histograms(
     plt.rcParams.update(
         {
             "text.usetex": True,
-            "text.latex.preamble": r"\usepackage[version=4]{mhchem}",
+            "text.latex.preamble": "\n".join(
+                [
+                    r"\usepackage[T1]{fontenc}",
+                    r"\usepackage{newtxtext,newtxmath}",
+                    r"\usepackage[version=4]{mhchem}",
+                ]
+            ),
+            "font.family": "serif",
+            "font.serif": ["Times"],
             "font.size": 52,
             "axes.labelsize": 52,
             "axes.titlesize": 52,
