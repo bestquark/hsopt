@@ -361,8 +361,8 @@ def plot_factorization_histograms(
     bins: int,
 ) -> None:
     methods = ("O(n^4)", "SF", "DF", "THC")
-    colors = ("#D9F0D3", "#A6DBA0", "#5AAE61", "#1B7837")
-    edge_colors = ("#6BAF6E", "#4F9C52", "#2E7D32", "#0B4F22")
+    colors = ("#EAF7D1", "#C6F26A", "#76B900", "#2E6B00")
+    edge_colors = ("#9ACD32", "#76B900", "#2E6B00", "#163800")
 
     plt.rcParams.update(
         {
@@ -405,9 +405,15 @@ def plot_factorization_histograms(
             x_max = 10 ** (log_max + padding)
         bin_edges = np.geomspace(x_min, x_max, bins + 1)
 
-        for color, edge_color, (label, molecule_data) in zip(
-            colors, edge_colors, all_coefficients.items()
-        ):
+        series = sorted(
+            all_coefficients.items(),
+            key=lambda item: summaries[item[0]].counts[method],
+            reverse=True,
+        )
+        color_by_label = dict(zip(all_coefficients.keys(), colors))
+        edge_by_label = dict(zip(all_coefficients.keys(), edge_colors))
+
+        for label, molecule_data in series:
             values = molecule_data[method]
             if len(values) == 0:
                 continue
@@ -420,10 +426,10 @@ def plot_factorization_histograms(
                 values,
                 bins=bin_edges,
                 histtype="bar",
-                alpha=0.42,
+                alpha=1.0,
                 linewidth=2.6,
-                color=color,
-                edgecolor=edge_color,
+                color=color_by_label[label],
+                edgecolor=edge_by_label[label],
                 label=legend_label,
             )
         ax.set_xscale("log")
