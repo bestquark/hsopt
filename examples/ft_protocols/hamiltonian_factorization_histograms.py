@@ -393,12 +393,12 @@ def plot_factorization_histograms(
             "font.serif": ["Times"],
             "font.weight": "normal",
             "font.size": 52,
-            "axes.labelsize": 52,
+            "axes.labelsize": 62,
             "axes.labelweight": "normal",
-            "axes.titlesize": 52,
+            "axes.titlesize": 62,
             "axes.titleweight": "normal",
-            "xtick.labelsize": 52,
-            "ytick.labelsize": 52,
+            "xtick.labelsize": 62,
+            "ytick.labelsize": 62,
             "legend.fontsize": 52,
         }
     )
