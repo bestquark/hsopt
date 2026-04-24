@@ -461,6 +461,7 @@ def plot_factorization_histograms(
             )
 
         ax.set_xscale("log")
+        ax.tick_params(axis="both", which="major", pad=14)
         ax.set_title(titles[method])
         ax.set_xlabel(r"$|\alpha_i|$")
         if method == "O(n^4)":
