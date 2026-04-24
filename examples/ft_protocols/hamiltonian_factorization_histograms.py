@@ -362,21 +362,22 @@ def plot_factorization_histograms(
     bins: int,
 ) -> None:
     methods = ("O(n^4)", "SF", "DF", "THC")
-    colors = ("#1B9E77", "#D95F02", "#7570B3", "#E7298A")
+    colors = ("#D9F0D3", "#A6DBA0", "#5AAE61", "#1B7837")
+    edge_colors = ("#6BAF6E", "#4F9C52", "#2E7D32", "#0B4F22")
 
     plt.rcParams.update(
         {
             "text.usetex": True,
             "text.latex.preamble": r"\usepackage[version=4]{mhchem}",
-            "font.size": 24,
-            "axes.labelsize": 24,
-            "axes.titlesize": 26,
-            "xtick.labelsize": 24,
-            "ytick.labelsize": 24,
-            "legend.fontsize": 24,
+            "font.size": 40,
+            "axes.labelsize": 40,
+            "axes.titlesize": 40,
+            "xtick.labelsize": 40,
+            "ytick.labelsize": 40,
+            "legend.fontsize": 40,
         }
     )
-    fig, axes = plt.subplots(1, 4, figsize=(44.0, 9.0), sharey=True, constrained_layout=True)
+    fig, axes = plt.subplots(1, 4, figsize=(64.0, 14.0), sharey=True, constrained_layout=True)
 
     titles = {
         "O(n^4)": "Unfactorized",
@@ -405,7 +406,9 @@ def plot_factorization_histograms(
             x_max = 10 ** (log_max + padding)
         bin_edges = np.geomspace(x_min, x_max, bins + 1)
 
-        for color, (label, molecule_data) in zip(colors, all_coefficients.items()):
+        for color, edge_color, (label, molecule_data) in zip(
+            colors, edge_colors, all_coefficients.items()
+        ):
             values = molecule_data[method]
             if len(values) == 0:
                 continue
@@ -417,11 +420,11 @@ def plot_factorization_histograms(
             ax.hist(
                 values,
                 bins=bin_edges,
-                histtype="stepfilled",
-                alpha=0.28,
-                linewidth=2.4,
+                histtype="bar",
+                alpha=0.42,
+                linewidth=2.6,
                 color=color,
-                edgecolor=color,
+                edgecolor=edge_color,
                 label=legend_label,
             )
         ax.set_xscale("log")
