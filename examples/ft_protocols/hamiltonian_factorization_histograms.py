@@ -377,9 +377,12 @@ def plot_factorization_histograms(
             ),
             "font.family": "serif",
             "font.serif": ["Times"],
+            "font.weight": "normal",
             "font.size": 52,
             "axes.labelsize": 52,
+            "axes.labelweight": "normal",
             "axes.titlesize": 52,
+            "axes.titleweight": "normal",
             "xtick.labelsize": 52,
             "ytick.labelsize": 52,
             "legend.fontsize": 52,
@@ -455,10 +458,11 @@ def plot_factorization_histograms(
             reverse=True,
         ):
             summary = summaries[label]
-            legend_label = rf"{latex_labels[label]} ({summary.counts[method]})"
+            legend_body = rf"{latex_labels[label]} ({summary.counts[method]})"
             if method == "THC":
                 epsilon = _latex_scientific(summary.thc_relative_error)
-                legend_label += rf", $\epsilon={epsilon}$"
+                legend_body += rf", $\epsilon={epsilon}$"
+            legend_label = rf"{{\normalfont\mdseries\unboldmath {legend_body}}}"
             legend_handles.append(
                 Patch(
                     facecolor=color_by_label[label],
