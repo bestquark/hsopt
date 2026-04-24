@@ -368,12 +368,12 @@ def plot_factorization_histograms(
         {
             "text.usetex": True,
             "text.latex.preamble": r"\usepackage[version=4]{mhchem}",
-            "font.size": 40,
-            "axes.labelsize": 40,
-            "axes.titlesize": 40,
-            "xtick.labelsize": 40,
-            "ytick.labelsize": 40,
-            "legend.fontsize": 40,
+            "font.size": 52,
+            "axes.labelsize": 52,
+            "axes.titlesize": 52,
+            "xtick.labelsize": 52,
+            "ytick.labelsize": 52,
+            "legend.fontsize": 52,
         }
     )
     fig, axes = plt.subplots(1, 4, figsize=(64.0, 14.0), sharey=True, constrained_layout=True)
