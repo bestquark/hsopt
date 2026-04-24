@@ -1,9 +1,8 @@
 from __future__ import annotations
 
-import csv
 import importlib.util
-import json
 import os
+import shlex
 import sys
 from dataclasses import dataclass
 from pathlib import Path
@@ -11,7 +10,15 @@ from typing import Any
 
 
 PFS_ROOT_RELATIVE = Path("examples/ft_protocols/pfs")
-PHASE_OBJECTIVE = "ground_state_phase_estimation"
+DEFAULT_FAMILY = "pf"
+DEFAULT_MOLECULE = "h2"
+DEFAULT_EVALUATOR = "energy"
+FAMILY_ALIASES = {
+    "pf": "pf",
+    "pf1": "pf",
+    "pfs": "pf",
+    "product_formula": "pf",
+}
 
 
 def _find_repo_root(start: Path) -> Path:
@@ -19,9 +26,12 @@ def _find_repo_root(start: Path) -> Path:
     if override:
         return Path(override).expanduser().resolve()
     for candidate in (start, *start.parents):
+        pfs_root = candidate / PFS_ROOT_RELATIVE
         if (
             (candidate / "pyproject.toml").exists()
-            and (candidate / PFS_ROOT_RELATIVE / "model_registry.py").exists()
+            and (pfs_root / "chemistry.py").exists()
+            and (pfs_root / "evaluate_energy.py").exists()
+            and (pfs_root / "evaluate_fidelity.py").exists()
         ):
             return candidate
     raise RuntimeError(
@@ -30,8 +40,6 @@ def _find_repo_root(start: Path) -> Path:
 
 
 REPO_ROOT = _find_repo_root(Path(__file__).resolve())
-DEFAULT_FAMILY = "pf1"
-DEFAULT_MOLECULE = "h2"
 
 
 @dataclass(frozen=True)
@@ -42,10 +50,7 @@ class Lane:
     root_dir: Path
     lane_dir: Path
     editable_script: Path
-    snapshots_dir: Path
-    results_path: Path
-    instruction_path: Path | None
-    max_parallel: int = 1
+    evaluator_wrapper: Path
     target_iteration: int = 100
     supported: bool = True
     notes: str = ""
@@ -77,43 +82,48 @@ def _load_module(path: Path, module_name: str) -> Any:
         sys.path[:] = old_path
 
 
-def _registry_lanes(repo_root: Path, family: str, relative_path: str) -> list[Lane]:
+def _pfs_lanes(repo_root: Path, family: str, relative_path: Path) -> list[Lane]:
     root = repo_root / relative_path
-    registry = root / "model_registry.py"
-    evaluator = root / "evaluate.py"
-    queued = root / "queued_track_iteration.py"
-    if not registry.exists():
+    chemistry = root / "chemistry.py"
+    if not chemistry.exists():
         return []
-    module_name = f"_trovolut_{family.replace('-', '_')}_registry"
-    module = _load_module(registry, module_name)
+    module = _load_module(chemistry, f"_trovolut_{family}_chemistry")
     lanes: list[Lane] = []
     for molecule in getattr(module, "ACTIVE_MOLECULES", ()):
         spec = module.get_spec(molecule)
-        supported = evaluator.exists() and queued.exists() and Path(spec.editable_script).exists()
+        lane_dir = Path(spec.lane_dir)
+        editable_script = Path(spec.editable_script)
+        evaluator_wrapper = lane_dir / "evaluate.py"
+        supported = (
+            editable_script.exists()
+            and evaluator_wrapper.exists()
+            and (root / "evaluate_energy.py").exists()
+            and (root / "evaluate_fidelity.py").exists()
+        )
         lanes.append(
             Lane(
                 family=family,
                 molecule=molecule,
                 display_name=str(spec.display_name),
                 root_dir=root,
-                lane_dir=Path(spec.lane_dir),
-                editable_script=Path(spec.editable_script),
-                snapshots_dir=Path(spec.snapshots_dir),
-                results_path=Path(spec.results_path),
-                instruction_path=Path(spec.instruction_path),
-                max_parallel=int(getattr(spec, "max_parallel", 1)),
+                lane_dir=lane_dir,
+                editable_script=editable_script,
+                evaluator_wrapper=evaluator_wrapper,
                 target_iteration=int(getattr(spec, "target_iteration", 100)),
                 supported=supported,
-                notes="" if supported else "Scaffold is present but evaluator/live simple_pf.py is missing.",
+                notes="" if supported else "Missing simple_pf.py or one of the two evaluator entry points.",
             )
         )
     return lanes
 
 
 def discover_lanes(repo_root: Path = REPO_ROOT) -> list[Lane]:
-    lanes: list[Lane] = []
-    lanes.extend(_registry_lanes(repo_root, "pf1", str(PFS_ROOT_RELATIVE)))
-    return lanes
+    return _pfs_lanes(repo_root, DEFAULT_FAMILY, PFS_ROOT_RELATIVE)
+
+
+def normalize_family(family: str | None) -> str:
+    value = (family or DEFAULT_FAMILY).strip().lower()
+    return FAMILY_ALIASES.get(value, value)
 
 
 def _candidate_target_paths(target: str | Path, repo_root: Path) -> list[Path]:
@@ -137,7 +147,6 @@ def _candidate_target_paths(target: str | Path, repo_root: Path) -> list[Path]:
 
 def lane_for_path(target: str | Path, repo_root: Path = REPO_ROOT, require_supported: bool = True) -> Lane:
     paths = _candidate_target_paths(target, repo_root)
-
     matches: list[Lane] = []
     for lane in discover_lanes(repo_root):
         lane_dir = lane.lane_dir.resolve()
@@ -163,7 +172,7 @@ def resolve_lane(
 ) -> Lane:
     if target is not None:
         return lane_for_path(target, repo_root=repo_root, require_supported=require_supported)
-    family = family or DEFAULT_FAMILY
+    family = normalize_family(family)
     molecule = molecule or DEFAULT_MOLECULE
     matches = [lane for lane in discover_lanes(repo_root) if lane.family == family and lane.molecule == molecule]
     if not matches:
@@ -175,78 +184,25 @@ def resolve_lane(
     return lane
 
 
-def next_iteration(lane: Lane) -> int:
-    if not lane.snapshots_dir.exists():
-        return 0
-    values: list[int] = []
-    for child in lane.snapshots_dir.iterdir():
-        if not child.is_dir() or not child.name.startswith("iter_"):
-            continue
-        try:
-            values.append(int(child.name.split("_", 1)[1]))
-        except ValueError:
-            continue
-    return max(values, default=-1) + 1
+def normalize_evaluator(evaluator: str | None) -> str:
+    value = (evaluator or DEFAULT_EVALUATOR).strip().lower()
+    if value in {"energy", "phase", "qpe"}:
+        return "energy"
+    if value in {"fidelity", "state"}:
+        return "fidelity"
+    raise SystemExit(f"unknown evaluator {evaluator!r}; use 'energy' or 'fidelity'")
 
 
-def _truthy(value: str | None) -> bool:
-    return (value or "").strip().lower() in {"true", "1", "yes"}
+def evaluator_path(lane: Lane, evaluator: str | None = None) -> Path:
+    selected = normalize_evaluator(evaluator)
+    return lane.root_dir / f"evaluate_{selected}.py"
 
 
-def _phase_accuracy_row(row: dict[str, str]) -> bool:
-    objective = (row.get("objective") or "").strip()
-    if objective and objective != PHASE_OBJECTIVE:
-        return False
-    if "passes_accuracy_constraint" not in row:
-        return False
-    return _truthy(row.get("passes_accuracy_constraint"))
-
-
-def best_row(lane: Lane) -> dict[str, str] | None:
-    if not lane.results_path.exists():
-        return None
-    best: dict[str, str] | None = None
-    best_score: float | None = None
-    with lane.results_path.open() as handle:
-        reader = csv.DictReader(handle, delimiter="\t")
-        for row in reader:
-            if row.get("status") != "keep":
-                continue
-            if not _phase_accuracy_row(row):
-                continue
-            try:
-                score = float(row["score"])
-            except (KeyError, TypeError, ValueError):
-                continue
-            if best_score is None or score < best_score:
-                best = row
-                best_score = score
-    return best
-
-
-def baseline_result(lane: Lane) -> dict[str, Any] | None:
-    path = lane.snapshots_dir / "iter_0000" / "result.json"
-    if not path.exists():
-        return None
-    try:
-        return json.loads(path.read_text())
-    except json.JSONDecodeError:
-        return None
+def next_iteration(_lane: Lane) -> int:
+    return 0
 
 
 def summarize_lane(lane: Lane) -> dict[str, Any]:
-    baseline = baseline_result(lane)
-    best = best_row(lane)
-    baseline_t = baseline.get("t_gate_count") if baseline else None
-    best_t: int | None = None
-    if best and best.get("t_gate_count") not in {None, ""}:
-        try:
-            best_t = int(float(best["t_gate_count"]))
-        except ValueError:
-            best_t = None
-    reduction_pct = None
-    if isinstance(baseline_t, int) and best_t is not None and baseline_t > 0:
-        reduction_pct = 100.0 * (baseline_t - best_t) / baseline_t
     return {
         "key": lane.key,
         "family": lane.family,
@@ -255,63 +211,53 @@ def summarize_lane(lane: Lane) -> dict[str, Any]:
         "supported": lane.supported,
         "notes": lane.notes,
         "editable_script": repo_relative(lane.editable_script),
-        "last_archived_iteration": next_iteration(lane) - 1,
+        "evaluator_wrapper": repo_relative(lane.evaluator_wrapper),
+        "energy_evaluator": repo_relative(lane.root_dir / "evaluate_energy.py"),
+        "fidelity_evaluator": repo_relative(lane.root_dir / "evaluate_fidelity.py"),
         "target_iteration": lane.target_iteration,
-        "baseline_t_gate_count": baseline_t,
-        "best_iteration": int(best["iteration"]) if best and best.get("iteration") else None,
-        "best_score": float(best["score"]) if best and best.get("score") else None,
-        "best_t_gate_count": best_t,
-        "t_gate_reduction_pct": reduction_pct,
     }
 
 
-def evaluate_command(lane: Lane, script: Path | None = None) -> list[str]:
+def evaluate_command(
+    lane: Lane,
+    script: Path | None = None,
+    evaluator: str | None = None,
+    epsilon: float | None = None,
+) -> list[str]:
+    selected = normalize_evaluator(evaluator)
     script = script or lane.editable_script
-    return [
+    command = [
         "uv",
         "run",
         "python",
-        str(lane.root_dir / "evaluate.py"),
+        str(evaluator_path(lane, selected)),
         "--molecule",
         lane.molecule,
         "--script",
         str(script),
     ]
+    if selected == "fidelity" and epsilon is not None:
+        command.extend(["--epsilon", str(epsilon)])
+    return command
 
 
-def track_command(lane: Lane, description: str, script: Path | None = None) -> list[str]:
-    script = script or lane.editable_script
+def track_command(
+    lane: Lane,
+    _description: str,
+    script: Path | None = None,
+    evaluator: str | None = None,
+    epsilon: float | None = None,
+) -> list[str]:
+    return evaluate_command(lane, script=script, evaluator=evaluator, epsilon=epsilon)
+
+
+def restore_command(_lane: Lane, _script: Path | None = None) -> list[str]:
     return [
-        "uv",
-        "run",
         "python",
-        str(lane.root_dir / "queued_track_iteration.py"),
-        "--molecule",
-        lane.molecule,
-        "--script",
-        str(script),
-        "--max-parallel",
-        str(lane.max_parallel),
-        "--description",
-        description,
-    ]
-
-
-def restore_command(lane: Lane, script: Path | None = None) -> list[str]:
-    script = script or lane.editable_script
-    return [
-        "uv",
-        "run",
-        "python",
-        str(lane.root_dir / "restore_best_iteration.py"),
-        "--molecule",
-        lane.molecule,
-        "--script",
-        str(script),
+        "-c",
+        "print('{\"status\":\"noop\",\"reason\":\"simplified pfs layout has no in-tree snapshots\"}')",
     ]
 
 
 def shell_join(command: list[str]) -> str:
-    import shlex
-
     return " ".join(shlex.quote(part) for part in command)

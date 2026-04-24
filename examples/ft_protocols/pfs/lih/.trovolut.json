@@ -19,7 +19,13 @@
   "default_iterations": 100,
   "default_wall_seconds": 20.0,
   "objective_metric": "score",
-  "objective_text": "Lower the score and T-gate count while preserving the fixed LiH product-formula phase-to-energy chemical-accuracy constraint.",
-  "support_files": [],
+  "objective_text": "Lower the score and T-gate count while preserving the selected LiH product-formula constraint. The default evaluator is phase-to-energy chemical accuracy; set TROVOLUT_PFS_EVALUATOR=fidelity to optimize the final-state fidelity evaluator.",
+  "support_files": [
+    "../chemistry.py",
+    "../evaluate_energy.py",
+    "../evaluate_fidelity.py",
+    "../problem_cache/lih.json",
+    "../problem_cache/lih.npz"
+  ],
   "benchmark_storage_name": "pfs_lih"
 }

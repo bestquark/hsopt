@@ -34,40 +34,27 @@ accepts legacy shorthand targets such as `pfs/h2`.
 
 ## Loop Contract
 
-1. Read the lane status and lane instruction file.
-2. Restore the current best kept valid snapshot if the live file is not already
-   best.
-3. Edit only the lane's `simple_pf.py` unless the user explicitly changes the
+1. Read the lane status and choose `--evaluator energy` or `--evaluator fidelity`.
+2. Edit only the lane's `simple_pf.py` unless the user explicitly changes the
    benchmark framework.
-4. Make one coherent precision-policy mutation.
-5. Run exactly one queued tracked evaluation.
-6. Read the JSON result before choosing the next mutation.
-7. If the result is `discard` or `crash`, restore the best kept valid snapshot
-   before mutating again.
-8. Preserve every scored proposal. Do not delete, renumber, or overwrite
-   `snapshots/`.
-9. Leave the live file restored to the best valid state before stopping.
+3. Make one coherent precision-policy mutation.
+4. Run exactly one fixed evaluator command.
+5. Read the JSON result before choosing the next mutation.
+6. Preserve campaign history in the external run directory used by the caller.
 
 ## Canonical Commands
 
 Print the evaluator command:
 
 ```bash
-uv run t-autoresearch evaluate examples/ft_protocols/pfs/h2 --print-only
+uv run t-autoresearch evaluate examples/ft_protocols/pfs/h2 --evaluator energy --print-only
+uv run t-autoresearch evaluate examples/ft_protocols/pfs/h2 --evaluator fidelity --epsilon 1e-3 --print-only
 ```
 
-Score one mutation:
+Score one mutation directly:
 
 ```bash
-uv run t-autoresearch track \
-  examples/ft_protocols/pfs/h2 \
-  --description "relax low-coefficient ZZ precision buckets"
-```
-
-Restore best:
-
-```bash
-uv run t-autoresearch restore examples/ft_protocols/pfs/h2
+uv run t-autoresearch evaluate examples/ft_protocols/pfs/h2 --evaluator energy
 ```
 
 ## Optimization Target
@@ -75,16 +62,16 @@ uv run t-autoresearch restore examples/ft_protocols/pfs/h2
 Optimize the evaluator's lower-is-better `score`. In practice, this means
 lowering compiled `t_gate_count` while keeping the fixed accuracy contract true:
 
-- `pf1`: chemical-accuracy ground-state phase estimate.
+- `energy`: chemical-accuracy estimate from the lowest HF-reference spectral
+  peak in the fixed-electron sector.
+- `fidelity`: final-state infidelity below the selected epsilon budget.
 
 Treat these as fixed infrastructure:
 
-- `evaluate.py`
-- `track_iteration.py`
-- `queued_track_iteration.py`
-- `restore_best_iteration.py`
 - `chemistry.py`
-- `model_registry.py`
+- `evaluate_energy.py`
+- `evaluate_fidelity.py`
+- molecule-local `evaluate.py` wrappers
 
 ## Search Behavior
 

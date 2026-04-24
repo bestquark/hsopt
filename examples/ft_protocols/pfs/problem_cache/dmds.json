@@ -1,6 +1,6 @@
 {
   "molecule": "dmds",
-  "display_name": "DMDS PF1",
+  "display_name": "DMDS PF",
   "basis": "sto-3g",
   "charge": 0,
   "multiplicity": 1,
@@ -10,6 +10,10 @@
   "target_time": 1.0,
   "chemical_accuracy_hartree": 0.001,
   "chemical_accuracy_fidelity_floor": 0.9999999997831531,
+  "ground_state_energy_hartree": -881.9709549623337,
+  "ground_state_sector": "fixed_electron_number",
+  "hf_ground_state_overlap": 0.12248411657660238,
+  "spectral_peak_weight_threshold": 1e-10,
   "centered_hamiltonian_norm": 33.95419056134414,
   "identity_coefficient": -873.7207521844355,
   "total_pauli_rotation_terms": 847,

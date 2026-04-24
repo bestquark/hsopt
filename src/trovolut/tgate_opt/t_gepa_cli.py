@@ -17,6 +17,7 @@ from .common import (
     Lane,
     discover_lanes,
     next_iteration,
+    normalize_family,
     resolve_lane,
     restore_command,
     shell_join,
@@ -46,6 +47,7 @@ histogram before choosing the next mutation.
 
 
 def default_examples(family: str = DEFAULT_FAMILY, smoke: bool = False) -> list[dict[str, Any]]:
+    family = normalize_family(family)
     molecules = ["h2"] if smoke else ["h2", "bh", "lih", "dmds"]
     lanes = {lane.key: lane for lane in discover_lanes(REPO_ROOT)}
     examples: list[dict[str, Any]] = []
@@ -259,7 +261,7 @@ def evaluate_candidate_prompt(
     if not prompt.strip():
         return -0.25, {"Feedback": {"status": "empty candidate prompt"}, "scores": {"t_gate_reduction_fraction": -0.25}}
 
-    family = str(example.get("family", DEFAULT_FAMILY))
+    family = normalize_family(str(example.get("family", DEFAULT_FAMILY)))
     molecule = str(example.get("molecule", "h2"))
     target_iterations = int(example.get("target_iterations", 1))
     max_agent_seconds = int(example.get("max_agent_seconds", 900))

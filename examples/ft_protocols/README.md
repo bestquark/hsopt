@@ -7,8 +7,8 @@ chemical-accuracy threshold fixed.
 Direct dynamics methods for implementing exp(-i H t):
 
 - `pfs/`: product-formula/Trotter dynamics for `h2`, `bh`, `lih`, and `dmds`,
-  using pygridsynth rotation T counts and a phase-to-energy chemical-accuracy
-  constraint
+  using pygridsynth rotation T counts with two evaluator modes: final-state
+  fidelity against exact `exp(+i H t)` and phase-to-energy chemical accuracy
 - `taylor_lcu/`: segmented truncated Taylor/LCU dynamics using Qualtran
   chemistry SELECT/PREPARE counts
 - `qsvt/`: qubitized QSVT/QSP dynamics using a sparse chemistry walk
@@ -34,7 +34,8 @@ Run the smoke checks from the repo root:
 ```bash
 uv run t-autoresearch list
 uv run t-autoresearch status examples/ft_protocols/pfs/h2
-uv run --extra ft-protocols python examples/ft_protocols/pfs/evaluate.py --molecule h2 --script examples/ft_protocols/pfs/h2/simple_pf.py
+uv run --extra ft-protocols python examples/ft_protocols/pfs/evaluate_energy.py --molecule h2 --script examples/ft_protocols/pfs/h2/simple_pf.py
+uv run --extra ft-protocols python examples/ft_protocols/pfs/evaluate_fidelity.py --molecule h2 --script examples/ft_protocols/pfs/h2/simple_pf.py --epsilon 1e-3
 uv run --extra ft-protocols python examples/ft_protocols/taylor_lcu/evaluate.py --molecule h2 --script examples/ft_protocols/taylor_lcu/h2/simple_taylor_lcu.py
 uv run --extra ft-protocols python examples/ft_protocols/qsvt/evaluate.py --molecule h2 --script examples/ft_protocols/qsvt/h2/simple_qsvt.py
 uv run --extra ft-protocols python examples/ft_protocols/qubitization/evaluate.py --molecule h2 --script examples/ft_protocols/qubitization/h2/simple_qubitization.py
