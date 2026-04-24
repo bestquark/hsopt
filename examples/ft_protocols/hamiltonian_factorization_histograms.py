@@ -427,7 +427,6 @@ def plot_factorization_histograms(
         ax.set_xscale("log")
         ax.set_title(titles[method])
         ax.set_xlabel(r"$|\alpha_i|$")
-        ax.grid(axis="y", alpha=0.18)
         if method == "O(n^4)":
             ax.set_ylabel("Count")
         ax.legend(
