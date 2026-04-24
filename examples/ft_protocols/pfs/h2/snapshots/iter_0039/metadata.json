@@ -1,0 +1,12 @@
+{
+  "iteration": 39,
+  "status": "discard",
+  "description": "increase YXXY second-plateau duty cycle from nine-sixteenths to three-fifths",
+  "timestamp_utc": "2026-04-09T20:53:50.127052+00:00",
+  "molecule": "h2",
+  "script": "/Users/lmantilla/Desktop/Internship/trovolut/examples/ft_protocols/pfs/h2/simple_pf.py",
+  "previous_best_iteration": 38,
+  "previous_best_score": 335184.0,
+  "source_hash_before": "6ee2ed3bb978082939c94b1127b286c094b8206b83748b2ba38d9320b68009be",
+  "source_hash_after": "6ee2ed3bb978082939c94b1127b286c094b8206b83748b2ba38d9320b68009be"
+}

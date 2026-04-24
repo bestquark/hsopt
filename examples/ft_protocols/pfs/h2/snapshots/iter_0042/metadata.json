@@ -1,0 +1,12 @@
+{
+  "iteration": 42,
+  "status": "keep",
+  "description": "add one extra YXXY second-plateau step every 128 steps on top of the kept 9/16 cadence",
+  "timestamp_utc": "2026-04-09T20:54:21.321841+00:00",
+  "molecule": "h2",
+  "script": "/Users/lmantilla/Desktop/Internship/trovolut/examples/ft_protocols/pfs/h2/simple_pf.py",
+  "previous_best_iteration": 38,
+  "previous_best_score": 335184.0,
+  "source_hash_before": "50f109ef69ae705914c12dcad9284263d66db2393f49f4a7d641aaf491c5e884",
+  "source_hash_after": "50f109ef69ae705914c12dcad9284263d66db2393f49f4a7d641aaf491c5e884"
+}

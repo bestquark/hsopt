@@ -1,0 +1,12 @@
+{
+  "iteration": 61,
+  "status": "keep",
+  "description": "controller add end-loaded YXXY sparse bonus step 345",
+  "timestamp_utc": "2026-04-09T20:57:03.715725+00:00",
+  "molecule": "h2",
+  "script": "/Users/lmantilla/Desktop/Internship/trovolut/examples/ft_protocols/pfs/h2/simple_pf.py",
+  "previous_best_iteration": 60,
+  "previous_best_score": 335144.0,
+  "source_hash_before": "31750f91bde6db08b65c9c118e57b3a04d4909189e85b7505b28555866d2000e",
+  "source_hash_after": "31750f91bde6db08b65c9c118e57b3a04d4909189e85b7505b28555866d2000e"
+}

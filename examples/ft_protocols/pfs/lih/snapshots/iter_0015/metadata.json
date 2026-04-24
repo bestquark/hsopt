@@ -1,0 +1,12 @@
+{
+  "iteration": 15,
+  "status": "keep",
+  "description": "add every-128-step 4e-7 sparse override for IIXXIIYY/IIXXYYII/IIXYIIYX/IIXYYXII/IIYXIIXY/IIYXXYII/IIYYIIXX/IIYYXXII middle-pair exchange octet",
+  "timestamp_utc": "2026-04-10T03:51:22.695854+00:00",
+  "molecule": "lih",
+  "script": "/Users/lmantilla/Desktop/Internship/trovolut/examples/ft_protocols/pfs/lih/simple_pf.py",
+  "previous_best_iteration": 14,
+  "previous_best_score": 1935460.0,
+  "source_hash_before": "7afefa9221a78abad2db6a187251d01e5b572cf1625d4a293bc103f56b9e6026",
+  "source_hash_after": "7afefa9221a78abad2db6a187251d01e5b572cf1625d4a293bc103f56b9e6026"
+}

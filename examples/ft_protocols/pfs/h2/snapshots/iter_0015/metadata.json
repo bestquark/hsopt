@@ -1,0 +1,12 @@
+{
+  "iteration": 15,
+  "status": "discard",
+  "description": "raise YXXY to its 1.2e-6 62-T breakpoint on top of the current best policy",
+  "timestamp_utc": "2026-04-09T20:03:01.381241+00:00",
+  "molecule": "h2",
+  "script": "/Users/lmantilla/Desktop/Internship/trovolut/examples/ft_protocols/pfs/h2/simple_pf.py",
+  "previous_best_iteration": 14,
+  "previous_best_score": 343296.0,
+  "source_hash_before": "0a6175b1902aff15f8a1f4379864b5b8c72f323b781d5a4287ab5310894a62c2",
+  "source_hash_after": "0a6175b1902aff15f8a1f4379864b5b8c72f323b781d5a4287ab5310894a62c2"
+}

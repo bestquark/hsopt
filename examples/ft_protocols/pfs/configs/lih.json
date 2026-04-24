@@ -1,0 +1,22 @@
+{
+  "key": "lih",
+  "display_name": "LiH PF1",
+  "geometry": "Li 0.000000 0.000000 0.000000\nH  0.000000 0.000000 1.570000",
+  "active_electrons": 2,
+  "active_orbitals": 4,
+  "aolabels": null,
+  "charge": 0,
+  "multiplicity": 1,
+  "basis": "sto-3g",
+  "target_time": 1.0,
+  "target_iteration": 100,
+  "max_parallel": 1,
+  "localization": "pipek_mezey_split_occ_vir",
+  "cas_label": "CAS(2e,4o)",
+  "lane_dir": "/Users/lmantilla/Desktop/Internship/trovolut/examples/ft_protocols/pfs/lih",
+  "editable_script": "/Users/lmantilla/Desktop/Internship/trovolut/examples/ft_protocols/pfs/lih/simple_pf.py",
+  "snapshots_dir": "/Users/lmantilla/Desktop/Internship/trovolut/examples/ft_protocols/pfs/lih/snapshots",
+  "results_path": "/Users/lmantilla/Desktop/Internship/trovolut/examples/ft_protocols/pfs/lih/snapshots/results.tsv",
+  "instruction_path": "/Users/lmantilla/Desktop/Internship/trovolut/examples/ft_protocols/pfs/instructions/lih.md",
+  "config_path": "/Users/lmantilla/Desktop/Internship/trovolut/examples/ft_protocols/pfs/configs/lih.json"
+}

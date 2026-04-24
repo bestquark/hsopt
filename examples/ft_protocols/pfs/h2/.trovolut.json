@@ -19,7 +19,7 @@
   "default_iterations": 100,
   "default_wall_seconds": 20.0,
   "objective_metric": "score",
-  "objective_text": "Lower the score and T-gate count while preserving the fixed H2 product-formula chemical-accuracy constraint.",
+  "objective_text": "Lower the score and T-gate count while preserving the fixed H2 product-formula phase-to-energy chemical-accuracy constraint.",
   "support_files": [],
   "benchmark_storage_name": "pfs_h2"
 }

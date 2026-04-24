@@ -1,0 +1,12 @@
+{
+  "iteration": 11,
+  "status": "keep",
+  "description": "raise only ZZII to 1e-6 on top of the best current label-specific policy",
+  "timestamp_utc": "2026-04-09T20:02:13.445134+00:00",
+  "molecule": "h2",
+  "script": "/Users/lmantilla/Desktop/Internship/trovolut/examples/ft_protocols/pfs/h2/simple_pf.py",
+  "previous_best_iteration": 10,
+  "previous_best_score": 346368.0,
+  "source_hash_before": "51969c1c831779df5d283a6e2951e2406c6c4c481c5a8642b9d91b65c9f9c23c",
+  "source_hash_after": "51969c1c831779df5d283a6e2951e2406c6c4c481c5a8642b9d91b65c9f9c23c"
+}

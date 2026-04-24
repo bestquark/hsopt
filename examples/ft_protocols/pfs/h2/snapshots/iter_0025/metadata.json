@@ -1,0 +1,12 @@
+{
+  "iteration": 25,
+  "status": "discard",
+  "description": "raise both small ZZ pairs to 1.4e-6 and tighten the XY block to its 7.8e-7 plateau",
+  "timestamp_utc": "2026-04-09T20:13:52.073616+00:00",
+  "molecule": "h2",
+  "script": "/Users/lmantilla/Desktop/Internship/trovolut/examples/ft_protocols/pfs/h2/simple_pf.py",
+  "previous_best_iteration": 24,
+  "previous_best_score": 337920.0,
+  "source_hash_before": "998677f464fc8cfb73db47fc08fc6fc5f416c309295a21f0749227a63d620073",
+  "source_hash_after": "998677f464fc8cfb73db47fc08fc6fc5f416c309295a21f0749227a63d620073"
+}

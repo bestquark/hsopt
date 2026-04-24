@@ -1,0 +1,12 @@
+{
+  "iteration": 85,
+  "status": "keep",
+  "description": "relax the repeated 5.112984e-6 support>=4 quartet to 3e-10",
+  "timestamp_utc": "2026-04-10T18:26:52.721415+00:00",
+  "molecule": "dmds",
+  "script": "/Users/lmantilla/Desktop/Internship/trovolut/examples/ft_protocols/pfs/dmds/simple_pf.py",
+  "previous_best_iteration": 84,
+  "previous_best_score": 80281600.0,
+  "source_hash_before": "afe953581e55b0b016501adefb37268c9eea70a4ce43d0c2f3541b7d8e19bbc8",
+  "source_hash_after": "afe953581e55b0b016501adefb37268c9eea70a4ce43d0c2f3541b7d8e19bbc8"
+}

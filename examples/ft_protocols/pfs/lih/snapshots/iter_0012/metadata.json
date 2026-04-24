@@ -1,0 +1,12 @@
+{
+  "iteration": 12,
+  "status": "keep",
+  "description": "add every-128-step 1.75e-7 sparse override for XXIIIIYY/XXIIYYII front-pair XXYY duo",
+  "timestamp_utc": "2026-04-09T21:44:24.989463+00:00",
+  "molecule": "lih",
+  "script": "/Users/lmantilla/Desktop/Internship/trovolut/examples/ft_protocols/pfs/lih/simple_pf.py",
+  "previous_best_iteration": 11,
+  "previous_best_score": 1935492.0,
+  "source_hash_before": "ca010c0863acaf466e2f04223f5c63c54e1c8bdb3c42afce64f1bddb1ce36501",
+  "source_hash_after": "ca010c0863acaf466e2f04223f5c63c54e1c8bdb3c42afce64f1bddb1ce36501"
+}

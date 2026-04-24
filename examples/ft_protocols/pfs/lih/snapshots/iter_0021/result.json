@@ -1,0 +1,1574 @@
+{
+  "experiment": "pf1_lih",
+  "molecule": "lih",
+  "display_name": "LiH PF1",
+  "script": "/Users/lmantilla/Desktop/Internship/trovolut/examples/ft_protocols/pfs/.track_o31ohfu6/simple_pf.py",
+  "objective": "ground_state_phase_estimation",
+  "score": 1882628.0,
+  "passes_accuracy_constraint": true,
+  "passes_fidelity_constraint": true,
+  "passes_state_fidelity_diagnostic": false,
+  "chemical_accuracy_hartree": 0.001,
+  "chemical_accuracy_fidelity_floor": 0.9999999985685262,
+  "target_time": 1.0,
+  "time_sign": 1.0,
+  "ground_state_energy_hartree": -25.64915654065373,
+  "ground_state_energy_estimate_hartree": -25.64918988401899,
+  "ground_state_energy_error_hartree": 3.334336525995241e-05,
+  "exact_pf1_ground_state_energy_estimate_hartree": -25.649156540653753,
+  "exact_pf1_ground_state_energy_error_hartree": 2.1316282072803006e-14,
+  "ground_state_phase_overlap_magnitude": 0.9999999998680521,
+  "exact_pf1_ground_state_phase_overlap_magnitude": 0.9999999999999998,
+  "accuracy_metric_name": "ground_state_energy_error_hartree",
+  "accuracy_metric_value": 3.334336525995241e-05,
+  "accuracy_threshold_name": "chemical_accuracy_hartree",
+  "accuracy_threshold_value": 0.001,
+  "fidelity": 0.9999990256254789,
+  "infidelity": 9.743745210677446e-07,
+  "exact_pf1_fidelity": 0.9999990702585073,
+  "exact_pf1_infidelity": 9.297414926834335e-07,
+  "precision_gain_over_exact_pf1": -4.4633028384311046e-08,
+  "t_gate_count": 1882628,
+  "nonzero_rotation_count": 26624,
+  "skipped_rotation_count": 0,
+  "compilation_backend": "pygridsynth",
+  "synthesis_epsilon_histogram": {
+    "1.000e-07": 1532,
+    "1.050e-07": 1022,
+    "1.500e-07": 12579,
+    "1.750e-07": 48,
+    "2.000e-07": 67,
+    "2.500e-07": 4160,
+    "4.000e-07": 384,
+    "5.000e-07": 512,
+    "9.500e-08": 6320
+  },
+  "unique_compilation_count": 166,
+  "unique_compilations": [
+    {
+      "label": "IIIIIIIZ",
+      "alpha": 0.004400120444298,
+      "theta": -0.008800240888596,
+      "epsilon": 1.05e-07,
+      "t_gate_count": 72,
+      "gate_count": 187,
+      "operator_error": 8.392443083331065e-08
+    },
+    {
+      "label": "IIIIIIZI",
+      "alpha": 0.004400120444298,
+      "theta": -0.008800240888596,
+      "epsilon": 1.05e-07,
+      "t_gate_count": 72,
+      "gate_count": 187,
+      "operator_error": 8.392443083331065e-08
+    },
+    {
+      "label": "IIIIIIZZ",
+      "alpha": -0.000611221701483,
+      "theta": 0.001222443402966,
+      "epsilon": 9.5e-08,
+      "t_gate_count": 74,
+      "gate_count": 187,
+      "operator_error": 3.571812583199431e-08
+    },
+    {
+      "label": "IIIIIZII",
+      "alpha": 0.004400120444298,
+      "theta": -0.008800240888596,
+      "epsilon": 9.5e-08,
+      "t_gate_count": 72,
+      "gate_count": 187,
+      "operator_error": 8.392443083331065e-08
+    },
+    {
+      "label": "IIIIIZII",
+      "alpha": 0.004400120444298,
+      "theta": -0.008800240888596,
+      "epsilon": 1.5e-07,
+      "t_gate_count": 72,
+      "gate_count": 187,
+      "operator_error": 8.392443083331065e-08
+    },
+    {
+      "label": "IIIIIZIZ",
+      "alpha": -0.000512379087145,
+      "theta": 0.00102475817429,
+      "epsilon": 9.5e-08,
+      "t_gate_count": 74,
+      "gate_count": 190,
+      "operator_error": 8.243642881927103e-08
+    },
+    {
+      "label": "IIIIIZZI",
+      "alpha": -0.000545326625258,
+      "theta": 0.001090653250516,
+      "epsilon": 9.5e-08,
+      "t_gate_count": 68,
+      "gate_count": 173,
+      "operator_error": 6.60715626987017e-08
+    },
+    {
+      "label": "IIIIIZZI",
+      "alpha": -0.000545326625258,
+      "theta": 0.001090653250516,
+      "epsilon": 1.5e-07,
+      "t_gate_count": 68,
+      "gate_count": 173,
+      "operator_error": 6.60715626987017e-08
+    },
+    {
+      "label": "IIIIXXYY",
+      "alpha": 3.2947538113e-05,
+      "theta": -6.5895076226e-05,
+      "epsilon": 2.5e-07,
+      "t_gate_count": 68,
+      "gate_count": 177,
+      "operator_error": 1.448163199345794e-07
+    },
+    {
+      "label": "IIIIXYYX",
+      "alpha": -3.2947538113e-05,
+      "theta": 6.5895076226e-05,
+      "epsilon": 2.5e-07,
+      "t_gate_count": 68,
+      "gate_count": 174,
+      "operator_error": 6.752648852251284e-08
+    },
+    {
+      "label": "IIIIYXXY",
+      "alpha": -3.2947538113e-05,
+      "theta": 6.5895076226e-05,
+      "epsilon": 2.5e-07,
+      "t_gate_count": 68,
+      "gate_count": 174,
+      "operator_error": 6.752648852251284e-08
+    },
+    {
+      "label": "IIIIYYXX",
+      "alpha": 3.2947538113e-05,
+      "theta": -6.5895076226e-05,
+      "epsilon": 2.5e-07,
+      "t_gate_count": 68,
+      "gate_count": 177,
+      "operator_error": 1.448163199345794e-07
+    },
+    {
+      "label": "IIIIZIII",
+      "alpha": 0.004400120444298,
+      "theta": -0.008800240888596,
+      "epsilon": 9.5e-08,
+      "t_gate_count": 72,
+      "gate_count": 187,
+      "operator_error": 8.392443083331065e-08
+    },
+    {
+      "label": "IIIIZIII",
+      "alpha": 0.004400120444298,
+      "theta": -0.008800240888596,
+      "epsilon": 1.5e-07,
+      "t_gate_count": 72,
+      "gate_count": 187,
+      "operator_error": 8.392443083331065e-08
+    },
+    {
+      "label": "IIIIZIIZ",
+      "alpha": -0.000545326625258,
+      "theta": 0.001090653250516,
+      "epsilon": 9.5e-08,
+      "t_gate_count": 68,
+      "gate_count": 173,
+      "operator_error": 6.60715626987017e-08
+    },
+    {
+      "label": "IIIIZIIZ",
+      "alpha": -0.000545326625258,
+      "theta": 0.001090653250516,
+      "epsilon": 1.5e-07,
+      "t_gate_count": 68,
+      "gate_count": 173,
+      "operator_error": 6.60715626987017e-08
+    },
+    {
+      "label": "IIIIZIZI",
+      "alpha": -0.000512379087145,
+      "theta": 0.00102475817429,
+      "epsilon": 9.5e-08,
+      "t_gate_count": 74,
+      "gate_count": 190,
+      "operator_error": 8.243642881927103e-08
+    },
+    {
+      "label": "IIIIZZII",
+      "alpha": -0.000611221701483,
+      "theta": 0.001222443402966,
+      "epsilon": 9.5e-08,
+      "t_gate_count": 74,
+      "gate_count": 187,
+      "operator_error": 3.571812583199431e-08
+    },
+    {
+      "label": "IIIZIIII",
+      "alpha": 0.004253482873798,
+      "theta": -0.008506965747596,
+      "epsilon": 1.05e-07,
+      "t_gate_count": 74,
+      "gate_count": 194,
+      "operator_error": 4.015725184201545e-08
+    },
+    {
+      "label": "IIIZIIII",
+      "alpha": 0.004253482873798,
+      "theta": -0.008506965747596,
+      "epsilon": 1.5e-07,
+      "t_gate_count": 72,
+      "gate_count": 195,
+      "operator_error": 9.494297667441315e-08
+    },
+    {
+      "label": "IIIZIIIZ",
+      "alpha": -0.000470272575248,
+      "theta": 0.000940545150496,
+      "epsilon": 9.5e-08,
+      "t_gate_count": 74,
+      "gate_count": 193,
+      "operator_error": 1.832723546719387e-08
+    },
+    {
+      "label": "IIIZIIIZ",
+      "alpha": -0.000470272575248,
+      "theta": 0.000940545150496,
+      "epsilon": 1.5e-07,
+      "t_gate_count": 70,
+      "gate_count": 185,
+      "operator_error": 9.067237922281088e-08
+    },
+    {
+      "label": "IIIZIIZI",
+      "alpha": -0.000550906360977,
+      "theta": 0.001101812721954,
+      "epsilon": 1e-07,
+      "t_gate_count": 70,
+      "gate_count": 187,
+      "operator_error": 6.072800845346524e-08
+    },
+    {
+      "label": "IIIZIIZI",
+      "alpha": -0.000550906360977,
+      "theta": 0.001101812721954,
+      "epsilon": 1.5e-07,
+      "t_gate_count": 70,
+      "gate_count": 187,
+      "operator_error": 6.072800845346524e-08
+    },
+    {
+      "label": "IIIZIZII",
+      "alpha": -0.000470272575248,
+      "theta": 0.000940545150496,
+      "epsilon": 9.5e-08,
+      "t_gate_count": 74,
+      "gate_count": 193,
+      "operator_error": 1.832723546719387e-08
+    },
+    {
+      "label": "IIIZIZII",
+      "alpha": -0.000470272575248,
+      "theta": 0.000940545150496,
+      "epsilon": 1.5e-07,
+      "t_gate_count": 70,
+      "gate_count": 185,
+      "operator_error": 9.067237922281088e-08
+    },
+    {
+      "label": "IIIZZIII",
+      "alpha": -0.000550906360977,
+      "theta": 0.001101812721954,
+      "epsilon": 1e-07,
+      "t_gate_count": 70,
+      "gate_count": 187,
+      "operator_error": 6.072800845346524e-08
+    },
+    {
+      "label": "IIIZZIII",
+      "alpha": -0.000550906360977,
+      "theta": 0.001101812721954,
+      "epsilon": 1.5e-07,
+      "t_gate_count": 70,
+      "gate_count": 187,
+      "operator_error": 6.072800845346524e-08
+    },
+    {
+      "label": "IIXXIIYY",
+      "alpha": 8.0633785729e-05,
+      "theta": -0.000161267571458,
+      "epsilon": 1.5e-07,
+      "t_gate_count": 70,
+      "gate_count": 172,
+      "operator_error": 9.848377050962453e-08
+    },
+    {
+      "label": "IIXXIIYY",
+      "alpha": 8.0633785729e-05,
+      "theta": -0.000161267571458,
+      "epsilon": 4e-07,
+      "t_gate_count": 68,
+      "gate_count": 177,
+      "operator_error": 3.647938120514945e-07
+    },
+    {
+      "label": "IIXXYYII",
+      "alpha": 8.0633785729e-05,
+      "theta": -0.000161267571458,
+      "epsilon": 1.5e-07,
+      "t_gate_count": 70,
+      "gate_count": 172,
+      "operator_error": 9.848377050962453e-08
+    },
+    {
+      "label": "IIXXYYII",
+      "alpha": 8.0633785729e-05,
+      "theta": -0.000161267571458,
+      "epsilon": 4e-07,
+      "t_gate_count": 68,
+      "gate_count": 177,
+      "operator_error": 3.647938120514945e-07
+    },
+    {
+      "label": "IIXYIIYX",
+      "alpha": -8.0633785729e-05,
+      "theta": 0.000161267571458,
+      "epsilon": 1.5e-07,
+      "t_gate_count": 70,
+      "gate_count": 168,
+      "operator_error": 9.848377052371685e-08
+    },
+    {
+      "label": "IIXYIIYX",
+      "alpha": -8.0633785729e-05,
+      "theta": 0.000161267571458,
+      "epsilon": 4e-07,
+      "t_gate_count": 68,
+      "gate_count": 168,
+      "operator_error": 2.499472630016892e-07
+    },
+    {
+      "label": "IIXYYXII",
+      "alpha": -8.0633785729e-05,
+      "theta": 0.000161267571458,
+      "epsilon": 1.5e-07,
+      "t_gate_count": 70,
+      "gate_count": 168,
+      "operator_error": 9.848377052371685e-08
+    },
+    {
+      "label": "IIXYYXII",
+      "alpha": -8.0633785729e-05,
+      "theta": 0.000161267571458,
+      "epsilon": 4e-07,
+      "t_gate_count": 68,
+      "gate_count": 168,
+      "operator_error": 2.499472630016892e-07
+    },
+    {
+      "label": "IIYXIIXY",
+      "alpha": -8.0633785729e-05,
+      "theta": 0.000161267571458,
+      "epsilon": 1.5e-07,
+      "t_gate_count": 70,
+      "gate_count": 168,
+      "operator_error": 9.848377052371685e-08
+    },
+    {
+      "label": "IIYXIIXY",
+      "alpha": -8.0633785729e-05,
+      "theta": 0.000161267571458,
+      "epsilon": 4e-07,
+      "t_gate_count": 68,
+      "gate_count": 168,
+      "operator_error": 2.499472630016892e-07
+    },
+    {
+      "label": "IIYXXYII",
+      "alpha": -8.0633785729e-05,
+      "theta": 0.000161267571458,
+      "epsilon": 1.5e-07,
+      "t_gate_count": 70,
+      "gate_count": 168,
+      "operator_error": 9.848377052371685e-08
+    },
+    {
+      "label": "IIYXXYII",
+      "alpha": -8.0633785729e-05,
+      "theta": 0.000161267571458,
+      "epsilon": 4e-07,
+      "t_gate_count": 68,
+      "gate_count": 168,
+      "operator_error": 2.499472630016892e-07
+    },
+    {
+      "label": "IIYYIIXX",
+      "alpha": 8.0633785729e-05,
+      "theta": -0.000161267571458,
+      "epsilon": 1.5e-07,
+      "t_gate_count": 70,
+      "gate_count": 172,
+      "operator_error": 9.848377050962453e-08
+    },
+    {
+      "label": "IIYYIIXX",
+      "alpha": 8.0633785729e-05,
+      "theta": -0.000161267571458,
+      "epsilon": 4e-07,
+      "t_gate_count": 68,
+      "gate_count": 177,
+      "operator_error": 3.647938120514945e-07
+    },
+    {
+      "label": "IIYYXXII",
+      "alpha": 8.0633785729e-05,
+      "theta": -0.000161267571458,
+      "epsilon": 1.5e-07,
+      "t_gate_count": 70,
+      "gate_count": 172,
+      "operator_error": 9.848377050962453e-08
+    },
+    {
+      "label": "IIYYXXII",
+      "alpha": 8.0633785729e-05,
+      "theta": -0.000161267571458,
+      "epsilon": 4e-07,
+      "t_gate_count": 68,
+      "gate_count": 177,
+      "operator_error": 3.647938120514945e-07
+    },
+    {
+      "label": "IIZIIIII",
+      "alpha": 0.004253482873798,
+      "theta": -0.008506965747596,
+      "epsilon": 1.05e-07,
+      "t_gate_count": 74,
+      "gate_count": 194,
+      "operator_error": 4.015725184201545e-08
+    },
+    {
+      "label": "IIZIIIII",
+      "alpha": 0.004253482873798,
+      "theta": -0.008506965747596,
+      "epsilon": 1.5e-07,
+      "t_gate_count": 72,
+      "gate_count": 195,
+      "operator_error": 9.494297667441315e-08
+    },
+    {
+      "label": "IIZIIIIZ",
+      "alpha": -0.000550906360977,
+      "theta": 0.001101812721954,
+      "epsilon": 1e-07,
+      "t_gate_count": 70,
+      "gate_count": 187,
+      "operator_error": 6.072800845346524e-08
+    },
+    {
+      "label": "IIZIIIIZ",
+      "alpha": -0.000550906360977,
+      "theta": 0.001101812721954,
+      "epsilon": 1.5e-07,
+      "t_gate_count": 70,
+      "gate_count": 187,
+      "operator_error": 6.072800845346524e-08
+    },
+    {
+      "label": "IIZIIIZI",
+      "alpha": -0.000470272575248,
+      "theta": 0.000940545150496,
+      "epsilon": 9.5e-08,
+      "t_gate_count": 74,
+      "gate_count": 193,
+      "operator_error": 1.832723546719387e-08
+    },
+    {
+      "label": "IIZIIIZI",
+      "alpha": -0.000470272575248,
+      "theta": 0.000940545150496,
+      "epsilon": 1.5e-07,
+      "t_gate_count": 70,
+      "gate_count": 185,
+      "operator_error": 9.067237922281088e-08
+    },
+    {
+      "label": "IIZIIZII",
+      "alpha": -0.000550906360977,
+      "theta": 0.001101812721954,
+      "epsilon": 1e-07,
+      "t_gate_count": 70,
+      "gate_count": 187,
+      "operator_error": 6.072800845346524e-08
+    },
+    {
+      "label": "IIZIIZII",
+      "alpha": -0.000550906360977,
+      "theta": 0.001101812721954,
+      "epsilon": 1.5e-07,
+      "t_gate_count": 70,
+      "gate_count": 187,
+      "operator_error": 6.072800845346524e-08
+    },
+    {
+      "label": "IIZIZIII",
+      "alpha": -0.000470272575248,
+      "theta": 0.000940545150496,
+      "epsilon": 9.5e-08,
+      "t_gate_count": 74,
+      "gate_count": 193,
+      "operator_error": 1.832723546719387e-08
+    },
+    {
+      "label": "IIZIZIII",
+      "alpha": -0.000470272575248,
+      "theta": 0.000940545150496,
+      "epsilon": 1.5e-07,
+      "t_gate_count": 70,
+      "gate_count": 185,
+      "operator_error": 9.067237922281088e-08
+    },
+    {
+      "label": "IIZZIIII",
+      "alpha": -0.000660525709418,
+      "theta": 0.001321051418836,
+      "epsilon": 9.5e-08,
+      "t_gate_count": 70,
+      "gate_count": 183,
+      "operator_error": 8.46735852521101e-08
+    },
+    {
+      "label": "IIZZIIII",
+      "alpha": -0.000660525709418,
+      "theta": 0.001321051418836,
+      "epsilon": 2e-07,
+      "t_gate_count": 70,
+      "gate_count": 183,
+      "operator_error": 8.46735852521101e-08
+    },
+    {
+      "label": "IXIXIIII",
+      "alpha": 1.3844310066e-05,
+      "theta": -2.7688620132e-05,
+      "epsilon": 1.5e-07,
+      "t_gate_count": 74,
+      "gate_count": 189,
+      "operator_error": 1.0032864149451507e-07
+    },
+    {
+      "label": "IXIXIIII",
+      "alpha": 1.3844310066e-05,
+      "theta": -2.7688620132e-05,
+      "epsilon": 4e-07,
+      "t_gate_count": 68,
+      "gate_count": 173,
+      "operator_error": 3.051833855724499e-07
+    },
+    {
+      "label": "IXXIIIXX",
+      "alpha": 3.7602925602e-05,
+      "theta": -7.5205851204e-05,
+      "epsilon": 1.5e-07,
+      "t_gate_count": 70,
+      "gate_count": 188,
+      "operator_error": 1.4221002170269485e-07
+    },
+    {
+      "label": "IXXIIIXX",
+      "alpha": 3.7602925602e-05,
+      "theta": -7.5205851204e-05,
+      "epsilon": 2.5e-07,
+      "t_gate_count": 70,
+      "gate_count": 188,
+      "operator_error": 1.4221002170269485e-07
+    },
+    {
+      "label": "IXXIXXII",
+      "alpha": 3.7602925602e-05,
+      "theta": -7.5205851204e-05,
+      "epsilon": 1.5e-07,
+      "t_gate_count": 70,
+      "gate_count": 188,
+      "operator_error": 1.4221002170269485e-07
+    },
+    {
+      "label": "IXXIXXII",
+      "alpha": 3.7602925602e-05,
+      "theta": -7.5205851204e-05,
+      "epsilon": 2.5e-07,
+      "t_gate_count": 70,
+      "gate_count": 188,
+      "operator_error": 1.4221002170269485e-07
+    },
+    {
+      "label": "IXYIIIYX",
+      "alpha": 3.7602925602e-05,
+      "theta": -7.5205851204e-05,
+      "epsilon": 1.5e-07,
+      "t_gate_count": 70,
+      "gate_count": 188,
+      "operator_error": 1.4221002170269485e-07
+    },
+    {
+      "label": "IXYIIIYX",
+      "alpha": 3.7602925602e-05,
+      "theta": -7.5205851204e-05,
+      "epsilon": 2.5e-07,
+      "t_gate_count": 70,
+      "gate_count": 188,
+      "operator_error": 1.4221002170269485e-07
+    },
+    {
+      "label": "IXYIYXII",
+      "alpha": 3.7602925602e-05,
+      "theta": -7.5205851204e-05,
+      "epsilon": 1.5e-07,
+      "t_gate_count": 70,
+      "gate_count": 188,
+      "operator_error": 1.4221002170269485e-07
+    },
+    {
+      "label": "IXYIYXII",
+      "alpha": 3.7602925602e-05,
+      "theta": -7.5205851204e-05,
+      "epsilon": 2.5e-07,
+      "t_gate_count": 70,
+      "gate_count": 188,
+      "operator_error": 1.4221002170269485e-07
+    },
+    {
+      "label": "IXZXIIII",
+      "alpha": 0.000206623965154,
+      "theta": -0.000413247930308,
+      "epsilon": 1.5e-07,
+      "t_gate_count": 70,
+      "gate_count": 172,
+      "operator_error": 2.5785319851174523e-08
+    },
+    {
+      "label": "IXZXIIII",
+      "alpha": 0.000206623965154,
+      "theta": -0.000413247930308,
+      "epsilon": 1.75e-07,
+      "t_gate_count": 70,
+      "gate_count": 172,
+      "operator_error": 2.5785319851174523e-08
+    },
+    {
+      "label": "IXZXIIIZ",
+      "alpha": -2.6969624556e-05,
+      "theta": 5.3939249112e-05,
+      "epsilon": 1.5e-07,
+      "t_gate_count": 72,
+      "gate_count": 182,
+      "operator_error": 1.4516376874544997e-07
+    },
+    {
+      "label": "IXZXIIZI",
+      "alpha": 1.0633301046e-05,
+      "theta": -2.1266602092e-05,
+      "epsilon": 1.5e-07,
+      "t_gate_count": 66,
+      "gate_count": 171,
+      "operator_error": 1.1301586779312031e-07
+    },
+    {
+      "label": "IXZXIIZI",
+      "alpha": 1.0633301046e-05,
+      "theta": -2.1266602092e-05,
+      "epsilon": 4e-07,
+      "t_gate_count": 66,
+      "gate_count": 167,
+      "operator_error": 2.394699940948137e-07
+    },
+    {
+      "label": "IXZXIZII",
+      "alpha": -2.6969624556e-05,
+      "theta": 5.3939249112e-05,
+      "epsilon": 1.5e-07,
+      "t_gate_count": 72,
+      "gate_count": 182,
+      "operator_error": 1.4516376874544997e-07
+    },
+    {
+      "label": "IXZXZIII",
+      "alpha": 1.0633301046e-05,
+      "theta": -2.1266602092e-05,
+      "epsilon": 1.5e-07,
+      "t_gate_count": 66,
+      "gate_count": 171,
+      "operator_error": 1.1301586779312031e-07
+    },
+    {
+      "label": "IXZXZIII",
+      "alpha": 1.0633301046e-05,
+      "theta": -2.1266602092e-05,
+      "epsilon": 4e-07,
+      "t_gate_count": 66,
+      "gate_count": 167,
+      "operator_error": 2.394699940948137e-07
+    },
+    {
+      "label": "IYIYIIII",
+      "alpha": 1.3844310066e-05,
+      "theta": -2.7688620132e-05,
+      "epsilon": 1.5e-07,
+      "t_gate_count": 74,
+      "gate_count": 189,
+      "operator_error": 1.0032864149451507e-07
+    },
+    {
+      "label": "IYIYIIII",
+      "alpha": 1.3844310066e-05,
+      "theta": -2.7688620132e-05,
+      "epsilon": 4e-07,
+      "t_gate_count": 68,
+      "gate_count": 173,
+      "operator_error": 3.051833855724499e-07
+    },
+    {
+      "label": "IYXIIIXY",
+      "alpha": 3.7602925602e-05,
+      "theta": -7.5205851204e-05,
+      "epsilon": 1.5e-07,
+      "t_gate_count": 70,
+      "gate_count": 188,
+      "operator_error": 1.4221002170269485e-07
+    },
+    {
+      "label": "IYXIIIXY",
+      "alpha": 3.7602925602e-05,
+      "theta": -7.5205851204e-05,
+      "epsilon": 2.5e-07,
+      "t_gate_count": 70,
+      "gate_count": 188,
+      "operator_error": 1.4221002170269485e-07
+    },
+    {
+      "label": "IYXIXYII",
+      "alpha": 3.7602925602e-05,
+      "theta": -7.5205851204e-05,
+      "epsilon": 1.5e-07,
+      "t_gate_count": 70,
+      "gate_count": 188,
+      "operator_error": 1.4221002170269485e-07
+    },
+    {
+      "label": "IYXIXYII",
+      "alpha": 3.7602925602e-05,
+      "theta": -7.5205851204e-05,
+      "epsilon": 2.5e-07,
+      "t_gate_count": 70,
+      "gate_count": 188,
+      "operator_error": 1.4221002170269485e-07
+    },
+    {
+      "label": "IYYIIIYY",
+      "alpha": 3.7602925602e-05,
+      "theta": -7.5205851204e-05,
+      "epsilon": 1.5e-07,
+      "t_gate_count": 70,
+      "gate_count": 188,
+      "operator_error": 1.4221002170269485e-07
+    },
+    {
+      "label": "IYYIIIYY",
+      "alpha": 3.7602925602e-05,
+      "theta": -7.5205851204e-05,
+      "epsilon": 2.5e-07,
+      "t_gate_count": 70,
+      "gate_count": 188,
+      "operator_error": 1.4221002170269485e-07
+    },
+    {
+      "label": "IYYIYYII",
+      "alpha": 3.7602925602e-05,
+      "theta": -7.5205851204e-05,
+      "epsilon": 1.5e-07,
+      "t_gate_count": 70,
+      "gate_count": 188,
+      "operator_error": 1.4221002170269485e-07
+    },
+    {
+      "label": "IYYIYYII",
+      "alpha": 3.7602925602e-05,
+      "theta": -7.5205851204e-05,
+      "epsilon": 2.5e-07,
+      "t_gate_count": 70,
+      "gate_count": 188,
+      "operator_error": 1.4221002170269485e-07
+    },
+    {
+      "label": "IYZYIIII",
+      "alpha": 0.000206623965154,
+      "theta": -0.000413247930308,
+      "epsilon": 1.5e-07,
+      "t_gate_count": 70,
+      "gate_count": 172,
+      "operator_error": 2.5785319851174523e-08
+    },
+    {
+      "label": "IYZYIIII",
+      "alpha": 0.000206623965154,
+      "theta": -0.000413247930308,
+      "epsilon": 1.75e-07,
+      "t_gate_count": 70,
+      "gate_count": 172,
+      "operator_error": 2.5785319851174523e-08
+    },
+    {
+      "label": "IYZYIIIZ",
+      "alpha": -2.6969624556e-05,
+      "theta": 5.3939249112e-05,
+      "epsilon": 1.5e-07,
+      "t_gate_count": 72,
+      "gate_count": 182,
+      "operator_error": 1.4516376874544997e-07
+    },
+    {
+      "label": "IYZYIIZI",
+      "alpha": 1.0633301046e-05,
+      "theta": -2.1266602092e-05,
+      "epsilon": 1.5e-07,
+      "t_gate_count": 66,
+      "gate_count": 171,
+      "operator_error": 1.1301586779312031e-07
+    },
+    {
+      "label": "IYZYIIZI",
+      "alpha": 1.0633301046e-05,
+      "theta": -2.1266602092e-05,
+      "epsilon": 4e-07,
+      "t_gate_count": 66,
+      "gate_count": 167,
+      "operator_error": 2.394699940948137e-07
+    },
+    {
+      "label": "IYZYIZII",
+      "alpha": -2.6969624556e-05,
+      "theta": 5.3939249112e-05,
+      "epsilon": 1.5e-07,
+      "t_gate_count": 72,
+      "gate_count": 182,
+      "operator_error": 1.4516376874544997e-07
+    },
+    {
+      "label": "IYZYZIII",
+      "alpha": 1.0633301046e-05,
+      "theta": -2.1266602092e-05,
+      "epsilon": 1.5e-07,
+      "t_gate_count": 66,
+      "gate_count": 171,
+      "operator_error": 1.1301586779312031e-07
+    },
+    {
+      "label": "IYZYZIII",
+      "alpha": 1.0633301046e-05,
+      "theta": -2.1266602092e-05,
+      "epsilon": 4e-07,
+      "t_gate_count": 66,
+      "gate_count": 167,
+      "operator_error": 2.394699940948137e-07
+    },
+    {
+      "label": "IZIIIIII",
+      "alpha": 0.005355918855015,
+      "theta": -0.01071183771003,
+      "epsilon": 1e-07,
+      "t_gate_count": 74,
+      "gate_count": 198,
+      "operator_error": 5.610621081626474e-08
+    },
+    {
+      "label": "IZIIIIIZ",
+      "alpha": -0.000484503692233,
+      "theta": 0.000969007384466,
+      "epsilon": 9.5e-08,
+      "t_gate_count": 74,
+      "gate_count": 198,
+      "operator_error": 5.4790956139498104e-08
+    },
+    {
+      "label": "IZIIIIIZ",
+      "alpha": -0.000484503692233,
+      "theta": 0.000969007384466,
+      "epsilon": 1.5e-07,
+      "t_gate_count": 70,
+      "gate_count": 169,
+      "operator_error": 8.579292625212828e-08
+    },
+    {
+      "label": "IZIIIIZI",
+      "alpha": -0.000530575272663,
+      "theta": 0.001061150545326,
+      "epsilon": 9.5e-08,
+      "t_gate_count": 74,
+      "gate_count": 199,
+      "operator_error": 4.666331936254764e-08
+    },
+    {
+      "label": "IZIIIIZI",
+      "alpha": -0.000530575272663,
+      "theta": 0.001061150545326,
+      "epsilon": 1.5e-07,
+      "t_gate_count": 74,
+      "gate_count": 197,
+      "operator_error": 1.0927018418057537e-07
+    },
+    {
+      "label": "IZIIIZII",
+      "alpha": -0.000484503692233,
+      "theta": 0.000969007384466,
+      "epsilon": 9.5e-08,
+      "t_gate_count": 74,
+      "gate_count": 198,
+      "operator_error": 5.4790956139498104e-08
+    },
+    {
+      "label": "IZIIIZII",
+      "alpha": -0.000484503692233,
+      "theta": 0.000969007384466,
+      "epsilon": 1.5e-07,
+      "t_gate_count": 70,
+      "gate_count": 169,
+      "operator_error": 8.579292625212828e-08
+    },
+    {
+      "label": "IZIIZIII",
+      "alpha": -0.000530575272663,
+      "theta": 0.001061150545326,
+      "epsilon": 9.5e-08,
+      "t_gate_count": 74,
+      "gate_count": 199,
+      "operator_error": 4.666331936254764e-08
+    },
+    {
+      "label": "IZIIZIII",
+      "alpha": -0.000530575272663,
+      "theta": 0.001061150545326,
+      "epsilon": 1.5e-07,
+      "t_gate_count": 74,
+      "gate_count": 197,
+      "operator_error": 1.0927018418057537e-07
+    },
+    {
+      "label": "IZIZIIII",
+      "alpha": -0.000413496790873,
+      "theta": 0.000826993581746,
+      "epsilon": 9.5e-08,
+      "t_gate_count": 68,
+      "gate_count": 165,
+      "operator_error": 2.2513144636814696e-08
+    },
+    {
+      "label": "IZIZIIII",
+      "alpha": -0.000413496790873,
+      "theta": 0.000826993581746,
+      "epsilon": 1.5e-07,
+      "t_gate_count": 68,
+      "gate_count": 165,
+      "operator_error": 2.2513144636814696e-08
+    },
+    {
+      "label": "IZZIIIII",
+      "alpha": -0.000438438136679,
+      "theta": 0.000876876273358,
+      "epsilon": 9.5e-08,
+      "t_gate_count": 72,
+      "gate_count": 183,
+      "operator_error": 6.942768727707784e-08
+    },
+    {
+      "label": "IZZIIIII",
+      "alpha": -0.000438438136679,
+      "theta": 0.000876876273358,
+      "epsilon": 1.5e-07,
+      "t_gate_count": 70,
+      "gate_count": 181,
+      "operator_error": 1.409085407591274e-07
+    },
+    {
+      "label": "XIXIIIII",
+      "alpha": -9.3897804318e-05,
+      "theta": 0.000187795608636,
+      "epsilon": 5e-07,
+      "t_gate_count": 66,
+      "gate_count": 175,
+      "operator_error": 2.2706619897288887e-07
+    },
+    {
+      "label": "XXIIIIYY",
+      "alpha": 4.6071580429e-05,
+      "theta": -9.2143160858e-05,
+      "epsilon": 1.5e-07,
+      "t_gate_count": 72,
+      "gate_count": 182,
+      "operator_error": 8.647675556316419e-08
+    },
+    {
+      "label": "XXIIIIYY",
+      "alpha": 4.6071580429e-05,
+      "theta": -9.2143160858e-05,
+      "epsilon": 1.75e-07,
+      "t_gate_count": 72,
+      "gate_count": 186,
+      "operator_error": 1.0053898775153979e-07
+    },
+    {
+      "label": "XXIIYYII",
+      "alpha": 4.6071580429e-05,
+      "theta": -9.2143160858e-05,
+      "epsilon": 1.5e-07,
+      "t_gate_count": 72,
+      "gate_count": 182,
+      "operator_error": 8.647675556316419e-08
+    },
+    {
+      "label": "XXIIYYII",
+      "alpha": 4.6071580429e-05,
+      "theta": -9.2143160858e-05,
+      "epsilon": 1.75e-07,
+      "t_gate_count": 72,
+      "gate_count": 186,
+      "operator_error": 1.0053898775153979e-07
+    },
+    {
+      "label": "XXYYIIII",
+      "alpha": 2.4941345806e-05,
+      "theta": -4.9882691612e-05,
+      "epsilon": 1.5e-07,
+      "t_gate_count": 72,
+      "gate_count": 182,
+      "operator_error": 1.0789636712609505e-07
+    },
+    {
+      "label": "XYIIIIYX",
+      "alpha": -4.6071580429e-05,
+      "theta": 9.2143160858e-05,
+      "epsilon": 5e-07,
+      "t_gate_count": 62,
+      "gate_count": 156,
+      "operator_error": 3.8551871971228365e-07
+    },
+    {
+      "label": "XYIIYXII",
+      "alpha": -4.6071580429e-05,
+      "theta": 9.2143160858e-05,
+      "epsilon": 1.5e-07,
+      "t_gate_count": 72,
+      "gate_count": 196,
+      "operator_error": 4.392762597682253e-08
+    },
+    {
+      "label": "XYIIYXII",
+      "alpha": -4.6071580429e-05,
+      "theta": 9.2143160858e-05,
+      "epsilon": 2e-07,
+      "t_gate_count": 72,
+      "gate_count": 196,
+      "operator_error": 4.392762597682253e-08
+    },
+    {
+      "label": "XYYXIIII",
+      "alpha": -2.4941345806e-05,
+      "theta": 4.9882691612e-05,
+      "epsilon": 1.5e-07,
+      "t_gate_count": 72,
+      "gate_count": 183,
+      "operator_error": 9.040920242364668e-08
+    },
+    {
+      "label": "XZXIIIII",
+      "alpha": 0.000206623965154,
+      "theta": -0.000413247930308,
+      "epsilon": 1.5e-07,
+      "t_gate_count": 70,
+      "gate_count": 172,
+      "operator_error": 2.5785319851174523e-08
+    },
+    {
+      "label": "XZXIIIII",
+      "alpha": 0.000206623965154,
+      "theta": -0.000413247930308,
+      "epsilon": 1.75e-07,
+      "t_gate_count": 70,
+      "gate_count": 172,
+      "operator_error": 2.5785319851174523e-08
+    },
+    {
+      "label": "XZXIIIIZ",
+      "alpha": 1.0633301046e-05,
+      "theta": -2.1266602092e-05,
+      "epsilon": 1.5e-07,
+      "t_gate_count": 66,
+      "gate_count": 171,
+      "operator_error": 1.1301586779312031e-07
+    },
+    {
+      "label": "XZXIIIIZ",
+      "alpha": 1.0633301046e-05,
+      "theta": -2.1266602092e-05,
+      "epsilon": 4e-07,
+      "t_gate_count": 66,
+      "gate_count": 167,
+      "operator_error": 2.394699940948137e-07
+    },
+    {
+      "label": "XZXIIIZI",
+      "alpha": -2.6969624556e-05,
+      "theta": 5.3939249112e-05,
+      "epsilon": 1.5e-07,
+      "t_gate_count": 72,
+      "gate_count": 182,
+      "operator_error": 1.4516376874544997e-07
+    },
+    {
+      "label": "XZXIIZII",
+      "alpha": 1.0633301046e-05,
+      "theta": -2.1266602092e-05,
+      "epsilon": 1.5e-07,
+      "t_gate_count": 66,
+      "gate_count": 171,
+      "operator_error": 1.1301586779312031e-07
+    },
+    {
+      "label": "XZXIIZII",
+      "alpha": 1.0633301046e-05,
+      "theta": -2.1266602092e-05,
+      "epsilon": 4e-07,
+      "t_gate_count": 66,
+      "gate_count": 167,
+      "operator_error": 2.394699940948137e-07
+    },
+    {
+      "label": "XZXIZIII",
+      "alpha": -2.6969624556e-05,
+      "theta": 5.3939249112e-05,
+      "epsilon": 1.5e-07,
+      "t_gate_count": 72,
+      "gate_count": 182,
+      "operator_error": 1.4516376874544997e-07
+    },
+    {
+      "label": "XZXZIIII",
+      "alpha": 1.3844310066e-05,
+      "theta": -2.7688620132e-05,
+      "epsilon": 1.5e-07,
+      "t_gate_count": 74,
+      "gate_count": 189,
+      "operator_error": 1.0032864149451507e-07
+    },
+    {
+      "label": "XZXZIIII",
+      "alpha": 1.3844310066e-05,
+      "theta": -2.7688620132e-05,
+      "epsilon": 4e-07,
+      "t_gate_count": 68,
+      "gate_count": 173,
+      "operator_error": 3.051833855724499e-07
+    },
+    {
+      "label": "XZZXIIYY",
+      "alpha": 3.7602925602e-05,
+      "theta": -7.5205851204e-05,
+      "epsilon": 2.5e-07,
+      "t_gate_count": 70,
+      "gate_count": 188,
+      "operator_error": 1.4221002170269485e-07
+    },
+    {
+      "label": "XZZXYYII",
+      "alpha": 3.7602925602e-05,
+      "theta": -7.5205851204e-05,
+      "epsilon": 2.5e-07,
+      "t_gate_count": 70,
+      "gate_count": 188,
+      "operator_error": 1.4221002170269485e-07
+    },
+    {
+      "label": "XZZYIIYX",
+      "alpha": -3.7602925602e-05,
+      "theta": 7.5205851204e-05,
+      "epsilon": 2.5e-07,
+      "t_gate_count": 70,
+      "gate_count": 188,
+      "operator_error": 1.4221002170269482e-07
+    },
+    {
+      "label": "XZZYYXII",
+      "alpha": -3.7602925602e-05,
+      "theta": 7.5205851204e-05,
+      "epsilon": 2.5e-07,
+      "t_gate_count": 70,
+      "gate_count": 188,
+      "operator_error": 1.4221002170269482e-07
+    },
+    {
+      "label": "YIYIIIII",
+      "alpha": -9.3897804318e-05,
+      "theta": 0.000187795608636,
+      "epsilon": 4e-07,
+      "t_gate_count": 66,
+      "gate_count": 175,
+      "operator_error": 2.2706619897288887e-07
+    },
+    {
+      "label": "YXIIIIXY",
+      "alpha": -4.6071580429e-05,
+      "theta": 9.2143160858e-05,
+      "epsilon": 2.5e-07,
+      "t_gate_count": 70,
+      "gate_count": 173,
+      "operator_error": 1.947875163158983e-07
+    },
+    {
+      "label": "YXIIXYII",
+      "alpha": -4.6071580429e-05,
+      "theta": 9.2143160858e-05,
+      "epsilon": 2.5e-07,
+      "t_gate_count": 70,
+      "gate_count": 173,
+      "operator_error": 1.947875163158983e-07
+    },
+    {
+      "label": "YXXYIIII",
+      "alpha": -2.4941345806e-05,
+      "theta": 4.9882691612e-05,
+      "epsilon": 1.5e-07,
+      "t_gate_count": 72,
+      "gate_count": 183,
+      "operator_error": 9.040920242364668e-08
+    },
+    {
+      "label": "YYIIIIXX",
+      "alpha": 4.6071580429e-05,
+      "theta": -9.2143160858e-05,
+      "epsilon": 2.5e-07,
+      "t_gate_count": 70,
+      "gate_count": 180,
+      "operator_error": 1.947875163158983e-07
+    },
+    {
+      "label": "YYIIXXII",
+      "alpha": 4.6071580429e-05,
+      "theta": -9.2143160858e-05,
+      "epsilon": 2.5e-07,
+      "t_gate_count": 70,
+      "gate_count": 180,
+      "operator_error": 1.947875163158983e-07
+    },
+    {
+      "label": "YYXXIIII",
+      "alpha": 2.4941345806e-05,
+      "theta": -4.9882691612e-05,
+      "epsilon": 1.5e-07,
+      "t_gate_count": 72,
+      "gate_count": 182,
+      "operator_error": 1.0789636712609505e-07
+    },
+    {
+      "label": "YZYIIIII",
+      "alpha": 0.000206623965154,
+      "theta": -0.000413247930308,
+      "epsilon": 1.5e-07,
+      "t_gate_count": 70,
+      "gate_count": 172,
+      "operator_error": 2.5785319851174523e-08
+    },
+    {
+      "label": "YZYIIIII",
+      "alpha": 0.000206623965154,
+      "theta": -0.000413247930308,
+      "epsilon": 1.75e-07,
+      "t_gate_count": 70,
+      "gate_count": 172,
+      "operator_error": 2.5785319851174523e-08
+    },
+    {
+      "label": "YZYIIIIZ",
+      "alpha": 1.0633301046e-05,
+      "theta": -2.1266602092e-05,
+      "epsilon": 1.5e-07,
+      "t_gate_count": 66,
+      "gate_count": 171,
+      "operator_error": 1.1301586779312031e-07
+    },
+    {
+      "label": "YZYIIIIZ",
+      "alpha": 1.0633301046e-05,
+      "theta": -2.1266602092e-05,
+      "epsilon": 4e-07,
+      "t_gate_count": 66,
+      "gate_count": 167,
+      "operator_error": 2.394699940948137e-07
+    },
+    {
+      "label": "YZYIIIZI",
+      "alpha": -2.6969624556e-05,
+      "theta": 5.3939249112e-05,
+      "epsilon": 1.5e-07,
+      "t_gate_count": 72,
+      "gate_count": 182,
+      "operator_error": 1.4516376874544997e-07
+    },
+    {
+      "label": "YZYIIZII",
+      "alpha": 1.0633301046e-05,
+      "theta": -2.1266602092e-05,
+      "epsilon": 1.5e-07,
+      "t_gate_count": 66,
+      "gate_count": 171,
+      "operator_error": 1.1301586779312031e-07
+    },
+    {
+      "label": "YZYIIZII",
+      "alpha": 1.0633301046e-05,
+      "theta": -2.1266602092e-05,
+      "epsilon": 4e-07,
+      "t_gate_count": 66,
+      "gate_count": 167,
+      "operator_error": 2.394699940948137e-07
+    },
+    {
+      "label": "YZYIZIII",
+      "alpha": -2.6969624556e-05,
+      "theta": 5.3939249112e-05,
+      "epsilon": 1.5e-07,
+      "t_gate_count": 72,
+      "gate_count": 182,
+      "operator_error": 1.4516376874544997e-07
+    },
+    {
+      "label": "YZYZIIII",
+      "alpha": 1.3844310066e-05,
+      "theta": -2.7688620132e-05,
+      "epsilon": 1.5e-07,
+      "t_gate_count": 74,
+      "gate_count": 189,
+      "operator_error": 1.0032864149451507e-07
+    },
+    {
+      "label": "YZYZIIII",
+      "alpha": 1.3844310066e-05,
+      "theta": -2.7688620132e-05,
+      "epsilon": 4e-07,
+      "t_gate_count": 68,
+      "gate_count": 173,
+      "operator_error": 3.051833855724499e-07
+    },
+    {
+      "label": "YZZXIIXY",
+      "alpha": -3.7602925602e-05,
+      "theta": 7.5205851204e-05,
+      "epsilon": 2.5e-07,
+      "t_gate_count": 70,
+      "gate_count": 188,
+      "operator_error": 1.4221002170269482e-07
+    },
+    {
+      "label": "YZZXXYII",
+      "alpha": -3.7602925602e-05,
+      "theta": 7.5205851204e-05,
+      "epsilon": 2.5e-07,
+      "t_gate_count": 70,
+      "gate_count": 188,
+      "operator_error": 1.4221002170269482e-07
+    },
+    {
+      "label": "YZZYIIXX",
+      "alpha": 3.7602925602e-05,
+      "theta": -7.5205851204e-05,
+      "epsilon": 2.5e-07,
+      "t_gate_count": 70,
+      "gate_count": 188,
+      "operator_error": 1.4221002170269485e-07
+    },
+    {
+      "label": "YZZYXXII",
+      "alpha": 3.7602925602e-05,
+      "theta": -7.5205851204e-05,
+      "epsilon": 2.5e-07,
+      "t_gate_count": 70,
+      "gate_count": 188,
+      "operator_error": 1.4221002170269485e-07
+    },
+    {
+      "label": "ZIIIIIII",
+      "alpha": 0.005355918855015,
+      "theta": -0.01071183771003,
+      "epsilon": 1e-07,
+      "t_gate_count": 74,
+      "gate_count": 198,
+      "operator_error": 5.610621081626474e-08
+    },
+    {
+      "label": "ZIIIIIIZ",
+      "alpha": -0.000530575272663,
+      "theta": 0.001061150545326,
+      "epsilon": 1.5e-07,
+      "t_gate_count": 74,
+      "gate_count": 197,
+      "operator_error": 1.0927018418057537e-07
+    },
+    {
+      "label": "ZIIIIIIZ",
+      "alpha": -0.000530575272663,
+      "theta": 0.001061150545326,
+      "epsilon": 2e-07,
+      "t_gate_count": 70,
+      "gate_count": 180,
+      "operator_error": 1.9483447983477868e-07
+    },
+    {
+      "label": "ZIIIIIZI",
+      "alpha": -0.000484503692233,
+      "theta": 0.000969007384466,
+      "epsilon": 9.5e-08,
+      "t_gate_count": 74,
+      "gate_count": 198,
+      "operator_error": 5.4790956139498104e-08
+    },
+    {
+      "label": "ZIIIIIZI",
+      "alpha": -0.000484503692233,
+      "theta": 0.000969007384466,
+      "epsilon": 1.5e-07,
+      "t_gate_count": 70,
+      "gate_count": 169,
+      "operator_error": 8.579292625212828e-08
+    },
+    {
+      "label": "ZIIIIZII",
+      "alpha": -0.000530575272663,
+      "theta": 0.001061150545326,
+      "epsilon": 9.5e-08,
+      "t_gate_count": 74,
+      "gate_count": 199,
+      "operator_error": 4.666331936254764e-08
+    },
+    {
+      "label": "ZIIIIZII",
+      "alpha": -0.000530575272663,
+      "theta": 0.001061150545326,
+      "epsilon": 1.5e-07,
+      "t_gate_count": 74,
+      "gate_count": 197,
+      "operator_error": 1.0927018418057537e-07
+    },
+    {
+      "label": "ZIIIZIII",
+      "alpha": -0.000484503692233,
+      "theta": 0.000969007384466,
+      "epsilon": 9.5e-08,
+      "t_gate_count": 74,
+      "gate_count": 198,
+      "operator_error": 5.4790956139498104e-08
+    },
+    {
+      "label": "ZIIIZIII",
+      "alpha": -0.000484503692233,
+      "theta": 0.000969007384466,
+      "epsilon": 1.5e-07,
+      "t_gate_count": 70,
+      "gate_count": 169,
+      "operator_error": 8.579292625212828e-08
+    },
+    {
+      "label": "ZIIZIIII",
+      "alpha": -0.000438438136679,
+      "theta": 0.000876876273358,
+      "epsilon": 9.5e-08,
+      "t_gate_count": 72,
+      "gate_count": 183,
+      "operator_error": 6.942768727707784e-08
+    },
+    {
+      "label": "ZIIZIIII",
+      "alpha": -0.000438438136679,
+      "theta": 0.000876876273358,
+      "epsilon": 1.5e-07,
+      "t_gate_count": 70,
+      "gate_count": 181,
+      "operator_error": 1.409085407591274e-07
+    },
+    {
+      "label": "ZIZIIIII",
+      "alpha": -0.000413496790873,
+      "theta": 0.000826993581746,
+      "epsilon": 9.5e-08,
+      "t_gate_count": 68,
+      "gate_count": 165,
+      "operator_error": 2.2513144636814696e-08
+    },
+    {
+      "label": "ZXZXIIII",
+      "alpha": -9.3897804318e-05,
+      "theta": 0.000187795608636,
+      "epsilon": 1.5e-07,
+      "t_gate_count": 70,
+      "gate_count": 173,
+      "operator_error": 9.659775779493876e-08
+    },
+    {
+      "label": "ZYZYIIII",
+      "alpha": -9.3897804318e-05,
+      "theta": 0.000187795608636,
+      "epsilon": 1.5e-07,
+      "t_gate_count": 70,
+      "gate_count": 173,
+      "operator_error": 9.659775779493876e-08
+    },
+    {
+      "label": "ZZIIIIII",
+      "alpha": -0.000955849853305,
+      "theta": 0.00191169970661,
+      "epsilon": 9.5e-08,
+      "t_gate_count": 72,
+      "gate_count": 184,
+      "operator_error": 5.688367820757311e-08
+    },
+    {
+      "label": "ZZIIIIII",
+      "alpha": -0.000955849853305,
+      "theta": 0.00191169970661,
+      "epsilon": 2e-07,
+      "t_gate_count": 72,
+      "gate_count": 184,
+      "operator_error": 5.688367820757311e-08
+    }
+  ],
+  "method_config": {
+    "name": "lih_pf1_selected_diag_eps",
+    "n_steps": 256,
+    "zero_angle_threshold": 1e-15,
+    "diagonal_epsilon": 9.5e-08,
+    "relaxed_diagonal_epsilon": 1e-07,
+    "mid_diagonal_epsilon": 1.05e-07,
+    "tertiary_diagonal_epsilon": 1.5e-07,
+    "quaternary_diagonal_epsilon": 1.5e-07,
+    "quinary_diagonal_epsilon": 1.5e-07,
+    "senary_diagonal_epsilon": 2e-07,
+    "offdiag_epsilon": 1.5e-07,
+    "relaxed_offdiag_epsilon": 2.5e-07,
+    "secondary_offdiag_epsilon": 2.5e-07,
+    "tertiary_offdiag_epsilon": 5e-07,
+    "quaternary_offdiag_epsilon": 4e-07,
+    "quinary_offdiag_epsilon": 5e-07,
+    "senary_offdiag_epsilon": 2e-07,
+    "targeted_exchange_offdiag_epsilon": 1.75e-07
+  },
+  "total_pauli_rotation_terms": 104,
+  "identity_coefficient": -12.433817766918795,
+  "centered_hamiltonian_norm": 13.215338773734938,
+  "max_abs_total_alpha": 1.371115226883772,
+  "min_abs_total_alpha": 0.002722125067659037,
+  "hf_energy": -9.33088032204288,
+  "exact_final_energy": -9.330880322042882,
+  "cas_label": "CAS(2e,4o)",
+  "basis": "sto-3g",
+  "localization": "pipek_mezey_split_occ_vir",
+  "evaluation_wall_seconds": 17.88922870811075
+}

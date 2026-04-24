@@ -1,0 +1,13 @@
+{
+  "iteration": 101,
+  "status": "keep",
+  "description": "migration phase-energy baseline from iter 0004",
+  "timestamp_utc": "2026-04-24T15:44:22.723711+00:00",
+  "molecule": "h2",
+  "objective": "ground_state_phase_estimation",
+  "script": "/Users/lmantilla/Desktop/Internship/trovolut/examples/ft_protocols/pfs/h2/simple_pf.py",
+  "previous_best_iteration": null,
+  "previous_best_score": null,
+  "source_hash_before": "66319d1a493f90f9a0228e3ab07f54a502de4628eb4d1366854654baf4d568d2",
+  "source_hash_after": "66319d1a493f90f9a0228e3ab07f54a502de4628eb4d1366854654baf4d568d2"
+}

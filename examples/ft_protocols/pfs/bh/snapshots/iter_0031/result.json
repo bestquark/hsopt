@@ -1,0 +1,381 @@
+{
+  "experiment": "pf1_bh",
+  "molecule": "bh",
+  "display_name": "BH PF1",
+  "script": "/Users/lmantilla/Desktop/Internship/trovolut/examples/ft_protocols/pfs/.track_rzdq5xb7/simple_pf.py",
+  "objective": "ground_state_phase_estimation",
+  "score": 450048.0,
+  "passes_accuracy_constraint": true,
+  "passes_fidelity_constraint": true,
+  "passes_state_fidelity_diagnostic": false,
+  "chemical_accuracy_hartree": 0.001,
+  "chemical_accuracy_fidelity_floor": 0.9999999986259792,
+  "target_time": 1.0,
+  "time_sign": 1.0,
+  "ground_state_energy_hartree": -43.122268661040124,
+  "ground_state_energy_estimate_hartree": -43.1222416954109,
+  "ground_state_energy_error_hartree": 2.696562922466228e-05,
+  "exact_pf1_ground_state_energy_estimate_hartree": -43.122268661040124,
+  "exact_pf1_ground_state_energy_error_hartree": 0.0,
+  "ground_state_phase_overlap_magnitude": 0.999999999929125,
+  "exact_pf1_ground_state_phase_overlap_magnitude": 0.9999999999999999,
+  "accuracy_metric_name": "ground_state_energy_error_hartree",
+  "accuracy_metric_value": 2.696562922466228e-05,
+  "accuracy_threshold_name": "chemical_accuracy_hartree",
+  "accuracy_threshold_value": 0.001,
+  "fidelity": 0.9999957177534095,
+  "infidelity": 4.282246590547878e-06,
+  "exact_pf1_fidelity": 0.9999958586420565,
+  "exact_pf1_infidelity": 4.141357943465707e-06,
+  "precision_gain_over_exact_pf1": -1.408886470821713e-07,
+  "t_gate_count": 450048,
+  "nonzero_rotation_count": 6336,
+  "skipped_rotation_count": 0,
+  "compilation_backend": "pygridsynth",
+  "synthesis_epsilon_histogram": {
+    "1.000e-07": 4224,
+    "2.000e-07": 960,
+    "7.000e-07": 1152
+  },
+  "unique_compilation_count": 33,
+  "unique_compilations": [
+    {
+      "label": "IIIIIZ",
+      "alpha": 0.008394966868328,
+      "theta": -0.016789933736656,
+      "epsilon": 7e-07,
+      "t_gate_count": 66,
+      "gate_count": 173,
+      "operator_error": 4.88658404514252e-07
+    },
+    {
+      "label": "IIIIZI",
+      "alpha": 0.008394966868328,
+      "theta": -0.016789933736656,
+      "epsilon": 7e-07,
+      "t_gate_count": 66,
+      "gate_count": 173,
+      "operator_error": 4.88658404514252e-07
+    },
+    {
+      "label": "IIIIZZ",
+      "alpha": -0.001528054020778,
+      "theta": 0.003056108041556,
+      "epsilon": 2e-07,
+      "t_gate_count": 70,
+      "gate_count": 184,
+      "operator_error": 1.6439828184087248e-07
+    },
+    {
+      "label": "IIIZII",
+      "alpha": 0.008394966868328,
+      "theta": -0.016789933736656,
+      "epsilon": 7e-07,
+      "t_gate_count": 66,
+      "gate_count": 173,
+      "operator_error": 4.88658404514252e-07
+    },
+    {
+      "label": "IIIZIZ",
+      "alpha": -0.001280947526594,
+      "theta": 0.002561895053188,
+      "epsilon": 1e-07,
+      "t_gate_count": 70,
+      "gate_count": 191,
+      "operator_error": 5.986682676443066e-08
+    },
+    {
+      "label": "IIIZZI",
+      "alpha": -0.001363316357989,
+      "theta": 0.002726632715978,
+      "epsilon": 2e-07,
+      "t_gate_count": 70,
+      "gate_count": 183,
+      "operator_error": 1.3167240788528129e-07
+    },
+    {
+      "label": "IIXXYY",
+      "alpha": 8.2368831395e-05,
+      "theta": -0.00016473766279,
+      "epsilon": 1e-07,
+      "t_gate_count": 70,
+      "gate_count": 192,
+      "operator_error": 5.905241437171763e-08
+    },
+    {
+      "label": "IIXYYX",
+      "alpha": -8.2368831395e-05,
+      "theta": 0.00016473766279,
+      "epsilon": 1e-07,
+      "t_gate_count": 70,
+      "gate_count": 181,
+      "operator_error": 5.905241432957488e-08
+    },
+    {
+      "label": "IIYXXY",
+      "alpha": -8.2368831395e-05,
+      "theta": 0.00016473766279,
+      "epsilon": 1e-07,
+      "t_gate_count": 70,
+      "gate_count": 181,
+      "operator_error": 5.905241432957488e-08
+    },
+    {
+      "label": "IIYYXX",
+      "alpha": 8.2368831395e-05,
+      "theta": -0.00016473766279,
+      "epsilon": 1e-07,
+      "t_gate_count": 70,
+      "gate_count": 192,
+      "operator_error": 5.905241437171763e-08
+    },
+    {
+      "label": "IIZIII",
+      "alpha": 0.008394966868328,
+      "theta": -0.016789933736656,
+      "epsilon": 7e-07,
+      "t_gate_count": 66,
+      "gate_count": 173,
+      "operator_error": 4.88658404514252e-07
+    },
+    {
+      "label": "IIZIIZ",
+      "alpha": -0.001363316357989,
+      "theta": 0.002726632715978,
+      "epsilon": 1e-07,
+      "t_gate_count": 74,
+      "gate_count": 197,
+      "operator_error": 4.278445266749776e-08
+    },
+    {
+      "label": "IIZIZI",
+      "alpha": -0.001280947526594,
+      "theta": 0.002561895053188,
+      "epsilon": 1e-07,
+      "t_gate_count": 70,
+      "gate_count": 191,
+      "operator_error": 5.986682676443066e-08
+    },
+    {
+      "label": "IIZZII",
+      "alpha": -0.001528054020778,
+      "theta": 0.003056108041556,
+      "epsilon": 2e-07,
+      "t_gate_count": 70,
+      "gate_count": 184,
+      "operator_error": 1.6439828184087248e-07
+    },
+    {
+      "label": "IZIIII",
+      "alpha": 0.008504842410958,
+      "theta": -0.017009684821916,
+      "epsilon": 7e-07,
+      "t_gate_count": 64,
+      "gate_count": 164,
+      "operator_error": 5.440959824101457e-07
+    },
+    {
+      "label": "IZIIIZ",
+      "alpha": -0.001149425334461,
+      "theta": 0.002298850668922,
+      "epsilon": 1e-07,
+      "t_gate_count": 76,
+      "gate_count": 197,
+      "operator_error": 5.065198477921726e-08
+    },
+    {
+      "label": "IZIIZI",
+      "alpha": -0.001313416486912,
+      "theta": 0.002626832973824,
+      "epsilon": 1e-07,
+      "t_gate_count": 76,
+      "gate_count": 193,
+      "operator_error": 5.682867505544112e-08
+    },
+    {
+      "label": "IZIZII",
+      "alpha": -0.001149425334461,
+      "theta": 0.002298850668922,
+      "epsilon": 1e-07,
+      "t_gate_count": 76,
+      "gate_count": 197,
+      "operator_error": 5.065198477921726e-08
+    },
+    {
+      "label": "IZZIII",
+      "alpha": -0.001313416486912,
+      "theta": 0.002626832973824,
+      "epsilon": 2e-07,
+      "t_gate_count": 70,
+      "gate_count": 192,
+      "operator_error": 8.268209694143849e-08
+    },
+    {
+      "label": "XXIIYY",
+      "alpha": 0.00016399115245,
+      "theta": -0.0003279823049,
+      "epsilon": 1e-07,
+      "t_gate_count": 72,
+      "gate_count": 187,
+      "operator_error": 3.307711280975166e-08
+    },
+    {
+      "label": "XXYYII",
+      "alpha": 0.00016399115245,
+      "theta": -0.0003279823049,
+      "epsilon": 1e-07,
+      "t_gate_count": 72,
+      "gate_count": 187,
+      "operator_error": 3.307711280975166e-08
+    },
+    {
+      "label": "XYIIYX",
+      "alpha": -0.00016399115245,
+      "theta": 0.0003279823049,
+      "epsilon": 1e-07,
+      "t_gate_count": 72,
+      "gate_count": 194,
+      "operator_error": 3.307711280975167e-08
+    },
+    {
+      "label": "XYYXII",
+      "alpha": -0.00016399115245,
+      "theta": 0.0003279823049,
+      "epsilon": 1e-07,
+      "t_gate_count": 72,
+      "gate_count": 194,
+      "operator_error": 3.307711280975167e-08
+    },
+    {
+      "label": "YXIIXY",
+      "alpha": -0.00016399115245,
+      "theta": 0.0003279823049,
+      "epsilon": 1e-07,
+      "t_gate_count": 72,
+      "gate_count": 194,
+      "operator_error": 3.307711280975167e-08
+    },
+    {
+      "label": "YXXYII",
+      "alpha": -0.00016399115245,
+      "theta": 0.0003279823049,
+      "epsilon": 1e-07,
+      "t_gate_count": 72,
+      "gate_count": 194,
+      "operator_error": 3.307711280975167e-08
+    },
+    {
+      "label": "YYIIXX",
+      "alpha": 0.00016399115245,
+      "theta": -0.0003279823049,
+      "epsilon": 1e-07,
+      "t_gate_count": 72,
+      "gate_count": 187,
+      "operator_error": 3.307711280975166e-08
+    },
+    {
+      "label": "YYXXII",
+      "alpha": 0.00016399115245,
+      "theta": -0.0003279823049,
+      "epsilon": 1e-07,
+      "t_gate_count": 72,
+      "gate_count": 187,
+      "operator_error": 3.307711280975166e-08
+    },
+    {
+      "label": "ZIIIII",
+      "alpha": 0.008504842410958,
+      "theta": -0.017009684821916,
+      "epsilon": 7e-07,
+      "t_gate_count": 64,
+      "gate_count": 164,
+      "operator_error": 5.440959824101457e-07
+    },
+    {
+      "label": "ZIIIIZ",
+      "alpha": -0.001313416486912,
+      "theta": 0.002626832973824,
+      "epsilon": 1e-07,
+      "t_gate_count": 76,
+      "gate_count": 193,
+      "operator_error": 5.682867505544112e-08
+    },
+    {
+      "label": "ZIIIZI",
+      "alpha": -0.001149425334461,
+      "theta": 0.002298850668922,
+      "epsilon": 1e-07,
+      "t_gate_count": 76,
+      "gate_count": 197,
+      "operator_error": 5.065198477921726e-08
+    },
+    {
+      "label": "ZIIZII",
+      "alpha": -0.001313416486912,
+      "theta": 0.002626832973824,
+      "epsilon": 1e-07,
+      "t_gate_count": 76,
+      "gate_count": 193,
+      "operator_error": 5.682867505544112e-08
+    },
+    {
+      "label": "ZIZIII",
+      "alpha": -0.001149425334461,
+      "theta": 0.002298850668922,
+      "epsilon": 1e-07,
+      "t_gate_count": 76,
+      "gate_count": 197,
+      "operator_error": 5.065198477921726e-08
+    },
+    {
+      "label": "ZZIIII",
+      "alpha": -0.001468618020248,
+      "theta": 0.002937236040496,
+      "epsilon": 2e-07,
+      "t_gate_count": 70,
+      "gate_count": 187,
+      "operator_error": 1.7465191231860445e-07
+    }
+  ],
+  "method_config": {
+    "name": "bh_pf1_structured_eps",
+    "n_steps": 192,
+    "zero_angle_threshold": 1e-15,
+    "base_epsilon": 1e-07,
+    "contiguous_zz_epsilon": 2e-07,
+    "medium_support1_alpha_cutoff": 0.001,
+    "medium_support1_epsilon": 1e-06,
+    "large_support1_alpha_cutoff": 0.0015,
+    "large_support1_epsilon": 7e-07,
+    "zz_pair_mid_alpha_floor": 0.00068,
+    "zz_pair_mid_alpha_cutoff": 0.00069,
+    "zz_pair_mid_epsilon": 5e-07,
+    "split_support2_relaxed_alpha_floor": 0.00062,
+    "split_support2_relaxed_alpha_cutoff": 0.000645,
+    "split_support2_relaxed_epsilon": 5e-07,
+    "contiguous_zz_large_alpha_floor": 0.00075,
+    "contiguous_zz_large_alpha_cutoff": 0.00077,
+    "contiguous_zz_large_epsilon": 2.5e-07,
+    "contiguous_zz_edge_alpha_floor": 0.00073,
+    "contiguous_zz_edge_alpha_cutoff": 0.00074,
+    "contiguous_zz_edge_epsilon": 7e-07,
+    "split_support2_tight_alpha_floor": 0.00065,
+    "split_support2_tight_alpha_cutoff": 0.00066,
+    "split_support2_tight_epsilon": 1e-07,
+    "split_support2_alpha_cutoff": 0.0007,
+    "split_support2_epsilon": 4e-07,
+    "small_support4_alpha_cutoff": 5e-05,
+    "small_support4_epsilon": 7e-07
+  },
+  "total_pauli_rotation_terms": 33,
+  "identity_coefficient": -29.6334673659963,
+  "centered_hamiltonian_norm": 13.488801295043821,
+  "max_abs_total_alpha": 1.6329297429038652,
+  "min_abs_total_alpha": 0.01581481562781018,
+  "hf_energy": -26.444674513660605,
+  "exact_final_energy": -26.44467451366061,
+  "cas_label": "CAS(2e,3o)",
+  "basis": "sto-3g",
+  "localization": "pipek_mezey_split_occ_vir",
+  "evaluation_wall_seconds": 3.5046149159315974
+}

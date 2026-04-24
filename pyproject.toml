@@ -44,6 +44,8 @@ dependencies = [
 
 [project.scripts]
 trovolut = "trovolut.tui.__main__:main"
+t-autoresearch = "trovolut.tgate_opt.t_autoresearch_cli:main"
+t-gepa = "trovolut.tgate_opt.t_gepa_cli:main"
 
 [project.optional-dependencies]
 # GPU backend - requires NVIDIA hardware and Linux
@@ -64,6 +66,10 @@ qpu = [
 # Fault-tolerant chemistry protocol examples in examples/ft_protocols
 ft-protocols = [
   "qualtran>=0.7,<0.8",
+]
+
+gepa = [
+  "gepa",
 ]
 
 # GPU emulator - CPU-based emulation for studying quantized exponentials

@@ -1,0 +1,12 @@
+{
+  "iteration": 58,
+  "status": "keep",
+  "description": "relax the repeated 2.11147e-5 support>=6 band to 1e-9",
+  "timestamp_utc": "2026-04-10T16:24:36.570271+00:00",
+  "molecule": "dmds",
+  "script": "/Users/lmantilla/Desktop/Internship/trovolut/examples/ft_protocols/pfs/dmds/simple_pf.py",
+  "previous_best_iteration": 57,
+  "previous_best_score": 81182720.0,
+  "source_hash_before": "833fd9efb4dbeb8f719de3ecaf4a0b8d4833cac921e3c2420b4494463fdc58cc",
+  "source_hash_after": "833fd9efb4dbeb8f719de3ecaf4a0b8d4833cac921e3c2420b4494463fdc58cc"
+}

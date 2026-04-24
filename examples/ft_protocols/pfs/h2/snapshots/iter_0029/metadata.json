@@ -1,0 +1,12 @@
+{
+  "iteration": 29,
+  "status": "discard",
+  "description": "add the ZIZI 1.4e-6 second plateau on top of the current best XYYX-enabled policy",
+  "timestamp_utc": "2026-04-09T20:15:11.803521+00:00",
+  "molecule": "h2",
+  "script": "/Users/lmantilla/Desktop/Internship/trovolut/examples/ft_protocols/pfs/h2/simple_pf.py",
+  "previous_best_iteration": 28,
+  "previous_best_score": 337152.0,
+  "source_hash_before": "a3017099036e4274ad49dc58891276c94bac0a91c9602e2299c6c80f244e5d8e",
+  "source_hash_after": "a3017099036e4274ad49dc58891276c94bac0a91c9602e2299c6c80f244e5d8e"
+}

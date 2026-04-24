@@ -1,0 +1,12 @@
+{
+  "iteration": 14,
+  "status": "keep",
+  "description": "relax the narrow 2.41807e-6 support>=4 band to 3e-10",
+  "timestamp_utc": "2026-04-09T21:10:31.075780+00:00",
+  "molecule": "dmds",
+  "script": "/Users/lmantilla/Desktop/Internship/trovolut/examples/ft_protocols/pfs/dmds/simple_pf.py",
+  "previous_best_iteration": 13,
+  "previous_best_score": 83836928.0,
+  "source_hash_before": "8031905385ef2efa8446c79406893c821e691116e3fd79f1bf985dd500a6a21a",
+  "source_hash_after": "8031905385ef2efa8446c79406893c821e691116e3fd79f1bf985dd500a6a21a"
+}

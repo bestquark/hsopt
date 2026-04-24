@@ -1,0 +1,190 @@
+{
+  "experiment": "localized_small_pf_h2",
+  "molecule": "h2",
+  "display_name": "H2 Localized PF",
+  "script": "/Users/lmantilla/Desktop/Internship/trovolut/examples/ft_protocols/pfs/localized_small_pf_track_jx4pzjw1/simple_pf.py",
+  "score": 251222549.25617358,
+  "passes_fidelity_constraint": false,
+  "chemical_accuracy_hartree": 0.001,
+  "chemical_accuracy_fidelity_floor": 0.9999997689576242,
+  "target_time": 1.0,
+  "time_sign": 1.0,
+  "fidelity": 0.9999997109917562,
+  "infidelity": 2.8900824378119694e-07,
+  "exact_pf1_fidelity": 0.9999999653793662,
+  "exact_pf1_infidelity": 3.462063380421654e-08,
+  "precision_gain_over_exact_pf1": -2.543876099769804e-07,
+  "t_gate_count": 334080,
+  "nonzero_rotation_count": 5376,
+  "skipped_rotation_count": 0,
+  "compilation_backend": "pygridsynth",
+  "synthesis_epsilon_histogram": {
+    "1.200e-06": 1536,
+    "1.400e-06": 384,
+    "1.500e-06": 384,
+    "1.700e-06": 768,
+    "1.800e-06": 384,
+    "5.000e-07": 768,
+    "7.000e-07": 384,
+    "7.400e-07": 384,
+    "8.000e-07": 384
+  },
+  "unique_compilation_count": 14,
+  "unique_compilations": [
+    {
+      "label": "IIIZ",
+      "alpha": -0.000581852960698,
+      "theta": 0.001163705921396,
+      "epsilon": 5e-07,
+      "t_gate_count": 64,
+      "gate_count": 163,
+      "operator_error": 2.630552896780425e-07
+    },
+    {
+      "label": "IIZI",
+      "alpha": -0.000581852960698,
+      "theta": 0.001163705921396,
+      "epsilon": 1.5e-06,
+      "t_gate_count": 58,
+      "gate_count": 146,
+      "operator_error": 1.001684987064469e-06
+    },
+    {
+      "label": "IIZZ",
+      "alpha": 0.000454200198236,
+      "theta": -0.000908400396472,
+      "epsilon": 5e-07,
+      "t_gate_count": 62,
+      "gate_count": 159,
+      "operator_error": 3.9520676961546804e-07
+    },
+    {
+      "label": "IZII",
+      "alpha": 0.000446387568874,
+      "theta": -0.000892775137748,
+      "epsilon": 1.2e-06,
+      "t_gate_count": 62,
+      "gate_count": 161,
+      "operator_error": 5.279527600830909e-07
+    },
+    {
+      "label": "IZIZ",
+      "alpha": 0.000314128215713,
+      "theta": -0.000628256431426,
+      "epsilon": 1.4e-06,
+      "t_gate_count": 60,
+      "gate_count": 160,
+      "operator_error": 1.2454195727674987e-06
+    },
+    {
+      "label": "IZZI",
+      "alpha": 0.000432103776921,
+      "theta": -0.000864207553842,
+      "epsilon": 1.7e-06,
+      "t_gate_count": 62,
+      "gate_count": 160,
+      "operator_error": 1.4361091539294498e-06
+    },
+    {
+      "label": "XXYY",
+      "alpha": -0.000117975561208,
+      "theta": 0.000235951122416,
+      "epsilon": 8e-07,
+      "t_gate_count": 64,
+      "gate_count": 167,
+      "operator_error": 7.252349529642018e-07
+    },
+    {
+      "label": "XYYX",
+      "alpha": 0.000117975561208,
+      "theta": -0.000235951122416,
+      "epsilon": 1.2e-06,
+      "t_gate_count": 62,
+      "gate_count": 164,
+      "operator_error": 8.910572008182563e-07
+    },
+    {
+      "label": "YXXY",
+      "alpha": 0.000117975561208,
+      "theta": -0.000235951122416,
+      "epsilon": 7.4e-07,
+      "t_gate_count": 64,
+      "gate_count": 163,
+      "operator_error": 7.155000097318274e-07
+    },
+    {
+      "label": "YYXX",
+      "alpha": -0.000117975561208,
+      "theta": 0.000235951122416,
+      "epsilon": 1.2e-06,
+      "t_gate_count": 62,
+      "gate_count": 160,
+      "operator_error": 8.910572008182563e-07
+    },
+    {
+      "label": "ZIII",
+      "alpha": 0.000446387568874,
+      "theta": -0.000892775137748,
+      "epsilon": 1.2e-06,
+      "t_gate_count": 62,
+      "gate_count": 161,
+      "operator_error": 5.279527600830909e-07
+    },
+    {
+      "label": "ZIIZ",
+      "alpha": 0.000432103776921,
+      "theta": -0.000864207553842,
+      "epsilon": 1.7e-06,
+      "t_gate_count": 62,
+      "gate_count": 160,
+      "operator_error": 1.4361091539294498e-06
+    },
+    {
+      "label": "ZIZI",
+      "alpha": 0.000314128215713,
+      "theta": -0.000628256431426,
+      "epsilon": 7e-07,
+      "t_gate_count": 64,
+      "gate_count": 170,
+      "operator_error": 3.4972170997812796e-07
+    },
+    {
+      "label": "ZZII",
+      "alpha": 0.000439294223186,
+      "theta": -0.000878588446372,
+      "epsilon": 1.8e-06,
+      "t_gate_count": 62,
+      "gate_count": 156,
+      "operator_error": 1.0083198476541462e-06
+    }
+  ],
+  "method_config": {
+    "name": "h2_pf1_uniform_eps",
+    "n_steps": 384,
+    "zero_angle_threshold": 1e-15,
+    "default_epsilon": 5e-07,
+    "iizi_second_plateau_epsilon": 1.5e-06,
+    "izii_second_plateau_epsilon": 1.2e-06,
+    "iziz_second_plateau_epsilon": 1.4e-06,
+    "low_angle_pair_epsilon": 7e-07,
+    "medium_single_z_epsilon": 7e-07,
+    "relaxed_xy_block_epsilon": 8e-07,
+    "xyyx_second_plateau_epsilon": 1.2e-06,
+    "yyxx_second_plateau_epsilon": 1.2e-06,
+    "yxxy_epsilon": 7.4e-07,
+    "zz_pair_epsilon": 1.8e-06,
+    "mixed_zz_pair_epsilon": 9.4e-07,
+    "izzi_second_plateau_epsilon": 1.7e-06
+  },
+  "total_pauli_rotation_terms": 14,
+  "identity_coefficient": -0.097066268167632,
+  "centered_hamiltonian_norm": 1.0402175663208695,
+  "max_abs_total_alpha": 0.223431536908134,
+  "min_abs_total_alpha": 0.045302615503799,
+  "hf_energy": -1.1167593073964248,
+  "exact_final_energy": -1.1167593073964248,
+  "cas_label": "CAS(2e,2o)",
+  "basis": "sto-3g",
+  "localization": "pipek_mezey_split_occ_vir",
+  "evaluation_wall_seconds": 2.5722060420084745
+}

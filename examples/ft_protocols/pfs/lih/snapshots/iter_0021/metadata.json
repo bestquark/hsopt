@@ -1,0 +1,13 @@
+{
+  "iteration": 21,
+  "status": "keep",
+  "description": "migration phase-energy baseline from restored fidelity best",
+  "timestamp_utc": "2026-04-24T15:45:40.331628+00:00",
+  "molecule": "lih",
+  "objective": "ground_state_phase_estimation",
+  "script": "/Users/lmantilla/Desktop/Internship/trovolut/examples/ft_protocols/pfs/lih/simple_pf.py",
+  "previous_best_iteration": null,
+  "previous_best_score": null,
+  "source_hash_before": "f985eb9d35aa943183858aafa64d3a5ead15200b64089158511b46405923e3a5",
+  "source_hash_after": "f985eb9d35aa943183858aafa64d3a5ead15200b64089158511b46405923e3a5"
+}

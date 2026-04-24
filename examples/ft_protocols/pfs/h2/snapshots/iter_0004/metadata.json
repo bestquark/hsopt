@@ -1,0 +1,12 @@
+{
+  "iteration": 4,
+  "status": "discard",
+  "description": "raise uniform synthesis epsilon to 8e-7",
+  "timestamp_utc": "2026-04-09T20:00:13.312981+00:00",
+  "molecule": "h2",
+  "script": "/Users/lmantilla/Desktop/Internship/trovolut/examples/ft_protocols/pfs/h2/simple_pf.py",
+  "previous_best_iteration": 3,
+  "previous_best_score": 353280.0,
+  "source_hash_before": "66319d1a493f90f9a0228e3ab07f54a502de4628eb4d1366854654baf4d568d2",
+  "source_hash_after": "66319d1a493f90f9a0228e3ab07f54a502de4628eb4d1366854654baf4d568d2"
+}

@@ -1,0 +1,12 @@
+{
+  "iteration": 4,
+  "status": "keep",
+  "description": "zero the support>=9 bucket between 1.3e-10 and 3e-10 with 1e-9 epsilon",
+  "timestamp_utc": "2026-04-09T20:07:57.823820+00:00",
+  "molecule": "dmds",
+  "script": "/Users/lmantilla/Desktop/Internship/trovolut/examples/ft_protocols/pfs/dmds/simple_pf.py",
+  "previous_best_iteration": 3,
+  "previous_best_score": 85336064.0,
+  "source_hash_before": "fb9eb19dbd527d7081a24a5ba5216e77aa4ba9bb702212995bd5e44bebf53e45",
+  "source_hash_after": "fb9eb19dbd527d7081a24a5ba5216e77aa4ba9bb702212995bd5e44bebf53e45"
+}

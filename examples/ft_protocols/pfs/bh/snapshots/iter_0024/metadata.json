@@ -1,0 +1,12 @@
+{
+  "iteration": 24,
+  "status": "keep",
+  "description": "push the isolated 7.34e-4 contiguous ZZ edge bucket from 4e-7 to 7e-7",
+  "timestamp_utc": "2026-04-09T21:34:44.235013+00:00",
+  "molecule": "bh",
+  "script": "/Users/lmantilla/Desktop/Internship/trovolut/examples/ft_protocols/pfs/bh/simple_pf.py",
+  "previous_best_iteration": 22,
+  "previous_best_score": 420096.0,
+  "source_hash_before": "9722477fc6f54bf7b612feff35d27a7cd4f9114571f0307e082121a82c409bef",
+  "source_hash_after": "9722477fc6f54bf7b612feff35d27a7cd4f9114571f0307e082121a82c409bef"
+}

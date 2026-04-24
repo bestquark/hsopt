@@ -1,0 +1,12 @@
+{
+  "iteration": 19,
+  "status": "discard",
+  "description": "split noncontiguous ZZ pairs near 6.40e-4 to a dedicated 5e-7 bucket",
+  "timestamp_utc": "2026-04-09T21:10:47.669677+00:00",
+  "molecule": "bh",
+  "script": "/Users/lmantilla/Desktop/Internship/trovolut/examples/ft_protocols/pfs/bh/simple_pf.py",
+  "previous_best_iteration": 18,
+  "previous_best_score": 421248.0,
+  "source_hash_before": "8b6944f5b173ef71d3c720bd2887435bb630b3abfb0fb9b249a0e3a8cf16a2e1",
+  "source_hash_after": "8b6944f5b173ef71d3c720bd2887435bb630b3abfb0fb9b249a0e3a8cf16a2e1"
+}

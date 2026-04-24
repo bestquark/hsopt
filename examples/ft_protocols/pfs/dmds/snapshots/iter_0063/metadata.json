@@ -1,0 +1,12 @@
+{
+  "iteration": 63,
+  "status": "keep",
+  "description": "relax the repeated 1.85793e-6 support>=6 cluster pair to 1e-9",
+  "timestamp_utc": "2026-04-10T16:43:47.305102+00:00",
+  "molecule": "dmds",
+  "script": "/Users/lmantilla/Desktop/Internship/trovolut/examples/ft_protocols/pfs/dmds/simple_pf.py",
+  "previous_best_iteration": 61,
+  "previous_best_score": 81068032.0,
+  "source_hash_before": "27c8a6fcd641c8bd6e089e931aee1867ae2e3c14d8d30f45be85206bded0e17c",
+  "source_hash_after": "27c8a6fcd641c8bd6e089e931aee1867ae2e3c14d8d30f45be85206bded0e17c"
+}

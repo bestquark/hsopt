@@ -1,0 +1,12 @@
+{
+  "iteration": 8,
+  "status": "keep",
+  "description": "push the mid-sized single-qubit bucket to 2e-7",
+  "timestamp_utc": "2026-04-09T20:08:36.927758+00:00",
+  "molecule": "bh",
+  "script": "/Users/lmantilla/Desktop/Internship/trovolut/examples/ft_protocols/pfs/bh/simple_pf.py",
+  "previous_best_iteration": 7,
+  "previous_best_score": 443136.0,
+  "source_hash_before": "21dee55402bdd9644456a0ab008dced2626641b432fff1b6f51fe6b5baf882fe",
+  "source_hash_after": "21dee55402bdd9644456a0ab008dced2626641b432fff1b6f51fe6b5baf882fe"
+}

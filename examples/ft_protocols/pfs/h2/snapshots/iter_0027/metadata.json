@@ -1,0 +1,12 @@
+{
+  "iteration": 27,
+  "status": "discard",
+  "description": "trade YXXY back to 5e-7 and raise both small ZZ labels to the 1.4e-6 second plateau",
+  "timestamp_utc": "2026-04-09T20:14:25.760048+00:00",
+  "molecule": "h2",
+  "script": "/Users/lmantilla/Desktop/Internship/trovolut/examples/ft_protocols/pfs/h2/simple_pf.py",
+  "previous_best_iteration": 24,
+  "previous_best_score": 337920.0,
+  "source_hash_before": "21384d3713dccbe4984dd28ddb279f005df7a3b183348e4df1bd082a381955e4",
+  "source_hash_after": "21384d3713dccbe4984dd28ddb279f005df7a3b183348e4df1bd082a381955e4"
+}

@@ -1,0 +1,12 @@
+{
+  "iteration": 7,
+  "status": "keep",
+  "description": "keep 5e-7 default and raise the smaller one-body Z terms plus smallest ZZ pairs to 7e-7",
+  "timestamp_utc": "2026-04-09T20:01:01.480900+00:00",
+  "molecule": "h2",
+  "script": "/Users/lmantilla/Desktop/Internship/trovolut/examples/ft_protocols/pfs/h2/simple_pf.py",
+  "previous_best_iteration": 6,
+  "previous_best_score": 350208.0,
+  "source_hash_before": "a53658a2601fa77dcedb32981c0de197244a89473d6a0e070944128408b651d8",
+  "source_hash_after": "a53658a2601fa77dcedb32981c0de197244a89473d6a0e070944128408b651d8"
+}

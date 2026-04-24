@@ -1,0 +1,12 @@
+{
+  "iteration": 5,
+  "status": "keep",
+  "description": "relax the support>=6 6.4e-9 angle band to 2e-10",
+  "timestamp_utc": "2026-04-09T20:12:20.614453+00:00",
+  "molecule": "dmds",
+  "script": "/Users/lmantilla/Desktop/Internship/trovolut/examples/ft_protocols/pfs/dmds/simple_pf.py",
+  "previous_best_iteration": 4,
+  "previous_best_score": 84819968.0,
+  "source_hash_before": "35c9d791312782a8eb100510ec0fc071be683ab389849dbf75c891a36450a208",
+  "source_hash_after": "35c9d791312782a8eb100510ec0fc071be683ab389849dbf75c891a36450a208"
+}

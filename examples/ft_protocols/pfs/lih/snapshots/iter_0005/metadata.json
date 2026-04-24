@@ -1,0 +1,12 @@
+{
+  "iteration": 5,
+  "status": "keep",
+  "description": "expand IXZXIIII/IYZYIIII/XZXIIIII/YZYIIIII 1.75e-7 sparse override cadence from every 64th step to every 32nd step",
+  "timestamp_utc": "2026-04-09T21:15:44.297487+00:00",
+  "molecule": "lih",
+  "script": "/Users/lmantilla/Desktop/Internship/trovolut/examples/ft_protocols/pfs/lih/simple_pf.py",
+  "previous_best_iteration": 4,
+  "previous_best_score": 1935780.0,
+  "source_hash_before": "b9be0ff63cdf3d4971269de71071b830597184c1bcc035fc8d8989c2a6d900f8",
+  "source_hash_after": "b9be0ff63cdf3d4971269de71071b830597184c1bcc035fc8d8989c2a6d900f8"
+}

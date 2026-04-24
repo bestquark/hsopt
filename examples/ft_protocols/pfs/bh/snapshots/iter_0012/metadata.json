@@ -1,0 +1,12 @@
+{
+  "iteration": 12,
+  "status": "discard",
+  "description": "give the larger support-4 family its own looser bucket",
+  "timestamp_utc": "2026-04-09T20:19:39.777005+00:00",
+  "molecule": "bh",
+  "script": "/Users/lmantilla/Desktop/Internship/trovolut/examples/ft_protocols/pfs/bh/simple_pf.py",
+  "previous_best_iteration": 11,
+  "previous_best_score": 435456.0,
+  "source_hash_before": "5e7a4417f56e1fe373bc3903dc30479fb9289c34f612988e05cd5ac08b313444",
+  "source_hash_after": "5e7a4417f56e1fe373bc3903dc30479fb9289c34f612988e05cd5ac08b313444"
+}

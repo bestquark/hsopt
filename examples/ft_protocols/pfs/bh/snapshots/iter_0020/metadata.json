@@ -1,0 +1,12 @@
+{
+  "iteration": 20,
+  "status": "keep",
+  "description": "tighten split noncontiguous ZZ terms near 6.57e-4 to 1e-7 and pull the small support-4 bucket back to 7e-7",
+  "timestamp_utc": "2026-04-09T21:15:53.223873+00:00",
+  "molecule": "bh",
+  "script": "/Users/lmantilla/Desktop/Internship/trovolut/examples/ft_protocols/pfs/bh/simple_pf.py",
+  "previous_best_iteration": 18,
+  "previous_best_score": 421248.0,
+  "source_hash_before": "a27f3e1fe36e5f6c42a3eba3a2165be3f299757530199308556c9fa8acd495d3",
+  "source_hash_after": "a27f3e1fe36e5f6c42a3eba3a2165be3f299757530199308556c9fa8acd495d3"
+}

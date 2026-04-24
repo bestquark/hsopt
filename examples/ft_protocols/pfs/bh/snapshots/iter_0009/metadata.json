@@ -1,0 +1,12 @@
+{
+  "iteration": 9,
+  "status": "keep",
+  "description": "push contiguous ZZ support-2 terms to 2e-7",
+  "timestamp_utc": "2026-04-09T20:12:44.513495+00:00",
+  "molecule": "bh",
+  "script": "/Users/lmantilla/Desktop/Internship/trovolut/examples/ft_protocols/pfs/bh/simple_pf.py",
+  "previous_best_iteration": 8,
+  "previous_best_score": 442368.0,
+  "source_hash_before": "49f50c5dcfbc4a4160d6d437040fae2662138d785cde4b551c4daf0df781a5f1",
+  "source_hash_after": "49f50c5dcfbc4a4160d6d437040fae2662138d785cde4b551c4daf0df781a5f1"
+}

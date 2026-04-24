@@ -1,0 +1,12 @@
+{
+  "iteration": 3,
+  "status": "keep",
+  "description": "relax only the smallest-angle support-4 rotations",
+  "timestamp_utc": "2026-04-09T19:49:19.184606+00:00",
+  "molecule": "bh",
+  "script": "/Users/lmantilla/Desktop/Internship/trovolut/examples/ft_protocols/pfs/bh/simple_pf.py",
+  "previous_best_iteration": 2,
+  "previous_best_score": 453120.0,
+  "source_hash_before": "eb37337ff0e3866f37376455b4c64094c36b61f6bb4018dc810b0d4d08b1f866",
+  "source_hash_after": "eb37337ff0e3866f37376455b4c64094c36b61f6bb4018dc810b0d4d08b1f866"
+}

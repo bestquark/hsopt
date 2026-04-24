@@ -1,0 +1,12 @@
+{
+  "iteration": 45,
+  "status": "keep",
+  "description": "add the step-381 YXXY bonus on top of the kept end-loaded sparse bonuses",
+  "timestamp_utc": "2026-04-09T20:54:44.947733+00:00",
+  "molecule": "h2",
+  "script": "/Users/lmantilla/Desktop/Internship/trovolut/examples/ft_protocols/pfs/h2/simple_pf.py",
+  "previous_best_iteration": 44,
+  "previous_best_score": 335176.0,
+  "source_hash_before": "9691c52cff5a57546e9e58513280a672fb16b4268d22be895995936320a64b5c",
+  "source_hash_after": "9691c52cff5a57546e9e58513280a672fb16b4268d22be895995936320a64b5c"
+}

@@ -1,0 +1,12 @@
+{
+  "iteration": 75,
+  "status": "keep",
+  "description": "relax the paired 1.35792e-5 and 1.35793e-5 support>=4 quartets to 5e-10",
+  "timestamp_utc": "2026-04-10T17:39:05.407890+00:00",
+  "molecule": "dmds",
+  "script": "/Users/lmantilla/Desktop/Internship/trovolut/examples/ft_protocols/pfs/dmds/simple_pf.py",
+  "previous_best_iteration": 74,
+  "previous_best_score": 80683008.0,
+  "source_hash_before": "4fff0ae921a2b2933ffaeb3bd0d9b92e22d44da8881e2c562d4f56258af40f3a",
+  "source_hash_after": "4fff0ae921a2b2933ffaeb3bd0d9b92e22d44da8881e2c562d4f56258af40f3a"
+}

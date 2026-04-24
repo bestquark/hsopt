@@ -1,0 +1,12 @@
+{
+  "iteration": 22,
+  "status": "keep",
+  "description": "set ZZ pairs near 6.82e-4 to 5e-7 at flat T and relax the 7.64e-4 contiguous pair family to 2.5e-7",
+  "timestamp_utc": "2026-04-09T21:25:18.595401+00:00",
+  "molecule": "bh",
+  "script": "/Users/lmantilla/Desktop/Internship/trovolut/examples/ft_protocols/pfs/bh/simple_pf.py",
+  "previous_best_iteration": 21,
+  "previous_best_score": 420864.0,
+  "source_hash_before": "7135c1a714682f9a5f69487b987f8a965a67b650939a8a9d238778885cf05c8c",
+  "source_hash_after": "7135c1a714682f9a5f69487b987f8a965a67b650939a8a9d238778885cf05c8c"
+}

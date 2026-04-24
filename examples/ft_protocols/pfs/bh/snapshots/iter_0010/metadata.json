@@ -1,0 +1,12 @@
+{
+  "iteration": 10,
+  "status": "keep",
+  "description": "push the largest single-qubit bucket to 3e-7",
+  "timestamp_utc": "2026-04-09T20:13:59.621419+00:00",
+  "molecule": "bh",
+  "script": "/Users/lmantilla/Desktop/Internship/trovolut/examples/ft_protocols/pfs/bh/simple_pf.py",
+  "previous_best_iteration": 9,
+  "previous_best_score": 440064.0,
+  "source_hash_before": "894764aea121ae0592d57779da12648da9be5b0c8b3828c4892e3e9c72b88c43",
+  "source_hash_after": "894764aea121ae0592d57779da12648da9be5b0c8b3828c4892e3e9c72b88c43"
+}

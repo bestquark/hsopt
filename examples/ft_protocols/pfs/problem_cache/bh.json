@@ -1,0 +1,22 @@
+{
+  "molecule": "bh",
+  "display_name": "BH PF1",
+  "basis": "sto-3g",
+  "charge": 0,
+  "multiplicity": 1,
+  "active_electrons": 2,
+  "active_orbitals": 3,
+  "cas_label": "CAS(2e,3o)",
+  "target_time": 1.0,
+  "chemical_accuracy_hartree": 0.001,
+  "chemical_accuracy_fidelity_floor": 0.9999999986259792,
+  "ground_state_energy_hartree": -43.122268661040124,
+  "centered_hamiltonian_norm": 13.488801295043821,
+  "identity_coefficient": -29.6334673659963,
+  "total_pauli_rotation_terms": 33,
+  "max_abs_total_alpha": 1.6329297429038652,
+  "min_abs_total_alpha": 0.01581481562781018,
+  "n_qubits": 6,
+  "localization": "pipek_mezey_split_occ_vir",
+  "geometry": "B 0.000000 0.000000 0.000000\nH 0.000000 0.000000 1.230000"
+}

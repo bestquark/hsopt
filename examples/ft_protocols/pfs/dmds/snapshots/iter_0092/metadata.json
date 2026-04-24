@@ -1,0 +1,12 @@
+{
+  "iteration": 92,
+  "status": "keep",
+  "description": "relax the repeated 4.536893829e-6 support>=4 IXZX/XZX XZX/YZY family to 1e-9",
+  "timestamp_utc": "2026-04-10T18:58:53.310178+00:00",
+  "molecule": "dmds",
+  "script": "/Users/lmantilla/Desktop/Internship/trovolut/examples/ft_protocols/pfs/dmds/simple_pf.py",
+  "previous_best_iteration": 91,
+  "previous_best_score": 79994880.0,
+  "source_hash_before": "2357b11ad4c029e0ff9c6b39a9a946179658c5436868c3b9dad35228ecbd1111",
+  "source_hash_after": "2357b11ad4c029e0ff9c6b39a9a946179658c5436868c3b9dad35228ecbd1111"
+}

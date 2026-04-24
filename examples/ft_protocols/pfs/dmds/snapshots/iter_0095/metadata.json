@@ -1,0 +1,12 @@
+{
+  "iteration": 95,
+  "status": "keep",
+  "description": "relax the repeated 3.705549231e-6 support>=4 XXIXX/XYIYX/YXIXY/YYIYY mirror family to 1e-9",
+  "timestamp_utc": "2026-04-10T19:12:10.506897+00:00",
+  "molecule": "dmds",
+  "script": "/Users/lmantilla/Desktop/Internship/trovolut/examples/ft_protocols/pfs/dmds/simple_pf.py",
+  "previous_best_iteration": 94,
+  "previous_best_score": 79872000.0,
+  "source_hash_before": "201c9dc283d671370768324225949b89bf61f005ad92bd8ea772a789f36f779d",
+  "source_hash_after": "201c9dc283d671370768324225949b89bf61f005ad92bd8ea772a789f36f779d"
+}

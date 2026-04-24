@@ -1,0 +1,12 @@
+{
+  "iteration": 2,
+  "status": "keep",
+  "description": "relax contiguous ZZ support-2 terms together",
+  "timestamp_utc": "2026-04-09T19:45:22.466427+00:00",
+  "molecule": "bh",
+  "script": "/Users/lmantilla/Desktop/Internship/trovolut/examples/ft_protocols/pfs/bh/simple_pf.py",
+  "previous_best_iteration": 1,
+  "previous_best_score": 453888.0,
+  "source_hash_before": "df285774e60c738ee4a84183815f32e87eaa789da870bec99e051994c3f53dbe",
+  "source_hash_after": "df285774e60c738ee4a84183815f32e87eaa789da870bec99e051994c3f53dbe"
+}

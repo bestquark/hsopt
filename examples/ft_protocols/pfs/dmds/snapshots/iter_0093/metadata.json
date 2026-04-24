@@ -1,0 +1,12 @@
+{
+  "iteration": 93,
+  "status": "keep",
+  "description": "relax the repeated 2.82063013e-6 support>=4 XZIZ/YZIZ quartet to 1e-9",
+  "timestamp_utc": "2026-04-10T19:03:08.877406+00:00",
+  "molecule": "dmds",
+  "script": "/Users/lmantilla/Desktop/Internship/trovolut/examples/ft_protocols/pfs/dmds/simple_pf.py",
+  "previous_best_iteration": 92,
+  "previous_best_score": 79953920.0,
+  "source_hash_before": "927a941f032f8b8d21bbec9623121ee005cb4c48d035df982a5d508fb65892fc",
+  "source_hash_after": "927a941f032f8b8d21bbec9623121ee005cb4c48d035df982a5d508fb65892fc"
+}

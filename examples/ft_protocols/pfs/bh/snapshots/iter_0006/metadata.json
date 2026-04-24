@@ -1,0 +1,12 @@
+{
+  "iteration": 6,
+  "status": "keep",
+  "description": "add a looser bucket for mid-sized single-qubit Z angles",
+  "timestamp_utc": "2026-04-09T20:00:04.583413+00:00",
+  "molecule": "bh",
+  "script": "/Users/lmantilla/Desktop/Internship/trovolut/examples/ft_protocols/pfs/bh/simple_pf.py",
+  "previous_best_iteration": 5,
+  "previous_best_score": 447744.0,
+  "source_hash_before": "80ea5da6794cb3ce3c97f946f286a41403294ca2ed58722dd08e33b699ae5615",
+  "source_hash_after": "80ea5da6794cb3ce3c97f946f286a41403294ca2ed58722dd08e33b699ae5615"
+}

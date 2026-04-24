@@ -1,0 +1,12 @@
+{
+  "iteration": 23,
+  "status": "keep",
+  "description": "raise both smaller one-body Z terms to their 1.2e-6 62-T breakpoint",
+  "timestamp_utc": "2026-04-09T20:13:12.642381+00:00",
+  "molecule": "h2",
+  "script": "/Users/lmantilla/Desktop/Internship/trovolut/examples/ft_protocols/pfs/h2/simple_pf.py",
+  "previous_best_iteration": 22,
+  "previous_best_score": 340224.0,
+  "source_hash_before": "e1074e2e4dbc62e2e1162ed9be2ea75caefd30d8686a327f722e3d9474d20d34",
+  "source_hash_after": "e1074e2e4dbc62e2e1162ed9be2ea75caefd30d8686a327f722e3d9474d20d34"
+}

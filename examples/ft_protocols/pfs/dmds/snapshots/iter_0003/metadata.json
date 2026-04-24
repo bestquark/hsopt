@@ -1,0 +1,12 @@
+{
+  "iteration": 3,
+  "status": "keep",
+  "description": "zero out support-3 rotations up to 2.5e-10 with 5e-10 epsilon",
+  "timestamp_utc": "2026-04-09T19:59:23.887848+00:00",
+  "molecule": "dmds",
+  "script": "/Users/lmantilla/Desktop/Internship/trovolut/examples/ft_protocols/pfs/dmds/simple_pf.py",
+  "previous_best_iteration": 2,
+  "previous_best_score": 85868544.0,
+  "source_hash_before": "875971d65d5d911c68732e4ae68f0add0d2e8057d13d8698280fb25f8587f53f",
+  "source_hash_after": "875971d65d5d911c68732e4ae68f0add0d2e8057d13d8698280fb25f8587f53f"
+}

@@ -1,0 +1,12 @@
+{
+  "iteration": 89,
+  "status": "keep",
+  "description": "relax the repeated 5.432326333e-6 support>=4 IXX/IXY/IYX/IYY edge-pair family to 1e-9",
+  "timestamp_utc": "2026-04-10T18:46:20.715165+00:00",
+  "molecule": "dmds",
+  "script": "/Users/lmantilla/Desktop/Internship/trovolut/examples/ft_protocols/pfs/dmds/simple_pf.py",
+  "previous_best_iteration": 88,
+  "previous_best_score": 80117760.0,
+  "source_hash_before": "5432b2bf0757da92518595c0824e07f84ff166481be10a4971c0859dd77f348d",
+  "source_hash_after": "5432b2bf0757da92518595c0824e07f84ff166481be10a4971c0859dd77f348d"
+}

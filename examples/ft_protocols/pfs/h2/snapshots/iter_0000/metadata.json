@@ -1,0 +1,12 @@
+{
+  "iteration": 0,
+  "status": "keep",
+  "description": "baseline restart after full archive reset",
+  "timestamp_utc": "2026-04-09T19:33:45.290676+00:00",
+  "molecule": "h2",
+  "script": "/Users/lmantilla/Desktop/Internship/trovolut/examples/ft_protocols/pfs/h2/simple_pf.py",
+  "previous_best_iteration": null,
+  "previous_best_score": null,
+  "source_hash_before": "e6ed06da6c59e75ae5108b8c207f95845bf0c02ff66d20c2ff8f489e5aeb368a",
+  "source_hash_after": "e6ed06da6c59e75ae5108b8c207f95845bf0c02ff66d20c2ff8f489e5aeb368a"
+}

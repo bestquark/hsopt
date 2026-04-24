@@ -1,0 +1,22 @@
+{
+  "key": "h2",
+  "display_name": "H2 PF1",
+  "geometry": "H 0.000000 0.000000 0.000000\nH 0.000000 0.000000 0.740000",
+  "active_electrons": 2,
+  "active_orbitals": 2,
+  "aolabels": null,
+  "charge": 0,
+  "multiplicity": 1,
+  "basis": "sto-3g",
+  "target_time": 1.0,
+  "target_iteration": 100,
+  "max_parallel": 1,
+  "localization": "pipek_mezey_split_occ_vir",
+  "cas_label": "CAS(2e,2o)",
+  "lane_dir": "/Users/lmantilla/Desktop/Internship/trovolut/examples/ft_protocols/pfs/h2",
+  "editable_script": "/Users/lmantilla/Desktop/Internship/trovolut/examples/ft_protocols/pfs/h2/simple_pf.py",
+  "snapshots_dir": "/Users/lmantilla/Desktop/Internship/trovolut/examples/ft_protocols/pfs/h2/snapshots",
+  "results_path": "/Users/lmantilla/Desktop/Internship/trovolut/examples/ft_protocols/pfs/h2/snapshots/results.tsv",
+  "instruction_path": "/Users/lmantilla/Desktop/Internship/trovolut/examples/ft_protocols/pfs/instructions/h2.md",
+  "config_path": "/Users/lmantilla/Desktop/Internship/trovolut/examples/ft_protocols/pfs/configs/h2.json"
+}

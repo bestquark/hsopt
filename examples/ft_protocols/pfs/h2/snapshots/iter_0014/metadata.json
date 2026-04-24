@@ -1,0 +1,12 @@
+{
+  "iteration": 14,
+  "status": "keep",
+  "description": "raise only YXXY to its 7.4e-7 64-T breakpoint on top of the current best policy",
+  "timestamp_utc": "2026-04-09T20:02:34.877164+00:00",
+  "molecule": "h2",
+  "script": "/Users/lmantilla/Desktop/Internship/trovolut/examples/ft_protocols/pfs/h2/simple_pf.py",
+  "previous_best_iteration": 13,
+  "previous_best_score": 344064.0,
+  "source_hash_before": "f93aa7b8fd833daeaea1b04d8ae300b0f25b80d8f544d1c01e9de55500ecd852",
+  "source_hash_after": "f93aa7b8fd833daeaea1b04d8ae300b0f25b80d8f544d1c01e9de55500ecd852"
+}

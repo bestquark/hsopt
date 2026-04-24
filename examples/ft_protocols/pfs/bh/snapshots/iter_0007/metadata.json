@@ -1,0 +1,12 @@
+{
+  "iteration": 7,
+  "status": "keep",
+  "description": "push split support-2 ZZ pairs to a looser epsilon bucket",
+  "timestamp_utc": "2026-04-09T20:04:11.751673+00:00",
+  "molecule": "bh",
+  "script": "/Users/lmantilla/Desktop/Internship/trovolut/examples/ft_protocols/pfs/bh/simple_pf.py",
+  "previous_best_iteration": 6,
+  "previous_best_score": 446976.0,
+  "source_hash_before": "e2fcb6467f7d344ac48164b4ed7b30788cb88ecb08a8554e63674b5c16fe9916",
+  "source_hash_after": "e2fcb6467f7d344ac48164b4ed7b30788cb88ecb08a8554e63674b5c16fe9916"
+}

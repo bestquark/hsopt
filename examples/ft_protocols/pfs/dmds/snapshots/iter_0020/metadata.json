@@ -1,0 +1,12 @@
+{
+  "iteration": 20,
+  "status": "keep",
+  "description": "relax the 2.14993e-7 to 2.14997e-7 support>=6 submicro cluster to 1e-9",
+  "timestamp_utc": "2026-04-09T21:39:22.858857+00:00",
+  "molecule": "dmds",
+  "script": "/Users/lmantilla/Desktop/Internship/trovolut/examples/ft_protocols/pfs/dmds/simple_pf.py",
+  "previous_best_iteration": 19,
+  "previous_best_score": 83386368.0,
+  "source_hash_before": "c54a960b42085861da7b8b8eec49da10cc73db0a300b784a1cf4ab3a7ee3c6b2",
+  "source_hash_after": "c54a960b42085861da7b8b8eec49da10cc73db0a300b784a1cf4ab3a7ee3c6b2"
+}

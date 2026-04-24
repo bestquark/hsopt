@@ -1,0 +1,12 @@
+{
+  "iteration": 21,
+  "status": "keep",
+  "description": "loosen the smallest contiguous ZZ angle near 7.34e-4 to a dedicated 4e-7 bucket",
+  "timestamp_utc": "2026-04-09T21:20:43.500919+00:00",
+  "molecule": "bh",
+  "script": "/Users/lmantilla/Desktop/Internship/trovolut/examples/ft_protocols/pfs/bh/simple_pf.py",
+  "previous_best_iteration": 18,
+  "previous_best_score": 421248.0,
+  "source_hash_before": "e7cac09ec5b46f8cd1c6c93e8cd7d1d74aa4f8d261c23884954fe8e7adb9843c",
+  "source_hash_after": "e7cac09ec5b46f8cd1c6c93e8cd7d1d74aa4f8d261c23884954fe8e7adb9843c"
+}

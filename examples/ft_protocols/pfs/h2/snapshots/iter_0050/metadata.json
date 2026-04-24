@@ -1,0 +1,12 @@
+{
+  "iteration": 50,
+  "status": "keep",
+  "description": "extend the kept end-loaded YXXY sparse bonus block to step 371",
+  "timestamp_utc": "2026-04-09T20:55:27.017337+00:00",
+  "molecule": "h2",
+  "script": "/Users/lmantilla/Desktop/Internship/trovolut/examples/ft_protocols/pfs/h2/simple_pf.py",
+  "previous_best_iteration": 49,
+  "previous_best_score": 335166.0,
+  "source_hash_before": "f3c1b356fcaa03d3be4b4f8e46c47642ac7ae642e913fb2c3b43de0ccbe9c430",
+  "source_hash_after": "f3c1b356fcaa03d3be4b4f8e46c47642ac7ae642e913fb2c3b43de0ccbe9c430"
+}
