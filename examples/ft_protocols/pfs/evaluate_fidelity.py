@@ -14,9 +14,8 @@ import warnings
 from pathlib import Path
 from typing import Dict
 
-import numpy as np
-
 try:
+    from .array_backend import array_backend_name, np
     from .chemistry import (
         ACTIVE_MOLECULES,
         build_problem,
@@ -26,6 +25,7 @@ try:
         t_gate_metrics,
     )
 except ImportError:
+    from array_backend import array_backend_name, np
     from chemistry import (
         ACTIVE_MOLECULES,
         build_problem,
@@ -48,13 +48,13 @@ def evaluate(molecule: str, script_path: Path, epsilon: float | None = None) -> 
     error_budget = float(default_error_budget if epsilon is None else epsilon)
 
     quantized = module.run_product_formula(problem, exact_angles=False)
-    exact_state = np.array(problem["exact_state"], dtype=np.complex128, copy=False)
-    quantized_state = np.array(quantized["state"], dtype=np.complex128, copy=False)
+    exact_state = np.asarray(problem["exact_state"], dtype=np.complex128)
+    quantized_state = np.asarray(quantized["state"], dtype=np.complex128)
     fidelity_value = fidelity(exact_state, quantized_state)
     infidelity = max(0.0, 1.0 - fidelity_value)
     passes_constraint = infidelity <= error_budget
 
-    hamiltonian = np.array(problem["hamiltonian"], dtype=np.complex128, copy=False)
+    hamiltonian = np.asarray(problem["hamiltonian"], dtype=np.complex128)
     hf_energy = float(np.real(np.vdot(problem["initial_state"], hamiltonian @ problem["initial_state"])))
     exact_final_energy = float(np.real(np.vdot(exact_state, hamiltonian @ exact_state)))
     quantized_final_energy = float(np.real(np.vdot(quantized_state, hamiltonian @ quantized_state)))
@@ -83,6 +83,9 @@ def evaluate(molecule: str, script_path: Path, epsilon: float | None = None) -> 
         "time_sign": float(problem["time_sign"]),
         "ground_state_energy_hartree": float(problem["ground_state_energy_hartree"]),
         "total_pauli_rotation_terms": int(problem["total_pauli_rotation_terms"]),
+        "hamiltonian_factorization": problem["hamiltonian_factorization"],
+        "factorization_cost_terms": int(problem["factorization_cost_terms"]),
+        "factorization_metadata": problem["factorization_metadata"],
         "identity_coefficient": float(problem["identity_coefficient"]),
         "centered_hamiltonian_norm": float(problem["centered_hamiltonian_norm"]),
         "max_abs_total_alpha": float(problem["max_abs_total_alpha"]),
@@ -94,6 +97,7 @@ def evaluate(molecule: str, script_path: Path, epsilon: float | None = None) -> 
         "basis": problem["basis"],
         "localization": problem["localization"],
         "compilation_backend": problem["compilation_backend"],
+        "array_backend": array_backend_name(),
         "evaluation_wall_seconds": time.perf_counter() - start,
     }
     result.update(t_gate_metrics(quantized))

@@ -1,0 +1,12 @@
+{
+  "molecule": "nh3",
+  "factorization": "unfactorized",
+  "basis": "sto-3g",
+  "active_electrons": 6,
+  "active_orbitals": 5,
+  "n_qubits": 10,
+  "one_body_cost_terms": 13,
+  "two_body_cost_terms": 313,
+  "factorization_cost_terms": 326,
+  "coefficient_tolerance": 1e-12
+}

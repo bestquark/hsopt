@@ -4,6 +4,7 @@ import functools
 import importlib.util
 import json
 import math
+import os
 import sys
 import warnings
 from dataclasses import dataclass
@@ -13,6 +14,12 @@ from typing import Dict, List, Tuple
 
 import numpy as np
 from scipy.linalg import expm
+from scipy.optimize import least_squares
+
+try:
+    from .array_backend import array_backend_name, np as runtime_np
+except ImportError:
+    from array_backend import array_backend_name, np as runtime_np
 
 try:
     from openfermion import InteractionOperator, get_sparse_operator, jordan_wigner
@@ -26,6 +33,10 @@ SCRIPT_DIR = Path(__file__).resolve().parent
 CACHE_ROOT = SCRIPT_DIR / "problem_cache"
 CHEMICAL_ACCURACY_HARTREE = 1e-3
 SPECTRAL_PEAK_WEIGHT_THRESHOLD = 1e-10
+HAMILTONIAN_FACTORIZATIONS = ("pauli", "unfactorized", "sf", "df", "thc")
+DEFAULT_HAMILTONIAN_FACTORIZATION = "pauli"
+DEFAULT_THC_MAX_NFEV = 120
+FACTORIZATION_COEFFICIENT_TOLERANCE = 1e-12
 
 
 @dataclass(frozen=True)
@@ -167,7 +178,7 @@ class StateAction:
         self._apply_fn = apply_fn
 
     def __matmul__(self, state: np.ndarray) -> np.ndarray:
-        return self._apply_fn(np.asarray(state, dtype=np.complex128))
+        return self._apply_fn(runtime_np.asarray(state, dtype=runtime_np.complex128))
 
 
 def single_qubit_paulis() -> Dict[str, np.ndarray]:
@@ -326,27 +337,28 @@ def pauli_matrix_from_label(label: str) -> np.ndarray:
 
 
 def apply_single_qubit_gate_to_state(state: np.ndarray, gate: np.ndarray, qubit: int, n_qubits: int) -> np.ndarray:
-    tensor = np.asarray(state, dtype=np.complex128).reshape((2,) * n_qubits)
-    moved = np.moveaxis(tensor, qubit, 0)
-    updated = np.tensordot(gate, moved, axes=([1], [0]))
-    updated = np.moveaxis(updated, 0, qubit)
+    tensor = runtime_np.asarray(state, dtype=runtime_np.complex128).reshape((2,) * n_qubits)
+    gate = runtime_np.asarray(gate, dtype=runtime_np.complex128)
+    moved = runtime_np.moveaxis(tensor, qubit, 0)
+    updated = runtime_np.tensordot(gate, moved, axes=([1], [0]))
+    updated = runtime_np.moveaxis(updated, 0, qubit)
     return updated.reshape(-1)
 
 
 def apply_cnot_to_state(state: np.ndarray, control: int, target: int, n_qubits: int) -> np.ndarray:
-    tensor = np.asarray(state, dtype=np.complex128).reshape((2,) * n_qubits)
-    moved = np.moveaxis(tensor, (control, target), (0, 1))
+    tensor = runtime_np.asarray(state, dtype=runtime_np.complex128).reshape((2,) * n_qubits)
+    moved = runtime_np.moveaxis(tensor, (control, target), (0, 1))
     updated = moved.copy()
     updated[1, 0] = moved[1, 1]
     updated[1, 1] = moved[1, 0]
-    updated = np.moveaxis(updated, (0, 1), (control, target))
+    updated = runtime_np.moveaxis(updated, (0, 1), (control, target))
     return updated.reshape(-1)
 
 
 def apply_pauli_label_to_state(state: np.ndarray, label: str) -> np.ndarray:
     paulis = single_qubit_paulis()
     n_qubits = len(label)
-    updated = np.asarray(state, dtype=np.complex128)
+    updated = runtime_np.asarray(state, dtype=runtime_np.complex128)
     for qubit, ch in enumerate(label):
         if ch == "I":
             continue
@@ -355,7 +367,7 @@ def apply_pauli_label_to_state(state: np.ndarray, label: str) -> np.ndarray:
 
 
 def apply_exact_pauli_rotation_to_state(state: np.ndarray, label: str, alpha: float) -> np.ndarray:
-    state = np.asarray(state, dtype=np.complex128)
+    state = runtime_np.asarray(state, dtype=runtime_np.complex128)
     rotated = apply_pauli_label_to_state(state, label)
     return math.cos(alpha) * state + 1j * math.sin(alpha) * rotated
 
@@ -430,9 +442,12 @@ def unitary_error_up_to_global_phase(target: np.ndarray, approx: np.ndarray) -> 
 
 def build_pauli_rotation_compiler(n_qubits: int):
     gridsynth_gates, d_omega_unitary_cls = import_pygridsynth_backend()
-    hadamard = (1.0 / math.sqrt(2.0)) * np.array([[1.0, 1.0], [1.0, -1.0]], dtype=np.complex128)
-    s_dagger = np.array([[1.0, 0.0], [0.0, -1j]], dtype=np.complex128)
-    s_gate = np.array([[1.0, 0.0], [0.0, 1j]], dtype=np.complex128)
+    hadamard = (1.0 / math.sqrt(2.0)) * runtime_np.array(
+        [[1.0, 1.0], [1.0, -1.0]],
+        dtype=runtime_np.complex128,
+    )
+    s_dagger = runtime_np.array([[1.0, 0.0], [0.0, -1j]], dtype=runtime_np.complex128)
+    s_gate = runtime_np.array([[1.0, 0.0], [0.0, 1j]], dtype=runtime_np.complex128)
     named_single_qubit_gates = {
         "H": hadamard,
         "S": s_gate,
@@ -526,17 +541,17 @@ def build_pauli_rotation_compiler(n_qubits: int):
         rz_compilation = compile_rz(theta, epsilon)
         rz_unitary = rz_compilation["rz_unitary"]
         basis_forward, basis_inverse, cnot_pairs, pivot = term_scaffold(label)
-        single_gate = np.array(
+        single_gate = runtime_np.array(
             [
                 [rz_unitary[0, 0], rz_unitary[0, 1]],
                 [rz_unitary[1, 0], rz_unitary[1, 1]],
             ],
-            dtype=np.complex128,
+            dtype=runtime_np.complex128,
         )
 
         if rz_compilation["gate_count"] == 0:
             def apply_state_identity(state: np.ndarray) -> np.ndarray:
-                return np.asarray(state, dtype=np.complex128)
+                return runtime_np.asarray(state, dtype=runtime_np.complex128)
 
             return {
                 "cache_key": f"{label}|{alpha:.16e}|{epsilon:.16e}",
@@ -553,7 +568,7 @@ def build_pauli_rotation_compiler(n_qubits: int):
             }
 
         def apply_state(state: np.ndarray) -> np.ndarray:
-            updated = np.asarray(state, dtype=np.complex128)
+            updated = runtime_np.asarray(state, dtype=runtime_np.complex128)
             for qubit, gate_name in basis_forward:
                 updated = apply_single_qubit_gate_to_state(updated, named_single_qubit_gates[gate_name], qubit, n_qubits)
             for control, target in cnot_pairs:
@@ -790,6 +805,324 @@ def cache_paths(spec: MoleculeSpec) -> Tuple[Path, Path]:
     return CACHE_ROOT / f"{spec.key}.json", CACHE_ROOT / f"{spec.key}.npz"
 
 
+def normalize_hamiltonian_factorization(value: str | None = None) -> str:
+    raw = (value or os.environ.get("TROVOLUT_PFS_HAMILTONIAN_FACTORIZATION") or DEFAULT_HAMILTONIAN_FACTORIZATION)
+    key = raw.strip().lower().replace("-", "_")
+    aliases = {
+        "raw": "unfactorized",
+        "o_n4": "unfactorized",
+        "on4": "unfactorized",
+        "o(n^4)": "unfactorized",
+        "single_factorization": "sf",
+        "single": "sf",
+        "double_factorization": "df",
+        "double": "df",
+        "tensor_hypercontraction": "thc",
+    }
+    key = aliases.get(key, key)
+    if key not in HAMILTONIAN_FACTORIZATIONS:
+        allowed = ", ".join(HAMILTONIAN_FACTORIZATIONS)
+        raise ValueError(f"unknown Hamiltonian factorization {value!r}; use one of {allowed}")
+    return key
+
+
+def _positive_abs(values: np.ndarray, *, tolerance: float = FACTORIZATION_COEFFICIENT_TOLERANCE) -> np.ndarray:
+    abs_values = np.abs(np.asarray(values, dtype=np.float64)).ravel()
+    return abs_values[abs_values > tolerance]
+
+
+def _pair_matrix(two_body: np.ndarray) -> np.ndarray:
+    n_orb = two_body.shape[0]
+    matrix = np.asarray(two_body, dtype=np.float64).reshape(n_orb * n_orb, n_orb * n_orb)
+    return 0.5 * (matrix + matrix.T)
+
+
+def _single_factorization(two_body: np.ndarray, *, tolerance: float) -> list[np.ndarray]:
+    matrix = _pair_matrix(two_body)
+    eigenvalues, eigenvectors = np.linalg.eigh(matrix)
+    order = np.argsort(np.abs(eigenvalues))[::-1]
+    n_orb = two_body.shape[0]
+
+    factors: list[np.ndarray] = []
+    for idx in order:
+        eigenvalue = float(eigenvalues[idx])
+        if abs(eigenvalue) <= tolerance:
+            continue
+        factor = np.sqrt(abs(eigenvalue)) * eigenvectors[:, idx].reshape(n_orb, n_orb)
+        factors.append(0.5 * (factor + factor.T))
+    return factors
+
+
+def _double_factorization_coefficients(sf_factors: list[np.ndarray], *, tolerance: float) -> np.ndarray:
+    eigenvalue_blocks = []
+    for factor in sf_factors:
+        symmetric_factor = 0.5 * (factor + factor.T)
+        eigenvalues = np.linalg.eigvalsh(symmetric_factor)
+        eigenvalue_blocks.append(_positive_abs(eigenvalues, tolerance=tolerance))
+    if not eigenvalue_blocks:
+        return np.array([], dtype=np.float64)
+    return np.concatenate(eigenvalue_blocks)
+
+
+def _initial_thc_orbital_factors(two_body: np.ndarray, rank: int, *, seed: int) -> np.ndarray:
+    n_orb = two_body.shape[0]
+    matrix = _pair_matrix(two_body)
+    eigenvalues, eigenvectors = np.linalg.eigh(matrix)
+    order = np.argsort(np.abs(eigenvalues))[::-1]
+
+    columns = []
+    for idx in order:
+        pair_vector = eigenvectors[:, idx].reshape(n_orb, n_orb)
+        pair_matrix = 0.5 * (pair_vector + pair_vector.T)
+        values, vectors = np.linalg.eigh(pair_matrix)
+        dominant = int(np.argmax(np.abs(values)))
+        column = np.asarray(vectors[:, dominant], dtype=np.float64)
+        column_norm = np.linalg.norm(column)
+        if column_norm > FACTORIZATION_COEFFICIENT_TOLERANCE:
+            columns.append(column / column_norm)
+        if len(columns) == rank:
+            break
+
+    rng = np.random.default_rng(seed)
+    while len(columns) < rank:
+        column = rng.normal(size=n_orb)
+        column_norm = np.linalg.norm(column)
+        if column_norm > FACTORIZATION_COEFFICIENT_TOLERANCE:
+            columns.append(column / column_norm)
+
+    return np.column_stack(columns[:rank])
+
+
+def _normalize_thc_columns(raw: np.ndarray) -> np.ndarray:
+    chi = np.asarray(raw, dtype=np.float64).copy()
+    norms = np.linalg.norm(chi, axis=0)
+    safe_norms = np.where(norms > FACTORIZATION_COEFFICIENT_TOLERANCE, norms, 1.0)
+    return chi / safe_norms
+
+
+def _thc_basis(chi: np.ndarray) -> np.ndarray:
+    n_orb, rank = chi.shape
+    return np.einsum("pm,qm->pqm", chi, chi).reshape(n_orb * n_orb, rank)
+
+
+def _solve_thc_zeta(pair_matrix: np.ndarray, chi: np.ndarray) -> tuple[np.ndarray, np.ndarray]:
+    basis = _thc_basis(chi)
+    basis_pinv = np.linalg.pinv(basis, rcond=1e-10)
+    zeta = basis_pinv @ pair_matrix @ basis_pinv.T
+    return zeta, basis
+
+
+def _thc_zeta_coefficients(
+    two_body: np.ndarray,
+    *,
+    rank: int,
+    max_nfev: int,
+    seed: int,
+    tolerance: float,
+) -> tuple[np.ndarray, float]:
+    matrix = _pair_matrix(two_body)
+    matrix_norm = max(float(np.linalg.norm(matrix)), tolerance)
+    initial_chi = _initial_thc_orbital_factors(two_body, rank, seed=seed)
+
+    def residual(raw: np.ndarray) -> np.ndarray:
+        chi = _normalize_thc_columns(raw.reshape(two_body.shape[0], rank))
+        zeta, basis = _solve_thc_zeta(matrix, chi)
+        return ((basis @ zeta @ basis.T - matrix) / matrix_norm).ravel()
+
+    if max_nfev > 0:
+        result = least_squares(
+            residual,
+            initial_chi.ravel(),
+            max_nfev=max_nfev,
+            ftol=1e-8,
+            xtol=1e-8,
+            gtol=1e-8,
+        )
+        chi = _normalize_thc_columns(result.x.reshape(two_body.shape[0], rank))
+    else:
+        chi = initial_chi
+
+    zeta, basis = _solve_thc_zeta(matrix, chi)
+    zeta = 0.5 * (zeta + zeta.T)
+    relative_error = float(np.linalg.norm(basis @ zeta @ basis.T - matrix) / matrix_norm)
+    unique_zeta = zeta[np.triu_indices_from(zeta)]
+    return _positive_abs(unique_zeta, tolerance=tolerance), relative_error
+
+
+def factorization_cache_paths(spec: MoleculeSpec, factorization: str) -> Tuple[Path, Path]:
+    CACHE_ROOT.mkdir(parents=True, exist_ok=True)
+    stem = f"{spec.key}_{factorization}_cost_terms"
+    return CACHE_ROOT / f"{stem}.json", CACHE_ROOT / f"{stem}.npz"
+
+
+def _factorization_coefficients_from_integrals(
+    factorization: str,
+    one_body: np.ndarray,
+    two_body: np.ndarray,
+    *,
+    thc_rank: int | None = None,
+    thc_max_nfev: int = DEFAULT_THC_MAX_NFEV,
+    seed: int = 1234,
+    tolerance: float = FACTORIZATION_COEFFICIENT_TOLERANCE,
+) -> tuple[np.ndarray, np.ndarray, dict[str, object]]:
+    one_body_coeffs = _positive_abs(one_body, tolerance=tolerance)
+    two_body = np.asarray(two_body, dtype=np.float64)
+    metadata: dict[str, object] = {}
+
+    if factorization == "unfactorized":
+        two_body_coeffs = _positive_abs(0.5 * two_body, tolerance=tolerance)
+    else:
+        sf_factors = _single_factorization(two_body, tolerance=tolerance)
+        if factorization == "sf":
+            two_body_coeffs = _positive_abs(np.asarray(sf_factors), tolerance=tolerance)
+            metadata["sf_rank"] = len(sf_factors)
+        elif factorization == "df":
+            two_body_coeffs = _double_factorization_coefficients(sf_factors, tolerance=tolerance)
+            metadata["sf_rank"] = len(sf_factors)
+        elif factorization == "thc":
+            rank = int(thc_rank or (2 * two_body.shape[0]))
+            two_body_coeffs, thc_relative_error = _thc_zeta_coefficients(
+                two_body,
+                rank=rank,
+                max_nfev=thc_max_nfev,
+                seed=seed,
+                tolerance=tolerance,
+            )
+            metadata["thc_rank"] = rank
+            metadata["thc_relative_error"] = thc_relative_error
+        else:
+            raise ValueError(f"unsupported factorization coefficient set: {factorization}")
+
+    return one_body_coeffs, two_body_coeffs, metadata
+
+
+def _cost_label(n_qubits: int, support_size: int) -> str:
+    support = max(1, min(int(support_size), int(n_qubits)))
+    return "Z" * support + "I" * (int(n_qubits) - support)
+
+
+def _coefficients_to_cost_terms(
+    coefficients: np.ndarray,
+    *,
+    n_qubits: int,
+    support_size: int,
+    source: str,
+) -> list[Dict[str, object]]:
+    label = _cost_label(n_qubits, support_size)
+    return [
+        {
+            "label": label,
+            "coefficient": float(value),
+            "support_size": int(support_size),
+            "source": source,
+            "matrix": None,
+        }
+        for value in np.asarray(coefficients, dtype=np.float64).tolist()
+    ]
+
+
+def build_factorization_cost_cache(spec: MoleculeSpec, factorization: str, arrays: dict[str, object]) -> Dict[str, object]:
+    factorization = normalize_hamiltonian_factorization(factorization)
+    if factorization in {"pauli"}:
+        raise ValueError("pauli cost terms are built from cached Pauli terms, not a factorization coefficient cache")
+
+    one_body = np.asarray(arrays["one_body"], dtype=np.float64)
+    two_body = np.asarray(arrays["two_body"], dtype=np.float64)
+    n_qubits = 2 * spec.active_orbitals
+    one_body_coeffs, two_body_coeffs, extra = _factorization_coefficients_from_integrals(
+        factorization,
+        one_body,
+        two_body,
+        seed=1234 + sum(ord(ch) for ch in spec.key),
+    )
+    coefficients = np.concatenate([one_body_coeffs, two_body_coeffs])
+    support_sizes = np.concatenate(
+        [
+            np.full(one_body_coeffs.shape, 2, dtype=np.int64),
+            np.full(two_body_coeffs.shape, 4 if factorization in {"unfactorized", "sf"} else 2, dtype=np.int64),
+        ]
+    )
+    sources = np.asarray(
+        ["one_body"] * len(one_body_coeffs) + [factorization] * len(two_body_coeffs),
+        dtype="<U32",
+    )
+    metadata = {
+        "molecule": spec.key,
+        "factorization": factorization,
+        "basis": spec.basis,
+        "active_electrons": spec.active_electrons,
+        "active_orbitals": spec.active_orbitals,
+        "n_qubits": n_qubits,
+        "one_body_cost_terms": int(len(one_body_coeffs)),
+        "two_body_cost_terms": int(len(two_body_coeffs)),
+        "factorization_cost_terms": int(len(coefficients)),
+        "coefficient_tolerance": FACTORIZATION_COEFFICIENT_TOLERANCE,
+        **extra,
+    }
+    json_path, npz_path = factorization_cache_paths(spec, factorization)
+    json_path.write_text(json.dumps(metadata, indent=2))
+    np.savez_compressed(
+        npz_path,
+        coefficients=np.asarray(coefficients, dtype=np.float64),
+        support_sizes=support_sizes,
+        sources=sources,
+    )
+    return {"metadata": metadata, "arrays": {"coefficients": coefficients, "support_sizes": support_sizes, "sources": sources}}
+
+
+@functools.lru_cache(maxsize=None)
+def load_factorization_cost_data(molecule: str, factorization: str) -> Dict[str, object]:
+    factorization = normalize_hamiltonian_factorization(factorization)
+    if factorization == "pauli":
+        raise ValueError("pauli cost terms are identical to the Pauli simulation terms")
+
+    spec = get_spec(molecule)
+    _, problem_npz_path = cache_paths(spec)
+    if not problem_npz_path.exists():
+        build_problem_cache(spec)
+    problem_arrays = dict(np.load(problem_npz_path, allow_pickle=False))
+
+    json_path, npz_path = factorization_cache_paths(spec, factorization)
+    rebuild = not json_path.exists() or not npz_path.exists()
+    if not rebuild:
+        metadata = json.loads(json_path.read_text())
+        rebuild = (
+            metadata.get("factorization") != factorization
+            or metadata.get("active_electrons") != spec.active_electrons
+            or metadata.get("active_orbitals") != spec.active_orbitals
+            or metadata.get("basis") != spec.basis
+            or metadata.get("coefficient_tolerance") != FACTORIZATION_COEFFICIENT_TOLERANCE
+        )
+    if rebuild:
+        payload = build_factorization_cost_cache(spec, factorization, problem_arrays)
+        metadata = payload["metadata"]
+        arrays = payload["arrays"]
+    else:
+        arrays = dict(np.load(npz_path, allow_pickle=False))
+
+    coefficients = np.asarray(arrays["coefficients"], dtype=np.float64)
+    support_sizes = np.asarray(arrays["support_sizes"], dtype=np.int64)
+    sources = np.asarray(arrays["sources"]).astype(str)
+    terms = []
+    for idx, (coefficient, support_size, source) in enumerate(zip(coefficients, support_sizes, sources)):
+        support = int(support_size)
+        terms.append(
+            {
+                "label": _cost_label(int(metadata["n_qubits"]), support),
+                "coefficient": float(coefficient),
+                "support_size": support,
+                "source": str(source),
+                "factorization_index": int(idx),
+                "matrix": None,
+            }
+        )
+
+    return {
+        "metadata": metadata,
+        "cost_terms": terms,
+    }
+
+
 def build_problem_cache(spec: MoleculeSpec) -> Dict[str, object]:
     one_body, two_body, constant = _active_space_integrals(spec)
     n_qubits = 2 * spec.active_orbitals
@@ -927,35 +1260,51 @@ def load_problem_data(molecule: str) -> Dict[str, object]:
         arrays["pauli_support_sizes"].tolist(),
     ):
         matrix = pauli_matrix_from_label(str(label)) if build_dense_term_matrices else None
+        runtime_matrix = (
+            runtime_np.asarray(matrix, dtype=runtime_np.complex128)
+            if matrix is not None
+            else None
+        )
         pauli_terms.append(
             {
                 "label": str(label),
                 "coefficient": float(coefficient),
                 "support_size": int(support_size),
-                "matrix": matrix,
+                "matrix": runtime_matrix,
             }
         )
 
     return {
         "metadata": metadata,
-        "hamiltonian": np.asarray(hamiltonian, dtype=np.complex128),
-        "identity": np.eye(hamiltonian.shape[0], dtype=np.complex128),
-        "initial_state": np.asarray(initial_state, dtype=np.complex128),
-        "exact_state": np.asarray(exact_state, dtype=np.complex128),
-        "ground_state": np.asarray(ground_state, dtype=np.complex128),
-        "sector_eigenvalues": np.asarray(sector_eigenvalues, dtype=np.float64),
-        "sector_eigenvectors": np.asarray(sector_eigenvectors, dtype=np.complex128),
-        "sector_indices": np.asarray(sector_indices, dtype=np.int64),
+        "hamiltonian": runtime_np.asarray(hamiltonian, dtype=runtime_np.complex128),
+        "identity": runtime_np.eye(hamiltonian.shape[0], dtype=runtime_np.complex128),
+        "initial_state": runtime_np.asarray(initial_state, dtype=runtime_np.complex128),
+        "exact_state": runtime_np.asarray(exact_state, dtype=runtime_np.complex128),
+        "ground_state": runtime_np.asarray(ground_state, dtype=runtime_np.complex128),
+        "sector_eigenvalues": runtime_np.asarray(sector_eigenvalues, dtype=runtime_np.float64),
+        "sector_eigenvectors": runtime_np.asarray(sector_eigenvectors, dtype=runtime_np.complex128),
+        "sector_indices": runtime_np.asarray(sector_indices, dtype=runtime_np.int64),
         "pauli_terms": pauli_terms,
         "apply_exact_pauli_rotation": apply_exact_pauli_rotation_to_state,
     }
 
 
-def build_problem(molecule: str) -> Dict[str, object]:
+def build_problem(molecule: str, factorization: str | None = None) -> Dict[str, object]:
     spec = get_spec(molecule)
     payload = load_problem_data(molecule)
     metadata = payload["metadata"]
     hamiltonian = payload["hamiltonian"]
+    selected_factorization = normalize_hamiltonian_factorization(factorization)
+    if selected_factorization == "pauli":
+        cost_terms = payload["pauli_terms"]
+        factorization_metadata: dict[str, object] = {
+            "factorization": "pauli",
+            "factorization_cost_terms": int(metadata["total_pauli_rotation_terms"]),
+        }
+    else:
+        factorization_payload = load_factorization_cost_data(molecule, selected_factorization)
+        cost_terms = factorization_payload["cost_terms"]
+        factorization_metadata = dict(factorization_payload["metadata"])
 
     return {
         "experiment": f"pf_{molecule}",
@@ -965,6 +1314,7 @@ def build_problem(molecule: str) -> Dict[str, object]:
         "identity": payload["identity"],
         "identity_coefficient": float(metadata["identity_coefficient"]),
         "pauli_terms": payload["pauli_terms"],
+        "cost_terms": cost_terms,
         "apply_exact_pauli_rotation": payload.get("apply_exact_pauli_rotation"),
         "initial_state": payload["initial_state"],
         "exact_state": payload["exact_state"],
@@ -984,11 +1334,15 @@ def build_problem(molecule: str) -> Dict[str, object]:
         ),
         "centered_hamiltonian_norm": float(metadata["centered_hamiltonian_norm"]),
         "total_pauli_rotation_terms": int(metadata["total_pauli_rotation_terms"]),
+        "hamiltonian_factorization": selected_factorization,
+        "factorization_cost_terms": int(factorization_metadata["factorization_cost_terms"]),
+        "factorization_metadata": factorization_metadata,
         "max_abs_total_alpha": float(metadata["max_abs_total_alpha"]),
         "min_abs_total_alpha": float(metadata["min_abs_total_alpha"]),
         "n_qubits": int(metadata["n_qubits"]),
         "compile_pauli_rotation": build_pauli_rotation_compiler(int(metadata["n_qubits"])),
         "compilation_backend": "pygridsynth",
+        "array_backend": array_backend_name(),
         "cas_label": metadata["cas_label"],
         "basis": metadata["basis"],
         "localization": metadata["localization"],
@@ -996,7 +1350,7 @@ def build_problem(molecule: str) -> Dict[str, object]:
 
 
 def fidelity(state_a: np.ndarray, state_b: np.ndarray) -> float:
-    overlap = np.vdot(state_a, state_b)
+    overlap = runtime_np.vdot(state_a, state_b)
     return float(abs(overlap) ** 2)
 
 
@@ -1014,7 +1368,7 @@ def estimate_ground_state_energy_from_overlap(
     reference_energy: float,
     identity_shift: float = 0.0,
 ) -> Dict[str, object]:
-    overlap = np.vdot(reference_state, propagated_state)
+    overlap = runtime_np.vdot(reference_state, propagated_state)
     overlap_magnitude = float(abs(overlap))
     if overlap_magnitude <= 1e-15:
         return {
@@ -1025,7 +1379,7 @@ def estimate_ground_state_energy_from_overlap(
 
     centered_reference_energy = float(reference_energy - identity_shift)
     centered_energy_estimate = unwrap_energy_near_reference(
-        float(np.angle(overlap)),
+        float(runtime_np.angle(overlap)),
         target_time,
         centered_reference_energy,
     )
@@ -1043,12 +1397,12 @@ def select_lowest_reference_peak(
     sector_eigenvectors: np.ndarray,
     min_weight: float = SPECTRAL_PEAK_WEIGHT_THRESHOLD,
 ) -> Dict[str, object]:
-    reference = np.asarray(reference_state, dtype=np.complex128)
-    eigenvalues = np.asarray(sector_eigenvalues, dtype=np.float64)
-    eigenvectors = np.asarray(sector_eigenvectors, dtype=np.complex128)
+    reference = runtime_np.asarray(reference_state, dtype=runtime_np.complex128)
+    eigenvalues = runtime_np.asarray(sector_eigenvalues, dtype=runtime_np.float64)
+    eigenvectors = runtime_np.asarray(sector_eigenvectors, dtype=runtime_np.complex128)
     amplitudes = eigenvectors.conj().T @ reference
-    weights = np.abs(amplitudes) ** 2
-    resolved = np.flatnonzero(weights >= float(min_weight))
+    weights = runtime_np.abs(amplitudes) ** 2
+    resolved = runtime_np.flatnonzero(weights >= float(min_weight))
     if resolved.size == 0:
         return {
             "peak_index": None,
@@ -1057,18 +1411,18 @@ def select_lowest_reference_peak(
             "peak_state": None,
             "reference_amplitude": None,
             "resolved_peak_count": 0,
-            "max_peak_weight": float(np.max(weights)) if weights.size else 0.0,
+            "max_peak_weight": float(runtime_np.max(weights)) if weights.size else 0.0,
         }
 
-    selected = int(resolved[np.argmin(eigenvalues[resolved])])
+    selected = int(resolved[runtime_np.argmin(eigenvalues[resolved])])
     return {
         "peak_index": selected,
         "peak_energy_hartree": float(eigenvalues[selected]),
         "peak_weight": float(weights[selected]),
-        "peak_state": np.asarray(eigenvectors[:, selected], dtype=np.complex128),
+        "peak_state": runtime_np.asarray(eigenvectors[:, selected], dtype=runtime_np.complex128),
         "reference_amplitude": complex(amplitudes[selected]),
         "resolved_peak_count": int(resolved.size),
-        "max_peak_weight": float(np.max(weights)),
+        "max_peak_weight": float(runtime_np.max(weights)),
     }
 
 
@@ -1095,11 +1449,11 @@ def estimate_reference_peak_energy_from_state(
             "energy_error_hartree": None,
         }
 
-    peak_state = np.asarray(peak["peak_state"], dtype=np.complex128)
+    peak_state = runtime_np.asarray(peak["peak_state"], dtype=runtime_np.complex128)
     reference_amplitude = complex(peak["reference_amplitude"])
-    propagated_amplitude = np.vdot(peak_state, propagated_state)
+    propagated_amplitude = runtime_np.vdot(peak_state, propagated_state)
     peak_weight = float(peak["peak_weight"])
-    phase_component = np.conjugate(reference_amplitude) * propagated_amplitude / peak_weight
+    phase_component = runtime_np.conjugate(reference_amplitude) * propagated_amplitude / peak_weight
     phase_magnitude = float(abs(phase_component))
     if phase_magnitude <= 1e-15:
         return {
@@ -1112,7 +1466,7 @@ def estimate_reference_peak_energy_from_state(
     reference_energy = float(peak["peak_energy_hartree"])
     centered_reference_energy = reference_energy - float(identity_shift)
     centered_energy_estimate = unwrap_energy_near_reference(
-        float(np.angle(phase_component)),
+        float(runtime_np.angle(phase_component)),
         target_time,
         centered_reference_energy,
     )

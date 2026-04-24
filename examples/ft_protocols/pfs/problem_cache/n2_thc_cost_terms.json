@@ -1,0 +1,14 @@
+{
+  "molecule": "n2",
+  "factorization": "thc",
+  "basis": "sto-3g",
+  "active_electrons": 6,
+  "active_orbitals": 5,
+  "n_qubits": 10,
+  "one_body_cost_terms": 11,
+  "two_body_cost_terms": 55,
+  "factorization_cost_terms": 66,
+  "coefficient_tolerance": 1e-12,
+  "thc_rank": 10,
+  "thc_relative_error": 0.035700038505428855
+}

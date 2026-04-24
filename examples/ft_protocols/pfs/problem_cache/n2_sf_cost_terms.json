@@ -1,0 +1,13 @@
+{
+  "molecule": "n2",
+  "factorization": "sf",
+  "basis": "sto-3g",
+  "active_electrons": 6,
+  "active_orbitals": 5,
+  "n_qubits": 10,
+  "one_body_cost_terms": 11,
+  "two_body_cost_terms": 163,
+  "factorization_cost_terms": 174,
+  "coefficient_tolerance": 1e-12,
+  "sf_rank": 14
+}

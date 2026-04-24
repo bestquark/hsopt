@@ -15,9 +15,8 @@ import warnings
 from pathlib import Path
 from typing import Dict
 
-import numpy as np
-
 try:
+    from .array_backend import array_backend_name, np
     from .chemistry import (
         ACTIVE_MOLECULES,
         CHEMICAL_ACCURACY_HARTREE,
@@ -29,6 +28,7 @@ try:
         t_gate_metrics,
     )
 except ImportError:
+    from array_backend import array_backend_name, np
     from chemistry import (
         ACTIVE_MOLECULES,
         CHEMICAL_ACCURACY_HARTREE,
@@ -46,20 +46,20 @@ def evaluate(molecule: str, script_path: Path) -> Dict[str, object]:
     module = load_method_module(script_path)
     problem = build_problem(molecule)
 
-    reference_state = np.array(problem["initial_state"], dtype=np.complex128, copy=True)
+    reference_state = np.asarray(problem["initial_state"], dtype=np.complex128).copy()
     reference_problem = dict(problem)
     reference_problem["initial_state"] = reference_state
     reference_run = module.run_product_formula(reference_problem, exact_angles=False)
 
-    exact_state = np.array(problem["exact_state"], dtype=np.complex128, copy=False)
-    diagnostic_state = np.array(reference_run["state"], dtype=np.complex128, copy=False)
+    exact_state = np.asarray(problem["exact_state"], dtype=np.complex128)
+    diagnostic_state = np.asarray(reference_run["state"], dtype=np.complex128)
 
     exact_ground_energy = float(problem["ground_state_energy_hartree"])
     phase_metrics = estimate_reference_peak_energy_from_state(
         reference_state,
         diagnostic_state,
-        np.array(problem["sector_eigenvalues"], dtype=np.float64, copy=False),
-        np.array(problem["sector_eigenvectors"], dtype=np.complex128, copy=False),
+        np.asarray(problem["sector_eigenvalues"], dtype=np.float64),
+        np.asarray(problem["sector_eigenvectors"], dtype=np.complex128),
         float(problem["target_time"]),
         float(problem["identity_coefficient"]),
         float(problem["spectral_peak_weight_threshold"]),
@@ -73,7 +73,7 @@ def evaluate(molecule: str, script_path: Path) -> Dict[str, object]:
 
     state_fidelity = fidelity(exact_state, diagnostic_state)
     state_infidelity = max(0.0, 1.0 - state_fidelity)
-    hamiltonian = np.array(problem["hamiltonian"], dtype=np.complex128, copy=False)
+    hamiltonian = np.asarray(problem["hamiltonian"], dtype=np.complex128)
     hf_energy = float(np.real(np.vdot(problem["initial_state"], hamiltonian @ problem["initial_state"])))
     exact_final_energy = float(np.real(np.vdot(exact_state, hamiltonian @ exact_state)))
 
@@ -115,6 +115,9 @@ def evaluate(molecule: str, script_path: Path) -> Dict[str, object]:
         "state_infidelity_to_exact_evolution": state_infidelity,
         "state_diagnostic_t_gate_count": int(reference_run["t_gate_count"]),
         "total_pauli_rotation_terms": int(problem["total_pauli_rotation_terms"]),
+        "hamiltonian_factorization": problem["hamiltonian_factorization"],
+        "factorization_cost_terms": int(problem["factorization_cost_terms"]),
+        "factorization_metadata": problem["factorization_metadata"],
         "identity_coefficient": float(problem["identity_coefficient"]),
         "centered_hamiltonian_norm": float(problem["centered_hamiltonian_norm"]),
         "max_abs_total_alpha": float(problem["max_abs_total_alpha"]),
@@ -125,6 +128,7 @@ def evaluate(molecule: str, script_path: Path) -> Dict[str, object]:
         "basis": problem["basis"],
         "localization": problem["localization"],
         "compilation_backend": problem["compilation_backend"],
+        "array_backend": array_backend_name(),
         "evaluation_wall_seconds": time.perf_counter() - start,
     }
     result.update(t_gate_metrics(reference_run))

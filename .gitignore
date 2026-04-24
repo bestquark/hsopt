@@ -9,6 +9,10 @@ deprecated/*.json
 deprecated/legion_prof
 encryptcontent.cache
 
+# Trovolut local campaign/evaluator artifacts
+runs/
+examples/ft_protocols/pfs/*/.trovolut_eval_*/
+
 docs/tutorials/opt/
 docs/tutorials/data/
 docs/tutorials/mp_opt/

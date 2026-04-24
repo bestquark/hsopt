@@ -9,7 +9,7 @@ from dataclasses import asdict, dataclass
 import math
 from typing import Dict
 
-import numpy as np
+from pfs.array_backend import np
 
 
 @dataclass(frozen=True)
@@ -45,8 +45,8 @@ def apply_pauli_rotation(
 
 def run_product_formula(problem: Dict[str, object], exact_angles: bool = False) -> Dict[str, object]:
     config = get_method_config()
-    state = np.array(problem["initial_state"], dtype=np.complex128, copy=True)
-    identity = np.array(problem["identity"], dtype=np.complex128, copy=False)
+    state = np.asarray(problem["initial_state"], dtype=np.complex128).copy()
+    identity = np.asarray(problem["identity"], dtype=np.complex128)
     time_sign = float(problem["time_sign"])
     target_time = float(problem["target_time"])
     step_time = target_time / float(config.n_steps)

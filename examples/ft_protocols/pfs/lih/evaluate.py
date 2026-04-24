@@ -11,6 +11,10 @@ FT_PROTOCOL_ROOT = BENCHMARK_ROOT.parents[1]
 if str(FT_PROTOCOL_ROOT) not in sys.path:
     sys.path.insert(0, str(FT_PROTOCOL_ROOT))
 
+from pfs.legate_launch import maybe_reexec_under_legate
+
+maybe_reexec_under_legate()
+
 
 def evaluate_selected(source: Path):
     evaluator = os.environ.get("TROVOLUT_PFS_EVALUATOR", "energy").strip().lower()

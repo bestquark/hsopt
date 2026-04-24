@@ -24,6 +24,8 @@
     "../chemistry.py",
     "../evaluate_energy.py",
     "../evaluate_fidelity.py",
+    "../array_backend.py",
+    "../legate_launch.py",
     "../problem_cache/hcn.json",
     "../problem_cache/hcn.npz"
   ],

@@ -24,6 +24,8 @@
     "../chemistry.py",
     "../evaluate_energy.py",
     "../evaluate_fidelity.py",
+    "../array_backend.py",
+    "../legate_launch.py",
     "../problem_cache/lih.json",
     "../problem_cache/lih.npz"
   ],

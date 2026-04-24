@@ -24,6 +24,8 @@
     "../chemistry.py",
     "../evaluate_energy.py",
     "../evaluate_fidelity.py",
+    "../array_backend.py",
+    "../legate_launch.py",
     "../problem_cache/n2.json",
     "../problem_cache/n2.npz"
   ],
