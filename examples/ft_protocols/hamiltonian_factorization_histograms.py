@@ -11,7 +11,7 @@ from scipy.optimize import least_squares
 
 
 EXAMPLE_ROOT = Path(__file__).resolve().parent
-DEFAULT_OUTPUT = EXAMPLE_ROOT / "hamiltonian_factorization_histograms.png"
+DEFAULT_OUTPUT = EXAMPLE_ROOT / "hamiltonian_factorization_histograms.pdf"
 DEFAULT_TOLERANCE = 1e-12
 
 
@@ -379,10 +379,10 @@ def plot_factorization_histograms(
     fig, axes = plt.subplots(1, 4, figsize=(44.0, 9.0), sharey=True, constrained_layout=True)
 
     titles = {
-        "O(n^4)": r"Unfactorized $T_{pq}, V_{pqrs}$",
-        "SF": r"Single factorization $W^{(l)}_{pq}$",
-        "DF": r"Double factorization $f^{(l)}_k$",
-        "THC": r"THC fit $\zeta_{\mu\nu}$",
+        "O(n^4)": "Unfactorized",
+        "SF": "Single Factorization",
+        "DF": "Double Factorization",
+        "THC": "THC",
     }
 
     for ax, method in zip(axes, methods):
