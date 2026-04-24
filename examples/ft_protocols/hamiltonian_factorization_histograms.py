@@ -5,6 +5,7 @@ from dataclasses import dataclass
 from pathlib import Path
 
 import matplotlib.pyplot as plt
+from matplotlib.patches import Patch
 import numpy as np
 from pyscf import gto, lo, scf
 from scipy.optimize import least_squares
@@ -361,8 +362,8 @@ def plot_factorization_histograms(
     bins: int,
 ) -> None:
     methods = ("O(n^4)", "SF", "DF", "THC")
-    colors = ("#EAF7D1", "#C6F26A", "#76B900", "#2E6B00")
-    edge_colors = ("#9ACD32", "#76B900", "#2E6B00", "#163800")
+    colors = ("#E4EAD7", "#B7C9A8", "#6F9A6B", "#2F5D45")
+    edge_colors = ("#9BA987", "#7D9569", "#4B7149", "#1D3C2F")
 
     plt.rcParams.update(
         {
@@ -405,39 +406,67 @@ def plot_factorization_histograms(
             x_max = 10 ** (log_max + padding)
         bin_edges = np.geomspace(x_min, x_max, bins + 1)
 
-        series = sorted(
-            all_coefficients.items(),
-            key=lambda item: summaries[item[0]].counts[method],
-            reverse=True,
-        )
         color_by_label = dict(zip(all_coefficients.keys(), colors))
         edge_by_label = dict(zip(all_coefficients.keys(), edge_colors))
 
-        for label, molecule_data in series:
+        histograms = {}
+        for label, molecule_data in all_coefficients.items():
             values = molecule_data[method]
             if len(values) == 0:
                 continue
+            histograms[label], _ = np.histogram(values, bins=bin_edges)
+
+        # Draw each bin independently so shorter bars sit in front of taller bars.
+        for bin_index, left_edge in enumerate(bin_edges[:-1]):
+            right_edge = bin_edges[bin_index + 1]
+            bin_counts = [
+                (label, int(counts[bin_index]))
+                for label, counts in histograms.items()
+                if counts[bin_index] > 0
+            ]
+            bin_counts.sort(
+                key=lambda item: (item[1], summaries[item[0]].counts[method]),
+                reverse=True,
+            )
+            for draw_order, (label, count) in enumerate(bin_counts):
+                ax.bar(
+                    left_edge,
+                    count,
+                    width=right_edge - left_edge,
+                    align="edge",
+                    color=color_by_label[label],
+                    edgecolor=edge_by_label[label],
+                    linewidth=2.6,
+                    zorder=2 + draw_order,
+                )
+
+        legend_handles = []
+        for label in sorted(
+            histograms,
+            key=lambda molecule_label: summaries[molecule_label].counts[method],
+            reverse=True,
+        ):
             summary = summaries[label]
             legend_label = rf"{latex_labels[label]} ({summary.counts[method]})"
             if method == "THC":
                 epsilon = _latex_scientific(summary.thc_relative_error)
                 legend_label += rf", $\epsilon={epsilon}$"
-            ax.hist(
-                values,
-                bins=bin_edges,
-                histtype="bar",
-                alpha=1.0,
-                linewidth=2.6,
-                color=color_by_label[label],
-                edgecolor=edge_by_label[label],
-                label=legend_label,
+            legend_handles.append(
+                Patch(
+                    facecolor=color_by_label[label],
+                    edgecolor=edge_by_label[label],
+                    linewidth=2.6,
+                    label=legend_label,
+                )
             )
+
         ax.set_xscale("log")
         ax.set_title(titles[method])
         ax.set_xlabel(r"$|\alpha_i|$")
         if method == "O(n^4)":
             ax.set_ylabel("Count")
         ax.legend(
+            handles=legend_handles,
             frameon=False,
             loc="upper left",
             handlelength=1.4,
