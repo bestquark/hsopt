@@ -491,7 +491,7 @@ def plot_factorization_histograms(
         ax.set_xlim(x_min, x_max)
         ax.set_xticks(x_ticks, labels=x_tick_labels)
         ax.tick_params(axis="both", which="major", pad=14)
-        ax.set_title(titles[method])
+        ax.set_title(titles[method], pad=18)
         ax.set_xlabel(r"$|\alpha_i|$")
         if method == "O(n^4)":
             ax.set_ylabel("Count")
