@@ -298,6 +298,20 @@ def _latex_scientific(value: float, *, precision: int = 1) -> str:
     return rf"{float(mantissa):.{precision}f}\times 10^{{{int(exponent)}}}"
 
 
+def _log_decade_ticks(x_min: float, x_max: float, *, count: int = 5) -> tuple[np.ndarray, list[str]]:
+    lower_exponent = int(np.ceil(np.log10(x_min)))
+    upper_exponent = int(np.floor(np.log10(x_max)))
+    exponents = np.arange(lower_exponent, upper_exponent + 1)
+
+    if len(exponents) < count:
+        exponents = np.rint(np.linspace(np.log10(x_min), np.log10(x_max), count)).astype(int)
+    else:
+        indices = np.rint(np.linspace(0, len(exponents) - 1, count)).astype(int)
+        exponents = exponents[indices]
+
+    return 10.0**exponents, [rf"$10^{{{exponent}}}$" for exponent in exponents]
+
+
 def factorization_coefficients(
     integrals: ActiveSpaceIntegrals,
     *,
@@ -416,6 +430,7 @@ def plot_factorization_histograms(
             x_min = 10 ** (log_min - padding)
             x_max = 10 ** (log_max + padding)
         bin_edges = np.geomspace(x_min, x_max, bins + 1)
+        x_ticks, x_tick_labels = _log_decade_ticks(x_min, x_max, count=5)
 
         color_by_label = dict(zip(all_coefficients.keys(), colors))
         edge_by_label = dict(zip(all_coefficients.keys(), edge_colors))
@@ -473,6 +488,8 @@ def plot_factorization_histograms(
             )
 
         ax.set_xscale("log")
+        ax.set_xlim(x_min, x_max)
+        ax.set_xticks(x_ticks, labels=x_tick_labels)
         ax.tick_params(axis="both", which="major", pad=14)
         ax.set_title(titles[method])
         ax.set_xlabel(r"$|\alpha_i|$")
