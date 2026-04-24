@@ -362,8 +362,8 @@ def plot_factorization_histograms(
     bins: int,
 ) -> None:
     methods = ("O(n^4)", "SF", "DF", "THC")
-    colors = ("#E4EAD7", "#B7C9A8", "#6F9A6B", "#2F5D45")
-    edge_colors = ("#9BA987", "#7D9569", "#4B7149", "#1D3C2F")
+    colors = ("#EEF8D9", "#C9EA72", "#76B900", "#2F6900")
+    edge_colors = ("#B5D84C", "#8FBE24", "#4D8600", "#1F4700")
 
     plt.rcParams.update(
         {
