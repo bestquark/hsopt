@@ -19,9 +19,9 @@ Energy-estimation method:
 
 Coefficient-distribution diagnostic:
 
-- `pauli_coefficient_histogram.py`: builds four similar-size localized
-  CAS(4e,4o) hydride Hamiltonians, expands them into Jordan-Wigner Pauli terms,
-  and writes a shared histogram of `|c|` coefficient counts.
+- `hamiltonian_factorization_histograms.py`: builds four similar-size localized
+  CAS(4e,4o) hydride Hamiltonians and compares `|alpha_i|` coefficient/data-entry
+  histograms for the unfactorized, SF, DF, and THC representations.
 
 Install the optional Qualtran dependency with:
 
@@ -38,5 +38,5 @@ uv run --extra ft-protocols python examples/ft_protocols/pfs/evaluate.py --molec
 uv run --extra ft-protocols python examples/ft_protocols/taylor_lcu/evaluate.py --molecule h2 --script examples/ft_protocols/taylor_lcu/h2/simple_taylor_lcu.py
 uv run --extra ft-protocols python examples/ft_protocols/qsvt/evaluate.py --molecule h2 --script examples/ft_protocols/qsvt/h2/simple_qsvt.py
 uv run --extra ft-protocols python examples/ft_protocols/qubitization/evaluate.py --molecule h2 --script examples/ft_protocols/qubitization/h2/simple_qubitization.py
-uv run python examples/ft_protocols/pauli_coefficient_histogram.py
+uv run python examples/ft_protocols/hamiltonian_factorization_histograms.py
 ```
