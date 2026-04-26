@@ -1,74 +1,44 @@
 """
-Editable Qualtran qubitization-QPE resource policy.
+Editable qubitization-QPE resource policy for H2 with double factorization.
 
-The evaluator supplies fixed chemistry integrals and a fixed chemical-accuracy
-threshold. Mutations should only change resource/precision policy parameters.
+The evaluator reads ``get_method_config()`` and uses its parameters to:
+  - perform a DF factorization and discretize Givens angles / eigenvalue coefficients,
+  - build the effective Hamiltonian,
+  - count Toffoli gates via paper-exact cost formulas.
+
+Autoresearch mutations should only change the numeric knobs below.
+
+H2 in STO-3G (CAS(2e,2o)) has 2 spatial orbitals, which produces 3 DF leaves.
+Each leaf gets its own Givens-angle bit-width (beth_per_leaf), and all
+eigenvalue coefficients share a single fixed-point bit-width (aleph).
 """
 
 from __future__ import annotations
 
-from dataclasses import asdict, dataclass
-from typing import Dict
-
-from protocol_common.qualtran_resources import (
-    build_sparse_chem_walk,
-    coefficient_loading_error,
-    cost_bloq,
-    qpe_phase_epsilon,
-)
+from dataclasses import dataclass
 
 
 @dataclass(frozen=True)
-class QubitizationQPEConfig:
-    name: str = "sparse_qubitization_qpe_baseline"
-    num_bits_state_prep: int = 14
-    num_bits_rot_aa: int = 15
-    qpe_error_fraction: float = 0.45
-    ts_per_rotation: int = 11
+class QubitizationConfig:
+    """Discretization parameters for DF qubitization-QPE on H2."""
+
+    name: str = "h2_df_qubitization_qpe"
+
+    # Which two-body factorization to use: "df" (double factorization) or "thc"
+    factorization: str = "df"
+
+    # Givens-rotation angle bit-width per DF leaf.
+    # H2 STO-3G yields 3 leaves from the double factorization.
+    beth_per_leaf: tuple[int, ...] = (16, 16, 16)
+
+    # Fixed-point bit-width for eigenvalue coefficients in PREPARE.
+    aleph: int = 10
+
+    # Phase-estimation energy resolution (Hartree).
+    # QPE iterations = ceil(pi * lambda / (2 * epsilon_qpe)).
+    epsilon_qpe: float = 0.001
 
 
-def get_method_config() -> QubitizationQPEConfig:
-    return QubitizationQPEConfig()
-
-
-def estimate_qubitization_qpe(problem: Dict[str, object]) -> Dict[str, object]:
-    from qualtran.bloqs.phase_estimation import LPResourceState, QubitizationQPE
-
-    config = get_method_config()
-    walk = build_sparse_chem_walk(
-        problem["one_body"],
-        problem["two_body"],
-        num_bits_state_prep=config.num_bits_state_prep,
-        num_bits_rot_aa=config.num_bits_rot_aa,
-    )
-    alpha = float(walk.block_encoding.alpha)
-    qpe_energy_error = float(problem["chemical_accuracy_hartree"]) * float(config.qpe_error_fraction)
-    qpe_eps = qpe_phase_epsilon(alpha, qpe_energy_error)
-    qpe = QubitizationQPE(walk, LPResourceState.from_standard_deviation_eps(qpe_eps))
-
-    gate_counts, logical_qubits = cost_bloq(qpe, ts_per_rotation=config.ts_per_rotation)
-    loading_errors = coefficient_loading_error(
-        alpha,
-        config.num_bits_state_prep,
-        config.num_bits_rot_aa,
-    )
-    accuracy_proxy = qpe_energy_error + sum(loading_errors.values())
-
-    return {
-        "method_config": asdict(config),
-        "alpha": alpha,
-        "qpe_phase_epsilon": qpe_eps,
-        "qpe_energy_error_hartree": qpe_energy_error,
-        "accuracy_proxy_hartree": accuracy_proxy,
-        "accuracy_proxy_terms": {
-            "qpe_energy_error_hartree": qpe_energy_error,
-            **loading_errors,
-        },
-        "qualtran_count_status": "exact",
-        "gate_counts": gate_counts,
-        "t_gate_count": int(gate_counts["total_t_count"]),
-        "logical_qubits": logical_qubits,
-        "qpe_bloq": str(qpe),
-        "walk_bloq": str(walk),
-    }
-
+def get_method_config() -> QubitizationConfig:
+    """Return the current resource policy configuration."""
+    return QubitizationConfig()
