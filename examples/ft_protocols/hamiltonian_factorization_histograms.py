@@ -321,17 +321,22 @@ def factorization_coefficients(
     include_one_body: bool,
     tolerance: float,
 ) -> FactorizationCoefficients:
-    one_body = _positive_abs(integrals.one_body, tolerance=tolerance)
+    h1 = np.asarray(integrals.one_body, dtype=np.float64)
+    one_body = _positive_abs(h1[np.triu_indices(h1.shape[0])], tolerance=tolerance)
     two_body = np.asarray(integrals.two_body, dtype=np.float64)
     rank = int(thc_rank or (2 * two_body.shape[0]))
 
-    raw_blocks = [_positive_abs(0.5 * two_body, tolerance=tolerance)]
+    pair_mat = _pair_matrix(two_body)
+    raw_blocks = [_positive_abs(pair_mat[np.triu_indices(pair_mat.shape[0])], tolerance=tolerance)]
     if include_one_body:
         raw_blocks.insert(0, one_body)
     raw = np.concatenate(raw_blocks)
 
     sf_factors = _single_factorization(two_body, tolerance=tolerance)
-    sf_blocks = [_positive_abs(np.asarray(sf_factors), tolerance=tolerance)]
+    sf_unique = []
+    for factor in sf_factors:
+        sf_unique.append(_positive_abs(factor[np.triu_indices(factor.shape[0])], tolerance=tolerance))
+    sf_blocks = [np.concatenate(sf_unique) if sf_unique else np.array([], dtype=np.float64)]
     if include_one_body:
         sf_blocks.insert(0, one_body)
     sf = np.concatenate(sf_blocks)
