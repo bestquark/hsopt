@@ -1,5 +1,9 @@
 """
 Editable PF2 method file for the NH3 product-formula precision benchmark.
+
+Synthesis precision follows Reiher et al. (2017): a total synthesis error
+budget is split uniformly across all rotations.  The budget is derived from
+chemical accuracy (1.6 mHa) with ~1/3 allocated to synthesis error.
 """
 
 from __future__ import annotations
@@ -13,10 +17,10 @@ from pfs.array_backend import np
 
 @dataclass(frozen=True)
 class ProductFormulaConfig:
-    name: str = "nh3_pf2_uniform_eps"
+    name: str = "nh3_pf2_reiher_uniform"
     n_steps: int = 512
     zero_angle_threshold: float = 1e-15
-    uniform_epsilon: float = 1e-10
+    synthesis_error_budget_hartree: float = 5e-4
 
 
 def get_method_config() -> ProductFormulaConfig:
@@ -28,9 +32,13 @@ def choose_synthesis_epsilon(
     alpha: float,
     step_index: int,
     config: ProductFormulaConfig,
+    n_terms: int,
 ) -> float:
+    """Reiher-style uniform synthesis precision: total budget / total rotations."""
     _ = (term, alpha, step_index)
-    return config.uniform_epsilon
+    rotations_per_step = 2 * n_terms - 1
+    total_rotations = config.n_steps * rotations_per_step
+    return config.synthesis_error_budget_hartree / total_rotations
 
 
 def run_product_formula(problem: Dict[str, object], exact_angles: bool = False) -> Dict[str, object]:
@@ -42,6 +50,7 @@ def run_product_formula(problem: Dict[str, object], exact_angles: bool = False) 
     compile_pauli_rotation = problem["compile_pauli_rotation"]
     exact_apply = problem["apply_exact_pauli_rotation"]
     pauli_terms = tuple(problem["pauli_terms"])
+    n_terms = len(pauli_terms)
 
     epsilon_hist = Counter()
     unique_compilations = {}
@@ -59,7 +68,7 @@ def run_product_formula(problem: Dict[str, object], exact_angles: bool = False) 
             nonzero_rotation_count += 1
             return exact_apply(state_vector, term["label"], alpha)
 
-        epsilon = float(choose_synthesis_epsilon(term, alpha, step_index, config))
+        epsilon = float(choose_synthesis_epsilon(term, alpha, step_index, config, n_terms))
         compiled = compile_pauli_rotation(term["label"], alpha, epsilon)
         epsilon_key = f"{float(compiled['epsilon']):.3e}"
         epsilon_hist[epsilon_key] += 1
