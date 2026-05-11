@@ -26,6 +26,12 @@ nav:
   - Agent Loop: agent-loop.md
   - Try It: try-it.md
 
+plugins:
+  - search
+  - encryptcontent:
+      global_password: hsopt2026
+      threshold_warning_min_entropy: 0
+
 markdown_extensions:
   - admonition
   - attr_list

@@ -27,7 +27,7 @@ jobs:
           python-version: "3.12"
 
       - name: Install docs dependencies
-        run: python -m pip install "mkdocs-material>=9.6,<10"
+        run: python -m pip install "mkdocs-material>=9.6,<10" "mkdocs-encryptcontent-plugin>=3.0.5,<4"
 
       - name: Configure Pages
         uses: actions/configure-pages@v5
