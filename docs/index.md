@@ -1,4 +1,4 @@
-# hsopt showroom
+# hsopt
 
 Agent-run Hamiltonian-simulation optimization experiments.
 
