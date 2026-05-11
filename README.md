@@ -1,105 +1,98 @@
-# Trovolut
+# hsopt
 
-> [![Docs](https://img.shields.io/badge/docs-online-blue.svg)](https://bestquark.github.io/trovolut/) &nbsp;&nbsp;&nbsp; 🔑 **Password**: `gordonbell2026`
+Hamiltonian-simulation T-gate optimization with fixed fault-tolerant chemistry
+benchmarks and agent-friendly mutation loops.
 
-Evolutionary Trotterization for quantum simulation with modular backends (CPU, GPU, QPU).
+`main` is intentionally narrow. It keeps the product-formula benchmark
+definition in `examples/ft_protocols/pfs/` and the two repo skills that operate
+on those lanes:
 
-## Agent Skill
+- `$t-autoresearch`: sequential `simple_pf.py` mutation runs scored by a fixed
+  evaluator.
+- `$t-gepa`: GEPA prompt optimization for the agent strategy that drives those
+  mutation runs.
 
-This repo now ships a `trovolut` agent skill under `skills/trovolut/` for
-fixed-budget mutation loops against a fixed evaluator.
-
-Install it locally with:
-
-```bash
-npx skills add .
-```
-
-The shell fallback from the repo root is:
-
-```bash
-python3 skills/trovolut/scripts/trovolut_cli.py <iterations> <benchmark_dir> "mutation guidance"
-```
-
-The runtime is aimed at resource-aware optimization problems where the
-evaluator returns a scalar `score`, including T-gate or other cost objectives
-with hard fidelity or accuracy constraints.
-
-## T-Count Dependencies
-
-The migrated T-gate estimation benchmarks depend directly on `pygridsynth` for
-Clifford+T synthesis and T-count extraction. Its own transitive dependencies,
-including `mpmath`, come in through `pygridsynth`; `trovolut` does not need to
-declare them separately.
+The older CPU/GPU/QPU constraint framework, GPU-memory experiments, generic
+telemetry APIs, broad protocol examples, and large run artifacts are preserved
+off `main` on branches listed in `BRANCHES.md`.
 
 ## Installation
 
 ```bash
-# Base package
-uv pip install trovolut
-
-# With GPU support (Linux only)
-uv pip install trovolut[gpu]
-
-# Development
-git clone https://github.com/bestquark/trovolut.git
-cd trovolut
-uv sync --all-extras
-
-# Run tests
-uv run pytest tests/
+git clone https://github.com/bestquark/hsopt.git
+cd hsopt
+uv sync
 ```
 
-## Quick Start
+For GEPA prompt optimization:
 
-```python
-import numpy as np
-import trovolut as trv
-
-# Set backend (enables trv.dynamics.* shortcuts)
-trv.set_backend('cpu')
-
-# Create Hamiltonian and initial state
-H = np.random.randn(4, 4) + 1j * np.random.randn(4, 4)
-H = (H + H.T.conj()) / 2
-psi0 = np.array([1, 0, 0, 0], dtype=complex)
-
-# Evolve using Suzuki-Trotter
-psi = trv.dynamics.suzuki_step([H], dt=1.0, order=2) @ psi0
-
-# Or use class-based interface
-from trovolut.dynamics import TrotterEvolution
-trotter = TrotterEvolution(order=2, n_steps=10)
-psi = trotter.evolve(H, psi0, time=1.0)
+```bash
+uv sync --extra gepa
 ```
 
-**GPU:** Same code with cupynumeric arrays runs on GPU automatically.
+For optional cuPyNumeric execution of the PFS evaluators on a Legate-capable
+cluster:
 
-## Backends
+```bash
+uv sync --extra cupynumeric
+```
 
-- **CPU**: NumPy/SciPy dynamics (ExactEvolution, TrotterEvolution, QDriftEvolution)
-- **Emulator**: Mixed-precision simulation (FP64→FP8)
-- **GPU**: cupynumeric arrays + GPU profiling tools [!NOTE: Not available yet]
-- **QPU**: Quantum hardware via Qiskit/Cirq/CUDA-Q [!NOTE: Not available yet]
+## T-Gate Lanes
 
-## Documentation
+The canonical benchmark tree is `examples/ft_protocols/pfs/`. It contains fixed
+chemistry instances and editable lane-local policies:
 
-- [Full Documentation](https://bestquark.github.io/trovolut/)
-- [Tutorials](https://bestquark.github.io/trovolut/tutorials/)
-- [API Reference](https://bestquark.github.io/trovolut/api/)
+- `h2/`, `bh/`, `lih/`, `dmds/`: small runnable baselines.
+- `n2/`, `co/`, `nh3/`, `hcn/`: larger CAS(6e,5o) lanes seeded for campaigns.
+- `evaluate_energy.py`: T count with chemical accuracy on the lowest resolved
+  HF-reference spectral peak.
+- `evaluate_fidelity.py`: T count with final-state infidelity below the selected
+  epsilon budget.
 
-## Fault-Tolerant Protocol Examples
+During an optimization run, edit only the active lane's `simple_pf.py` unless
+you are deliberately changing the benchmark framework.
 
-`examples/ft_protocols/` contains small, self-contained H2 examples for
-fault-tolerant chemistry protocol resource estimates:
+## Quick Commands
 
-- `pfs/`: product-formula/Trotter dynamics
-- `taylor_lcu/`: segmented truncated Taylor/LCU dynamics
-- `qsvt/`: qubitized QSVT/QSP dynamics
-- `qubitization/`: QPE energy readout over a qubitized walk
+List lanes:
 
-Install the optional dependency set with `uv sync --extra ft-protocols`.
+```bash
+uv run t-autoresearch list
+```
+
+Inspect a lane:
+
+```bash
+uv run t-autoresearch status examples/ft_protocols/pfs/h2
+```
+
+Print the direct evaluator command:
+
+```bash
+uv run t-autoresearch evaluate examples/ft_protocols/pfs/h2 --evaluator energy --print-only
+uv run t-autoresearch evaluate examples/ft_protocols/pfs/h2 --evaluator fidelity --epsilon 1e-3 --print-only
+```
+
+Render the prompt for an agent run:
+
+```bash
+uv run t-autoresearch prompt examples/ft_protocols/pfs/h2 --evaluator energy
+```
+
+Seed a GEPA prompt-optimization run:
+
+```bash
+uv run t-gepa dataset --smoke --output runs/t_gepa/dataset_smoke.json
+uv run t-gepa optimize --smoke --run-root runs/t_gepa/smoke --max-metric-calls 6 --no-parallel
+```
+
+## Compatibility
+
+Some PFS evaluator environment variables and molecule manifests still use the
+`TROVOLUT_` prefix and `.trovolut.json` names. They are retained so old campaign
+scripts and lane wrappers keep working while the repo/package identity moves to
+`hsopt`.
 
 ## License
 
-MIT License - see LICENSE file for details.
+MIT License - see `LICENSE` for details.

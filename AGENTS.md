@@ -1,4 +1,4 @@
-# trovolut Fault-Tolerant Protocol Agent Notes
+# hsopt Fault-Tolerant Protocol Agent Notes
 
 The canonical product-formula T-gate optimization code lives in
 `examples/ft_protocols/pfs/`. Do not use the old standalone checkout as a runtime

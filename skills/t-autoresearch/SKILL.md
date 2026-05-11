@@ -1,6 +1,6 @@
 ---
 name: t-autoresearch
-description: Run sequential autoresearch-style T-gate optimization in trovolut. Use this whenever the user asks to reduce T gates, optimize synthesis precision, mutate product-formula precision policies, continue a lane, inspect T-count progress, or run the repo's `/t-autoresearch` workflow.
+description: Run sequential autoresearch-style T-gate optimization in hsopt. Use this whenever the user asks to reduce T gates, optimize synthesis precision, mutate product-formula precision policies, continue a lane, inspect T-count progress, or run the repo's `/t-autoresearch` workflow.
 ---
 
 # T Autoresearch

@@ -1,7 +1,7 @@
 # Product-Formula Benchmarks
 
 `examples/ft_protocols/pfs/` is the canonical home for the product-formula
-Hamiltonian-simulation benchmarks in trovolut.
+Hamiltonian-simulation benchmarks in hsopt.
 
 - `h2/`, `bh/`, `lih/`, `dmds/`: runnable baseline molecule folders.
 - `n2/`, `co/`, `nh3/`, `hcn/`: histogram-derived larger molecule folders
@@ -32,7 +32,7 @@ TROVOLUT_PFS_ARRAY_BACKEND=cupynumeric legate --gpus 4 --fbmem 20000 \
   --script examples/ft_protocols/pfs/n2/simple_pf.py
 ```
 
-For Trovolut `run_eval.py` / `campaign.py` runs, the molecule-local
+For external `run_eval.py` / `campaign.py` runs, the molecule-local
 `evaluate.py` wrapper re-executes itself under Legate when the cuPyNumeric
 backend is selected:
 
@@ -66,7 +66,7 @@ The experiment grid for the large-molecule benchmarks is:
 - target iterations per lane: `100`
 - target simulation time: `t=1`, from each molecule's `MoleculeSpec`
 
-That gives `4 * 2 = 8` independent Trovolut/Codex autoresearch lanes.
+That gives `4 * 2 = 8` independent hsopt/Codex autoresearch lanes.
 
 The active mutation target is only the lane-local `simple_pf.py`. Do not edit
 `chemistry.py`, `evaluate_energy.py`, `evaluate_fidelity.py`, molecule
@@ -98,5 +98,5 @@ export TROVOLUT_PFS_LEGATE_FBMEM=20000
 Hamiltonian factorizations (SF, DF, THC) are not used in the product-formula
 campaign. Factorization reduces the 1-norm, which benefits oracle-based methods
 (qubitization, QSVT) but does not reduce the Pauli rotation count in
-Trotterized circuits. Factorization-based resource estimation belongs in the
-`qubitization/` and `qsvt/` protocol directories.
+Trotterized circuits. Factorization-based resource estimation now belongs on the
+`resource/hamiltonian-simulation-resources` branch.

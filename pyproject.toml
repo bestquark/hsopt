@@ -1,105 +1,36 @@
 [project]
-name = "trovolut"
+name = "hsopt"
 version = "0.1.0"
-description = "Evolutionary Trotterization"
+description = "Agent-driven T-gate optimization for Hamiltonian simulation"
 readme = "README.md"
 requires-python = ">=3.12"
 dependencies = [
-  "ase>=3.26.0",
-  "imageio>=2.37.0",
-  "matplotlib>=3.10.6",
   "numpy>=2.3.3",
-  "openevolve>=0.2.14",
   "openfermion>=1.7.1",
   "pygridsynth>=1.1.0,<2",
   "pyscf>=2.5.0",
-  "rdkit>=2025.3.6",
   "scipy>=1.13",
-  "zstandard>=0.25.0",
-  "orjson>=3.11.3",
-  "duckdb>=1.4.1",
-  "ruff>=0.14.2",
-  "scikit-image>=0.25.2",
-  "ipykernel>=6.31.0",
-  "cachetools>=6.2.1",
-  "nglview==3.1.4",
-  "plotly>=6.4.0",
-  "nest-asyncio>=1.6.0",
-  "jax>=0.8.1",
-  "python-constraint>=1.4.0",
-  "pandas>=2.3.3",
-  "lxml>=6.0.2",
-  "py3dmol>=2.5.3",
-  "cudaq>=0.13.0; sys_platform == 'linux'",
-  "netcdf4>=1.7.4",
-  "jupyter>=1.1.1",
-  "jupyterlab>=4.5.0",
-  "moviepy>=2.2.1",
-  "imageio-ffmpeg>=0.6.0",
-  "torch>=2.10.0",
-  "brokenaxes>=0.6.2",
-  "joblib>=1.5.3",
-  "textual>=1.0.0",
 ]
 
 [project.scripts]
-trovolut = "trovolut.tui.__main__:main"
-t-autoresearch = "trovolut.tgate_opt.t_autoresearch_cli:main"
-t-gepa = "trovolut.tgate_opt.t_gepa_cli:main"
+hsopt = "hsopt.tgate_opt.t_autoresearch_cli:main"
+t-autoresearch = "hsopt.tgate_opt.t_autoresearch_cli:main"
+t-gepa = "hsopt.tgate_opt.t_gepa_cli:main"
 
 [project.optional-dependencies]
-# GPU backend - requires NVIDIA hardware and Linux
-gpu = [
-  "cudaq>=0.13.0; sys_platform == 'linux'",
-  "nvidia-cupynumeric>=25.10.0",
+cupynumeric = [
   "legate>=25.10.0; sys_platform == 'linux'",
-  "pynvml>=11.5.0; sys_platform == 'linux'",
-]
-
-# QPU backend - quantum hardware access
-qpu = [
-  "cudaq>=0.13.0; sys_platform == 'linux'",
-  "qiskit>=1.0.0",
-  "cirq>=1.4.0",
-]
-
-# Fault-tolerant chemistry protocol examples in examples/ft_protocols
-ft-protocols = [
-  "qualtran>=0.7,<0.8",
+  "nvidia-cupynumeric>=25.10.0",
 ]
 
 gepa = [
   "gepa",
 ]
 
-# GPU emulator - CPU-based emulation for studying quantized exponentials
-# Uses mixed-precision Trotter methods to simulate GPU low-precision behavior
-gpu-emulate = [
-  # No additional dependencies required - uses NumPy + optional cupynumeric
-  # Optional: torch for additional bfloat16 support
-]
-
-# All backends
-all = [
-  "trovolut[gpu,qpu,gpu-emulate]",
-]
-
 [dependency-groups]
 dev = [
-  "black>=25.1.0",
-  "pre-commit>=4.3.0",
   "pytest>=9.0.0",
   "ruff>=0.13.3",
-]
-
-docs = [
-  "mkdocs>=1.6.1",
-  "mkdocs-encryptcontent-plugin>=3.0.5",
-  "mkdocs-material>=9.6.21",
-  "mkdocstrings[python]>=0.30.1",
-  "griffe",
-  "pymdown-extensions>=10.16.1",
-  "mkdocs-jupyter>=0.25.1",
 ]
 
 [build-system]
@@ -109,20 +40,12 @@ build-backend = "uv_build"
 [tool.uv]
 package = true
 
-[tool.uv.sources]
-legate-sparse = { git = "https://github.com/nv-legate/legate-sparse.git"}
-
-[tool.uv.workspace]
-members = ["."]
-
 [tool.ruff]
 line-length = 100
-target-version = "py313"
-exclude = [
-    "src/trovolut/utils/*",
-    "src/trovolut/mm/*",
-    "code_evolution/*"
-]
+target-version = "py312"
+
+[tool.ruff.lint.per-file-ignores]
+"examples/ft_protocols/pfs/*/evaluate.py" = ["E402"]
 
 [tool.ruff.format]
 quote-style = "double"

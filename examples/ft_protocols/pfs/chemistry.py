@@ -371,8 +371,14 @@ def load_method_module(script_path: Path) -> ModuleType:
     if spec is None or spec.loader is None:
         raise ImportError(f"could not load method file: {script_path}")
     module = importlib.util.module_from_spec(spec)
-    sys.modules[spec.name] = module
-    spec.loader.exec_module(module)
+    old_path = list(sys.path)
+    try:
+        sys.path.insert(0, str(SCRIPT_DIR.parent))
+        sys.path.insert(0, str(script_path.parent))
+        sys.modules[spec.name] = module
+        spec.loader.exec_module(module)
+    finally:
+        sys.path[:] = old_path
     for symbol in ("get_method_config", "run_product_formula"):
         if not hasattr(module, symbol):
             raise AttributeError(f"method file is missing required symbol {symbol!r}")

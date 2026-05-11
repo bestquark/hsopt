@@ -1,3 +1,0 @@
-# `trovolut.utils`
-
-::: trovolut.utils

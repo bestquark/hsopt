@@ -1,1 +1,0 @@
-"""Trovolut skill package."""

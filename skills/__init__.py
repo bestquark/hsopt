@@ -1,1 +1,1 @@
-"""Python package surface for gsopt skill runtime helpers."""
+"""Python package surface for hsopt skill runtime helpers."""

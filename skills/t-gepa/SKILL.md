@@ -1,6 +1,6 @@
 ---
 name: t-gepa
-description: Optimize the T-gate autoresearch prompt with GEPA `optimize_anything`. Use this whenever the user mentions GEPA, prompt optimization, `/t-gepa`, comparing GEPA to autoresearch, optimizing the agent prompt, or testing T-gate prompt strategies across trovolut lanes.
+description: Optimize the T-gate autoresearch prompt with GEPA `optimize_anything`. Use this whenever the user mentions GEPA, prompt optimization, `/t-gepa`, comparing GEPA to autoresearch, optimizing the agent prompt, or testing T-gate prompt strategies across hsopt lanes.
 ---
 
 # T GEPA
