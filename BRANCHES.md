@@ -3,7 +3,7 @@
 Use this split to keep `main` small and make future work explicit.
 
 - `main`: `hsopt`, focused on product-formula T-gate optimization in
-  `examples/ft_protocols/pfs/` with `$t-autoresearch` and `$t-gepa`.
+  `examples/pfs/` with `$t-autoresearch` and `$t-gepa`.
 - `backup/pre-hsopt-cleanup-20260511`: exact backup of the dirty workspace
   before the hsopt cleanup.
 - `resource/classical-compute`: branch point for the broader classical compute

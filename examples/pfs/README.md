@@ -1,6 +1,6 @@
 # Product-Formula Benchmarks
 
-`examples/ft_protocols/pfs/` is the canonical home for the product-formula
+`examples/pfs/` is the canonical home for the product-formula
 Hamiltonian-simulation benchmarks in hsopt.
 
 - `h2/`, `bh/`, `lih/`, `dmds/`: runnable baseline molecule folders.
@@ -18,8 +18,8 @@ Hamiltonian-simulation benchmarks in hsopt.
 Run either evaluator directly:
 
 ```bash
-uv run python examples/ft_protocols/pfs/evaluate_energy.py --molecule h2 --script examples/ft_protocols/pfs/h2/simple_pf.py
-uv run python examples/ft_protocols/pfs/evaluate_fidelity.py --molecule h2 --script examples/ft_protocols/pfs/h2/simple_pf.py --epsilon 1e-3
+uv run python examples/pfs/evaluate_energy.py --molecule h2 --script examples/pfs/h2/simple_pf.py
+uv run python examples/pfs/evaluate_fidelity.py --molecule h2 --script examples/pfs/h2/simple_pf.py --epsilon 1e-3
 ```
 
 To use NVIDIA cuPyNumeric for runtime array operations, set
@@ -27,9 +27,9 @@ To use NVIDIA cuPyNumeric for runtime array operations, set
 
 ```bash
 TROVOLUT_PFS_ARRAY_BACKEND=cupynumeric legate --gpus 4 --fbmem 20000 \
-  examples/ft_protocols/pfs/evaluate_energy.py \
+  examples/pfs/evaluate_energy.py \
   --molecule n2 \
-  --script examples/ft_protocols/pfs/n2/simple_pf.py
+  --script examples/pfs/n2/simple_pf.py
 ```
 
 For external `run_eval.py` / `campaign.py` runs, the molecule-local
@@ -53,8 +53,8 @@ is meant for the product-formula state evolution and evaluator linear algebra.
 Use molecule folders directly with the helper CLI:
 
 ```bash
-uv run t-autoresearch status examples/ft_protocols/pfs/h2
-uv run t-autoresearch prompt examples/ft_protocols/pfs/h2 --evaluator fidelity --epsilon 1e-3
+uv run t-autoresearch status examples/pfs/h2
+uv run t-autoresearch prompt examples/pfs/h2 --evaluator fidelity --epsilon 1e-3
 ```
 
 ## Autoresearch Campaign

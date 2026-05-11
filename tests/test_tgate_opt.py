@@ -23,20 +23,23 @@ def test_resolves_legacy_pfs_target_and_builds_commands() -> None:
     lane = resolve_lane(target="pfs/h2")
     assert lane.key == "pf:h2"
 
+    old_layout_lane = resolve_lane(target="examples/ft_protocols/pfs/h2")
+    assert old_layout_lane.key == "pf:h2"
+
     energy = evaluate_command(lane, evaluator="energy")
     assert energy[:3] == ["uv", "run", "python"]
-    assert energy[3].endswith("examples/ft_protocols/pfs/evaluate_energy.py")
+    assert energy[3].endswith("examples/pfs/evaluate_energy.py")
     assert energy[-4:] == ["--molecule", "h2", "--script", str(lane.editable_script)]
 
     fidelity = evaluate_command(lane, evaluator="fidelity", epsilon=1e-3)
-    assert fidelity[3].endswith("examples/ft_protocols/pfs/evaluate_fidelity.py")
+    assert fidelity[3].endswith("examples/pfs/evaluate_fidelity.py")
     assert fidelity[-2:] == ["--epsilon", "0.001"]
 
 
 def test_agent_prompt_keeps_mutation_scope_on_simple_pf() -> None:
-    lane = resolve_lane(target="examples/ft_protocols/pfs/h2")
+    lane = resolve_lane(target="examples/pfs/h2")
     prompt = build_agent_prompt(lane, evaluator="energy")
 
-    assert "examples/ft_protocols/pfs/h2/simple_pf.py" in prompt
-    assert "Edit only `examples/ft_protocols/pfs/h2/simple_pf.py`" in prompt
+    assert "examples/pfs/h2/simple_pf.py" in prompt
+    assert "Edit only `examples/pfs/h2/simple_pf.py`" in prompt
     assert "evaluate_energy.py" in prompt

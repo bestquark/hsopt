@@ -9,7 +9,7 @@ from pathlib import Path
 from typing import Any
 
 
-PFS_ROOT_RELATIVE = Path("examples/ft_protocols/pfs")
+PFS_ROOT_RELATIVE = Path("examples/pfs")
 DEFAULT_FAMILY = "pf"
 DEFAULT_MOLECULE = "h2"
 DEFAULT_EVALUATOR = "energy"
@@ -136,7 +136,9 @@ def _candidate_target_paths(target: str | Path, repo_root: Path) -> list[Path]:
         (repo_root / raw).resolve(),
     ]
     if raw.parts and raw.parts[0] == "pfs":
-        candidates.append((repo_root / "examples/ft_protocols" / raw).resolve())
+        candidates.append((repo_root / "examples" / raw).resolve())
+    if len(raw.parts) >= 3 and raw.parts[:3] == ("examples", "ft_protocols", "pfs"):
+        candidates.append((repo_root / "examples" / "pfs" / Path(*raw.parts[3:])).resolve())
 
     unique: list[Path] = []
     for candidate in candidates:

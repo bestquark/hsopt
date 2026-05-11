@@ -131,7 +131,7 @@ def prepare_trial_workspace(trial_root: Path, family: str) -> Path:
     for relative in [
         Path("src/hsopt/__init__.py"),
         Path("src/hsopt/tgate_opt"),
-        Path("examples/ft_protocols/pfs"),
+        Path("examples/pfs"),
         Path("skills"),
     ]:
         source = REPO_ROOT / relative

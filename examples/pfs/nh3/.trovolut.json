@@ -1,13 +1,13 @@
 {
   "version": 1,
-  "lane": "ft_protocols",
-  "example_key": "pfs_hcn",
+  "lane": "pfs",
+  "example_key": "pfs_nh3",
   "benchmark_arg": "molecule",
-  "benchmark_value": "hcn",
-  "display_name": "HCN product-formula dynamics",
+  "benchmark_value": "nh3",
+  "display_name": "NH3 product-formula dynamics",
   "source_file": "simple_pf.py",
   "evaluator_file": "evaluate.py",
-  "source_template": "examples/ft_protocols/pfs/hcn/simple_pf.py",
+  "source_template": "examples/pfs/nh3/simple_pf.py",
   "queue_script": null,
   "restore_script": null,
   "plot_script": null,
@@ -19,15 +19,15 @@
   "default_iterations": 100,
   "default_wall_seconds": 20.0,
   "objective_metric": "score",
-  "objective_text": "Lower the score and T-gate count while preserving the selected HCN product-formula constraint. The default evaluator is phase-to-energy chemical accuracy; set TROVOLUT_PFS_EVALUATOR=fidelity to optimize the final-state fidelity evaluator.",
+  "objective_text": "Lower the score and T-gate count while preserving the selected NH3 product-formula constraint. The default evaluator is phase-to-energy chemical accuracy; set TROVOLUT_PFS_EVALUATOR=fidelity to optimize the final-state fidelity evaluator.",
   "support_files": [
     "../chemistry.py",
     "../evaluate_energy.py",
     "../evaluate_fidelity.py",
     "../array_backend.py",
     "../legate_launch.py",
-    "../problem_cache/hcn.json",
-    "../problem_cache/hcn.npz"
+    "../problem_cache/nh3.json",
+    "../problem_cache/nh3.npz"
   ],
-  "benchmark_storage_name": "pfs_hcn"
+  "benchmark_storage_name": "pfs_nh3"
 }

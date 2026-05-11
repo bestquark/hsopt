@@ -20,16 +20,16 @@ Inspect lanes and pick the active benchmark:
 
 ```bash
 uv run t-autoresearch list
-uv run t-autoresearch status examples/ft_protocols/pfs/h2
+uv run t-autoresearch status examples/pfs/h2
 ```
 
 Render the exact agent prompt for a lane:
 
 ```bash
-uv run t-autoresearch prompt examples/ft_protocols/pfs/h2
+uv run t-autoresearch prompt examples/pfs/h2
 ```
 
-The primary runnable family is `examples/ft_protocols/pfs/`. The CLI also
+The primary runnable family is `examples/pfs/`. The CLI also
 accepts legacy shorthand targets such as `pfs/h2`.
 
 ## Loop Contract
@@ -47,14 +47,14 @@ accepts legacy shorthand targets such as `pfs/h2`.
 Print the evaluator command:
 
 ```bash
-uv run t-autoresearch evaluate examples/ft_protocols/pfs/h2 --evaluator energy --print-only
-uv run t-autoresearch evaluate examples/ft_protocols/pfs/h2 --evaluator fidelity --epsilon 1e-3 --print-only
+uv run t-autoresearch evaluate examples/pfs/h2 --evaluator energy --print-only
+uv run t-autoresearch evaluate examples/pfs/h2 --evaluator fidelity --epsilon 1e-3 --print-only
 ```
 
 Score one mutation directly:
 
 ```bash
-uv run t-autoresearch evaluate examples/ft_protocols/pfs/h2 --evaluator energy
+uv run t-autoresearch evaluate examples/pfs/h2 --evaluator energy
 ```
 
 ## Optimization Target

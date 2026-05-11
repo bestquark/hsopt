@@ -11,9 +11,9 @@ encryptcontent.cache
 
 # hsopt local campaign/evaluator artifacts
 runs/
-examples/ft_protocols/pfs/*/.trovolut_eval_*/
-examples/ft_protocols/pfs/autoresearch_*_report_*/
-examples/ft_protocols/pfs/remote_*runs*/
+examples/pfs/*/.trovolut_eval_*/
+examples/pfs/autoresearch_*_report_*/
+examples/pfs/remote_*runs*/
 
 docs/tutorials/opt/
 docs/tutorials/data/

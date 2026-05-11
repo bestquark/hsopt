@@ -1,13 +1,13 @@
 {
   "version": 1,
-  "lane": "ft_protocols",
-  "example_key": "pfs_co",
+  "lane": "pfs",
+  "example_key": "pfs_bh",
   "benchmark_arg": "molecule",
-  "benchmark_value": "co",
-  "display_name": "CO product-formula dynamics",
+  "benchmark_value": "bh",
+  "display_name": "BH product-formula dynamics",
   "source_file": "simple_pf.py",
   "evaluator_file": "evaluate.py",
-  "source_template": "examples/ft_protocols/pfs/co/simple_pf.py",
+  "source_template": "examples/pfs/bh/simple_pf.py",
   "queue_script": null,
   "restore_script": null,
   "plot_script": null,
@@ -19,15 +19,15 @@
   "default_iterations": 100,
   "default_wall_seconds": 20.0,
   "objective_metric": "score",
-  "objective_text": "Lower the score and T-gate count while preserving the selected CO product-formula constraint. The default evaluator is phase-to-energy chemical accuracy; set TROVOLUT_PFS_EVALUATOR=fidelity to optimize the final-state fidelity evaluator.",
+  "objective_text": "Lower the score and T-gate count while preserving the selected BH product-formula constraint. The default evaluator is phase-to-energy chemical accuracy; set TROVOLUT_PFS_EVALUATOR=fidelity to optimize the final-state fidelity evaluator.",
   "support_files": [
     "../chemistry.py",
     "../evaluate_energy.py",
     "../evaluate_fidelity.py",
     "../array_backend.py",
     "../legate_launch.py",
-    "../problem_cache/co.json",
-    "../problem_cache/co.npz"
+    "../problem_cache/bh.json",
+    "../problem_cache/bh.npz"
   ],
-  "benchmark_storage_name": "pfs_co"
+  "benchmark_storage_name": "pfs_bh"
 }

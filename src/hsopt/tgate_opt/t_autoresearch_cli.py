@@ -138,7 +138,7 @@ def add_lane_args(parser: argparse.ArgumentParser) -> None:
     parser.add_argument(
         "target",
         nargs="?",
-        help="Optional molecule folder, e.g. examples/ft_protocols/pfs/h2 or pfs/h2.",
+        help="Optional molecule folder, e.g. examples/pfs/h2 or pfs/h2.",
     )
     parser.add_argument("--family", default=DEFAULT_FAMILY)
     parser.add_argument("--molecule", default=DEFAULT_MOLECULE)

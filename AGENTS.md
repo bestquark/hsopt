@@ -1,7 +1,7 @@
 # hsopt Fault-Tolerant Protocol Agent Notes
 
 The canonical product-formula T-gate optimization code lives in
-`examples/ft_protocols/pfs/`. Do not use the old standalone checkout as a runtime
+`examples/pfs/`. Do not use the old standalone checkout as a runtime
 dependency or source of truth.
 
 Use the repo skills first:
@@ -14,10 +14,10 @@ Use the repo skills first:
 Treat these as fixed infrastructure unless the user explicitly asks to change
 the benchmark framework:
 
-- `examples/ft_protocols/pfs/*/evaluate.py`
-- `examples/ft_protocols/pfs/evaluate_energy.py`
-- `examples/ft_protocols/pfs/evaluate_fidelity.py`
-- `examples/ft_protocols/pfs/chemistry.py`
+- `examples/pfs/*/evaluate.py`
+- `examples/pfs/evaluate_energy.py`
+- `examples/pfs/evaluate_fidelity.py`
+- `examples/pfs/chemistry.py`
 
 The usual mutation target is the active lane's `simple_pf.py`. Do not change
 molecules, geometries, basis sets, active spaces, target times, localization, or
@@ -25,14 +25,14 @@ evaluator scoring semantics during an optimization run.
 
 Canonical benchmark folders:
 
-- `examples/ft_protocols/pfs/h2`
-- `examples/ft_protocols/pfs/bh`
-- `examples/ft_protocols/pfs/lih`
-- `examples/ft_protocols/pfs/dmds`
-- `examples/ft_protocols/pfs/n2`
-- `examples/ft_protocols/pfs/co`
-- `examples/ft_protocols/pfs/nh3`
-- `examples/ft_protocols/pfs/hcn`
+- `examples/pfs/h2`
+- `examples/pfs/bh`
+- `examples/pfs/lih`
+- `examples/pfs/dmds`
+- `examples/pfs/n2`
+- `examples/pfs/co`
+- `examples/pfs/nh3`
+- `examples/pfs/hcn`
 
 The PF examples expose two fixed scoring contracts:
 

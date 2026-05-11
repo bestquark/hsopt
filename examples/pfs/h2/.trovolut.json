@@ -1,13 +1,13 @@
 {
   "version": 1,
-  "lane": "ft_protocols",
-  "example_key": "pfs_n2",
+  "lane": "pfs",
+  "example_key": "pfs_h2",
   "benchmark_arg": "molecule",
-  "benchmark_value": "n2",
-  "display_name": "N2 product-formula dynamics",
+  "benchmark_value": "h2",
+  "display_name": "H2 product-formula dynamics",
   "source_file": "simple_pf.py",
   "evaluator_file": "evaluate.py",
-  "source_template": "examples/ft_protocols/pfs/n2/simple_pf.py",
+  "source_template": "examples/pfs/h2/simple_pf.py",
   "queue_script": null,
   "restore_script": null,
   "plot_script": null,
@@ -19,15 +19,15 @@
   "default_iterations": 100,
   "default_wall_seconds": 20.0,
   "objective_metric": "score",
-  "objective_text": "Lower the score and T-gate count while preserving the selected N2 product-formula constraint. The default evaluator is phase-to-energy chemical accuracy; set TROVOLUT_PFS_EVALUATOR=fidelity to optimize the final-state fidelity evaluator.",
+  "objective_text": "Lower the score and T-gate count while preserving the selected H2 product-formula constraint. The default evaluator is phase-to-energy chemical accuracy; set TROVOLUT_PFS_EVALUATOR=fidelity to optimize the final-state fidelity evaluator.",
   "support_files": [
     "../chemistry.py",
     "../evaluate_energy.py",
     "../evaluate_fidelity.py",
     "../array_backend.py",
     "../legate_launch.py",
-    "../problem_cache/n2.json",
-    "../problem_cache/n2.npz"
+    "../problem_cache/h2.json",
+    "../problem_cache/h2.npz"
   ],
-  "benchmark_storage_name": "pfs_n2"
+  "benchmark_storage_name": "pfs_h2"
 }

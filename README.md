@@ -4,7 +4,7 @@ Hamiltonian-simulation T-gate optimization with fixed fault-tolerant chemistry
 benchmarks and agent-friendly mutation loops.
 
 `main` is intentionally narrow. It keeps the product-formula benchmark
-definition in `examples/ft_protocols/pfs/` and the two repo skills that operate
+definition in `examples/pfs/` and the two repo skills that operate
 on those lanes:
 
 - `$t-autoresearch`: sequential `simple_pf.py` mutation runs scored by a fixed
@@ -39,7 +39,7 @@ uv sync --extra cupynumeric
 
 ## T-Gate Lanes
 
-The canonical benchmark tree is `examples/ft_protocols/pfs/`. It contains fixed
+The canonical benchmark tree is `examples/pfs/`. It contains fixed
 chemistry instances and editable lane-local policies:
 
 - `h2/`, `bh/`, `lih/`, `dmds/`: small runnable baselines.
@@ -63,20 +63,20 @@ uv run t-autoresearch list
 Inspect a lane:
 
 ```bash
-uv run t-autoresearch status examples/ft_protocols/pfs/h2
+uv run t-autoresearch status examples/pfs/h2
 ```
 
 Print the direct evaluator command:
 
 ```bash
-uv run t-autoresearch evaluate examples/ft_protocols/pfs/h2 --evaluator energy --print-only
-uv run t-autoresearch evaluate examples/ft_protocols/pfs/h2 --evaluator fidelity --epsilon 1e-3 --print-only
+uv run t-autoresearch evaluate examples/pfs/h2 --evaluator energy --print-only
+uv run t-autoresearch evaluate examples/pfs/h2 --evaluator fidelity --epsilon 1e-3 --print-only
 ```
 
 Render the prompt for an agent run:
 
 ```bash
-uv run t-autoresearch prompt examples/ft_protocols/pfs/h2 --evaluator energy
+uv run t-autoresearch prompt examples/pfs/h2 --evaluator energy
 ```
 
 Seed a GEPA prompt-optimization run:

@@ -45,7 +45,7 @@ line-length = 100
 target-version = "py312"
 
 [tool.ruff.lint.per-file-ignores]
-"examples/ft_protocols/pfs/*/evaluate.py" = ["E402"]
+"examples/pfs/*/evaluate.py" = ["E402"]
 
 [tool.ruff.format]
 quote-style = "double"
