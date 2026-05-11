@@ -1,0 +1,45 @@
+site_name: hsopt
+site_description: Agent skills for Hamiltonian-simulation optimization.
+site_url: https://bestquark.github.io/hsopt/
+
+theme:
+  name: material
+  logo: assets/hsopt-mark.svg
+  favicon: assets/hsopt-mark.svg
+  features:
+    - navigation.instant
+    - navigation.sections
+    - navigation.tabs
+    - content.code.copy
+    - content.tabs.link
+  palette:
+    - scheme: default
+      primary: teal
+      accent: amber
+
+nav:
+  - hsopt: index.md
+  - Install: install.md
+  - Agent Examples:
+      - Product Formulas: examples/product-formulas.md
+      - QSVT and LCU: examples/qsvt-lcu.md
+  - Skill Contract: skill-contract.md
+
+markdown_extensions:
+  - admonition
+  - attr_list
+  - md_in_html
+  - tables
+  - pymdownx.details
+  - pymdownx.superfences
+  - pymdownx.tabbed:
+      alternate_style: true
+
+extra_css:
+  - stylesheets/extra.css
+
+extra:
+  social:
+    - icon: fontawesome/brands/github
+      link: https://github.com/bestquark/hsopt
+      name: bestquark/hsopt

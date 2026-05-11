@@ -3,6 +3,8 @@
 Hamiltonian-simulation T-gate optimization with fixed fault-tolerant chemistry
 benchmarks and agent-friendly mutation loops.
 
+Docs: https://bestquark.github.io/hsopt/
+
 `main` is intentionally narrow. It keeps the product-formula benchmark
 definition in `examples/pfs/` and the two repo skills that operate
 on those lanes:
