@@ -1,83 +1,77 @@
-# hsopt
+# hsopt showroom
 
-Agent skills for Hamiltonian-simulation optimization.
+Agent-run Hamiltonian-simulation optimization experiments.
 
-`hsopt` turns a benchmark lane into an agent-editable optimization problem: one
-method file, one fixed evaluator, one score, and a loop that preserves the
-scientific contract while searching for lower cost.
+This site is not package API documentation. It is a showroom for the experiments
+in this repository: what is computed, what the agent is allowed to change, how
+the evaluator scores a run, and how the reported quantum costs are counted.
 
 <div class="hsopt-grid" markdown>
 
 <div class="hsopt-card" markdown>
-## Install the skills
+## Live exhibit
+
+Product-formula T-count optimization is runnable today.
 
 ```bash
-npx skills add bestquark/hsopt
-```
-
-Install into Claude Code explicitly:
-
-```bash
-npx skills add bestquark/hsopt --agent claude-code --skill '*' -y
-```
-</div>
-
-<div class="hsopt-card" markdown>
-## Run a lane
-
-```bash
-uv run hsopt list
 uv run hsopt status examples/pfs/h2
 uv run hsopt prompt examples/pfs/h2
 ```
-
-Use `$hsopt` inside Codex or `/hsopt` where the client exposes slash commands.
 </div>
 
 <div class="hsopt-card" markdown>
-## Optimize the prompt
+## Cost accounting
 
-```bash
-uv run hsgepa dataset --smoke --output runs/hsgepa/dataset_smoke.json
-uv run hsgepa optimize --smoke --run-root runs/hsgepa/smoke
+The current experiments compile Pauli rotations with pygridsynth and count the
+`T` symbols in the synthesized single-qubit rotation sequence.
+
+[Read the T-gate accounting](experiments/t-gates.md)
+</div>
+
+<div class="hsopt-card" markdown>
+## Agent workflow
+
+Agents mutate one method file, run one fixed evaluator, read JSON diagnostics,
+and keep the best valid state.
+
+[See the loop contract](agent-loop.md)
+</div>
+
+</div>
+
+## What is being shown
+
+The current tracked experiment surface on `main` is:
+
+```text
+examples/pfs/
 ```
 
-`hsgepa` uses GEPA to improve the agent strategy that drives hsopt lanes.
-</div>
+Those product-formula lanes simulate fixed molecular Hamiltonians and ask a
+simple question: how low can an agent push compiled T count without breaking the
+fixed energy or fidelity constraint?
 
-</div>
+The larger ambition is to use the same showroom pattern for Hamiltonian
+simulation methods beyond product formulas:
 
-## What hsopt optimizes
-
-The current runnable benchmark family is product-formula T-gate optimization in
-`examples/pfs/`. Each lane exposes a `simple_pf.py` policy and fixed evaluator
-entry points:
-
-- `evaluate_energy.py`: minimize compiled T count subject to chemical accuracy
-  on the HF-reference spectral peak.
-- `evaluate_fidelity.py`: minimize compiled T count subject to final-state
-  infidelity below the selected budget.
-
-The same lane pattern is intended for other Hamiltonian-simulation methods:
-
-| Method family | Agent edits | Evaluator holds fixed | Score direction |
+| Exhibit | Status | What the agent optimizes | What stays fixed |
 | --- | --- | --- | --- |
-| Product formulas | precision policy in `simple_pf.py` | molecule, active space, target time, accuracy test | lower T count |
-| QSVT | polynomial degree, phase policy, block-encoding tolerances | block encoding, target function, approximation error | lower query or T cost |
-| LCU | term grouping, coefficient buckets, PREPARE/SELECT tolerances | Hamiltonian terms, normalization, success/error test | lower T or query cost |
+| Product formulas | runnable now | synthesis precision policies in `simple_pf.py` | molecule, active space, target time, evaluator |
+| QSVT | blueprint | polynomial degree, phase precision, block-encoding tolerances | target function, block encoding, error budget |
+| LCU | blueprint | grouping and PREPARE/SELECT precision policies | Hamiltonian terms, normalization, success/error test |
 
-QSVT and LCU pages are blueprints for adding those lanes. They are not presented
-as runnable folders until the corresponding `examples/` benchmarks exist.
+The docs call QSVT and LCU directions "blueprints" until their benchmark
+folders exist under `examples/`.
 
-## Agent loop
+## Why agents
 
-The important part is the contract, not the optimizer name:
+The point is not to expose a general package interface. The point is to make
+small, auditable optimization experiments that an agent can repeat:
 
-1. Inspect the lane and fixed evaluator.
-2. Mutate exactly the allowed method file.
-3. Run one scored evaluation.
-4. Read the JSON result.
-5. Keep the best valid state and continue.
+1. Start from a fixed scientific target.
+2. Mutate only the intended method policy.
+3. Run the exact scorer.
+4. Archive the diagnostics.
+5. Let the next mutation be informed by the previous result.
 
-That makes hsopt a skill surface for repeated agent optimization, not just a
-library API.
+That is the role of the `hsopt` and `hsgepa` skills in this repo.

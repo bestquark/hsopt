@@ -1,5 +1,5 @@
-site_name: hsopt
-site_description: Agent skills for Hamiltonian-simulation optimization.
+site_name: hsopt showroom
+site_description: Agent-run Hamiltonian-simulation optimization experiments.
 site_url: https://bestquark.github.io/hsopt/
 
 theme:
@@ -18,12 +18,13 @@ theme:
       accent: amber
 
 nav:
-  - hsopt: index.md
-  - Install: install.md
-  - Agent Examples:
-      - Product Formulas: examples/product-formulas.md
-      - QSVT and LCU: examples/qsvt-lcu.md
-  - Skill Contract: skill-contract.md
+  - Showroom: index.md
+  - Experiments:
+      - Product-Formula T Counts: experiments/product-formulas.md
+      - How T Gates Are Counted: experiments/t-gates.md
+      - QSVT and LCU Directions: experiments/qsvt-lcu.md
+  - Agent Loop: agent-loop.md
+  - Try It: try-it.md
 
 markdown_extensions:
   - admonition

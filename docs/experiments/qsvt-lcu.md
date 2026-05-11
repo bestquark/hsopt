@@ -1,18 +1,15 @@
-# QSVT and LCU Blueprints
+# QSVT and LCU directions
 
-These are hsopt lane blueprints for Hamiltonian-simulation methods beyond the
-current product-formula examples. They describe the agent/evaluator contract to
-use when QSVT or LCU benchmark folders are added under `examples/`.
+QSVT and LCU are planned showroom directions for Hamiltonian simulation methods
+beyond product formulas. They should become exhibits when their benchmark
+folders exist under `examples/` with the same agent/evaluator contract.
 
 !!! note
-    The repository currently ships runnable product-formula lanes in
-    `examples/pfs/`. QSVT and LCU lanes should follow the same contract before
-    they are advertised as runnable examples.
+    The current runnable exhibit is product-formula T-count optimization in
+    `examples/pfs/`. The QSVT and LCU sections below define the shape of future
+    experiment lanes, not currently runnable folders.
 
-## QSVT lane shape
-
-A QSVT lane should isolate a single editable policy file from the fixed
-Hamiltonian simulation target:
+## QSVT exhibit shape
 
 ```text
 examples/qsvt/<problem>/
@@ -35,8 +32,8 @@ Agent mutations should focus on:
 - polynomial degree and parity choices
 - phase synthesis precision
 - block-encoding precision budgets
-- amplitude amplification tolerances
-- approximation-error slack allocation across subroutines
+- amplitude-amplification tolerances
+- approximation-error allocation across subroutines
 
 The evaluator should hold fixed:
 
@@ -46,7 +43,7 @@ The evaluator should hold fixed:
 - block-encoding definition
 - score semantics
 
-Example agent instruction:
+Example exhibit prompt:
 
 ```text
 $hsopt Run 15 mutations on examples/qsvt/h2_time_evolution.
@@ -54,10 +51,7 @@ Reduce query/T cost by reallocating polynomial and phase precision, but keep
 the fixed approximation-error check valid.
 ```
 
-## LCU lane shape
-
-An LCU lane should expose one editable implementation policy and one fixed
-scorer:
+## LCU exhibit shape
 
 ```text
 examples/lcu/<problem>/
@@ -83,7 +77,7 @@ Agent mutations should focus on:
 - term grouping and ordering
 - PREPARE precision allocation
 - SELECT synthesis precision
-- oblivious amplitude amplification schedules
+- oblivious amplitude-amplification schedules
 - truncation thresholds that remain inside the fixed error budget
 
 The evaluator should hold fixed:
@@ -93,7 +87,7 @@ The evaluator should hold fixed:
 - success probability/error contract
 - scoring function
 
-Example agent instruction:
+Example exhibit prompt:
 
 ```text
 $hsopt Run 15 mutations on examples/lcu/lih_sparse_terms.
@@ -103,10 +97,10 @@ allocation only.
 
 ## Promotion checklist
 
-Before a new method family becomes a public hsopt example:
+Before a new method family becomes a public exhibit:
 
 1. Add a fixed `evaluate.py` that prints deterministic JSON.
 2. Add one clearly named editable method file.
 3. Add a smoke molecule or small Hamiltonian that runs in CI-scale time.
-4. Document which file the agent may edit.
-5. Add a status/prompt path so the skill can target the lane directly.
+4. Document exactly which file the agent may edit.
+5. Add a status/prompt path so `hsopt` can target the lane directly.
