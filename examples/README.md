@@ -10,8 +10,8 @@ broader resource-estimation examples are preserved on the
 Run the PFS smoke checks from the repo root:
 
 ```bash
-uv run t-autoresearch list
-uv run t-autoresearch status examples/pfs/h2
+uv run hsopt list
+uv run hsopt status examples/pfs/h2
 uv run python examples/pfs/evaluate_energy.py --molecule h2 --script examples/pfs/h2/simple_pf.py
 uv run python examples/pfs/evaluate_fidelity.py --molecule h2 --script examples/pfs/h2/simple_pf.py --epsilon 1e-3
 ```

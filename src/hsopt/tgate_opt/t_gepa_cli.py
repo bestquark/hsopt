@@ -27,7 +27,7 @@ from .common import (
 from .t_autoresearch_cli import build_agent_prompt
 
 
-DEFAULT_RUN_ROOT = REPO_ROOT / "runs" / "t_gepa"
+DEFAULT_RUN_ROOT = REPO_ROOT / "runs" / "hsgepa"
 
 
 def default_seed_prompt() -> str:
@@ -107,6 +107,7 @@ def _copy_ignore(_dir: str, names: list[str]) -> set[str]:
         "reset_archive",
         "gepa_results",
         "t_gepa_workspace",
+        "hsgepa_workspace",
         "_archive",
     }
     result: set[str] = set()
@@ -173,7 +174,7 @@ def build_trial_agent_prompt(candidate_prompt: str, lane: Lane, target_iteration
     base_prompt = build_agent_prompt(lane, target_iteration)
     return f"""{base_prompt}
 
-Candidate strategy prompt being evaluated by `$t-gepa`:
+Candidate strategy prompt being evaluated by `$hsgepa`:
 ---
 {candidate_prompt.strip()}
 ---
@@ -357,7 +358,7 @@ def cmd_optimize(args: argparse.Namespace) -> int:
     except ImportError as exc:
         raise SystemExit(
             "GEPA is not installed. Install the optional dependency with `uv sync --extra gepa` "
-            "or `uv pip install gepa`, then rerun `t-gepa optimize`."
+            "or `uv pip install gepa`, then rerun `hsgepa optimize`."
         ) from exc
 
     seed = Path(args.seed_prompt).read_text() if args.seed_prompt else default_seed_prompt()

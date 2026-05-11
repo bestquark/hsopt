@@ -6,9 +6,9 @@ dependency or source of truth.
 
 Use the repo skills first:
 
-- `$t-autoresearch` for sequential code-mutation runs that edit only a lane's
+- `$hsopt` for sequential code-mutation runs that edit only a lane's
   `simple_pf.py` and score proposals with one of the fixed evaluators.
-- `$t-gepa` for optimizing the prompt that drives those T-gate mutation runs
+- `$hsgepa` for optimizing the prompt that drives those T-gate mutation runs
   through GEPA's `optimize_anything` API.
 
 Treat these as fixed infrastructure unless the user explicitly asks to change

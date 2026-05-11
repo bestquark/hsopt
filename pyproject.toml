@@ -14,6 +14,7 @@ dependencies = [
 
 [project.scripts]
 hsopt = "hsopt.tgate_opt.t_autoresearch_cli:main"
+hsgepa = "hsopt.tgate_opt.t_gepa_cli:main"
 t-autoresearch = "hsopt.tgate_opt.t_autoresearch_cli:main"
 t-gepa = "hsopt.tgate_opt.t_gepa_cli:main"
 

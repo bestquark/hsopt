@@ -1,32 +1,32 @@
 ---
-name: t-autoresearch
-description: Run sequential autoresearch-style T-gate optimization in hsopt. Use this whenever the user asks to reduce T gates, optimize synthesis precision, mutate product-formula precision policies, continue a lane, inspect T-count progress, or run the repo's `/t-autoresearch` workflow.
+name: hsopt
+description: Run sequential autoresearch-style T-gate optimization in hsopt. Use this whenever the user asks to reduce T gates, optimize synthesis precision, mutate product-formula precision policies, continue a lane, inspect T-count progress, or run the repo's `/hsopt` workflow.
 ---
 
-# T Autoresearch
+# HSOpt
 
 Use this skill for direct T-gate optimization runs where an agent edits a
 benchmark lane's `simple_pf.py`, scores the mutation, reads the result, and
 continues one scored step at a time.
 
 Invocation note:
-- In Codex, use this skill as `$t-autoresearch` or through `/skills`.
-- Some clients may expose it as `/t-autoresearch`.
-- The repo CLI is `uv run t-autoresearch ...`.
+- In Codex, use this skill as `$hsopt` or through `/skills`.
+- Some clients may expose it as `/hsopt`.
+- The repo CLI is `uv run hsopt ...`.
 
 ## First Step
 
 Inspect lanes and pick the active benchmark:
 
 ```bash
-uv run t-autoresearch list
-uv run t-autoresearch status examples/pfs/h2
+uv run hsopt list
+uv run hsopt status examples/pfs/h2
 ```
 
 Render the exact agent prompt for a lane:
 
 ```bash
-uv run t-autoresearch prompt examples/pfs/h2
+uv run hsopt prompt examples/pfs/h2
 ```
 
 The primary runnable family is `examples/pfs/`. The CLI also
@@ -47,14 +47,14 @@ accepts legacy shorthand targets such as `pfs/h2`.
 Print the evaluator command:
 
 ```bash
-uv run t-autoresearch evaluate examples/pfs/h2 --evaluator energy --print-only
-uv run t-autoresearch evaluate examples/pfs/h2 --evaluator fidelity --epsilon 1e-3 --print-only
+uv run hsopt evaluate examples/pfs/h2 --evaluator energy --print-only
+uv run hsopt evaluate examples/pfs/h2 --evaluator fidelity --epsilon 1e-3 --print-only
 ```
 
 Score one mutation directly:
 
 ```bash
-uv run t-autoresearch evaluate examples/pfs/h2 --evaluator energy
+uv run hsopt evaluate examples/pfs/h2 --evaluator energy
 ```
 
 ## Optimization Target

@@ -39,7 +39,7 @@ def build_agent_prompt(
 ) -> str:
     target_iteration = lane.target_iteration if target_iteration is None else target_iteration
     eval_command = shell_join(evaluate_command(lane, evaluator=evaluator, epsilon=epsilon))
-    return f"""Use the `$t-autoresearch` workflow for `{lane.key}`.
+    return f"""Use the `$hsopt` workflow for `{lane.key}`.
 
 Current state:
 - editable file: `{repo_relative(lane.editable_script)}`

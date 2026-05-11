@@ -53,8 +53,8 @@ is meant for the product-formula state evolution and evaluator linear algebra.
 Use molecule folders directly with the helper CLI:
 
 ```bash
-uv run t-autoresearch status examples/pfs/h2
-uv run t-autoresearch prompt examples/pfs/h2 --evaluator fidelity --epsilon 1e-3
+uv run hsopt status examples/pfs/h2
+uv run hsopt prompt examples/pfs/h2 --evaluator fidelity --epsilon 1e-3
 ```
 
 ## Autoresearch Campaign

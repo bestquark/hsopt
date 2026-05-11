@@ -1,6 +1,6 @@
 # GEPA Mapping for T-Gate Prompt Optimization
 
-The local `t-gepa` evaluator maps GEPA concepts to hsopt as follows:
+The local `hsgepa` evaluator maps GEPA concepts to hsopt as follows:
 
 - `seed_candidate`: `{"prompt": <strategy text>}`
 - `dataset`: JSON examples with `family`, `molecule`, `target_iterations`, and
