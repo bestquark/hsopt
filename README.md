@@ -16,7 +16,46 @@ The older CPU/GPU/QPU constraint framework, GPU-memory experiments, generic
 telemetry APIs, broad protocol examples, and large run artifacts are preserved
 off `main` on branches listed in `BRANCHES.md`.
 
-## Installation
+## Install the Skills
+
+Install the hsopt agent skills directly from GitHub:
+
+```bash
+npx skills add bestquark/hsopt
+```
+
+For non-interactive setup that installs both bundled skills:
+
+```bash
+npx skills add bestquark/hsopt --skill '*' -y
+```
+
+For Claude Code specifically:
+
+```bash
+npx skills add bestquark/hsopt --agent claude-code --skill '*' -y
+```
+
+To inspect the available skills before installing:
+
+```bash
+npx skills add bestquark/hsopt --list
+```
+
+To update installed skills later:
+
+```bash
+npx skills update t-autoresearch t-gepa -y
+```
+
+For local testing from inside this repo:
+
+```bash
+npx skills add . --list
+```
+
+These commands install the agent-facing skills. To run the local Python CLIs and
+benchmarks, set up the repo environment:
 
 ```bash
 git clone https://github.com/bestquark/hsopt.git
