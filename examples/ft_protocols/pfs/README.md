@@ -99,4 +99,4 @@ Hamiltonian factorizations (SF, DF, THC) are not used in the product-formula
 campaign. Factorization reduces the 1-norm, which benefits oracle-based methods
 (qubitization, QSVT) but does not reduce the Pauli rotation count in
 Trotterized circuits. Factorization-based resource estimation now belongs on the
-`resource/hamiltonian-simulation-resources` branch.
+`resource/classical-compute` branch.

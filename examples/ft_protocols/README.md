@@ -5,7 +5,7 @@ dynamics in `pfs/`.
 
 The removed Taylor/LCU, QSVT, qubitization, factorization, GPU-memory, and
 broader resource-estimation examples are preserved on the
-`resource/hamiltonian-simulation-resources` branch.
+`resource/classical-compute` branch.
 
 Run the PFS smoke checks from the repo root:
 
