@@ -31,7 +31,7 @@ theme:
         name: Switch to dark mode
 
 nav:
-  - Showroom: index.md
+  - hsopt: index.md
   - Experiments:
       - Product-Formula T Counts: experiments/product-formulas.md
       - How T Gates Are Counted: experiments/t-gates.md
