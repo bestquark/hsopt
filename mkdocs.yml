@@ -32,6 +32,7 @@ theme:
 
 nav:
   - hsopt: index.md
+  - Agent Start: agent-start.md
   - Experiments:
       - Product-Formula T Counts: experiments/product-formulas.md
       - How T Gates Are Counted: experiments/t-gates.md

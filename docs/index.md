@@ -9,14 +9,12 @@ the evaluator scores a run, and how the reported quantum costs are counted.
 <div class="hsopt-grid" markdown>
 
 <div class="hsopt-card" markdown>
-## Live exhibit
+## Agent start
 
-Product-formula T-count optimization is runnable today.
+Give an agent this page first. It explains what to inspect, which commands to
+run, what can be edited, and when to stop.
 
-```bash
-uv run hsopt status examples/pfs/h2
-uv run hsopt prompt examples/pfs/h2
-```
+[Open the agent handoff](agent-start.md)
 </div>
 
 <div class="hsopt-card" markdown>
@@ -29,12 +27,14 @@ The current experiments compile Pauli rotations with pygridsynth and count the
 </div>
 
 <div class="hsopt-card" markdown>
-## Agent workflow
+## Live exhibit
 
-Agents mutate one method file, run one fixed evaluator, read JSON diagnostics,
-and keep the best valid state.
+Product-formula T-count optimization is runnable today.
 
-[See the loop contract](agent-loop.md)
+```bash
+uv run hsopt status examples/pfs/h2
+uv run hsopt prompt examples/pfs/h2
+```
 </div>
 
 </div>
