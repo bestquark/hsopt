@@ -134,6 +134,12 @@ def cmd_restore(args: argparse.Namespace) -> int:
     return proc.returncode
 
 
+def cmd_extrapolate_femoco(args: argparse.Namespace) -> int:
+    from .extrapolate import run_extrapolate_cli
+
+    return run_extrapolate_cli(args)
+
+
 def add_lane_args(parser: argparse.ArgumentParser) -> None:
     parser.add_argument(
         "target",
@@ -189,6 +195,15 @@ def build_parser() -> argparse.ArgumentParser:
     restore.add_argument("--script")
     restore.add_argument("--print-only", action="store_true")
     restore.set_defaults(func=cmd_restore)
+
+    extrapolate = sub.add_parser(
+        "extrapolate-femoco",
+        help="Extrapolate observed T-gate gains to a FeMoco-sized active space.",
+    )
+    from .extrapolate import build_extrapolate_parser
+
+    build_extrapolate_parser(extrapolate)
+    extrapolate.set_defaults(func=cmd_extrapolate_femoco)
 
     return parser
 

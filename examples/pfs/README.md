@@ -57,6 +57,23 @@ uv run hsopt status examples/pfs/h2
 uv run hsopt prompt examples/pfs/h2 --evaluator fidelity --epsilon 1e-3
 ```
 
+Extrapolate observed autoresearch T-gate gains to a FeMoco-sized active space:
+
+```bash
+uv run hsopt extrapolate-femoco --target-baseline-t-count 1e12 \
+  --plot runs/femoco_extrapolation_uncertainty.svg
+```
+
+By default this reads local campaign `events.jsonl` files under
+`remote_sleepy_runs_20260506_cupynumeric/` when that ignored run-artifact tree is
+present, fits a Bayesian linear regression for log gain factor, reports a
+posterior interval, and can write an SVG uncertainty plot. Use `--gain-table`
+for hand-curated records with `molecule`, `baseline_t_count`, and
+`optimized_t_count`, and override FeMoco assumptions with flags such as
+`--active-orbitals`, `--n-qubits`, and `--total-pauli-rotation-terms`. If the
+target Pauli term count is not supplied, the CLI uses `active_orbitals**4` as a
+rough feature value for extrapolation.
+
 ## Autoresearch Campaign
 
 The experiment grid for the large-molecule benchmarks is:
