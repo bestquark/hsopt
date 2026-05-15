@@ -1,3 +1,7 @@
+<p align="center">
+  <img src="docs/assets/hsopt-logo.png" alt="HsOpt logo" width="760">
+</p>
+
 # hsopt
 
 Hamiltonian-simulation T-gate optimization with fixed fault-tolerant chemistry
