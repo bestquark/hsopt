@@ -34,11 +34,18 @@ def default_seed_prompt() -> str:
     return """You are optimizing product-formula synthesis precision for lower compiled T count.
 
 Focus on simple, auditable changes in `simple_pf.py`:
-- group Pauli terms by label family, support size, coefficient magnitude, and angle scale
+- use Hamiltonian term metadata in `choose_synthesis_epsilon`: Pauli label,
+  coefficient magnitude, support size, Pauli-family counts, and actual
+  per-application rotation angle
+- group or reorder Pauli terms by label family, support size, coefficient
+  bands, Z-only versus mixed X/Y/Z structure, or alternating large/small
+  coefficients when the method exposes an ordering hook
 - relax epsilons for low-impact terms first
-- tighten only the terms implicated by failed accuracy diagnostics
+- tighten only the term families or coefficient/angle bands implicated by
+  failed accuracy diagnostics
 - prefer broad policy changes over one-off cosmetic edits
-- keep `n_steps` fixed unless exact PF1 diagnostics show the product formula itself is failing
+- keep `n_steps` and `formula_order` fixed unless diagnostics show the product
+  formula error itself is limiting
 
 After each scored run, interpret `t_gate_count`, `passes_accuracy_constraint`,
 `ground_state_energy_error_hartree` or `fidelity`, and the synthesis epsilon

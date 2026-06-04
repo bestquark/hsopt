@@ -50,14 +50,35 @@ Goal:
 - minimize the evaluator's lower-is-better `score`
 - in practice, reduce compiled `t_gate_count`
 - preserve the fixed accuracy contract reported by the selected evaluator
+- for product-formula lanes, use Hamiltonian-aware precision and ordering
+  policies instead of only changing scalar config values
 
 Mutation loop:
 1. Edit only `{repo_relative(lane.editable_script)}` unless the user explicitly changes scope.
-2. Make one coherent precision-policy mutation.
+2. Inspect the editable product-formula API before editing. Prefer one coherent
+   Hamiltonian-aware mutation:
+   - structured synthesis precision in `choose_synthesis_epsilon(term, alpha, step_index, config)`
+   - term ordering/grouping when the method exposes `term_order_strategy`,
+     `order_product_formula_terms`, or an equivalent local hook
+   - PF order/step-count changes only when the error budget indicates PF error is limiting
 3. Score it with:
    `{eval_command}`
 4. Read the JSON result before choosing the next mutation.
-5. Keep campaign history in the external run directory used by the caller. The simplified `pfs/` tree contains only benchmark definitions and fixed evaluators.
+5. If changing formula order or PF steps, check that `scheduled_rotation_count`,
+   `nonzero_rotation_count`, and `t_gate_count` scale with the added rotations.
+6. Keep campaign history in the external run directory used by the caller. The simplified `pfs/` tree contains only benchmark definitions and fixed evaluators.
+
+Product-formula search guidance:
+- `choose_synthesis_epsilon` usually receives Hamiltonian term metadata such as
+  Pauli label, coefficient, support size, and Pauli-family counts, plus the
+  actual per-application rotation coefficient `alpha`. Use those fields to
+  allocate looser precision to low-impact rotations and tighter precision where
+  accuracy is likely to matter.
+- Reorder/group terms deterministically by coefficient bands, support/locality,
+  Z-only versus mixed X/Y/Z terms, Pauli family, or alternating large/small
+  coefficient patterns when the lane exposes an ordering hook.
+- Do not drop terms, change coefficients, edit evaluator code, or use random
+  search. Keep the policy small enough to audit.
 """
 
 

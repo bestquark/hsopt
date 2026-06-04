@@ -37,10 +37,14 @@ accepts legacy shorthand targets such as `pfs/h2`.
 1. Read the lane status and choose `--evaluator energy` or `--evaluator fidelity`.
 2. Edit only the lane's `simple_pf.py` unless the user explicitly changes the
    benchmark framework.
-3. Make one coherent precision-policy mutation.
-4. Run exactly one fixed evaluator command.
-5. Read the JSON result before choosing the next mutation.
-6. Preserve campaign history in the external run directory used by the caller.
+3. Inspect the product-formula API exposed by that file before editing:
+   `ProductFormulaConfig`, `choose_synthesis_epsilon`, term-order fields, and
+   any custom order hook.
+4. Make one coherent Hamiltonian-aware mutation: synthesis precision, term
+   ordering/grouping, or PF order/step count when the error budget justifies it.
+5. Run exactly one fixed evaluator command.
+6. Read the JSON result before choosing the next mutation.
+7. Preserve campaign history in the external run directory used by the caller.
 
 ## Canonical Commands
 
@@ -80,9 +84,28 @@ Prefer simple precision policies that are easy to audit:
 - Pauli label families (`XXYY`, `ZZ`, single-`Z`, etc.)
 - support size
 - coefficient magnitude
-- per-step angle magnitude
+- per-application rotation angle magnitude, usually available as `alpha`
 - grouped epsilon buckets
 - targeted tightening for terms implicated by failed accuracy diagnostics
+- product-formula term ordering when the benchmark exposes it, for example
+  reordering by coefficient magnitude, support size, Pauli family, or a
+  symmetric large/small interleaving before applying PF1/PF2 sweeps
+- custom deterministic term-order hooks such as
+  `order_product_formula_terms(terms, config)` when present or explicitly
+  allowed by the benchmark
+
+For product-formula lanes, do not default to scalar-only edits of
+`formula_order`, `n_steps`, or `uniform_epsilon`. First check whether
+`choose_synthesis_epsilon(term, alpha, step_index, config)` receives
+Hamiltonian metadata such as Pauli label, coefficient, support size, and
+Pauli-family counts. Use those features to loosen synthesis precision for
+low-impact terms and tighten only where the error budget needs it.
+
+Changing product-formula order or the number of PF steps is allowed only when
+the method file already exposes those knobs or the user explicitly requests it.
+When doing so, verify that the reported `nonzero_rotation_count`,
+`scheduled_rotation_count`, and `t_gate_count` reflect the additional rotations
+introduced by the higher-order formula or extra steps.
 
 Avoid scripted sweeps, future-result batching, evaluator edits, chemistry
 changes, and long stretches of tiny one-label tweaks after progress stalls.
