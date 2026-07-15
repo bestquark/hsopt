@@ -1,13 +1,7 @@
-<p align="center">
-  <img src="docs/assets/hsopt-logo.png" alt="HsOpt logo" width="760">
-</p>
-
 # hsopt
 
 Hamiltonian-simulation T-gate optimization with fixed fault-tolerant chemistry
 benchmarks and agent-friendly mutation loops.
-
-Showroom: https://bestquark.github.io/hsopt/ (`hsopt2026`)
 
 `main` is intentionally narrow. It keeps the product-formula benchmark
 definition in `examples/pfs/` and the two repo skills that operate
@@ -17,6 +11,10 @@ on those lanes:
   evaluator.
 - `$hsgepa`: GEPA prompt optimization for the agent strategy that drives those
   mutation runs.
+
+Raw campaign workspaces stay outside the benchmark tree. Only compact,
+completion-gated results for the five 121-Hamiltonian campaigns and the ten
+reaction comparisons belong on `main`.
 
 The older CPU/GPU/QPU constraint framework, GPU-memory experiments, generic
 telemetry APIs, broad protocol examples, and large run artifacts are preserved
@@ -139,7 +137,8 @@ scripts and lane wrappers keep working while the repo/package identity moves to
 `hsopt`.
 
 The old Python CLI aliases `t-autoresearch` and `t-gepa` are still registered
-for existing scripts, but new docs and skills use `hsopt` and `hsgepa`.
+for existing scripts, but the primary commands and skills use `hsopt` and
+`hsgepa`.
 
 ## License
 
