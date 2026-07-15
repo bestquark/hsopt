@@ -1,0 +1,277 @@
+{
+  "direct_budgets_mha": [
+    0.025,
+    0.05,
+    0.1,
+    0.2,
+    0.4,
+    0.8,
+    1.6,
+    3.2,
+    6.4,
+    12.8,
+    25.6
+  ],
+  "experiment": "pf_reaction_error_cancellation_candidates",
+  "n_steps": 512,
+  "reaction_keys": [
+    "hcn_hnc",
+    "hco_hoc_cation",
+    "hno_noh",
+    "h2co_hcoh",
+    "acetylene_vinylidene",
+    "h2_cl2_hcl",
+    "n2_h2_nh3",
+    "co_h2o_co2_h2",
+    "h2_f2_hf",
+    "co_h2_ch4_h2o"
+  ],
+  "reaction_target_mha": 1.5936014376405157,
+  "reactions": {
+    "acetylene_vinylidene": {
+      "label": "HCCH -> H2CC",
+      "product": "vinylidene",
+      "rationale": "Same-formula valence isomerization; the two Hamiltonians share size and many structural features.",
+      "reactant": "acetylene",
+      "species": [
+        "acetylene",
+        "vinylidene"
+      ],
+      "terms": [
+        {
+          "coefficient": -1.0,
+          "species": "acetylene"
+        },
+        {
+          "coefficient": 1.0,
+          "species": "vinylidene"
+        }
+      ]
+    },
+    "co_h2_ch4_h2o": {
+      "label": "CO + 3 H2 -> CH4 + H2O",
+      "product": "ch4+h2o",
+      "rationale": "Closed-shell CO methanation stoichiometry selected as a second balanced small-molecule reaction.",
+      "reactant": "co+3h2",
+      "species": [
+        "co",
+        "h2",
+        "ch4",
+        "h2o"
+      ],
+      "terms": [
+        {
+          "coefficient": -1.0,
+          "species": "co"
+        },
+        {
+          "coefficient": -3.0,
+          "species": "h2"
+        },
+        {
+          "coefficient": 1.0,
+          "species": "ch4"
+        },
+        {
+          "coefficient": 1.0,
+          "species": "h2o"
+        }
+      ]
+    },
+    "co_h2o_co2_h2": {
+      "label": "CO + H2O -> CO2 + H2",
+      "product": "co2+h2",
+      "rationale": "Closed-shell water-gas-shift stoichiometry requested by the user.",
+      "reactant": "co+h2o",
+      "species": [
+        "co",
+        "h2o",
+        "co2",
+        "h2"
+      ],
+      "terms": [
+        {
+          "coefficient": -1.0,
+          "species": "co"
+        },
+        {
+          "coefficient": -1.0,
+          "species": "h2o"
+        },
+        {
+          "coefficient": 1.0,
+          "species": "co2"
+        },
+        {
+          "coefficient": 1.0,
+          "species": "h2"
+        }
+      ]
+    },
+    "h2_cl2_hcl": {
+      "label": "H2 + Cl2 -> 2 HCl",
+      "product": "hcl",
+      "rationale": "Closed-shell hydrogen-halogen reaction requested by the user; H2 uses its natural two-electron active space.",
+      "reactant": "h2+cl2",
+      "species": [
+        "h2",
+        "cl2",
+        "hcl"
+      ],
+      "terms": [
+        {
+          "coefficient": -1.0,
+          "species": "h2"
+        },
+        {
+          "coefficient": -1.0,
+          "species": "cl2"
+        },
+        {
+          "coefficient": 2.0,
+          "species": "hcl"
+        }
+      ]
+    },
+    "h2_f2_hf": {
+      "label": "H2 + F2 -> 2 HF",
+      "product": "hf",
+      "rationale": "Closed-shell hydrogen-halogen analogue selected to keep the screen small and comparable to H2 + Cl2 -> 2 HCl.",
+      "reactant": "h2+f2",
+      "species": [
+        "h2",
+        "f2",
+        "hf"
+      ],
+      "terms": [
+        {
+          "coefficient": -1.0,
+          "species": "h2"
+        },
+        {
+          "coefficient": -1.0,
+          "species": "f2"
+        },
+        {
+          "coefficient": 2.0,
+          "species": "hf"
+        }
+      ]
+    },
+    "h2co_hcoh": {
+      "label": "H2CO -> HCOH",
+      "product": "hcoh",
+      "rationale": "Same-formula carbonyl/enol-like rearrangement with shared C/O/H active chemistry.",
+      "reactant": "h2co",
+      "species": [
+        "h2co",
+        "hcoh"
+      ],
+      "terms": [
+        {
+          "coefficient": -1.0,
+          "species": "h2co"
+        },
+        {
+          "coefficient": 1.0,
+          "species": "hcoh"
+        }
+      ]
+    },
+    "hcn_hnc": {
+      "label": "HCN -> HNC",
+      "product": "hnc",
+      "rationale": "Existing three-atom isomerization baseline with matched sto-3g/CAS(6e,5o) setup.",
+      "reactant": "hcn",
+      "species": [
+        "hcn",
+        "hnc"
+      ],
+      "terms": [
+        {
+          "coefficient": -1.0,
+          "species": "hcn"
+        },
+        {
+          "coefficient": 1.0,
+          "species": "hnc"
+        }
+      ]
+    },
+    "hco_hoc_cation": {
+      "label": "HCO+ -> HOC+",
+      "product": "hoc_plus",
+      "rationale": "Linear proton-transfer/isomer pair, isoelectronic with HCN/HNC and same active-space size.",
+      "reactant": "hco_plus",
+      "species": [
+        "hco_plus",
+        "hoc_plus"
+      ],
+      "terms": [
+        {
+          "coefficient": -1.0,
+          "species": "hco_plus"
+        },
+        {
+          "coefficient": 1.0,
+          "species": "hoc_plus"
+        }
+      ]
+    },
+    "hno_noh": {
+      "label": "HNO -> NOH",
+      "product": "noh",
+      "rationale": "Small H-shift isomerization with identical atoms and the same closed-shell electron count.",
+      "reactant": "hno",
+      "species": [
+        "hno",
+        "noh"
+      ],
+      "terms": [
+        {
+          "coefficient": -1.0,
+          "species": "hno"
+        },
+        {
+          "coefficient": 1.0,
+          "species": "noh"
+        }
+      ]
+    },
+    "n2_h2_nh3": {
+      "label": "N2 + 3 H2 -> 2 NH3",
+      "product": "nh3",
+      "rationale": "Closed-shell Haber-Bosch stoichiometry requested by the user, evaluated as an active-space reaction-energy screen.",
+      "reactant": "n2+3h2",
+      "species": [
+        "n2",
+        "h2",
+        "nh3"
+      ],
+      "terms": [
+        {
+          "coefficient": -1.0,
+          "species": "n2"
+        },
+        {
+          "coefficient": -3.0,
+          "species": "h2"
+        },
+        {
+          "coefficient": 2.0,
+          "species": "nh3"
+        }
+      ]
+    }
+  },
+  "reuse_direct_results": null,
+  "script": "/Users/lmantilla/Desktop/Internship/hsopt/examples/pfs/reactions/simple_pf.py",
+  "synthesis_budgets_mha": [
+    0.32,
+    0.64,
+    1.6,
+    3.2,
+    6.4,
+    12.8
+  ]
+}

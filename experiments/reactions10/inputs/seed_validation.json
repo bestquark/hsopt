@@ -1,0 +1,2048 @@
+[
+  {
+    "additional_t_gate_decrease_percent": 6.697870178875948,
+    "evaluation_wall_seconds": 64.01038566700299,
+    "experiment": "compiled_reaction_constraint_full_space_validation",
+    "formula_order": 1,
+    "n_steps": 512,
+    "policies": {
+      "equal_share": {
+        "full_space_constraint_passes": true,
+        "full_space_point": {
+          "absolute_reaction_error_hartree": 0.0005423658539456255,
+          "absolute_reaction_error_mha": 0.5423658539456255,
+          "equal_share_error_limit_hartree": 0.0007968007188202578,
+          "equal_share_error_limit_mha": 0.7968007188202578,
+          "max_species_absolute_error_hartree": 0.00029116741210089003,
+          "max_species_absolute_error_mha": 0.29116741210089003,
+          "passes_equal_share_constraint": true,
+          "passes_full_chemical_accuracy_per_species": true,
+          "passes_reaction_constraint": true,
+          "passes_triangle_constraint": true,
+          "signed_reaction_error_hartree": -0.0005423658539456255,
+          "species": {
+            "hcn": {
+              "absolute_energy_error_hartree": 0.0002511984418447355,
+              "absolute_energy_error_mha": 0.2511984418447355,
+              "signed_energy_error_hartree": 0.0002511984418447355,
+              "signed_energy_error_mha": 0.2511984418447355,
+              "synthesis_error_budget_hartree": 0.1024,
+              "synthesis_error_budget_mha": 102.4,
+              "t_gate_count": 12367872
+            },
+            "hnc": {
+              "absolute_energy_error_hartree": 0.00029116741210089003,
+              "absolute_energy_error_mha": 0.29116741210089003,
+              "signed_energy_error_hartree": -0.00029116741210089003,
+              "signed_energy_error_mha": -0.29116741210089003,
+              "synthesis_error_budget_hartree": 0.0512,
+              "synthesis_error_budget_mha": 51.2,
+              "t_gate_count": 15854592
+            }
+          },
+          "total_t_gate_count": 28222464,
+          "triangle_bound_hartree": 0.0005423658539456255,
+          "triangle_bound_mha": 0.5423658539456255
+        },
+        "max_abs_species_signed_error_delta_mha": 4.6583252810705744e-05,
+        "projected_point": {
+          "absolute_reaction_error_hartree": 0.0005423159955029178,
+          "absolute_reaction_error_mha": 0.5423159955029178,
+          "equal_share_error_limit_hartree": 0.0007968007188202578,
+          "equal_share_error_limit_mha": 0.7968007188202578,
+          "max_species_absolute_error_hartree": 0.00029116413691099297,
+          "max_species_absolute_error_mha": 0.29116413691099297,
+          "passes_equal_share_constraint": true,
+          "passes_full_chemical_accuracy_per_species": true,
+          "passes_reaction_constraint": true,
+          "passes_triangle_constraint": true,
+          "signed_reaction_error_hartree": -0.0005423159955029178,
+          "species": {
+            "hcn": {
+              "absolute_energy_error_hartree": 0.0002511518585919248,
+              "absolute_energy_error_mha": 0.2511518585919248,
+              "signed_energy_error_hartree": 0.0002511518585919248,
+              "signed_energy_error_mha": 0.2511518585919248,
+              "synthesis_error_budget_hartree": 0.1024,
+              "synthesis_error_budget_mha": 102.4,
+              "t_gate_count": 12367872
+            },
+            "hnc": {
+              "absolute_energy_error_hartree": 0.00029116413691099297,
+              "absolute_energy_error_mha": 0.29116413691099297,
+              "signed_energy_error_hartree": -0.00029116413691099297,
+              "signed_energy_error_mha": -0.29116413691099297,
+              "synthesis_error_budget_hartree": 0.0512,
+              "synthesis_error_budget_mha": 51.2,
+              "t_gate_count": 15854592
+            }
+          },
+          "total_t_gate_count": 28222464,
+          "triangle_bound_hartree": 0.0005423159955029178,
+          "triangle_bound_mha": 0.5423159955029178
+        },
+        "species_signed_error_delta_full_minus_projected_mha": {
+          "hcn": 4.6583252810705744e-05,
+          "hnc": -3.275189897067321e-06
+        },
+        "t_count_matches_projected_search": true,
+        "validation_passes": true
+      },
+      "reaction_aware": {
+        "full_space_constraint_passes": true,
+        "full_space_point": {
+          "absolute_reaction_error_hartree": 0.0004673748108956488,
+          "absolute_reaction_error_mha": 0.4673748108956488,
+          "equal_share_error_limit_hartree": 0.0007968007188202578,
+          "equal_share_error_limit_mha": 0.7968007188202578,
+          "max_species_absolute_error_hartree": 0.0023082893542891725,
+          "max_species_absolute_error_mha": 2.3082893542891725,
+          "passes_equal_share_constraint": false,
+          "passes_full_chemical_accuracy_per_species": false,
+          "passes_reaction_constraint": true,
+          "passes_triangle_constraint": false,
+          "signed_reaction_error_hartree": -0.0004673748108956488,
+          "species": {
+            "hcn": {
+              "absolute_energy_error_hartree": 0.0018409145433935237,
+              "absolute_energy_error_mha": 1.8409145433935237,
+              "signed_energy_error_hartree": -0.0018409145433935237,
+              "signed_energy_error_mha": -1.8409145433935237,
+              "synthesis_error_budget_hartree": 0.2048,
+              "synthesis_error_budget_mha": 204.8,
+              "t_gate_count": 11375616
+            },
+            "hnc": {
+              "absolute_energy_error_hartree": 0.0023082893542891725,
+              "absolute_energy_error_mha": 2.3082893542891725,
+              "signed_energy_error_hartree": -0.0023082893542891725,
+              "signed_energy_error_mha": -2.3082893542891725,
+              "synthesis_error_budget_hartree": 0.2048,
+              "synthesis_error_budget_mha": 204.8,
+              "t_gate_count": 14956544
+            }
+          },
+          "total_t_gate_count": 26332160,
+          "triangle_bound_hartree": 0.004149203897682696,
+          "triangle_bound_mha": 4.149203897682696
+        },
+        "max_abs_species_signed_error_delta_mha": 0.0005043251860570308,
+        "projected_point": {
+          "absolute_reaction_error_hartree": 0.00046683724418983275,
+          "absolute_reaction_error_mha": 0.46683724418983275,
+          "equal_share_error_limit_hartree": 0.0007968007188202578,
+          "equal_share_error_limit_mha": 0.7968007188202578,
+          "max_species_absolute_error_hartree": 0.0023082561127694134,
+          "max_species_absolute_error_mha": 2.3082561127694134,
+          "passes_equal_share_constraint": false,
+          "passes_full_chemical_accuracy_per_species": false,
+          "passes_reaction_constraint": true,
+          "passes_triangle_constraint": false,
+          "signed_reaction_error_hartree": -0.00046683724418983275,
+          "species": {
+            "hcn": {
+              "absolute_energy_error_hartree": 0.0018414188685795807,
+              "absolute_energy_error_mha": 1.8414188685795807,
+              "signed_energy_error_hartree": -0.0018414188685795807,
+              "signed_energy_error_mha": -1.8414188685795807,
+              "synthesis_error_budget_hartree": 0.2048,
+              "synthesis_error_budget_mha": 204.8,
+              "t_gate_count": 11375616
+            },
+            "hnc": {
+              "absolute_energy_error_hartree": 0.0023082561127694134,
+              "absolute_energy_error_mha": 2.3082561127694134,
+              "signed_energy_error_hartree": -0.0023082561127694134,
+              "signed_energy_error_mha": -2.3082561127694134,
+              "synthesis_error_budget_hartree": 0.2048,
+              "synthesis_error_budget_mha": 204.8,
+              "t_gate_count": 14956544
+            }
+          },
+          "total_t_gate_count": 26332160,
+          "triangle_bound_hartree": 0.004149674981348994,
+          "triangle_bound_mha": 4.149674981348994
+        },
+        "species_signed_error_delta_full_minus_projected_mha": {
+          "hcn": 0.0005043251860570308,
+          "hnc": -3.324151975903078e-05
+        },
+        "t_count_matches_projected_search": true,
+        "validation_passes": true
+      }
+    },
+    "reaction_error_target_hartree": 0.0015936014376405157,
+    "reaction_error_target_mha": 1.5936014376405157,
+    "reaction_key": "hcn_hnc",
+    "reaction_label": "HCN -> HNC",
+    "validation_passes": true
+  },
+  {
+    "additional_t_gate_decrease_percent": 12.60419127324267,
+    "evaluation_wall_seconds": 66.37527191700065,
+    "experiment": "compiled_reaction_constraint_full_space_validation",
+    "formula_order": 1,
+    "n_steps": 512,
+    "policies": {
+      "equal_share": {
+        "full_space_constraint_passes": true,
+        "full_space_point": {
+          "absolute_reaction_error_hartree": 0.0011002523884826587,
+          "absolute_reaction_error_mha": 1.1002523884826587,
+          "equal_share_error_limit_hartree": 0.0007968007188202578,
+          "equal_share_error_limit_mha": 0.7968007188202578,
+          "max_species_absolute_error_hartree": 0.0005631346656684855,
+          "max_species_absolute_error_mha": 0.5631346656684855,
+          "passes_equal_share_constraint": true,
+          "passes_full_chemical_accuracy_per_species": true,
+          "passes_reaction_constraint": true,
+          "passes_triangle_constraint": true,
+          "signed_reaction_error_hartree": -0.0011002523884826587,
+          "species": {
+            "hco_plus": {
+              "absolute_energy_error_hartree": 0.0005371177228141732,
+              "absolute_energy_error_mha": 0.5371177228141732,
+              "signed_energy_error_hartree": 0.0005371177228141732,
+              "signed_energy_error_mha": 0.5371177228141732,
+              "synthesis_error_budget_hartree": 0.0512,
+              "synthesis_error_budget_mha": 51.2,
+              "t_gate_count": 15064064
+            },
+            "hoc_plus": {
+              "absolute_energy_error_hartree": 0.0005631346656684855,
+              "absolute_energy_error_mha": 0.5631346656684855,
+              "signed_energy_error_hartree": -0.0005631346656684855,
+              "signed_energy_error_mha": -0.5631346656684855,
+              "synthesis_error_budget_hartree": 0.1024,
+              "synthesis_error_budget_mha": 102.4,
+              "t_gate_count": 15280128
+            }
+          },
+          "total_t_gate_count": 30344192,
+          "triangle_bound_hartree": 0.0011002523884826587,
+          "triangle_bound_mha": 1.1002523884826587
+        },
+        "max_abs_species_signed_error_delta_mha": 2.4495903971910593e-05,
+        "projected_point": {
+          "absolute_reaction_error_hartree": 0.0011002235262367321,
+          "absolute_reaction_error_mha": 1.1002235262367321,
+          "equal_share_error_limit_hartree": 0.0007968007188202578,
+          "equal_share_error_limit_mha": 0.7968007188202578,
+          "max_species_absolute_error_hartree": 0.0005631302993265308,
+          "max_species_absolute_error_mha": 0.5631302993265308,
+          "passes_equal_share_constraint": true,
+          "passes_full_chemical_accuracy_per_species": true,
+          "passes_reaction_constraint": true,
+          "passes_triangle_constraint": true,
+          "signed_reaction_error_hartree": -0.0011002235262367321,
+          "species": {
+            "hco_plus": {
+              "absolute_energy_error_hartree": 0.0005370932269102013,
+              "absolute_energy_error_mha": 0.5370932269102013,
+              "signed_energy_error_hartree": 0.0005370932269102013,
+              "signed_energy_error_mha": 0.5370932269102013,
+              "synthesis_error_budget_hartree": 0.0512,
+              "synthesis_error_budget_mha": 51.2,
+              "t_gate_count": 15064064
+            },
+            "hoc_plus": {
+              "absolute_energy_error_hartree": 0.0005631302993265308,
+              "absolute_energy_error_mha": 0.5631302993265308,
+              "signed_energy_error_hartree": -0.0005631302993265308,
+              "signed_energy_error_mha": -0.5631302993265308,
+              "synthesis_error_budget_hartree": 0.1024,
+              "synthesis_error_budget_mha": 102.4,
+              "t_gate_count": 15280128
+            }
+          },
+          "total_t_gate_count": 30344192,
+          "triangle_bound_hartree": 0.0011002235262367321,
+          "triangle_bound_mha": 1.1002235262367321
+        },
+        "species_signed_error_delta_full_minus_projected_mha": {
+          "hco_plus": 2.4495903971910593e-05,
+          "hoc_plus": -4.3663419546646765e-06
+        },
+        "t_count_matches_projected_search": true,
+        "validation_passes": true
+      },
+      "reaction_aware": {
+        "full_space_constraint_passes": true,
+        "full_space_point": {
+          "absolute_reaction_error_hartree": 0.0003954573622877433,
+          "absolute_reaction_error_mha": 0.3954573622877433,
+          "equal_share_error_limit_hartree": 0.0007968007188202578,
+          "equal_share_error_limit_mha": 0.7968007188202578,
+          "max_species_absolute_error_hartree": 0.0042012789385523774,
+          "max_species_absolute_error_mha": 4.201278938552377,
+          "passes_equal_share_constraint": false,
+          "passes_full_chemical_accuracy_per_species": false,
+          "passes_reaction_constraint": true,
+          "passes_triangle_constraint": false,
+          "signed_reaction_error_hartree": -0.0003954573622877433,
+          "species": {
+            "hco_plus": {
+              "absolute_energy_error_hartree": 0.0042012789385523774,
+              "absolute_energy_error_mha": 4.201278938552377,
+              "signed_energy_error_hartree": 0.0042012789385523774,
+              "signed_energy_error_mha": 4.201278938552377,
+              "synthesis_error_budget_hartree": 0.4096,
+              "synthesis_error_budget_mha": 409.6,
+              "t_gate_count": 11781120
+            },
+            "hoc_plus": {
+              "absolute_energy_error_hartree": 0.003805821576264634,
+              "absolute_energy_error_mha": 3.805821576264634,
+              "signed_energy_error_hartree": 0.003805821576264634,
+              "signed_energy_error_mha": 3.805821576264634,
+              "synthesis_error_budget_hartree": 0.2048,
+              "synthesis_error_budget_mha": 204.8,
+              "t_gate_count": 14738432
+            }
+          },
+          "total_t_gate_count": 26519552,
+          "triangle_bound_hartree": 0.008007100514817012,
+          "triangle_bound_mha": 8.007100514817012
+        },
+        "max_abs_species_signed_error_delta_mha": 0.0017581983513537125,
+        "projected_point": {
+          "absolute_reaction_error_hartree": 0.0003937241865799024,
+          "absolute_reaction_error_mha": 0.3937241865799024,
+          "equal_share_error_limit_hartree": 0.0007968007188202578,
+          "equal_share_error_limit_mha": 0.7968007188202578,
+          "max_species_absolute_error_hartree": 0.004199520740201024,
+          "max_species_absolute_error_mha": 4.199520740201024,
+          "passes_equal_share_constraint": false,
+          "passes_full_chemical_accuracy_per_species": false,
+          "passes_reaction_constraint": true,
+          "passes_triangle_constraint": false,
+          "signed_reaction_error_hartree": -0.0003937241865799024,
+          "species": {
+            "hco_plus": {
+              "absolute_energy_error_hartree": 0.004199520740201024,
+              "absolute_energy_error_mha": 4.199520740201024,
+              "signed_energy_error_hartree": 0.004199520740201024,
+              "signed_energy_error_mha": 4.199520740201024,
+              "synthesis_error_budget_hartree": 0.4096,
+              "synthesis_error_budget_mha": 409.6,
+              "t_gate_count": 11781120
+            },
+            "hoc_plus": {
+              "absolute_energy_error_hartree": 0.0038057965536211213,
+              "absolute_energy_error_mha": 3.8057965536211213,
+              "signed_energy_error_hartree": 0.0038057965536211213,
+              "signed_energy_error_mha": 3.8057965536211213,
+              "synthesis_error_budget_hartree": 0.2048,
+              "synthesis_error_budget_mha": 204.8,
+              "t_gate_count": 14738432
+            }
+          },
+          "total_t_gate_count": 26519552,
+          "triangle_bound_hartree": 0.008005317293822145,
+          "triangle_bound_mha": 8.005317293822145
+        },
+        "species_signed_error_delta_full_minus_projected_mha": {
+          "hco_plus": 0.0017581983513537125,
+          "hoc_plus": 2.502264351278427e-05
+        },
+        "t_count_matches_projected_search": true,
+        "validation_passes": true
+      }
+    },
+    "reaction_error_target_hartree": 0.0015936014376405157,
+    "reaction_error_target_mha": 1.5936014376405157,
+    "reaction_key": "hco_hoc_cation",
+    "reaction_label": "HCO+ -> HOC+",
+    "validation_passes": true
+  },
+  {
+    "additional_t_gate_decrease_percent": 12.208668752416775,
+    "evaluation_wall_seconds": 71.59134058299242,
+    "experiment": "compiled_reaction_constraint_full_space_validation",
+    "formula_order": 1,
+    "n_steps": 512,
+    "policies": {
+      "equal_share": {
+        "full_space_constraint_passes": true,
+        "full_space_point": {
+          "absolute_reaction_error_hartree": 0.000663660692225676,
+          "absolute_reaction_error_mha": 0.663660692225676,
+          "equal_share_error_limit_hartree": 0.0007968007188202578,
+          "equal_share_error_limit_mha": 0.7968007188202578,
+          "max_species_absolute_error_hartree": 0.00048766648961873216,
+          "max_species_absolute_error_mha": 0.48766648961873216,
+          "passes_equal_share_constraint": true,
+          "passes_full_chemical_accuracy_per_species": true,
+          "passes_reaction_constraint": true,
+          "passes_triangle_constraint": true,
+          "signed_reaction_error_hartree": 0.000663660692225676,
+          "species": {
+            "hno": {
+              "absolute_energy_error_hartree": 0.00048766648961873216,
+              "absolute_energy_error_mha": 0.48766648961873216,
+              "signed_energy_error_hartree": -0.00048766648961873216,
+              "signed_energy_error_mha": -0.48766648961873216,
+              "synthesis_error_budget_hartree": 0.4096,
+              "synthesis_error_budget_mha": 409.6,
+              "t_gate_count": 13244416
+            },
+            "noh": {
+              "absolute_energy_error_hartree": 0.00017599420260694387,
+              "absolute_energy_error_mha": 0.17599420260694387,
+              "signed_energy_error_hartree": 0.00017599420260694387,
+              "signed_energy_error_mha": 0.17599420260694387,
+              "synthesis_error_budget_hartree": 0.1024,
+              "synthesis_error_budget_mha": 102.4,
+              "t_gate_count": 15885312
+            }
+          },
+          "total_t_gate_count": 29129728,
+          "triangle_bound_hartree": 0.000663660692225676,
+          "triangle_bound_mha": 0.663660692225676
+        },
+        "max_abs_species_signed_error_delta_mha": 0.0007233018379793066,
+        "projected_point": {
+          "absolute_reaction_error_hartree": 0.000662965222687717,
+          "absolute_reaction_error_mha": 0.662965222687717,
+          "equal_share_error_limit_hartree": 0.0007968007188202578,
+          "equal_share_error_limit_mha": 0.7968007188202578,
+          "max_species_absolute_error_hartree": 0.00048694318778075285,
+          "max_species_absolute_error_mha": 0.48694318778075285,
+          "passes_equal_share_constraint": true,
+          "passes_full_chemical_accuracy_per_species": true,
+          "passes_reaction_constraint": true,
+          "passes_triangle_constraint": true,
+          "signed_reaction_error_hartree": 0.000662965222687717,
+          "species": {
+            "hno": {
+              "absolute_energy_error_hartree": 0.00048694318778075285,
+              "absolute_energy_error_mha": 0.48694318778075285,
+              "signed_energy_error_hartree": -0.00048694318778075285,
+              "signed_energy_error_mha": -0.48694318778075285,
+              "synthesis_error_budget_hartree": 0.4096,
+              "synthesis_error_budget_mha": 409.6,
+              "t_gate_count": 13244416
+            },
+            "noh": {
+              "absolute_energy_error_hartree": 0.0001760220349069641,
+              "absolute_energy_error_mha": 0.1760220349069641,
+              "signed_energy_error_hartree": 0.0001760220349069641,
+              "signed_energy_error_mha": 0.1760220349069641,
+              "synthesis_error_budget_hartree": 0.1024,
+              "synthesis_error_budget_mha": 102.4,
+              "t_gate_count": 15885312
+            }
+          },
+          "total_t_gate_count": 29129728,
+          "triangle_bound_hartree": 0.000662965222687717,
+          "triangle_bound_mha": 0.662965222687717
+        },
+        "species_signed_error_delta_full_minus_projected_mha": {
+          "hno": -0.0007233018379793066,
+          "noh": -2.783230002023629e-05
+        },
+        "t_count_matches_projected_search": true,
+        "validation_passes": true
+      },
+      "reaction_aware": {
+        "full_space_constraint_passes": true,
+        "full_space_point": {
+          "absolute_reaction_error_hartree": 0.0007052679659977912,
+          "absolute_reaction_error_mha": 0.7052679659977912,
+          "equal_share_error_limit_hartree": 0.0007968007188202578,
+          "equal_share_error_limit_mha": 0.7968007188202578,
+          "max_species_absolute_error_hartree": 0.0011929344556165233,
+          "max_species_absolute_error_mha": 1.1929344556165233,
+          "passes_equal_share_constraint": false,
+          "passes_full_chemical_accuracy_per_species": true,
+          "passes_reaction_constraint": true,
+          "passes_triangle_constraint": false,
+          "signed_reaction_error_hartree": -0.0007052679659977912,
+          "species": {
+            "hno": {
+              "absolute_energy_error_hartree": 0.00048766648961873216,
+              "absolute_energy_error_mha": 0.48766648961873216,
+              "signed_energy_error_hartree": -0.00048766648961873216,
+              "signed_energy_error_mha": -0.48766648961873216,
+              "synthesis_error_budget_hartree": 0.4096,
+              "synthesis_error_budget_mha": 409.6,
+              "t_gate_count": 13244416
+            },
+            "noh": {
+              "absolute_energy_error_hartree": 0.0011929344556165233,
+              "absolute_energy_error_mha": 1.1929344556165233,
+              "signed_energy_error_hartree": -0.0011929344556165233,
+              "signed_energy_error_mha": -1.1929344556165233,
+              "synthesis_error_budget_hartree": 0.4096,
+              "synthesis_error_budget_mha": 409.6,
+              "t_gate_count": 12328960
+            }
+          },
+          "total_t_gate_count": 25573376,
+          "triangle_bound_hartree": 0.0016806009452352555,
+          "triangle_bound_mha": 1.6806009452352555
+        },
+        "max_abs_species_signed_error_delta_mha": 0.0007233018379793066,
+        "projected_point": {
+          "absolute_reaction_error_hartree": 0.0007053917504151741,
+          "absolute_reaction_error_mha": 0.7053917504151741,
+          "equal_share_error_limit_hartree": 0.0007968007188202578,
+          "equal_share_error_limit_mha": 0.7968007188202578,
+          "max_species_absolute_error_hartree": 0.001192334938195927,
+          "max_species_absolute_error_mha": 1.192334938195927,
+          "passes_equal_share_constraint": false,
+          "passes_full_chemical_accuracy_per_species": true,
+          "passes_reaction_constraint": true,
+          "passes_triangle_constraint": false,
+          "signed_reaction_error_hartree": -0.0007053917504151741,
+          "species": {
+            "hno": {
+              "absolute_energy_error_hartree": 0.00048694318778075285,
+              "absolute_energy_error_mha": 0.48694318778075285,
+              "signed_energy_error_hartree": -0.00048694318778075285,
+              "signed_energy_error_mha": -0.48694318778075285,
+              "synthesis_error_budget_hartree": 0.4096,
+              "synthesis_error_budget_mha": 409.6,
+              "t_gate_count": 13244416
+            },
+            "noh": {
+              "absolute_energy_error_hartree": 0.001192334938195927,
+              "absolute_energy_error_mha": 1.192334938195927,
+              "signed_energy_error_hartree": -0.001192334938195927,
+              "signed_energy_error_mha": -1.192334938195927,
+              "synthesis_error_budget_hartree": 0.4096,
+              "synthesis_error_budget_mha": 409.6,
+              "t_gate_count": 12328960
+            }
+          },
+          "total_t_gate_count": 25573376,
+          "triangle_bound_hartree": 0.0016792781259766798,
+          "triangle_bound_mha": 1.6792781259766798
+        },
+        "species_signed_error_delta_full_minus_projected_mha": {
+          "hno": -0.0007233018379793066,
+          "noh": -0.0005995174205963849
+        },
+        "t_count_matches_projected_search": true,
+        "validation_passes": true
+      }
+    },
+    "reaction_error_target_hartree": 0.0015936014376405157,
+    "reaction_error_target_mha": 1.5936014376405157,
+    "reaction_key": "hno_noh",
+    "reaction_label": "HNO -> NOH",
+    "validation_passes": true
+  },
+  {
+    "additional_t_gate_decrease_percent": 6.415873283343163,
+    "evaluation_wall_seconds": 85.38988637502189,
+    "experiment": "compiled_reaction_constraint_full_space_validation",
+    "formula_order": 1,
+    "n_steps": 512,
+    "policies": {
+      "equal_share": {
+        "full_space_constraint_passes": true,
+        "full_space_point": {
+          "absolute_reaction_error_hartree": 0.0007303363624657777,
+          "absolute_reaction_error_mha": 0.7303363624657777,
+          "equal_share_error_limit_hartree": 0.0007968007188202578,
+          "equal_share_error_limit_mha": 0.7968007188202578,
+          "max_species_absolute_error_hartree": 0.0007962938543357723,
+          "max_species_absolute_error_mha": 0.7962938543357723,
+          "passes_equal_share_constraint": true,
+          "passes_full_chemical_accuracy_per_species": true,
+          "passes_reaction_constraint": true,
+          "passes_triangle_constraint": true,
+          "signed_reaction_error_hartree": 0.0007303363624657777,
+          "species": {
+            "h2co": {
+              "absolute_energy_error_hartree": 0.0007962938543357723,
+              "absolute_energy_error_mha": 0.7962938543357723,
+              "signed_energy_error_hartree": -0.0007962938543357723,
+              "signed_energy_error_mha": -0.7962938543357723,
+              "synthesis_error_budget_hartree": 0.1024,
+              "synthesis_error_budget_mha": 102.4,
+              "t_gate_count": 8338432
+            },
+            "hcoh": {
+              "absolute_energy_error_hartree": 6.595749186999456e-05,
+              "absolute_energy_error_mha": 0.06595749186999456,
+              "signed_energy_error_hartree": -6.595749186999456e-05,
+              "signed_energy_error_mha": -0.06595749186999456,
+              "synthesis_error_budget_hartree": 0.1024,
+              "synthesis_error_budget_mha": 102.4,
+              "t_gate_count": 15969280
+            }
+          },
+          "total_t_gate_count": 24307712,
+          "triangle_bound_hartree": 0.0008622513462057668,
+          "triangle_bound_mha": 0.8622513462057668
+        },
+        "max_abs_species_signed_error_delta_mha": 0.00044455046577240864,
+        "projected_point": {
+          "absolute_reaction_error_hartree": 0.0007299295661198357,
+          "absolute_reaction_error_mha": 0.7299295661198357,
+          "equal_share_error_limit_hartree": 0.0007968007188202578,
+          "equal_share_error_limit_mha": 0.7968007188202578,
+          "max_species_absolute_error_hartree": 0.0007958493038699999,
+          "max_species_absolute_error_mha": 0.7958493038699999,
+          "passes_equal_share_constraint": true,
+          "passes_full_chemical_accuracy_per_species": true,
+          "passes_reaction_constraint": true,
+          "passes_triangle_constraint": true,
+          "signed_reaction_error_hartree": 0.0007299295661198357,
+          "species": {
+            "h2co": {
+              "absolute_energy_error_hartree": 0.0007958493038699999,
+              "absolute_energy_error_mha": 0.7958493038699999,
+              "signed_energy_error_hartree": -0.0007958493038699999,
+              "signed_energy_error_mha": -0.7958493038699999,
+              "synthesis_error_budget_hartree": 0.1024,
+              "synthesis_error_budget_mha": 102.4,
+              "t_gate_count": 8338432
+            },
+            "hcoh": {
+              "absolute_energy_error_hartree": 6.591973775016413e-05,
+              "absolute_energy_error_mha": 0.06591973775016413,
+              "signed_energy_error_hartree": -6.591973775016413e-05,
+              "signed_energy_error_mha": -0.06591973775016413,
+              "synthesis_error_budget_hartree": 0.1024,
+              "synthesis_error_budget_mha": 102.4,
+              "t_gate_count": 15969280
+            }
+          },
+          "total_t_gate_count": 24307712,
+          "triangle_bound_hartree": 0.000861769041620164,
+          "triangle_bound_mha": 0.861769041620164
+        },
+        "species_signed_error_delta_full_minus_projected_mha": {
+          "h2co": -0.00044455046577240864,
+          "hcoh": -3.7754119830424315e-05
+        },
+        "t_count_matches_projected_search": true,
+        "validation_passes": true
+      },
+      "reaction_aware": {
+        "full_space_constraint_passes": true,
+        "full_space_point": {
+          "absolute_reaction_error_hartree": 8.268995307503246e-05,
+          "absolute_reaction_error_mha": 0.08268995307503246,
+          "equal_share_error_limit_hartree": 0.0007968007188202578,
+          "equal_share_error_limit_mha": 0.7968007188202578,
+          "max_species_absolute_error_hartree": 0.002079323740133532,
+          "max_species_absolute_error_mha": 2.079323740133532,
+          "passes_equal_share_constraint": false,
+          "passes_full_chemical_accuracy_per_species": false,
+          "passes_reaction_constraint": true,
+          "passes_triangle_constraint": false,
+          "signed_reaction_error_hartree": 8.268995307503246e-05,
+          "species": {
+            "h2co": {
+              "absolute_energy_error_hartree": 0.002079323740133532,
+              "absolute_energy_error_mha": 2.079323740133532,
+              "signed_energy_error_hartree": -0.002079323740133532,
+              "signed_energy_error_mha": -2.079323740133532,
+              "synthesis_error_budget_hartree": 0.2048,
+              "synthesis_error_budget_mha": 204.8,
+              "t_gate_count": 7799808
+            },
+            "hcoh": {
+              "absolute_energy_error_hartree": 0.0019966337870584994,
+              "absolute_energy_error_mha": 1.9966337870584994,
+              "signed_energy_error_hartree": -0.0019966337870584994,
+              "signed_energy_error_mha": -1.9966337870584994,
+              "synthesis_error_budget_hartree": 0.2048,
+              "synthesis_error_budget_mha": 204.8,
+              "t_gate_count": 14948352
+            }
+          },
+          "total_t_gate_count": 22748160,
+          "triangle_bound_hartree": 0.004075957527192031,
+          "triangle_bound_mha": 4.075957527192031
+        },
+        "max_abs_species_signed_error_delta_mha": 0.0003320916732718615,
+        "projected_point": {
+          "absolute_reaction_error_hartree": 8.253996327312052e-05,
+          "absolute_reaction_error_mha": 0.08253996327312052,
+          "equal_share_error_limit_hartree": 0.0007968007188202578,
+          "equal_share_error_limit_mha": 0.7968007188202578,
+          "max_species_absolute_error_hartree": 0.00207899164846026,
+          "max_species_absolute_error_mha": 2.07899164846026,
+          "passes_equal_share_constraint": false,
+          "passes_full_chemical_accuracy_per_species": false,
+          "passes_reaction_constraint": true,
+          "passes_triangle_constraint": false,
+          "signed_reaction_error_hartree": 8.253996327312052e-05,
+          "species": {
+            "h2co": {
+              "absolute_energy_error_hartree": 0.00207899164846026,
+              "absolute_energy_error_mha": 2.07899164846026,
+              "signed_energy_error_hartree": -0.00207899164846026,
+              "signed_energy_error_mha": -2.07899164846026,
+              "synthesis_error_budget_hartree": 0.2048,
+              "synthesis_error_budget_mha": 204.8,
+              "t_gate_count": 7799808
+            },
+            "hcoh": {
+              "absolute_energy_error_hartree": 0.0019964516851871394,
+              "absolute_energy_error_mha": 1.9964516851871394,
+              "signed_energy_error_hartree": -0.0019964516851871394,
+              "signed_energy_error_mha": -1.9964516851871394,
+              "synthesis_error_budget_hartree": 0.2048,
+              "synthesis_error_budget_mha": 204.8,
+              "t_gate_count": 14948352
+            }
+          },
+          "total_t_gate_count": 22748160,
+          "triangle_bound_hartree": 0.004075443333647399,
+          "triangle_bound_mha": 4.075443333647399
+        },
+        "species_signed_error_delta_full_minus_projected_mha": {
+          "h2co": -0.0003320916732718615,
+          "hcoh": -0.00018210187135991873
+        },
+        "t_count_matches_projected_search": true,
+        "validation_passes": true
+      }
+    },
+    "reaction_error_target_hartree": 0.0015936014376405157,
+    "reaction_error_target_mha": 1.5936014376405157,
+    "reaction_key": "h2co_hcoh",
+    "reaction_label": "H2CO -> HCOH",
+    "validation_passes": true
+  },
+  {
+    "additional_t_gate_decrease_percent": 9.448972937724161,
+    "evaluation_wall_seconds": 53.12831112497952,
+    "experiment": "compiled_reaction_constraint_full_space_validation",
+    "formula_order": 1,
+    "n_steps": 512,
+    "policies": {
+      "equal_share": {
+        "full_space_constraint_passes": true,
+        "full_space_point": {
+          "absolute_reaction_error_hartree": 0.00017789275383961467,
+          "absolute_reaction_error_mha": 0.17789275383961467,
+          "equal_share_error_limit_hartree": 0.0007968007188202578,
+          "equal_share_error_limit_mha": 0.7968007188202578,
+          "max_species_absolute_error_hartree": 9.374819809693236e-05,
+          "max_species_absolute_error_mha": 0.09374819809693236,
+          "passes_equal_share_constraint": true,
+          "passes_full_chemical_accuracy_per_species": true,
+          "passes_reaction_constraint": true,
+          "passes_triangle_constraint": true,
+          "signed_reaction_error_hartree": -0.00017789275383961467,
+          "species": {
+            "acetylene": {
+              "absolute_energy_error_hartree": 8.414455574268231e-05,
+              "absolute_energy_error_mha": 0.08414455574268231,
+              "signed_energy_error_hartree": 8.414455574268231e-05,
+              "signed_energy_error_mha": 0.08414455574268231,
+              "synthesis_error_budget_hartree": 0.1024,
+              "synthesis_error_budget_mha": 102.4,
+              "t_gate_count": 6475776
+            },
+            "vinylidene": {
+              "absolute_energy_error_hartree": 9.374819809693236e-05,
+              "absolute_energy_error_mha": 0.09374819809693236,
+              "signed_energy_error_hartree": -9.374819809693236e-05,
+              "signed_energy_error_mha": -0.09374819809693236,
+              "synthesis_error_budget_hartree": 0.0256,
+              "synthesis_error_budget_mha": 25.6,
+              "t_gate_count": 9227264
+            }
+          },
+          "total_t_gate_count": 15703040,
+          "triangle_bound_hartree": 0.00017789275383961467,
+          "triangle_bound_mha": 0.17789275383961467
+        },
+        "max_abs_species_signed_error_delta_mha": 2.939125920420338e-05,
+        "projected_point": {
+          "absolute_reaction_error_hartree": 0.00017786473929959357,
+          "absolute_reaction_error_mha": 0.17786473929959357,
+          "equal_share_error_limit_hartree": 0.0007968007188202578,
+          "equal_share_error_limit_mha": 0.7968007188202578,
+          "max_species_absolute_error_hartree": 9.374957481611546e-05,
+          "max_species_absolute_error_mha": 0.09374957481611546,
+          "passes_equal_share_constraint": true,
+          "passes_full_chemical_accuracy_per_species": true,
+          "passes_reaction_constraint": true,
+          "passes_triangle_constraint": true,
+          "signed_reaction_error_hartree": -0.00017786473929959357,
+          "species": {
+            "acetylene": {
+              "absolute_energy_error_hartree": 8.411516448347811e-05,
+              "absolute_energy_error_mha": 0.08411516448347811,
+              "signed_energy_error_hartree": 8.411516448347811e-05,
+              "signed_energy_error_mha": 0.08411516448347811,
+              "synthesis_error_budget_hartree": 0.1024,
+              "synthesis_error_budget_mha": 102.4,
+              "t_gate_count": 6475776
+            },
+            "vinylidene": {
+              "absolute_energy_error_hartree": 9.374957481611546e-05,
+              "absolute_energy_error_mha": 0.09374957481611546,
+              "signed_energy_error_hartree": -9.374957481611546e-05,
+              "signed_energy_error_mha": -0.09374957481611546,
+              "synthesis_error_budget_hartree": 0.0256,
+              "synthesis_error_budget_mha": 25.6,
+              "t_gate_count": 9227264
+            }
+          },
+          "total_t_gate_count": 15703040,
+          "triangle_bound_hartree": 0.00017786473929959357,
+          "triangle_bound_mha": 0.17786473929959357
+        },
+        "species_signed_error_delta_full_minus_projected_mha": {
+          "acetylene": 2.939125920420338e-05,
+          "vinylidene": 1.3767191830993397e-06
+        },
+        "t_count_matches_projected_search": true,
+        "validation_passes": true
+      },
+      "reaction_aware": {
+        "full_space_constraint_passes": true,
+        "full_space_point": {
+          "absolute_reaction_error_hartree": 0.0001469669663691775,
+          "absolute_reaction_error_mha": 0.1469669663691775,
+          "equal_share_error_limit_hartree": 0.0007968007188202578,
+          "equal_share_error_limit_mha": 0.7968007188202578,
+          "max_species_absolute_error_hartree": 0.004751263949856366,
+          "max_species_absolute_error_mha": 4.751263949856366,
+          "passes_equal_share_constraint": false,
+          "passes_full_chemical_accuracy_per_species": false,
+          "passes_reaction_constraint": true,
+          "passes_triangle_constraint": false,
+          "signed_reaction_error_hartree": 0.0001469669663691775,
+          "species": {
+            "acetylene": {
+              "absolute_energy_error_hartree": 0.004751263949856366,
+              "absolute_energy_error_mha": 4.751263949856366,
+              "signed_energy_error_hartree": -0.004751263949856366,
+              "signed_energy_error_mha": -4.751263949856366,
+              "synthesis_error_budget_hartree": 0.2048,
+              "synthesis_error_budget_mha": 204.8,
+              "t_gate_count": 6239232
+            },
+            "vinylidene": {
+              "absolute_energy_error_hartree": 0.004604296983487188,
+              "absolute_energy_error_mha": 4.604296983487188,
+              "signed_energy_error_hartree": -0.004604296983487188,
+              "signed_energy_error_mha": -4.604296983487188,
+              "synthesis_error_budget_hartree": 0.4096,
+              "synthesis_error_budget_mha": 409.6,
+              "t_gate_count": 7980032
+            }
+          },
+          "total_t_gate_count": 14219264,
+          "triangle_bound_hartree": 0.009355560933343554,
+          "triangle_bound_mha": 9.355560933343554
+        },
+        "max_abs_species_signed_error_delta_mha": 0.0009089026065112193,
+        "projected_point": {
+          "absolute_reaction_error_hartree": 0.0001460197637896954,
+          "absolute_reaction_error_mha": 0.1460197637896954,
+          "equal_share_error_limit_hartree": 0.0007968007188202578,
+          "equal_share_error_limit_mha": 0.7968007188202578,
+          "max_species_absolute_error_hartree": 0.004751225649883395,
+          "max_species_absolute_error_mha": 4.751225649883395,
+          "passes_equal_share_constraint": false,
+          "passes_full_chemical_accuracy_per_species": false,
+          "passes_reaction_constraint": true,
+          "passes_triangle_constraint": false,
+          "signed_reaction_error_hartree": 0.0001460197637896954,
+          "species": {
+            "acetylene": {
+              "absolute_energy_error_hartree": 0.004751225649883395,
+              "absolute_energy_error_mha": 4.751225649883395,
+              "signed_energy_error_hartree": -0.004751225649883395,
+              "signed_energy_error_mha": -4.751225649883395,
+              "synthesis_error_budget_hartree": 0.2048,
+              "synthesis_error_budget_mha": 204.8,
+              "t_gate_count": 6239232
+            },
+            "vinylidene": {
+              "absolute_energy_error_hartree": 0.0046052058860936995,
+              "absolute_energy_error_mha": 4.6052058860936995,
+              "signed_energy_error_hartree": -0.0046052058860936995,
+              "signed_energy_error_mha": -4.6052058860936995,
+              "synthesis_error_budget_hartree": 0.4096,
+              "synthesis_error_budget_mha": 409.6,
+              "t_gate_count": 7980032
+            }
+          },
+          "total_t_gate_count": 14219264,
+          "triangle_bound_hartree": 0.009356431535977094,
+          "triangle_bound_mha": 9.356431535977094
+        },
+        "species_signed_error_delta_full_minus_projected_mha": {
+          "acetylene": -3.829997297088994e-05,
+          "vinylidene": 0.0009089026065112193
+        },
+        "t_count_matches_projected_search": true,
+        "validation_passes": true
+      }
+    },
+    "reaction_error_target_hartree": 0.0015936014376405157,
+    "reaction_error_target_mha": 1.5936014376405157,
+    "reaction_key": "acetylene_vinylidene",
+    "reaction_label": "HCCH -> H2CC",
+    "validation_passes": true
+  },
+  {
+    "additional_t_gate_decrease_percent": 9.336175395858708,
+    "evaluation_wall_seconds": 61.5210632920207,
+    "experiment": "compiled_reaction_constraint_full_space_validation",
+    "formula_order": 1,
+    "n_steps": 512,
+    "policies": {
+      "equal_share": {
+        "full_space_constraint_passes": true,
+        "full_space_point": {
+          "absolute_reaction_error_hartree": 0.00015314948378675197,
+          "absolute_reaction_error_mha": 0.15314948378675197,
+          "equal_share_error_limit_hartree": 0.0003984003594101289,
+          "equal_share_error_limit_mha": 0.3984003594101289,
+          "max_species_absolute_error_hartree": 0.00023157090318948192,
+          "max_species_absolute_error_mha": 0.23157090318948192,
+          "passes_equal_share_constraint": true,
+          "passes_full_chemical_accuracy_per_species": true,
+          "passes_reaction_constraint": true,
+          "passes_triangle_constraint": true,
+          "signed_reaction_error_hartree": 0.00015314948378675197,
+          "species": {
+            "cl2": {
+              "absolute_energy_error_hartree": 4.910936058877269e-05,
+              "absolute_energy_error_mha": 0.04910936058877269,
+              "signed_energy_error_hartree": 4.910936058877269e-05,
+              "signed_energy_error_mha": 0.04910936058877269,
+              "synthesis_error_budget_hartree": 0.0512,
+              "synthesis_error_budget_mha": 51.2,
+              "t_gate_count": 6976512
+            },
+            "h2": {
+              "absolute_energy_error_hartree": 0.00023157090318948192,
+              "absolute_energy_error_mha": 0.23157090318948192,
+              "signed_energy_error_hartree": -0.00023157090318948192,
+              "signed_energy_error_mha": -0.23157090318948192,
+              "synthesis_error_budget_hartree": 0.0032,
+              "synthesis_error_budget_mha": 3.2,
+              "t_gate_count": 482304
+            },
+            "hcl": {
+              "absolute_energy_error_hartree": 1.4656029406978632e-05,
+              "absolute_energy_error_mha": 0.014656029406978632,
+              "signed_energy_error_hartree": -1.4656029406978632e-05,
+              "signed_energy_error_mha": -0.014656029406978632,
+              "synthesis_error_budget_hartree": 0.1024,
+              "synthesis_error_budget_mha": 102.4,
+              "t_gate_count": 9355264
+            }
+          },
+          "total_t_gate_count": 16814080,
+          "triangle_bound_hartree": 0.0003099923225922119,
+          "triangle_bound_mha": 0.3099923225922119
+        },
+        "max_abs_species_signed_error_delta_mha": 2.580901536930469e-05,
+        "projected_point": {
+          "absolute_reaction_error_hartree": 0.00015318757846216613,
+          "absolute_reaction_error_mha": 0.15318757846216613,
+          "equal_share_error_limit_hartree": 0.0003984003594101289,
+          "equal_share_error_limit_mha": 0.3984003594101289,
+          "max_species_absolute_error_hartree": 0.0002315713122698071,
+          "max_species_absolute_error_mha": 0.2315713122698071,
+          "passes_equal_share_constraint": true,
+          "passes_full_chemical_accuracy_per_species": true,
+          "passes_reaction_constraint": true,
+          "passes_triangle_constraint": true,
+          "signed_reaction_error_hartree": 0.00015318757846216613,
+          "species": {
+            "cl2": {
+              "absolute_energy_error_hartree": 4.912329302442231e-05,
+              "absolute_energy_error_mha": 0.04912329302442231,
+              "signed_energy_error_hartree": 4.912329302442231e-05,
+              "signed_energy_error_mha": 0.04912329302442231,
+              "synthesis_error_budget_hartree": 0.0512,
+              "synthesis_error_budget_mha": 51.2,
+              "t_gate_count": 6976512
+            },
+            "h2": {
+              "absolute_energy_error_hartree": 0.0002315713122698071,
+              "absolute_energy_error_mha": 0.2315713122698071,
+              "signed_energy_error_hartree": -0.0002315713122698071,
+              "signed_energy_error_mha": -0.2315713122698071,
+              "synthesis_error_budget_hartree": 0.0032,
+              "synthesis_error_budget_mha": 3.2,
+              "t_gate_count": 482304
+            },
+            "hcl": {
+              "absolute_energy_error_hartree": 1.4630220391609328e-05,
+              "absolute_energy_error_mha": 0.014630220391609328,
+              "signed_energy_error_hartree": -1.4630220391609328e-05,
+              "signed_energy_error_mha": -0.014630220391609328,
+              "synthesis_error_budget_hartree": 0.1024,
+              "synthesis_error_budget_mha": 102.4,
+              "t_gate_count": 9355264
+            }
+          },
+          "total_t_gate_count": 16814080,
+          "triangle_bound_hartree": 0.00030995504607744806,
+          "triangle_bound_mha": 0.30995504607744806
+        },
+        "species_signed_error_delta_full_minus_projected_mha": {
+          "cl2": -1.3932435649621766e-05,
+          "h2": 4.0908032516995263e-07,
+          "hcl": -2.580901536930469e-05
+        },
+        "t_count_matches_projected_search": true,
+        "validation_passes": true
+      },
+      "reaction_aware": {
+        "full_space_constraint_passes": true,
+        "full_space_point": {
+          "absolute_reaction_error_hartree": 0.00019050664019681918,
+          "absolute_reaction_error_mha": 0.19050664019681918,
+          "equal_share_error_limit_hartree": 0.0003984003594101289,
+          "equal_share_error_limit_mha": 0.3984003594101289,
+          "max_species_absolute_error_hartree": 0.004194845183806084,
+          "max_species_absolute_error_mha": 4.194845183806084,
+          "passes_equal_share_constraint": false,
+          "passes_full_chemical_accuracy_per_species": false,
+          "passes_reaction_constraint": true,
+          "passes_triangle_constraint": false,
+          "signed_reaction_error_hartree": 0.00019050664019681918,
+          "species": {
+            "cl2": {
+              "absolute_energy_error_hartree": 0.0012519153895027557,
+              "absolute_energy_error_mha": 1.2519153895027557,
+              "signed_energy_error_hartree": -0.0012519153895027557,
+              "signed_energy_error_mha": -1.2519153895027557,
+              "synthesis_error_budget_hartree": 0.4096,
+              "synthesis_error_budget_mha": 409.6,
+              "t_gate_count": 6152192
+            },
+            "h2": {
+              "absolute_energy_error_hartree": 0.004194845183806084,
+              "absolute_energy_error_mha": 4.194845183806084,
+              "signed_energy_error_hartree": -0.004194845183806084,
+              "signed_energy_error_mha": -4.194845183806084,
+              "synthesis_error_budget_hartree": 0.0256,
+              "synthesis_error_budget_mha": 25.6,
+              "t_gate_count": 405504
+            },
+            "hcl": {
+              "absolute_energy_error_hartree": 0.0026281269665560103,
+              "absolute_energy_error_mha": 2.6281269665560103,
+              "signed_energy_error_hartree": -0.0026281269665560103,
+              "signed_energy_error_mha": -2.6281269665560103,
+              "synthesis_error_budget_hartree": 0.4096,
+              "synthesis_error_budget_mha": 409.6,
+              "t_gate_count": 8686592
+            }
+          },
+          "total_t_gate_count": 15244288,
+          "triangle_bound_hartree": 0.01070301450642086,
+          "triangle_bound_mha": 10.70301450642086
+        },
+        "max_abs_species_signed_error_delta_mha": 0.0006990018164287903,
+        "projected_point": {
+          "absolute_reaction_error_hartree": 0.00019082057021169163,
+          "absolute_reaction_error_mha": 0.19082057021169163,
+          "equal_share_error_limit_hartree": 0.0003984003594101289,
+          "equal_share_error_limit_mha": 0.3984003594101289,
+          "max_species_absolute_error_hartree": 0.00419476238120442,
+          "max_species_absolute_error_mha": 4.19476238120442,
+          "passes_equal_share_constraint": false,
+          "passes_full_chemical_accuracy_per_species": false,
+          "passes_reaction_constraint": true,
+          "passes_triangle_constraint": false,
+          "signed_reaction_error_hartree": 0.00019082057021169163,
+          "species": {
+            "cl2": {
+              "absolute_energy_error_hartree": 0.001251216387686327,
+              "absolute_energy_error_mha": 1.251216387686327,
+              "signed_energy_error_hartree": -0.001251216387686327,
+              "signed_energy_error_mha": -1.251216387686327,
+              "synthesis_error_budget_hartree": 0.4096,
+              "synthesis_error_budget_mha": 409.6,
+              "t_gate_count": 6152192
+            },
+            "h2": {
+              "absolute_energy_error_hartree": 0.00419476238120442,
+              "absolute_energy_error_mha": 4.19476238120442,
+              "signed_energy_error_hartree": -0.00419476238120442,
+              "signed_energy_error_mha": -4.19476238120442,
+              "synthesis_error_budget_hartree": 0.0256,
+              "synthesis_error_budget_mha": 25.6,
+              "t_gate_count": 405504
+            },
+            "hcl": {
+              "absolute_energy_error_hartree": 0.0026275790993395276,
+              "absolute_energy_error_mha": 2.6275790993395276,
+              "signed_energy_error_hartree": -0.0026275790993395276,
+              "signed_energy_error_mha": -2.6275790993395276,
+              "synthesis_error_budget_hartree": 0.4096,
+              "synthesis_error_budget_mha": 409.6,
+              "t_gate_count": 8686592
+            }
+          },
+          "total_t_gate_count": 15244288,
+          "triangle_bound_hartree": 0.010701136967569802,
+          "triangle_bound_mha": 10.701136967569802
+        },
+        "species_signed_error_delta_full_minus_projected_mha": {
+          "cl2": -0.0006990018164287903,
+          "h2": -8.280260166415587e-05,
+          "hcl": -0.0005478672164827003
+        },
+        "t_count_matches_projected_search": true,
+        "validation_passes": true
+      }
+    },
+    "reaction_error_target_hartree": 0.0015936014376405157,
+    "reaction_error_target_mha": 1.5936014376405157,
+    "reaction_key": "h2_cl2_hcl",
+    "reaction_label": "H2 + Cl2 -> 2 HCl",
+    "validation_passes": true
+  },
+  {
+    "additional_t_gate_decrease_percent": 10.70568700705687,
+    "evaluation_wall_seconds": 71.24505162501009,
+    "experiment": "compiled_reaction_constraint_full_space_validation",
+    "formula_order": 1,
+    "n_steps": 512,
+    "policies": {
+      "equal_share": {
+        "full_space_constraint_passes": true,
+        "full_space_point": {
+          "absolute_reaction_error_hartree": 0.0006051637539967736,
+          "absolute_reaction_error_mha": 0.6051637539967736,
+          "equal_share_error_limit_hartree": 0.00026560023960675263,
+          "equal_share_error_limit_mha": 0.2656002396067526,
+          "max_species_absolute_error_hartree": 0.00023157090318948192,
+          "max_species_absolute_error_mha": 0.23157090318948192,
+          "passes_equal_share_constraint": true,
+          "passes_full_chemical_accuracy_per_species": true,
+          "passes_reaction_constraint": true,
+          "passes_triangle_constraint": true,
+          "signed_reaction_error_hartree": 0.0006051637539967736,
+          "species": {
+            "h2": {
+              "absolute_energy_error_hartree": 0.00023157090318948192,
+              "absolute_energy_error_mha": 0.23157090318948192,
+              "signed_energy_error_hartree": -0.00023157090318948192,
+              "signed_energy_error_mha": -0.23157090318948192,
+              "synthesis_error_budget_hartree": 0.0032,
+              "synthesis_error_budget_mha": 3.2,
+              "t_gate_count": 482304
+            },
+            "n2": {
+              "absolute_energy_error_hartree": 0.0001035402491993409,
+              "absolute_energy_error_mha": 0.1035402491993409,
+              "signed_energy_error_hartree": 0.0001035402491993409,
+              "signed_energy_error_mha": 0.1035402491993409,
+              "synthesis_error_budget_hartree": 0.1024,
+              "synthesis_error_budget_mha": 102.4,
+              "t_gate_count": 6790144
+            },
+            "nh3": {
+              "absolute_energy_error_hartree": 6.995646813834355e-06,
+              "absolute_energy_error_mha": 0.006995646813834355,
+              "signed_energy_error_hartree": 6.995646813834355e-06,
+              "signed_energy_error_mha": 0.006995646813834355,
+              "synthesis_error_budget_hartree": 0.0128,
+              "synthesis_error_budget_mha": 12.8,
+              "t_gate_count": 17395712
+            }
+          },
+          "total_t_gate_count": 24668160,
+          "triangle_bound_hartree": 0.0008122442523954554,
+          "triangle_bound_mha": 0.8122442523954554
+        },
+        "max_abs_species_signed_error_delta_mha": 2.221361228293972e-05,
+        "projected_point": {
+          "absolute_reaction_error_hartree": 0.0006051874246395528,
+          "absolute_reaction_error_mha": 0.6051874246395528,
+          "equal_share_error_limit_hartree": 0.00026560023960675263,
+          "equal_share_error_limit_mha": 0.2656002396067526,
+          "max_species_absolute_error_hartree": 0.0002315713122698071,
+          "max_species_absolute_error_mha": 0.2315713122698071,
+          "passes_equal_share_constraint": true,
+          "passes_full_chemical_accuracy_per_species": true,
+          "passes_reaction_constraint": true,
+          "passes_triangle_constraint": true,
+          "signed_reaction_error_hartree": 0.0006051874246395528,
+          "species": {
+            "h2": {
+              "absolute_energy_error_hartree": 0.0002315713122698071,
+              "absolute_energy_error_mha": 0.2315713122698071,
+              "signed_energy_error_hartree": -0.0002315713122698071,
+              "signed_energy_error_mha": -0.2315713122698071,
+              "synthesis_error_budget_hartree": 0.0032,
+              "synthesis_error_budget_mha": 3.2,
+              "t_gate_count": 482304
+            },
+            "n2": {
+              "absolute_energy_error_hartree": 0.00010351803558705797,
+              "absolute_energy_error_mha": 0.10351803558705797,
+              "signed_energy_error_hartree": 0.00010351803558705797,
+              "signed_energy_error_mha": 0.10351803558705797,
+              "synthesis_error_budget_hartree": 0.1024,
+              "synthesis_error_budget_mha": 102.4,
+              "t_gate_count": 6790144
+            },
+            "nh3": {
+              "absolute_energy_error_hartree": 6.995761708594728e-06,
+              "absolute_energy_error_mha": 0.006995761708594728,
+              "signed_energy_error_hartree": 6.995761708594728e-06,
+              "signed_energy_error_mha": 0.006995761708594728,
+              "synthesis_error_budget_hartree": 0.0128,
+              "synthesis_error_budget_mha": 12.8,
+              "t_gate_count": 17395712
+            }
+          },
+          "total_t_gate_count": 24668160,
+          "triangle_bound_hartree": 0.0008122234958136687,
+          "triangle_bound_mha": 0.8122234958136687
+        },
+        "species_signed_error_delta_full_minus_projected_mha": {
+          "h2": 4.0908032516995263e-07,
+          "n2": 2.221361228293972e-05,
+          "nh3": -1.148947603724082e-07
+        },
+        "t_count_matches_projected_search": true,
+        "validation_passes": true
+      },
+      "reaction_aware": {
+        "full_space_constraint_passes": true,
+        "full_space_point": {
+          "absolute_reaction_error_hartree": 0.0008348060337626251,
+          "absolute_reaction_error_mha": 0.8348060337626251,
+          "equal_share_error_limit_hartree": 0.00026560023960675263,
+          "equal_share_error_limit_mha": 0.2656002396067526,
+          "max_species_absolute_error_hartree": 0.005114954849616993,
+          "max_species_absolute_error_mha": 5.114954849616993,
+          "passes_equal_share_constraint": false,
+          "passes_full_chemical_accuracy_per_species": false,
+          "passes_reaction_constraint": true,
+          "passes_triangle_constraint": false,
+          "signed_reaction_error_hartree": 0.0008348060337626251,
+          "species": {
+            "h2": {
+              "absolute_energy_error_hartree": 0.0030971878054240065,
+              "absolute_energy_error_mha": 3.0971878054240065,
+              "signed_energy_error_hartree": 0.0030971878054240065,
+              "signed_energy_error_mha": 3.0971878054240065,
+              "synthesis_error_budget_hartree": 0.0512,
+              "synthesis_error_budget_mha": 51.2,
+              "t_gate_count": 382976
+            },
+            "n2": {
+              "absolute_energy_error_hartree": 0.0001035402491993409,
+              "absolute_energy_error_mha": 0.1035402491993409,
+              "signed_energy_error_hartree": 0.0001035402491993409,
+              "signed_energy_error_mha": 0.1035402491993409,
+              "synthesis_error_budget_hartree": 0.1024,
+              "synthesis_error_budget_mha": 102.4,
+              "t_gate_count": 6790144
+            },
+            "nh3": {
+              "absolute_energy_error_hartree": 0.005114954849616993,
+              "absolute_energy_error_mha": 5.114954849616993,
+              "signed_energy_error_hartree": 0.005114954849616993,
+              "signed_energy_error_mha": 5.114954849616993,
+              "synthesis_error_budget_hartree": 0.2048,
+              "synthesis_error_budget_mha": 204.8,
+              "t_gate_count": 14854144
+            }
+          },
+          "total_t_gate_count": 22027264,
+          "triangle_bound_hartree": 0.019625013364705346,
+          "triangle_bound_mha": 19.625013364705346
+        },
+        "max_abs_species_signed_error_delta_mha": 0.002288536427474952,
+        "projected_point": {
+          "absolute_reaction_error_hartree": 0.0008410238828706618,
+          "absolute_reaction_error_mha": 0.8410238828706618,
+          "equal_share_error_limit_hartree": 0.00026560023960675263,
+          "equal_share_error_limit_mha": 0.2656002396067526,
+          "max_species_absolute_error_hartree": 0.005114619862723657,
+          "max_species_absolute_error_mha": 5.114619862723657,
+          "passes_equal_share_constraint": false,
+          "passes_full_chemical_accuracy_per_species": false,
+          "passes_reaction_constraint": true,
+          "passes_triangle_constraint": false,
+          "signed_reaction_error_hartree": 0.0008410238828706618,
+          "species": {
+            "h2": {
+              "absolute_energy_error_hartree": 0.0030948992689965316,
+              "absolute_energy_error_mha": 3.0948992689965316,
+              "signed_energy_error_hartree": 0.0030948992689965316,
+              "signed_energy_error_mha": 3.0948992689965316,
+              "synthesis_error_budget_hartree": 0.0512,
+              "synthesis_error_budget_mha": 51.2,
+              "t_gate_count": 382976
+            },
+            "n2": {
+              "absolute_energy_error_hartree": 0.00010351803558705797,
+              "absolute_energy_error_mha": 0.10351803558705797,
+              "signed_energy_error_hartree": 0.00010351803558705797,
+              "signed_energy_error_mha": 0.10351803558705797,
+              "synthesis_error_budget_hartree": 0.1024,
+              "synthesis_error_budget_mha": 102.4,
+              "t_gate_count": 6790144
+            },
+            "nh3": {
+              "absolute_energy_error_hartree": 0.005114619862723657,
+              "absolute_energy_error_mha": 5.114619862723657,
+              "signed_energy_error_hartree": 0.005114619862723657,
+              "signed_energy_error_mha": 5.114619862723657,
+              "synthesis_error_budget_hartree": 0.2048,
+              "synthesis_error_budget_mha": 204.8,
+              "t_gate_count": 14854144
+            }
+          },
+          "total_t_gate_count": 22027264,
+          "triangle_bound_hartree": 0.019617455568023967,
+          "triangle_bound_mha": 19.617455568023967
+        },
+        "species_signed_error_delta_full_minus_projected_mha": {
+          "h2": 0.002288536427474952,
+          "n2": 2.221361228293972e-05,
+          "nh3": 0.00033498689333555376
+        },
+        "t_count_matches_projected_search": true,
+        "validation_passes": true
+      }
+    },
+    "reaction_error_target_hartree": 0.0015936014376405157,
+    "reaction_error_target_mha": 1.5936014376405157,
+    "reaction_key": "n2_h2_nh3",
+    "reaction_label": "N2 + 3 H2 -> 2 NH3",
+    "validation_passes": true
+  },
+  {
+    "additional_t_gate_decrease_percent": 9.375397937094105,
+    "evaluation_wall_seconds": 74.30894762501703,
+    "experiment": "compiled_reaction_constraint_full_space_validation",
+    "formula_order": 1,
+    "n_steps": 512,
+    "policies": {
+      "equal_share": {
+        "full_space_constraint_passes": true,
+        "full_space_point": {
+          "absolute_reaction_error_hartree": 0.000625769506080065,
+          "absolute_reaction_error_mha": 0.625769506080065,
+          "equal_share_error_limit_hartree": 0.0003984003594101289,
+          "equal_share_error_limit_mha": 0.3984003594101289,
+          "max_species_absolute_error_hartree": 0.0002894076445443261,
+          "max_species_absolute_error_mha": 0.2894076445443261,
+          "passes_equal_share_constraint": true,
+          "passes_full_chemical_accuracy_per_species": true,
+          "passes_reaction_constraint": true,
+          "passes_triangle_constraint": true,
+          "signed_reaction_error_hartree": -0.000625769506080065,
+          "species": {
+            "co": {
+              "absolute_energy_error_hartree": 0.0002894076445443261,
+              "absolute_energy_error_mha": 0.2894076445443261,
+              "signed_energy_error_hartree": 0.0002894076445443261,
+              "signed_energy_error_mha": 0.2894076445443261,
+              "synthesis_error_budget_hartree": 0.0256,
+              "synthesis_error_budget_mha": 25.6,
+              "t_gate_count": 16530432
+            },
+            "co2": {
+              "absolute_energy_error_hartree": 0.0001392034577065715,
+              "absolute_energy_error_mha": 0.1392034577065715,
+              "signed_energy_error_hartree": 0.0001392034577065715,
+              "signed_energy_error_mha": 0.1392034577065715,
+              "synthesis_error_budget_hartree": 0.0128,
+              "synthesis_error_budget_mha": 12.8,
+              "t_gate_count": 7288832
+            },
+            "h2": {
+              "absolute_energy_error_hartree": 0.00023157090318948192,
+              "absolute_energy_error_mha": 0.23157090318948192,
+              "signed_energy_error_hartree": -0.00023157090318948192,
+              "signed_energy_error_mha": -0.23157090318948192,
+              "synthesis_error_budget_hartree": 0.0032,
+              "synthesis_error_budget_mha": 3.2,
+              "t_gate_count": 482304
+            },
+            "h2o": {
+              "absolute_energy_error_hartree": 0.00024399441605282846,
+              "absolute_energy_error_mha": 0.24399441605282846,
+              "signed_energy_error_hartree": 0.00024399441605282846,
+              "signed_energy_error_mha": 0.24399441605282846,
+              "synthesis_error_budget_hartree": 0.4096,
+              "synthesis_error_budget_mha": 409.6,
+              "t_gate_count": 7864320
+            }
+          },
+          "total_t_gate_count": 32165888,
+          "triangle_bound_hartree": 0.000904176421493208,
+          "triangle_bound_mha": 0.904176421493208
+        },
+        "max_abs_species_signed_error_delta_mha": 0.004396273482143442,
+        "projected_point": {
+          "absolute_reaction_error_hartree": 0.0006301639482160226,
+          "absolute_reaction_error_mha": 0.6301639482160226,
+          "equal_share_error_limit_hartree": 0.0003984003594101289,
+          "equal_share_error_limit_mha": 0.3984003594101289,
+          "max_species_absolute_error_hartree": 0.000289405185611713,
+          "max_species_absolute_error_mha": 0.289405185611713,
+          "passes_equal_share_constraint": true,
+          "passes_full_chemical_accuracy_per_species": true,
+          "passes_reaction_constraint": true,
+          "passes_triangle_constraint": true,
+          "signed_reaction_error_hartree": -0.0006301639482160226,
+          "species": {
+            "co": {
+              "absolute_energy_error_hartree": 0.000289405185611713,
+              "absolute_energy_error_mha": 0.289405185611713,
+              "signed_energy_error_hartree": 0.000289405185611713,
+              "signed_energy_error_mha": 0.289405185611713,
+              "synthesis_error_budget_hartree": 0.0256,
+              "synthesis_error_budget_mha": 25.6,
+              "t_gate_count": 16530432
+            },
+            "co2": {
+              "absolute_energy_error_hartree": 0.0001392032392004694,
+              "absolute_energy_error_mha": 0.1392032392004694,
+              "signed_energy_error_hartree": 0.0001392032392004694,
+              "signed_energy_error_mha": 0.1392032392004694,
+              "synthesis_error_budget_hartree": 0.0128,
+              "synthesis_error_budget_mha": 12.8,
+              "t_gate_count": 7288832
+            },
+            "h2": {
+              "absolute_energy_error_hartree": 0.0002315713122698071,
+              "absolute_energy_error_mha": 0.2315713122698071,
+              "signed_energy_error_hartree": -0.0002315713122698071,
+              "signed_energy_error_mha": -0.2315713122698071,
+              "synthesis_error_budget_hartree": 0.0032,
+              "synthesis_error_budget_mha": 3.2,
+              "t_gate_count": 482304
+            },
+            "h2o": {
+              "absolute_energy_error_hartree": 0.0002483906895349719,
+              "absolute_energy_error_mha": 0.2483906895349719,
+              "signed_energy_error_hartree": 0.0002483906895349719,
+              "signed_energy_error_mha": 0.2483906895349719,
+              "synthesis_error_budget_hartree": 0.4096,
+              "synthesis_error_budget_mha": 409.6,
+              "t_gate_count": 7864320
+            }
+          },
+          "total_t_gate_count": 32165888,
+          "triangle_bound_hartree": 0.0009085704266169614,
+          "triangle_bound_mha": 0.9085704266169614
+        },
+        "species_signed_error_delta_full_minus_projected_mha": {
+          "co": 2.458932613080833e-06,
+          "co2": 2.18506102100946e-07,
+          "h2": 4.0908032516995263e-07,
+          "h2o": -0.004396273482143442
+        },
+        "t_count_matches_projected_search": true,
+        "validation_passes": true
+      },
+      "reaction_aware": {
+        "full_space_constraint_passes": true,
+        "full_space_point": {
+          "absolute_reaction_error_hartree": 0.0009765024765591157,
+          "absolute_reaction_error_mha": 0.9765024765591157,
+          "equal_share_error_limit_hartree": 0.0003984003594101289,
+          "equal_share_error_limit_mha": 0.3984003594101289,
+          "max_species_absolute_error_hartree": 0.005836030119866109,
+          "max_species_absolute_error_mha": 5.836030119866109,
+          "passes_equal_share_constraint": false,
+          "passes_full_chemical_accuracy_per_species": false,
+          "passes_reaction_constraint": true,
+          "passes_triangle_constraint": false,
+          "signed_reaction_error_hartree": 0.0009765024765591157,
+          "species": {
+            "co": {
+              "absolute_energy_error_hartree": 0.00042068804344808086,
+              "absolute_energy_error_mha": 0.42068804344808086,
+              "signed_energy_error_hartree": 0.00042068804344808086,
+              "signed_energy_error_mha": 0.42068804344808086,
+              "synthesis_error_budget_hartree": 0.4096,
+              "synthesis_error_budget_mha": 409.6,
+              "t_gate_count": 14626816
+            },
+            "co2": {
+              "absolute_energy_error_hartree": 0.005836030119866109,
+              "absolute_energy_error_mha": 5.836030119866109,
+              "signed_energy_error_hartree": 0.005836030119866109,
+              "signed_energy_error_mha": 5.836030119866109,
+              "synthesis_error_budget_hartree": 0.2048,
+              "synthesis_error_budget_mha": 204.8,
+              "t_gate_count": 6253568
+            },
+            "h2": {
+              "absolute_energy_error_hartree": 0.004194845183806084,
+              "absolute_energy_error_mha": 4.194845183806084,
+              "signed_energy_error_hartree": -0.004194845183806084,
+              "signed_energy_error_mha": -4.194845183806084,
+              "synthesis_error_budget_hartree": 0.0256,
+              "synthesis_error_budget_mha": 25.6,
+              "t_gate_count": 405504
+            },
+            "h2o": {
+              "absolute_energy_error_hartree": 0.00024399441605282846,
+              "absolute_energy_error_mha": 0.24399441605282846,
+              "signed_energy_error_hartree": 0.00024399441605282846,
+              "signed_energy_error_mha": 0.24399441605282846,
+              "synthesis_error_budget_hartree": 0.4096,
+              "synthesis_error_budget_mha": 409.6,
+              "t_gate_count": 7864320
+            }
+          },
+          "total_t_gate_count": 29150208,
+          "triangle_bound_hartree": 0.010695557763173102,
+          "triangle_bound_mha": 10.695557763173102
+        },
+        "max_abs_species_signed_error_delta_mha": 0.004396273482143442,
+        "projected_point": {
+          "absolute_reaction_error_hartree": 0.0009719511992463126,
+          "absolute_reaction_error_mha": 0.9719511992463126,
+          "equal_share_error_limit_hartree": 0.0003984003594101289,
+          "equal_share_error_limit_mha": 0.3984003594101289,
+          "max_species_absolute_error_hartree": 0.005835622404703145,
+          "max_species_absolute_error_mha": 5.835622404703145,
+          "passes_equal_share_constraint": false,
+          "passes_full_chemical_accuracy_per_species": false,
+          "passes_reaction_constraint": true,
+          "passes_triangle_constraint": false,
+          "signed_reaction_error_hartree": 0.0009719511992463126,
+          "species": {
+            "co": {
+              "absolute_energy_error_hartree": 0.00042051813471744026,
+              "absolute_energy_error_mha": 0.42051813471744026,
+              "signed_energy_error_hartree": 0.00042051813471744026,
+              "signed_energy_error_mha": 0.42051813471744026,
+              "synthesis_error_budget_hartree": 0.4096,
+              "synthesis_error_budget_mha": 409.6,
+              "t_gate_count": 14626816
+            },
+            "co2": {
+              "absolute_energy_error_hartree": 0.005835622404703145,
+              "absolute_energy_error_mha": 5.835622404703145,
+              "signed_energy_error_hartree": 0.005835622404703145,
+              "signed_energy_error_mha": 5.835622404703145,
+              "synthesis_error_budget_hartree": 0.2048,
+              "synthesis_error_budget_mha": 204.8,
+              "t_gate_count": 6253568
+            },
+            "h2": {
+              "absolute_energy_error_hartree": 0.00419476238120442,
+              "absolute_energy_error_mha": 4.19476238120442,
+              "signed_energy_error_hartree": -0.00419476238120442,
+              "signed_energy_error_mha": -4.19476238120442,
+              "synthesis_error_budget_hartree": 0.0256,
+              "synthesis_error_budget_mha": 25.6,
+              "t_gate_count": 405504
+            },
+            "h2o": {
+              "absolute_energy_error_hartree": 0.0002483906895349719,
+              "absolute_energy_error_mha": 0.2483906895349719,
+              "signed_energy_error_hartree": 0.0002483906895349719,
+              "signed_energy_error_mha": 0.2483906895349719,
+              "synthesis_error_budget_hartree": 0.4096,
+              "synthesis_error_budget_mha": 409.6,
+              "t_gate_count": 7864320
+            }
+          },
+          "total_t_gate_count": 29150208,
+          "triangle_bound_hartree": 0.010699293610159977,
+          "triangle_bound_mha": 10.699293610159977
+        },
+        "species_signed_error_delta_full_minus_projected_mha": {
+          "co": 0.00016990873064059997,
+          "co2": 0.00040771516296445043,
+          "h2": -8.280260166415587e-05,
+          "h2o": -0.004396273482143442
+        },
+        "t_count_matches_projected_search": true,
+        "validation_passes": true
+      }
+    },
+    "reaction_error_target_hartree": 0.0015936014376405157,
+    "reaction_error_target_mha": 1.5936014376405157,
+    "reaction_key": "co_h2o_co2_h2",
+    "reaction_label": "CO + H2O -> CO2 + H2",
+    "validation_passes": true
+  },
+  {
+    "additional_t_gate_decrease_percent": 23.272624480071073,
+    "evaluation_wall_seconds": 57.6221537500096,
+    "experiment": "compiled_reaction_constraint_full_space_validation",
+    "formula_order": 1,
+    "n_steps": 512,
+    "policies": {
+      "equal_share": {
+        "full_space_constraint_passes": true,
+        "full_space_point": {
+          "absolute_reaction_error_hartree": 5.628919204969662e-06,
+          "absolute_reaction_error_mha": 0.005628919204969662,
+          "equal_share_error_limit_hartree": 0.0003984003594101289,
+          "equal_share_error_limit_mha": 0.3984003594101289,
+          "max_species_absolute_error_hartree": 0.00023157090318948192,
+          "max_species_absolute_error_mha": 0.23157090318948192,
+          "passes_equal_share_constraint": true,
+          "passes_full_chemical_accuracy_per_species": true,
+          "passes_reaction_constraint": true,
+          "passes_triangle_constraint": true,
+          "signed_reaction_error_hartree": 5.628919204969662e-06,
+          "species": {
+            "f2": {
+              "absolute_energy_error_hartree": 0.0001623534612065214,
+              "absolute_energy_error_mha": 0.1623534612065214,
+              "signed_energy_error_hartree": -0.0001623534612065214,
+              "signed_energy_error_mha": -0.1623534612065214,
+              "synthesis_error_budget_hartree": 0.0064,
+              "synthesis_error_budget_mha": 6.4,
+              "t_gate_count": 15316992
+            },
+            "h2": {
+              "absolute_energy_error_hartree": 0.00023157090318948192,
+              "absolute_energy_error_mha": 0.23157090318948192,
+              "signed_energy_error_hartree": -0.00023157090318948192,
+              "signed_energy_error_mha": -0.23157090318948192,
+              "synthesis_error_budget_hartree": 0.0032,
+              "synthesis_error_budget_mha": 3.2,
+              "t_gate_count": 482304
+            },
+            "hf": {
+              "absolute_energy_error_hartree": 0.00019414772259551683,
+              "absolute_energy_error_mha": 0.19414772259551683,
+              "signed_energy_error_hartree": -0.00019414772259551683,
+              "signed_energy_error_mha": -0.19414772259551683,
+              "synthesis_error_budget_hartree": 0.0512,
+              "synthesis_error_budget_mha": 51.2,
+              "t_gate_count": 9558016
+            }
+          },
+          "total_t_gate_count": 25357312,
+          "triangle_bound_hartree": 0.000782219809587037,
+          "triangle_bound_mha": 0.782219809587037
+        },
+        "max_abs_species_signed_error_delta_mha": 2.874060101021314e-06,
+        "projected_point": {
+          "absolute_reaction_error_hartree": 5.623389000675161e-06,
+          "absolute_reaction_error_mha": 0.005623389000675161,
+          "equal_share_error_limit_hartree": 0.0003984003594101289,
+          "equal_share_error_limit_mha": 0.3984003594101289,
+          "max_species_absolute_error_hartree": 0.0002315713122698071,
+          "max_species_absolute_error_mha": 0.2315713122698071,
+          "passes_equal_share_constraint": true,
+          "passes_full_chemical_accuracy_per_species": true,
+          "passes_reaction_constraint": true,
+          "passes_triangle_constraint": true,
+          "signed_reaction_error_hartree": 5.623389000675161e-06,
+          "species": {
+            "f2": {
+              "absolute_energy_error_hartree": 0.00016235327004210376,
+              "absolute_energy_error_mha": 0.16235327004210376,
+              "signed_energy_error_hartree": -0.00016235327004210376,
+              "signed_energy_error_mha": -0.16235327004210376,
+              "synthesis_error_budget_hartree": 0.0064,
+              "synthesis_error_budget_mha": 6.4,
+              "t_gate_count": 15316992
+            },
+            "h2": {
+              "absolute_energy_error_hartree": 0.0002315713122698071,
+              "absolute_energy_error_mha": 0.2315713122698071,
+              "signed_energy_error_hartree": -0.0002315713122698071,
+              "signed_energy_error_mha": -0.2315713122698071,
+              "synthesis_error_budget_hartree": 0.0032,
+              "synthesis_error_budget_mha": 3.2,
+              "t_gate_count": 482304
+            },
+            "hf": {
+              "absolute_energy_error_hartree": 0.00019415059665561785,
+              "absolute_energy_error_mha": 0.19415059665561785,
+              "signed_energy_error_hartree": -0.00019415059665561785,
+              "signed_energy_error_mha": -0.19415059665561785,
+              "synthesis_error_budget_hartree": 0.0512,
+              "synthesis_error_budget_mha": 51.2,
+              "t_gate_count": 9558016
+            }
+          },
+          "total_t_gate_count": 25357312,
+          "triangle_bound_hartree": 0.0007822257756231465,
+          "triangle_bound_mha": 0.7822257756231465
+        },
+        "species_signed_error_delta_full_minus_projected_mha": {
+          "f2": -1.9116441762889735e-07,
+          "h2": 4.0908032516995263e-07,
+          "hf": 2.874060101021314e-06
+        },
+        "t_count_matches_projected_search": true,
+        "validation_passes": true
+      },
+      "reaction_aware": {
+        "full_space_constraint_passes": true,
+        "full_space_point": {
+          "absolute_reaction_error_hartree": 0.0015395607929971078,
+          "absolute_reaction_error_mha": 1.5395607929971078,
+          "equal_share_error_limit_hartree": 0.0003984003594101289,
+          "equal_share_error_limit_mha": 0.3984003594101289,
+          "max_species_absolute_error_hartree": 0.01777948245899097,
+          "max_species_absolute_error_mha": 17.77948245899097,
+          "passes_equal_share_constraint": false,
+          "passes_full_chemical_accuracy_per_species": false,
+          "passes_reaction_constraint": true,
+          "passes_triangle_constraint": false,
+          "signed_reaction_error_hartree": 0.0015395607929971078,
+          "species": {
+            "f2": {
+              "absolute_energy_error_hartree": 0.01777948245899097,
+              "absolute_energy_error_mha": 17.77948245899097,
+              "signed_energy_error_hartree": -0.01777948245899097,
+              "signed_energy_error_mha": -17.77948245899097,
+              "synthesis_error_budget_hartree": 0.4096,
+              "synthesis_error_budget_mha": 409.6,
+              "t_gate_count": 10190848
+            },
+            "h2": {
+              "absolute_energy_error_hartree": 0.010228340022814919,
+              "absolute_energy_error_mha": 10.228340022814919,
+              "signed_energy_error_hartree": 0.010228340022814919,
+              "signed_energy_error_mha": 10.228340022814919,
+              "synthesis_error_budget_hartree": 0.1024,
+              "synthesis_error_budget_mha": 102.4,
+              "t_gate_count": 366592
+            },
+            "hf": {
+              "absolute_energy_error_hartree": 0.0030057908215894713,
+              "absolute_energy_error_mha": 3.0057908215894713,
+              "signed_energy_error_hartree": -0.0030057908215894713,
+              "signed_energy_error_mha": -3.0057908215894713,
+              "synthesis_error_budget_hartree": 0.2048,
+              "synthesis_error_budget_mha": 204.8,
+              "t_gate_count": 8898560
+            }
+          },
+          "total_t_gate_count": 19456000,
+          "triangle_bound_hartree": 0.03401940412498483,
+          "triangle_bound_mha": 34.01940412498483
+        },
+        "max_abs_species_signed_error_delta_mha": 0.0008447511823383991,
+        "projected_point": {
+          "absolute_reaction_error_hartree": 0.0015398903612751091,
+          "absolute_reaction_error_mha": 1.5398903612751091,
+          "equal_share_error_limit_hartree": 0.0003984003594101289,
+          "equal_share_error_limit_mha": 0.3984003594101289,
+          "max_species_absolute_error_hartree": 0.017778903453319117,
+          "max_species_absolute_error_mha": 17.778903453319117,
+          "passes_equal_share_constraint": false,
+          "passes_full_chemical_accuracy_per_species": false,
+          "passes_reaction_constraint": true,
+          "passes_triangle_constraint": false,
+          "signed_reaction_error_hartree": 0.0015398903612751091,
+          "species": {
+            "f2": {
+              "absolute_energy_error_hartree": 0.017778903453319117,
+              "absolute_energy_error_mha": 17.778903453319117,
+              "signed_energy_error_hartree": -0.017778903453319117,
+              "signed_energy_error_mha": -17.778903453319117,
+              "synthesis_error_budget_hartree": 0.4096,
+              "synthesis_error_budget_mha": 409.6,
+              "t_gate_count": 10190848
+            },
+            "h2": {
+              "absolute_energy_error_hartree": 0.01022749527163258,
+              "absolute_energy_error_mha": 10.22749527163258,
+              "signed_energy_error_hartree": 0.01022749527163258,
+              "signed_energy_error_mha": 10.22749527163258,
+              "synthesis_error_budget_hartree": 0.1024,
+              "synthesis_error_budget_mha": 102.4,
+              "t_gate_count": 366592
+            },
+            "hf": {
+              "absolute_energy_error_hartree": 0.0030057589102057136,
+              "absolute_energy_error_mha": 3.0057589102057136,
+              "signed_energy_error_hartree": -0.0030057589102057136,
+              "signed_energy_error_mha": -3.0057589102057136,
+              "synthesis_error_budget_hartree": 0.2048,
+              "synthesis_error_budget_mha": 204.8,
+              "t_gate_count": 8898560
+            }
+          },
+          "total_t_gate_count": 19456000,
+          "triangle_bound_hartree": 0.034017916545363125,
+          "triangle_bound_mha": 34.01791654536312
+        },
+        "species_signed_error_delta_full_minus_projected_mha": {
+          "f2": -0.0005790056718524283,
+          "h2": 0.0008447511823383991,
+          "hf": -3.191138375768787e-05
+        },
+        "t_count_matches_projected_search": true,
+        "validation_passes": true
+      }
+    },
+    "reaction_error_target_hartree": 0.0015936014376405157,
+    "reaction_error_target_mha": 1.5936014376405157,
+    "reaction_key": "h2_f2_hf",
+    "reaction_label": "H2 + F2 -> 2 HF",
+    "validation_passes": true
+  },
+  {
+    "additional_t_gate_decrease_percent": 12.960132827682497,
+    "evaluation_wall_seconds": 133.21196066599805,
+    "experiment": "compiled_reaction_constraint_full_space_validation",
+    "formula_order": 1,
+    "n_steps": 512,
+    "policies": {
+      "equal_share": {
+        "full_space_constraint_passes": true,
+        "full_space_point": {
+          "absolute_reaction_error_hartree": 0.0009041533968399129,
+          "absolute_reaction_error_mha": 0.9041533968399129,
+          "equal_share_error_limit_hartree": 0.00026560023960675263,
+          "equal_share_error_limit_mha": 0.2656002396067526,
+          "max_species_absolute_error_hartree": 0.00024399441605282846,
+          "max_species_absolute_error_mha": 0.24399441605282846,
+          "passes_equal_share_constraint": true,
+          "passes_full_chemical_accuracy_per_species": true,
+          "passes_reaction_constraint": true,
+          "passes_triangle_constraint": true,
+          "signed_reaction_error_hartree": 0.0009041533968399129,
+          "species": {
+            "ch4": {
+              "absolute_energy_error_hartree": 6.811468684020383e-05,
+              "absolute_energy_error_mha": 0.06811468684020383,
+              "signed_energy_error_hartree": -6.811468684020383e-05,
+              "signed_energy_error_mha": -0.06811468684020383,
+              "synthesis_error_budget_hartree": 0.0512,
+              "synthesis_error_budget_mha": 51.2,
+              "t_gate_count": 28401664
+            },
+            "co": {
+              "absolute_energy_error_hartree": 3.3560958058842516e-05,
+              "absolute_energy_error_mha": 0.033560958058842516,
+              "signed_energy_error_hartree": -3.3560958058842516e-05,
+              "signed_energy_error_mha": -0.033560958058842516,
+              "synthesis_error_budget_hartree": 0.0064,
+              "synthesis_error_budget_mha": 6.4,
+              "t_gate_count": 17524736
+            },
+            "h2": {
+              "absolute_energy_error_hartree": 0.00023157090318948192,
+              "absolute_energy_error_mha": 0.23157090318948192,
+              "signed_energy_error_hartree": -0.00023157090318948192,
+              "signed_energy_error_mha": -0.23157090318948192,
+              "synthesis_error_budget_hartree": 0.0032,
+              "synthesis_error_budget_mha": 3.2,
+              "t_gate_count": 482304
+            },
+            "h2o": {
+              "absolute_energy_error_hartree": 0.00024399441605282846,
+              "absolute_energy_error_mha": 0.24399441605282846,
+              "signed_energy_error_hartree": 0.00024399441605282846,
+              "signed_energy_error_mha": 0.24399441605282846,
+              "synthesis_error_budget_hartree": 0.4096,
+              "synthesis_error_budget_mha": 409.6,
+              "t_gate_count": 7864320
+            }
+          },
+          "total_t_gate_count": 54273024,
+          "triangle_bound_hartree": 0.0010403827705203206,
+          "triangle_bound_mha": 1.0403827705203206
+        },
+        "max_abs_species_signed_error_delta_mha": 0.004396273482143442,
+        "projected_point": {
+          "absolute_reaction_error_hartree": 0.0009085519290508159,
+          "absolute_reaction_error_mha": 0.9085519290508159,
+          "equal_share_error_limit_hartree": 0.00026560023960675263,
+          "equal_share_error_limit_mha": 0.2656002396067526,
+          "max_species_absolute_error_hartree": 0.0002483906895349719,
+          "max_species_absolute_error_mha": 0.2483906895349719,
+          "passes_equal_share_constraint": true,
+          "passes_full_chemical_accuracy_per_species": true,
+          "passes_reaction_constraint": true,
+          "passes_triangle_constraint": true,
+          "signed_reaction_error_hartree": 0.0009085519290508159,
+          "species": {
+            "ch4": {
+              "absolute_energy_error_hartree": 6.811377102877714e-05,
+              "absolute_energy_error_mha": 0.06811377102877714,
+              "signed_energy_error_hartree": -6.811377102877714e-05,
+              "signed_energy_error_mha": -0.06811377102877714,
+              "synthesis_error_budget_hartree": 0.0512,
+              "synthesis_error_budget_mha": 51.2,
+              "t_gate_count": 28401664
+            },
+            "co": {
+              "absolute_energy_error_hartree": 3.35610737351999e-05,
+              "absolute_energy_error_mha": 0.0335610737351999,
+              "signed_energy_error_hartree": -3.35610737351999e-05,
+              "signed_energy_error_mha": -0.0335610737351999,
+              "synthesis_error_budget_hartree": 0.0064,
+              "synthesis_error_budget_mha": 6.4,
+              "t_gate_count": 17524736
+            },
+            "h2": {
+              "absolute_energy_error_hartree": 0.0002315713122698071,
+              "absolute_energy_error_mha": 0.2315713122698071,
+              "signed_energy_error_hartree": -0.0002315713122698071,
+              "signed_energy_error_mha": -0.2315713122698071,
+              "synthesis_error_budget_hartree": 0.0032,
+              "synthesis_error_budget_mha": 3.2,
+              "t_gate_count": 482304
+            },
+            "h2o": {
+              "absolute_energy_error_hartree": 0.0002483906895349719,
+              "absolute_energy_error_mha": 0.2483906895349719,
+              "signed_energy_error_hartree": 0.0002483906895349719,
+              "signed_energy_error_mha": 0.2483906895349719,
+              "synthesis_error_budget_hartree": 0.4096,
+              "synthesis_error_budget_mha": 409.6,
+              "t_gate_count": 7864320
+            }
+          },
+          "total_t_gate_count": 54273024,
+          "triangle_bound_hartree": 0.0010447794711083702,
+          "triangle_bound_mha": 1.0447794711083702
+        },
+        "species_signed_error_delta_full_minus_projected_mha": {
+          "ch4": -9.158114266938355e-07,
+          "co": 1.1567635738174431e-07,
+          "h2": 4.0908032516995263e-07,
+          "h2o": -0.004396273482143442
+        },
+        "t_count_matches_projected_search": true,
+        "validation_passes": true
+      },
+      "reaction_aware": {
+        "full_space_constraint_passes": true,
+        "full_space_point": {
+          "absolute_reaction_error_hartree": 0.001333063727353867,
+          "absolute_reaction_error_mha": 1.333063727353867,
+          "equal_share_error_limit_hartree": 0.00026560023960675263,
+          "equal_share_error_limit_mha": 0.2656002396067526,
+          "max_species_absolute_error_hartree": 0.0013565979328973299,
+          "max_species_absolute_error_mha": 1.3565979328973299,
+          "passes_equal_share_constraint": false,
+          "passes_full_chemical_accuracy_per_species": true,
+          "passes_reaction_constraint": true,
+          "passes_triangle_constraint": false,
+          "signed_reaction_error_hartree": 0.001333063727353867,
+          "species": {
+            "ch4": {
+              "absolute_energy_error_hartree": 0.0013565979328973299,
+              "absolute_energy_error_mha": 1.3565979328973299,
+              "signed_energy_error_hartree": 0.0013565979328973299,
+              "signed_energy_error_mha": 1.3565979328973299,
+              "synthesis_error_budget_hartree": 0.4096,
+              "synthesis_error_budget_mha": 409.6,
+              "t_gate_count": 24244224
+            },
+            "co": {
+              "absolute_energy_error_hartree": 0.00042068804344808086,
+              "absolute_energy_error_mha": 0.42068804344808086,
+              "signed_energy_error_hartree": 0.00042068804344808086,
+              "signed_energy_error_mha": 0.42068804344808086,
+              "synthesis_error_budget_hartree": 0.4096,
+              "synthesis_error_budget_mha": 409.6,
+              "t_gate_count": 14626816
+            },
+            "h2": {
+              "absolute_energy_error_hartree": 5.105314061726318e-05,
+              "absolute_energy_error_mha": 0.05105314061726318,
+              "signed_energy_error_hartree": -5.105314061726318e-05,
+              "signed_energy_error_mha": -0.05105314061726318,
+              "synthesis_error_budget_hartree": 0.0016,
+              "synthesis_error_budget_mha": 1.6,
+              "t_gate_count": 503808
+            },
+            "h2o": {
+              "absolute_energy_error_hartree": 0.00024399441605282846,
+              "absolute_energy_error_mha": 0.24399441605282846,
+              "signed_energy_error_hartree": 0.00024399441605282846,
+              "signed_energy_error_mha": 0.24399441605282846,
+              "synthesis_error_budget_hartree": 0.4096,
+              "synthesis_error_budget_mha": 409.6,
+              "t_gate_count": 7864320
+            }
+          },
+          "total_t_gate_count": 47239168,
+          "triangle_bound_hartree": 0.0021744398142500287,
+          "triangle_bound_mha": 2.1744398142500287
+        },
+        "max_abs_species_signed_error_delta_mha": 0.004396273482143442,
+        "projected_point": {
+          "absolute_reaction_error_hartree": 0.001337347082288165,
+          "absolute_reaction_error_mha": 1.337347082288165,
+          "equal_share_error_limit_hartree": 0.00026560023960675263,
+          "equal_share_error_limit_mha": 0.2656002396067526,
+          "max_species_absolute_error_hartree": 0.0013563072422329014,
+          "max_species_absolute_error_mha": 1.3563072422329014,
+          "passes_equal_share_constraint": false,
+          "passes_full_chemical_accuracy_per_species": true,
+          "passes_reaction_constraint": true,
+          "passes_triangle_constraint": false,
+          "signed_reaction_error_hartree": 0.001337347082288165,
+          "species": {
+            "ch4": {
+              "absolute_energy_error_hartree": 0.0013563072422329014,
+              "absolute_energy_error_mha": 1.3563072422329014,
+              "signed_energy_error_hartree": 0.0013563072422329014,
+              "signed_energy_error_mha": 1.3563072422329014,
+              "synthesis_error_budget_hartree": 0.4096,
+              "synthesis_error_budget_mha": 409.6,
+              "t_gate_count": 24244224
+            },
+            "co": {
+              "absolute_energy_error_hartree": 0.00042051813471744026,
+              "absolute_energy_error_mha": 0.42051813471744026,
+              "signed_energy_error_hartree": 0.00042051813471744026,
+              "signed_energy_error_mha": 0.42051813471744026,
+              "synthesis_error_budget_hartree": 0.4096,
+              "synthesis_error_budget_mha": 409.6,
+              "t_gate_count": 14626816
+            },
+            "h2": {
+              "absolute_energy_error_hartree": 5.1055761745910644e-05,
+              "absolute_energy_error_mha": 0.051055761745910644,
+              "signed_energy_error_hartree": -5.1055761745910644e-05,
+              "signed_energy_error_mha": -0.051055761745910644,
+              "synthesis_error_budget_hartree": 0.0016,
+              "synthesis_error_budget_mha": 1.6,
+              "t_gate_count": 503808
+            },
+            "h2o": {
+              "absolute_energy_error_hartree": 0.0002483906895349719,
+              "absolute_energy_error_mha": 0.2483906895349719,
+              "signed_energy_error_hartree": 0.0002483906895349719,
+              "signed_energy_error_mha": 0.2483906895349719,
+              "synthesis_error_budget_hartree": 0.4096,
+              "synthesis_error_budget_mha": 409.6,
+              "t_gate_count": 7864320
+            }
+          },
+          "total_t_gate_count": 47239168,
+          "triangle_bound_hartree": 0.0021783833517230455,
+          "triangle_bound_mha": 2.1783833517230455
+        },
+        "species_signed_error_delta_full_minus_projected_mha": {
+          "ch4": 0.00029069066442843905,
+          "co": 0.00016990873064059997,
+          "h2": 2.621128647462001e-06,
+          "h2o": -0.004396273482143442
+        },
+        "t_count_matches_projected_search": true,
+        "validation_passes": true
+      }
+    },
+    "reaction_error_target_hartree": 0.0015936014376405157,
+    "reaction_error_target_mha": 1.5936014376405157,
+    "reaction_key": "co_h2_ch4_h2o",
+    "reaction_label": "CO + 3 H2 -> CH4 + H2O",
+    "validation_passes": true
+  }
+]

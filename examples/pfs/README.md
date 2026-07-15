@@ -14,6 +14,9 @@ Hamiltonian-simulation benchmarks in hsopt.
   product-formula compilation helpers.
 - `array_backend.py`: opt-in NumPy/cuPyNumeric array backend selection for
   state propagation and evaluator diagnostics.
+- `reactions/`: the fixed full-Hilbert-space compiled-unitary evaluator used
+  by the ten-reaction paper experiment; its exact registry and runner live in
+  `experiments/reactions10/`.
 
 Run either evaluator directly:
 
