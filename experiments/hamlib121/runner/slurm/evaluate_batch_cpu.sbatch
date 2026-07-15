@@ -26,7 +26,6 @@ fi
 cd "$CAMPAIGN_ROOT"
 mkdir -p logs "iterations/iter_$(printf "%04d" "$ITERATION")/results" baselines
 
-export PATH="$HOME/.local/bin:$PATH"
 if [[ -n "${CAMPAIGN_UV_BASE_DIR:-}" ]]; then
   export XDG_CACHE_HOME="${CAMPAIGN_UV_BASE_DIR}/.cache"
   export XDG_DATA_HOME="${CAMPAIGN_UV_BASE_DIR}/.local/share"
@@ -42,10 +41,29 @@ export CAMPAIGN_ARRAY_BACKEND=numpy
 export CAMPAIGN_HDF5_SUBPROCESS=1
 export CAMPAIGN_SYNTH_WORKERS="${CAMPAIGN_SYNTH_WORKERS:-30}"
 
-uv sync --locked
-
 export VIRTUAL_ENV="$PWD/.venv_cpu"
-export PATH="$VIRTUAL_ENV/bin:$PATH"
+unset PYTHONHOME PYTHONPATH
+SHA256SUM=/usr/bin/sha256sum
+if [[ ! -x "$SHA256SUM" ]]; then
+  echo "missing trusted $SHA256SUM" >&2
+  exit 2
+fi
+EXPECTED_LOCK_LINE="$("$SHA256SUM" uv.lock)"
+EXPECTED_LOCK_SHA256="${EXPECTED_LOCK_LINE%% *}"
+RUNNER_LINE="$("$SHA256SUM" manifests/runner_provenance.json)"
+EXPECTED_RUNNER_SHA256="${RUNNER_LINE%% *}"
+IDENTITY_LINE="$("$SHA256SUM" manifests/campaign_identity.json)"
+EXPECTED_IDENTITY_SHA256="${IDENTITY_LINE%% *}"
+if [[ ! -x "$VIRTUAL_ENV/bin/python" \
+      || ! -f "$VIRTUAL_ENV/.hsopt-uv-lock-sha256" \
+      || ! -f "$VIRTUAL_ENV/.hsopt-runner-provenance-sha256" \
+      || ! -f "$VIRTUAL_ENV/.hsopt-campaign-identity-sha256" ]] || \
+   [[ "$(<"$VIRTUAL_ENV/.hsopt-uv-lock-sha256")" != "$EXPECTED_LOCK_SHA256" \
+      || "$(<"$VIRTUAL_ENV/.hsopt-runner-provenance-sha256")" != "$EXPECTED_RUNNER_SHA256" \
+      || "$(<"$VIRTUAL_ENV/.hsopt-campaign-identity-sha256")" != "$EXPECTED_IDENTITY_SHA256" ]]; then
+  echo "missing/stale prebuilt locked CPU environment; run scripts/prebuild_cluster_environments.py" >&2
+  exit 2
+fi
 
 echo "host=$(hostname)"
 echo "iteration=$ITERATION"
@@ -60,7 +78,7 @@ echo "started=$(date -Is)"
 echo "campaign_array_backend=$CAMPAIGN_ARRAY_BACKEND"
 echo "lane_count=$(grep -cve '^[[:space:]]*$' "$LANE_IDS_FILE")"
 
-python scripts/evaluate_worker.py \
+"$VIRTUAL_ENV/bin/python" scripts/evaluate_worker.py \
   --campaign-root "$CAMPAIGN_ROOT" \
   --iteration "$ITERATION" \
   --worker-id 0 \

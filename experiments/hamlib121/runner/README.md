@@ -1,8 +1,15 @@
 # HamLib121 Runner
 
-This is a self-contained runner for the fixed five-run HamLib experiment. Copy
-it into external campaign workspaces; do not run campaigns inside the Git
-checkout.
+This is a self-contained runner for the fixed paper experiment: five independent
+autoresearch replicates over the same A100-memory-selected set of 121 HamLib
+Hamiltonians, with 50 proposals per lane. Copy it into external campaign
+workspaces; do not run campaigns inside the Git checkout.
+
+Only the shared iteration-0 dense-sector baseline is computed on one NVIDIA
+A100 with cuPyNumeric. That verified baseline is copied, with provenance, from
+`run_01` into `run_02` through `run_05`. All 30,250 proposal evaluations
+(`5 * 121 * 50`) are CPU/NumPy policy evaluations. This is not five full A100
+runs.
 
 ## Environment
 
@@ -12,7 +19,18 @@ used without re-resolution:
 
 ```bash
 uv sync --locked
-uv sync --extra gpu --locked  # only where the GPU baseline is computed
+```
+
+Mutation launch requires a preinstalled Node.js 24.x runtime. Put its `bin`
+directory first on `PATH`; the runner records the exact Node version, requires
+major version 24, pins Codex to `@openai/codex@0.144.0`, and forces npm to the
+campaign-local `.codex_npm` cache:
+
+```bash
+export PATH="/absolute/path/to/node-v24/bin:$PATH"
+node --version  # must be v24.x
+mkdir -p -m 700 "$CAMPAIGN_ROOT/.codex_npm"
+npx -y @openai/codex@0.144.0 --version
 ```
 
 The paper protocol pins the mutation client to `@openai/codex@0.144.0`, the
@@ -36,8 +54,9 @@ Set site-specific values explicitly. Do not encode them in this repository:
 ```bash
 REPLICATE_ROOT="/absolute/path/to/external-workspaces"
 CAMPAIGN_ROOT="$REPLICATE_ROOT/run_01"
-CLUSTER_ROOT="cluster/path/to/hamlib121/run_01"
-HAMLIB_DATA_ROOT="cluster/path/to/hamlib-electronic-data"
+CLUSTER_ROOT="/absolute/cluster/path/to/hamlib121/run_01"
+HAMLIB_DATA_ROOT="/absolute/cluster/path/to/hamlib-electronic-data"
+HAMLIB_ZIP_SHA256="manifests/hamlib_zip_sha256.txt"
 SLURM_ACCOUNT="site-account"
 GPU_PARTITION="gpu-partition"
 CPU_PARTITION="cpu-partition"
@@ -49,17 +68,68 @@ cd "$CAMPAIGN_ROOT"
 
 uv run --locked python scripts/prepare_campaign.py \
   --source-csv manifests/hamlib_electronic_active_space_instances_le32_qubits.csv \
+  --hamlib-zip-checksums "$HAMLIB_ZIP_SHA256" \
   --campaign-root "$CAMPAIGN_ROOT" \
   --cluster-root "$CLUSTER_ROOT" \
   --hamlib-data-root "$HAMLIB_DATA_ROOT"
 ```
 
-Preparation fails unless the exact 401-to-121 manifest invariant holds. Repeat
-with distinct campaign and cluster roots for all five runs.
+Preparation fails unless the exact 72,200-byte canonical 401-row source
+manifest (`SHA256
+ff7f9acce5f5140d65f84ebe33df92276c9058d13a8de4a0ed254b7ad868e489`),
+its 401-to-121 selection invariant, and the
+checksum file is exactly the canonical 83-line, 9,383-byte
+`hamlib_zip_sha256.txt` (`SHA256
+2a5958a86a6adaa30bd98b325701830f618f7663ddcd925509213ad3ae187def`).
+Workers resolve every ZIP through its bound data-root-relative path, verify each
+archive at most once per worker process, and bind its digest into every result.
+Repeat preparation with distinct campaign and cluster roots for all five runs;
+each run receives a fresh random campaign ID.
 
 ## Establish iteration 0
 
-Before any mutation, submit and collect the deterministic initial policy:
+Before any mutation, claim and stage the campaign root without creating a
+durable Slurm batch intent:
+
+```bash
+uv run --locked python scripts/submit_eval_batch.py \
+  --campaign-root "$CAMPAIGN_ROOT" \
+  --iteration 0 \
+  --batch-id initial_baseline \
+  --all-active \
+  --compute-baseline \
+  --policy-snapshot initial \
+  --account "$SLURM_ACCOUNT" \
+  --partition "$GPU_PARTITION" \
+  --cpu-partition "$CPU_PARTITION" \
+  --sync-host "$SYNC_HOST" \
+  --submit-host "$SUBMIT_HOST" \
+  --sync-only
+```
+
+On the sync/login host, prebuild both locked evaluator environments exactly
+once. Slurm jobs never resolve or install dependencies; they require these
+environments and verify their recorded `uv.lock` digest:
+
+```bash
+ssh "$SYNC_HOST" \
+  "cd '$CLUSTER_ROOT' && python3 scripts/prebuild_cluster_environments.py --campaign-root '$CLUSTER_ROOT'"
+```
+
+On that same host, hash and open the exact 83 bound archives and all 121
+selected members. Copy the campaign-bound receipt back before submission:
+
+```bash
+ssh "$SYNC_HOST" \
+  "cd '$CLUSTER_ROOT' && python3 scripts/verify_hamlib_archives.py \
+    --campaign-root '$CLUSTER_ROOT' --hamlib-data-root '$HAMLIB_DATA_ROOT'"
+
+rsync -ah --protect-args \
+  "$SYNC_HOST:$CLUSTER_ROOT/manifests/hamlib_archive_preflight.json" \
+  "$CAMPAIGN_ROOT/manifests/"
+```
+
+Then rerun the same submission command without `--sync-only`:
 
 ```bash
 uv run --locked python scripts/submit_eval_batch.py \
@@ -76,13 +146,15 @@ uv run --locked python scripts/submit_eval_batch.py \
   --submit-host "$SUBMIT_HOST"
 ```
 
-The command prints a Slurm job ID. Wait for that job to reach a terminal state
+The submit command atomically verifies the campaign ID/manifest claim on both
+sync and submit hosts, then prints a Slurm job ID. Wait for that job to reach a terminal state
 and confirm its evaluator output before collecting:
 
 ```bash
 uv run --locked python scripts/collect_iteration.py \
   --campaign-root "$CAMPAIGN_ROOT" \
   --iteration 0 \
+  --batch-id initial_baseline \
   --sync-host "$SYNC_HOST"
 ```
 
@@ -106,7 +178,8 @@ done
 ```
 
 Mutation supervision refuses to start until all 121 baselines are accepted in
-that run's database.
+that run's database and replays the A100, cuPyNumeric, policy-byte, archive,
+batch-intent, and baseline-cache provenance for every lane.
 
 ## Run 50 proposals per lane
 
@@ -117,6 +190,9 @@ uv run --locked python scripts/supervise_streaming_batches.py \
   --campaign-root "$CAMPAIGN_ROOT" \
   --start-iteration 1 \
   --iterations 50 \
+  --batch-size 8 \
+  --max-concurrent-mutators 4 \
+  --max-running-eval-jobs 8 \
   --account "$SLURM_ACCOUNT" \
   --partition "$GPU_PARTITION" \
   --cpu-partition "$CPU_PARTITION" \
@@ -133,6 +209,25 @@ evaluation batch before contacting Slurm. Restart it with the same protocol
 arguments after an interruption: queued candidates, ambiguous submissions,
 active job IDs, collection, and evaluation retries resume from the campaign
 database without remutating in-flight lanes. Provenance drift fails closed.
+The paper runner rejects any change from 50 iterations, batch size 8, four
+concurrent mutators, eight running evaluator jobs, model `gpt-5.5`, reasoning
+`high`, or the pinned Codex command. The complete execution configuration is
+recorded in `manifests/supervisor_provenance.json`.
+
+Each Codex proposal runs in a fresh disposable directory containing only
+`simple_pf.py`, under `workspace-write` with user configuration and repository
+rules disabled. The runner requires a complete JSON lifecycle, terminates the
+whole proposal process group, rejects any extra workspace entry, validates the
+candidate with the restricted policy loader, and only then atomically promotes
+its bytes into the lane. The policy loader permits deterministic math and the
+explicit dataclass/typing names used by the API; filesystem, process, network,
+reflection, private-attribute, and arbitrary-module capabilities are rejected.
+
+Trust boundary: receipts and strict export detect accidental drift and
+single-record tampering, but campaign-owner access is trusted. An owner who
+rewrites mutually consistent SQLite rows, result JSON, or installed environment
+bytes can defeat local replay checks; the export is not a cryptographic
+signature or a full re-evaluation of every proposal.
 
 Partition fallback is disabled unless `--enable-partition-fallback` is passed
 with an explicit `--fallback-partition`. It applies to pending CPU evaluation

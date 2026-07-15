@@ -3,9 +3,24 @@ from __future__ import annotations
 
 import argparse
 import json
+import os
+import stat
+import sys
+import tempfile
 from pathlib import Path
 
-from campaign_common import db_connect, ensure_dirs, html_escape, init_db, now_iso, write_json
+_PRIVATE_PYCACHE_PREFIX = tempfile.mkdtemp(prefix="hsopt-hamlib121-pycache-")
+_private_pycache_stat = os.stat(_PRIVATE_PYCACHE_PREFIX, follow_symlinks=False)
+if (
+    not stat.S_ISDIR(_private_pycache_stat.st_mode)
+    or _private_pycache_stat.st_uid != os.getuid()
+    or stat.S_IMODE(_private_pycache_stat.st_mode) & 0o077
+):
+    raise RuntimeError("private Python bytecode prefix is not an owner-only real directory")
+sys.pycache_prefix = _PRIVATE_PYCACHE_PREFIX
+os.environ["PYTHONPYCACHEPREFIX"] = _PRIVATE_PYCACHE_PREFIX
+
+from campaign_common import db_connect, ensure_dirs, html_escape, init_db, now_iso, write_json  # noqa: E402
 
 
 def fmt_int(value):

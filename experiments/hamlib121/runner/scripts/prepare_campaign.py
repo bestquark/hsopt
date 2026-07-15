@@ -3,27 +3,54 @@ from __future__ import annotations
 
 import argparse
 import csv
+import os
+import secrets
 import shutil
+import stat
+import sys
+import tempfile
 from pathlib import Path
 
-from campaign_common import (
+_PRIVATE_PYCACHE_PREFIX = tempfile.mkdtemp(prefix="hsopt-hamlib121-pycache-")
+_private_pycache_stat = os.stat(_PRIVATE_PYCACHE_PREFIX, follow_symlinks=False)
+if (
+    not stat.S_ISDIR(_private_pycache_stat.st_mode)
+    or _private_pycache_stat.st_uid != os.getuid()
+    or stat.S_IMODE(_private_pycache_stat.st_mode) & 0o077
+):
+    raise RuntimeError("private Python bytecode prefix is not an owner-only real directory")
+sys.pycache_prefix = _PRIVATE_PYCACHE_PREFIX
+os.environ["PYTHONPYCACHEPREFIX"] = _PRIVATE_PYCACHE_PREFIX
+
+from campaign_common import (  # noqa: E402
     DEFAULT_CLUSTER_ROOT,
     DEFAULT_HAMLIB_DATA_ROOT,
     Lane,
     db_connect,
     ensure_dirs,
     fit_lane,
+    derive_campaign_id,
     ensure_runner_provenance,
     init_db,
+    load_json,
     log_event,
     policy_template,
     read_manifest_rows,
     write_json,
     now_iso,
+    parse_hamlib_zip_checksums,
+    sha256_file,
+    validate_absolute_posix_path,
+    validate_campaign_identity,
+    validate_canonical_hamlib_source_manifest,
+    validate_canonical_hamlib_zip_checksum_manifest,
 )
 
 
 RUNNER_ROOT = Path(__file__).resolve().parents[1]
+CANONICAL_SOURCE_MANIFEST = (
+    RUNNER_ROOT / "manifests" / "hamlib_electronic_active_space_instances_le32_qubits.csv"
+)
 CANONICAL_ACTIVE_MANIFEST = RUNNER_ROOT / "manifests" / "active_lanes.csv"
 EXPECTED_SOURCE_ROWS = 401
 EXPECTED_ACTIVE_ROWS = 121
@@ -71,6 +98,15 @@ def validate_benchmark_selection(
 def main() -> None:
     parser = argparse.ArgumentParser(description="Prepare a HamLib autoresearch campaign.")
     parser.add_argument("--source-csv", type=Path, required=True)
+    parser.add_argument(
+        "--hamlib-zip-checksums",
+        type=Path,
+        default=RUNNER_ROOT / "manifests" / "hamlib_zip_sha256.txt",
+        help=(
+            "GNU SHA256SUMS-format file binding exactly the 83 ZIP archives used by "
+            "the canonical 121 lanes; paths are relative to --hamlib-data-root"
+        ),
+    )
     parser.add_argument("--campaign-root", type=Path, default=Path.cwd())
     parser.add_argument("--max-qubits", type=int, default=32)
     parser.add_argument(
@@ -103,6 +139,8 @@ def main() -> None:
         parser.error("pass --cluster-root or set HSOPT_HAMLIB_CLUSTER_ROOT")
     if not args.hamlib_data_root:
         parser.error("pass --hamlib-data-root or set HSOPT_HAMLIB_DATA_ROOT")
+    args.cluster_root = validate_absolute_posix_path(args.cluster_root, "cluster_root")
+    args.hamlib_data_root = validate_absolute_posix_path(args.hamlib_data_root, "hamlib_data_root")
     fixed_parameters = {
         "max_qubits": (args.max_qubits, EXPECTED_MAX_QUBITS),
         "memory_gib": (args.memory_gib, EXPECTED_MEMORY_GIB),
@@ -127,9 +165,19 @@ def main() -> None:
         parser.error(f"fixed HamLib121 benchmark parameters changed: {drift}")
 
     root = args.campaign_root.resolve()
+    campaign_manifest_path = root / "manifests" / "campaign_manifest.json"
+    campaign_identity_path = root / "manifests" / "campaign_identity.json"
+    manifest_exists = campaign_manifest_path.exists()
+    identity_exists = campaign_identity_path.exists()
+    if identity_exists and not manifest_exists:
+        raise RuntimeError(
+            "campaign preparation has an identity but no manifest; refusing ambiguity"
+        )
+    resume_preparation = manifest_exists
     paths = ensure_dirs(root)
     ensure_runner_provenance(campaign_root=root, runner_root=RUNNER_ROOT)
-    source_copy = paths["manifests"] / args.source_csv.name
+    validate_canonical_hamlib_source_manifest(args.source_csv)
+    source_copy = paths["manifests"] / CANONICAL_SOURCE_MANIFEST.name
     if args.source_csv.resolve() != source_copy.resolve():
         shutil.copy2(args.source_csv, source_copy)
 
@@ -152,36 +200,104 @@ def main() -> None:
         ]
     active_lane_ids = {lane.lane_id for lane in active_lanes}
     validate_benchmark_selection(rows, active_lanes, CANONICAL_ACTIVE_MANIFEST)
+    validate_canonical_hamlib_zip_checksum_manifest(args.hamlib_zip_checksums)
+    archive_records = parse_hamlib_zip_checksums(args.hamlib_zip_checksums, active_lanes)
+    checksum_copy = paths["manifests"] / "hamlib_zip_sha256.txt"
+    if args.hamlib_zip_checksums.resolve() != checksum_copy.resolve():
+        shutil.copy2(args.hamlib_zip_checksums, checksum_copy)
+    active_manifest_copy = paths["manifests"] / CANONICAL_ACTIVE_MANIFEST.name
+    if CANONICAL_ACTIVE_MANIFEST.resolve() != active_manifest_copy.resolve():
+        shutil.copy2(CANONICAL_ACTIVE_MANIFEST, active_manifest_copy)
 
-    manifest = {
-        "created_at": now_iso(),
+    paper_protocol = {
+        "replicate_runs": 5,
+        "active_lanes": EXPECTED_ACTIVE_ROWS,
+        "proposal_iterations": 50,
+        "baseline_backend": "cupynumeric",
+        "baseline_accelerator": "NVIDIA A100",
+        "baseline_replicated_from_run_01": True,
+        "policy_backend": "numpy",
+        "streaming_batch_size": 8,
+        "max_concurrent_mutators": 4,
+        "max_running_eval_jobs": 8,
+        "node_major": 24,
+        "codex_cli_version": "0.144.0",
+        "model": "gpt-5.5",
+        "reasoning_effort": "high",
+    }
+    fixed_manifest_fields = {
         "source_csv": str(source_copy),
+        "source_csv_sha256": sha256_file(source_copy),
+        "hamlib_zip_checksums_file": "manifests/hamlib_zip_sha256.txt",
+        "hamlib_zip_checksums_sha256": sha256_file(checksum_copy),
+        "hamlib_archives": archive_records,
         "requested_max_qubits": args.max_qubits,
         "requested_count": len(lanes),
         "target_fit_count": len(target_fit_lanes),
         "active_fit_count": len(active_lanes),
-        "active_a100_fit_count": len(active_lanes)
-        if args.accelerator_label.lower() == "a100"
-        else None,
+        "active_a100_fit_count": len(active_lanes),
         "accelerator_label": args.accelerator_label,
         "memory_gib": args.memory_gib,
         "a100_memory_gib": args.memory_gib,
         "active_min_memory_gib": args.active_min_memory_gib,
         "workspace_factor": args.workspace_factor,
+        "paper_protocol": paper_protocol,
         "cluster_root": args.cluster_root,
         "hamlib_data_root": args.hamlib_data_root,
         "lanes": [lane.__dict__ for lane in lanes],
     }
-    write_json(paths["manifests"] / "campaign_manifest.json", manifest)
-
-    with (paths["manifests"] / "active_lanes.csv").open(
-        "w", newline="", encoding="utf-8"
-    ) as handle:
-        fieldnames = list(active_lanes[0].__dict__.keys()) if active_lanes else []
-        writer = csv.DictWriter(handle, fieldnames=fieldnames)
-        writer.writeheader()
-        for lane in active_lanes:
-            writer.writerow(lane.__dict__)
+    if resume_preparation:
+        if identity_exists:
+            manifest, _identity = validate_campaign_identity(root)
+        else:
+            if campaign_manifest_path.is_symlink() or not campaign_manifest_path.is_file():
+                raise RuntimeError("partial campaign manifest is missing or unsafe")
+            manifest = load_json(campaign_manifest_path)
+            nonce = manifest.get("preparation_nonce")
+            campaign_id = manifest.get("campaign_id")
+            if (
+                not isinstance(nonce, str)
+                or not isinstance(campaign_id, str)
+                or derive_campaign_id(nonce) != campaign_id
+            ):
+                raise RuntimeError("partial campaign manifest identity is malformed")
+        drift = {
+            key: {"actual": manifest.get(key), "expected": value}
+            for key, value in fixed_manifest_fields.items()
+            if manifest.get(key) != value
+        }
+        if manifest.get("schema_version") != 2 or drift:
+            raise RuntimeError(f"existing partial campaign preparation differs: {drift}")
+        campaign_id = str(manifest["campaign_id"])
+        if not identity_exists:
+            write_json(
+                paths["identity"],
+                {
+                    "schema_version": 1,
+                    "campaign_id": campaign_id,
+                    "campaign_manifest_sha256": sha256_file(campaign_manifest_path),
+                },
+            )
+    else:
+        preparation_nonce = secrets.token_hex(32)
+        campaign_id = derive_campaign_id(preparation_nonce)
+        manifest = {
+            "schema_version": 2,
+            "created_at": now_iso(),
+            "preparation_nonce": preparation_nonce,
+            "campaign_id": campaign_id,
+            **fixed_manifest_fields,
+        }
+        campaign_manifest_path = paths["manifests"] / "campaign_manifest.json"
+        write_json(campaign_manifest_path, manifest)
+        write_json(
+            paths["identity"],
+            {
+                "schema_version": 1,
+                "campaign_id": campaign_id,
+                "campaign_manifest_sha256": sha256_file(campaign_manifest_path),
+            },
+        )
 
     conn = db_connect(root)
     init_db(conn)
@@ -196,10 +312,25 @@ def main() -> None:
         lane_dir.mkdir(parents=True, exist_ok=True)
         policy = lane_dir / "simple_pf.py"
         initial_policy = lane_dir / "initial_simple_pf.py"
-        if not initial_policy.exists():
-            initial_policy.write_text(policy_template(lane), encoding="utf-8")
-        if not policy.exists():
-            policy.write_bytes(initial_policy.read_bytes())
+        expected_policy = policy_template(lane).encode("utf-8")
+        for target in (initial_policy, policy):
+            if target.exists():
+                if target.is_symlink() or not target.is_file():
+                    raise RuntimeError(f"campaign policy path is unsafe: {target}")
+                if target.read_bytes() != expected_policy:
+                    raise RuntimeError(
+                        f"existing campaign preparation has changed policy bytes: {target}"
+                    )
+                continue
+            temporary = target.with_name(f".{target.name}.{os.getpid()}.tmp")
+            try:
+                with temporary.open("xb") as handle:
+                    handle.write(expected_policy)
+                    handle.flush()
+                    os.fsync(handle.fileno())
+                os.replace(temporary, target)
+            finally:
+                temporary.unlink(missing_ok=True)
         write_json(lane_dir / "lane.json", lane.__dict__)
         conn.execute(
             """
@@ -246,6 +377,7 @@ def main() -> None:
             f"from {len(target_fit_lanes)} target-fit lanes and {len(lanes)} requested rows"
         ),
         payload={
+            "campaign_id": campaign_id,
             "requested": len(lanes),
             "target_fit": len(target_fit_lanes),
             "active": len(active_lanes),

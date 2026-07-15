@@ -1,24 +1,28 @@
 from __future__ import annotations
 
+import ast
 import csv
 import copy
 import hashlib
 import html
-import importlib.util
+import importlib
 import json
 import math
 import os
 import re
 import shlex
 import sqlite3
+import stat
 import subprocess
 import sys
 import time
+import types
 import zipfile
 import io
 from collections import Counter
 from dataclasses import dataclass
 from pathlib import Path
+from pathlib import PurePosixPath
 from typing import Any
 
 
@@ -30,6 +34,47 @@ DEFAULT_CODEX_BIN = "npx -y @openai/codex@0.144.0"
 PAPER_MODEL = "gpt-5.5"
 PAPER_REASONING_EFFORT = "high"
 PAPER_CODEX_CLI_VERSION = "0.144.0"
+PAPER_CODEX_EXEC_FLAGS = (
+    "exec",
+    "--sandbox",
+    "workspace-write",
+    "--ephemeral",
+    "--ignore-user-config",
+    "--ignore-rules",
+    "--skip-git-repo-check",
+    "--json",
+)
+CAMPAIGN_ID_DOMAIN = b"hsopt-hamlib121-campaign-v1\0"
+SHA256_RE = re.compile(r"[0-9a-f]{64}")
+EXPECTED_HAMLIB_ARCHIVES = 83
+CANONICAL_HAMLIB_SOURCE_MANIFEST_BYTES = 72_200
+CANONICAL_HAMLIB_SOURCE_MANIFEST_SHA256 = (
+    "ff7f9acce5f5140d65f84ebe33df92276c9058d13a8de4a0ed254b7ad868e489"
+)
+CANONICAL_HAMLIB_ZIP_SHA256_MANIFEST_BYTES = 9_383
+CANONICAL_HAMLIB_ZIP_SHA256_MANIFEST_SHA256 = (
+    "2a5958a86a6adaa30bd98b325701830f618f7663ddcd925509213ad3ae187def"
+)
+_VERIFIED_ARCHIVE_CACHE: set[tuple[str, int, int, int, int, int, str]] = set()
+_VERIFIED_ARCHIVE_MEMBER_CACHE: set[tuple[tuple[str, int, int, int, int, int, str], str]] = set()
+RUNNER_SCRIPT_FILES = (
+    "build_hamlib_zip_checksums.py",
+    "campaign_common.py",
+    "collect_iteration.py",
+    "evaluate_worker.py",
+    "export_replicate_results.py",
+    "finalize_replicates_when_complete.py",
+    "mutate_iteration.py",
+    "prepare_campaign.py",
+    "prebuild_cluster_environments.py",
+    "render_telemetry.py",
+    "replicate_initial_baseline.py",
+    "rescue_pending_eval_partitions.py",
+    "submit_eval_batch.py",
+    "supervise_streaming_batches.py",
+    "verify_hamlib_archives.py",
+)
+RUNNER_SLURM_FILES = ("evaluate_batch.sbatch", "evaluate_batch_cpu.sbatch")
 TOKEN_RE = re.compile(r"([XYZ])(\d+)")
 ALLOWED_TERM_ORDER_STRATEGIES = {
     "input",
@@ -46,6 +91,42 @@ ALLOWED_TERM_ORDER_STRATEGIES = {
     "coefficient_bands",
     "alternating_large_small",
     "custom",
+}
+SAFE_POLICY_IMPORTS: dict[str, set[str] | None] = {
+    "__future__": {"annotations"},
+    "dataclasses": {"asdict", "dataclass", "field", "fields", "replace"},
+    "typing": {
+        "Any",
+        "Callable",
+        "Dict",
+        "Iterable",
+        "List",
+        "Mapping",
+        "Sequence",
+        "Tuple",
+    },
+    "math": None,
+}
+FORBIDDEN_POLICY_NAMES = {
+    "breakpoint",
+    "compile",
+    "delattr",
+    "dir",
+    "eval",
+    "exec",
+    "exit",
+    "getattr",
+    "globals",
+    "help",
+    "input",
+    "locals",
+    "memoryview",
+    "open",
+    "quit",
+    "setattr",
+    "type",
+    "vars",
+    "__import__",
 }
 
 
@@ -85,6 +166,24 @@ def now_iso() -> str:
     return time.strftime("%Y-%m-%dT%H:%M:%S%z")
 
 
+def derive_campaign_id(preparation_nonce: str) -> str:
+    if SHA256_RE.fullmatch(preparation_nonce) is None:
+        raise ValueError("preparation nonce must be exactly 32 random bytes encoded as hex")
+    return hashlib.sha256(CAMPAIGN_ID_DOMAIN + bytes.fromhex(preparation_nonce)).hexdigest()
+
+
+def validate_absolute_posix_path(value: str, field: str) -> str:
+    if not isinstance(value, str) or not value or any(ch in value for ch in ("\n", "\r", "\0")):
+        raise ValueError(f"{field} must be a nonempty absolute POSIX path without newline or NUL")
+    path = PurePosixPath(value)
+    if not path.is_absolute() or path == PurePosixPath("/"):
+        raise ValueError(f"{field} must be an absolute POSIX path below the filesystem root")
+    parts = value.split("/")[1:]
+    if any(part in {"", ".", ".."} for part in parts) or path.as_posix() != value:
+        raise ValueError(f"{field} must be a canonical absolute POSIX path")
+    return value
+
+
 def campaign_paths(root: Path) -> dict[str, Path]:
     root = root.resolve()
     return {
@@ -96,6 +195,7 @@ def campaign_paths(root: Path) -> dict[str, Path]:
         "logs": root / "logs",
         "slurm": root / "slurm",
         "db": root / "campaign.sqlite",
+        "identity": root / "manifests" / "campaign_identity.json",
     }
 
 
@@ -221,11 +321,31 @@ def eval_submission_identity(
     batch_id: str,
     policy_snapshot: str,
     lane_ids: list[str],
+    campaign_id: str = "",
+    campaign_manifest_sha256: str = "",
+    policy_sha256s: list[str] | None = None,
+    execution_configuration: dict[str, Any] | None = None,
+    runner_provenance: dict[str, Any] | None = None,
 ) -> tuple[str, str]:
+    policy_sha256s = [] if policy_sha256s is None else policy_sha256s
+    if policy_sha256s and len(policy_sha256s) != len(lane_ids):
+        raise ValueError("policy SHA-256 list must align exactly with lane IDs")
+    execution_json = json.dumps(
+        execution_configuration or {}, sort_keys=True, separators=(",", ":"), allow_nan=False
+    )
+    runner_json = json.dumps(
+        runner_provenance or {}, sort_keys=True, separators=(",", ":"), allow_nan=False
+    )
     submission_key = hashlib.sha256(
-        (f"{cluster_root}|{iteration}|{batch_id}|{policy_snapshot}|" + "\n".join(lane_ids)).encode(
-            "utf-8"
-        )
+        (
+            f"{campaign_id}|{campaign_manifest_sha256}|{cluster_root}|{iteration}|{batch_id}|"
+            f"{policy_snapshot}|{execution_json}|{runner_json}|"
+            + "\n".join(
+                f"{lane_id}:{policy_sha256}"
+                for lane_id, policy_sha256 in zip(lane_ids, policy_sha256s, strict=False)
+            )
+            + ("\n".join(lane_ids) if not policy_sha256s else "")
+        ).encode("utf-8")
     ).hexdigest()[:12]
     return submission_key, f"hpf_{submission_key}"
 
@@ -433,6 +553,53 @@ def load_open_eval_batches(conn: sqlite3.Connection) -> list[EvalBatchRecord]:
     return records
 
 
+def validate_result_submission_receipt(
+    conn: sqlite3.Connection,
+    *,
+    lane_id: str,
+    iteration: int,
+    result: dict[str, Any],
+    expected_batch_id: str | None = None,
+) -> None:
+    """Bind a collected result to the exact durable Slurm submission receipt."""
+    if result.get("baseline_replication") is not None:
+        if iteration != 0:
+            raise RuntimeError(f"{lane_id}/iter {iteration}: invalid replicated baseline result")
+        return
+    execution = result.get("execution_configuration")
+    if not isinstance(execution, dict):
+        raise RuntimeError(f"{lane_id}/iter {iteration}: execution identity is missing")
+    result_batch_id = execution.get("batch_id")
+    if not isinstance(result_batch_id, str) or not result_batch_id:
+        raise RuntimeError(f"{lane_id}/iter {iteration}: result batch ID is missing")
+    batch_id = expected_batch_id or result_batch_id
+    row = conn.execute("SELECT * FROM eval_batches WHERE batch_id=?", (batch_id,)).fetchone()
+    if row is None:
+        raise RuntimeError(f"{lane_id}/iter {iteration}: durable batch {batch_id!r} is missing")
+    record = _eval_batch_record(row)
+    actual = {
+        "batch_id": result_batch_id,
+        "iteration": iteration,
+        "lane_member": lane_id in record.lane_ids,
+        "submission_key": str(execution.get("submission_key", "")),
+        "job_name": str(execution.get("job_name", "")),
+        "job_id": str(execution.get("slurm_job_id", "")),
+    }
+    expected = {
+        "batch_id": record.batch_id,
+        "iteration": record.iteration,
+        "lane_member": True,
+        "submission_key": record.submission_key,
+        "job_name": record.job_name,
+        "job_id": record.job_id,
+    }
+    if record.state not in {"submitted", "collected"} or actual != expected:
+        raise RuntimeError(
+            f"{lane_id}/iter {iteration}: result does not match durable Slurm receipt: "
+            f"actual={actual}, expected={expected}, batch_state={record.state}"
+        )
+
+
 def mark_eval_batch_collected(
     conn: sqlite3.Connection,
     *,
@@ -446,6 +613,10 @@ def mark_eval_batch_collected(
         if row is None:
             raise RuntimeError(f"batch {batch_id}: submission intent is missing")
         record = _eval_batch_record(row)
+        if record.state != "submitted":
+            raise RuntimeError(
+                f"batch {batch_id}: only a submitted batch can be collected, got {record.state}"
+            )
         outcomes = successful_lane_ids + retry_lane_ids
         if len(set(outcomes)) != len(outcomes) or set(outcomes) != set(record.lane_ids):
             raise RuntimeError(f"batch {batch_id}: lane outcomes do not match submitted lanes")
@@ -571,23 +742,415 @@ def sha256_file(path: Path) -> str:
     return digest.hexdigest()
 
 
+def manifest_sha256(path: Path) -> str:
+    return sha256_file(path)
+
+
+def validate_campaign_identity(campaign_root: Path) -> tuple[dict[str, Any], dict[str, Any]]:
+    paths = campaign_paths(campaign_root)
+    manifest_path = paths["manifests"] / "campaign_manifest.json"
+    if not manifest_path.is_file() or not paths["identity"].is_file():
+        raise RuntimeError(f"{campaign_root.name}: missing campaign manifest or identity")
+    manifest = load_json(manifest_path)
+    identity = load_json(paths["identity"])
+    expected_keys = {"schema_version", "campaign_id", "campaign_manifest_sha256"}
+    if set(identity) != expected_keys or identity.get("schema_version") != 1:
+        raise RuntimeError(f"{campaign_root.name}: malformed campaign identity")
+    nonce = manifest.get("preparation_nonce")
+    campaign_id = manifest.get("campaign_id")
+    if (
+        not isinstance(nonce, str)
+        or not isinstance(campaign_id, str)
+        or derive_campaign_id(nonce) != campaign_id
+        or identity.get("campaign_id") != campaign_id
+        or identity.get("campaign_manifest_sha256") != manifest_sha256(manifest_path)
+    ):
+        raise RuntimeError(f"{campaign_root.name}: campaign identity or manifest hash drift")
+    return manifest, identity
+
+
+def hamlib_archive_key(lane: Lane | dict[str, Any]) -> str:
+    collection = lane.collection if isinstance(lane, Lane) else str(lane["collection"])
+    file_name = lane.file if isinstance(lane, Lane) else str(lane["file"])
+    return f"{collection}:{file_name.replace('.hdf5', '.zip')}"
+
+
+def parse_hamlib_zip_checksums(
+    path: Path,
+    lanes: list[Lane] | list[dict[str, Any]],
+) -> list[dict[str, str]]:
+    expected = {hamlib_archive_key(lane) for lane in lanes}
+    if len(expected) != EXPECTED_HAMLIB_ARCHIVES:
+        raise RuntimeError(
+            f"canonical active lanes must reference {EXPECTED_HAMLIB_ARCHIVES} ZIP archives, "
+            f"found {len(expected)}"
+        )
+    records: dict[str, dict[str, str]] = {}
+    for line_number, raw in enumerate(path.read_text(encoding="utf-8").splitlines(), start=1):
+        if not raw:
+            continue
+        match = re.fullmatch(r"([0-9a-f]{64})  ([^\r\n\0]+)", raw)
+        if match is None:
+            raise RuntimeError(
+                f"{path.name}:{line_number}: expected '<sha256><two spaces><relative ZIP path>'"
+            )
+        digest, relative_text = match.groups()
+        relative = PurePosixPath(relative_text)
+        if (
+            relative.is_absolute()
+            or relative.as_posix() != relative_text
+            or any(part in {"", ".", ".."} for part in relative.parts)
+        ):
+            raise RuntimeError(f"{path.name}:{line_number}: unsafe/noncanonical relative path")
+        if len(relative.parts) < 2 or relative.suffix != ".zip":
+            raise RuntimeError(f"{path.name}:{line_number}: expected collection-relative ZIP path")
+        key = f"{relative.parts[0]}:{relative.name}"
+        if key not in expected:
+            raise RuntimeError(f"{path.name}:{line_number}: archive is not in HamLib121: {key}")
+        if key in records:
+            raise RuntimeError(f"{path.name}:{line_number}: duplicate archive key {key}")
+        records[key] = {"archive_key": key, "relative_path": relative_text, "sha256": digest}
+    if set(records) != expected:
+        missing = sorted(expected - set(records))
+        raise RuntimeError(
+            f"HamLib checksum manifest must bind exactly {EXPECTED_HAMLIB_ARCHIVES} archives; "
+            f"found {len(records)}, missing={missing[:10]}"
+        )
+    return [records[key] for key in sorted(records)]
+
+
+def validate_canonical_hamlib_zip_checksum_manifest(path: Path) -> None:
+    if path.is_symlink() or not path.is_file():
+        raise RuntimeError("canonical HamLib ZIP checksum manifest is missing or unsafe")
+    size = path.stat(follow_symlinks=False).st_size
+    digest = sha256_file(path)
+    if (
+        size != CANONICAL_HAMLIB_ZIP_SHA256_MANIFEST_BYTES
+        or digest != CANONICAL_HAMLIB_ZIP_SHA256_MANIFEST_SHA256
+    ):
+        raise RuntimeError(
+            "canonical HamLib ZIP checksum manifest drift: "
+            f"expected {CANONICAL_HAMLIB_ZIP_SHA256_MANIFEST_BYTES} bytes/"
+            f"{CANONICAL_HAMLIB_ZIP_SHA256_MANIFEST_SHA256}, found {size} bytes/{digest}"
+        )
+
+
+def validate_canonical_hamlib_source_manifest(path: Path) -> None:
+    if path.is_symlink() or not path.is_file():
+        raise RuntimeError("canonical HamLib source manifest is missing or unsafe")
+    size = path.stat(follow_symlinks=False).st_size
+    digest = sha256_file(path)
+    if (
+        size != CANONICAL_HAMLIB_SOURCE_MANIFEST_BYTES
+        or digest != CANONICAL_HAMLIB_SOURCE_MANIFEST_SHA256
+    ):
+        raise RuntimeError(
+            "canonical HamLib source manifest drift: "
+            f"expected {CANONICAL_HAMLIB_SOURCE_MANIFEST_BYTES} bytes/"
+            f"{CANONICAL_HAMLIB_SOURCE_MANIFEST_SHA256}, found {size} bytes/{digest}"
+        )
+
+
+def validate_hamlib_archive(
+    *, data_root: Path, lane: Lane | dict[str, Any], archive_records: list[dict[str, str]]
+) -> tuple[Path, dict[str, str]]:
+    key = hamlib_archive_key(lane)
+    matches = [record for record in archive_records if record.get("archive_key") == key]
+    if len(matches) != 1:
+        raise RuntimeError(f"{key}: expected exactly one bound HamLib archive record")
+    record = matches[0]
+    digest = str(record.get("sha256", ""))
+    relative_text = str(record.get("relative_path", ""))
+    if SHA256_RE.fullmatch(digest) is None:
+        raise RuntimeError(f"{key}: invalid bound SHA-256")
+    relative = PurePosixPath(relative_text)
+    if relative.is_absolute() or any(part in {"", ".", ".."} for part in relative.parts):
+        raise RuntimeError(f"{key}: unsafe bound archive path")
+    path = data_root.joinpath(*relative.parts)
+    if path.is_symlink() or not path.is_file():
+        raise RuntimeError(f"{key}: bound archive is missing, a symlink, or not a regular file")
+    metadata = path.stat(follow_symlinks=False)
+    cache_key = (
+        str(path.resolve()),
+        int(metadata.st_dev),
+        int(metadata.st_ino),
+        int(metadata.st_size),
+        int(metadata.st_mtime_ns),
+        int(metadata.st_ctime_ns),
+        digest,
+    )
+    if cache_key not in _VERIFIED_ARCHIVE_CACHE:
+        actual = sha256_file(path)
+        if actual != digest:
+            raise RuntimeError(
+                f"{key}: HamLib ZIP SHA-256 mismatch: expected {digest}, found {actual}"
+            )
+        _VERIFIED_ARCHIVE_CACHE.add(cache_key)
+    expected_member = lane.file if isinstance(lane, Lane) else str(lane["file"])
+    member_cache_key = (cache_key, expected_member)
+    if member_cache_key not in _VERIFIED_ARCHIVE_MEMBER_CACHE:
+        with zipfile.ZipFile(path) as archive:
+            members = archive.infolist()
+        if len(members) != 1 or members[0].is_dir():
+            raise RuntimeError(
+                f"{key}: expected exactly one regular ZIP member, found {len(members)}"
+            )
+        member = members[0]
+        if (
+            PurePosixPath(member.filename).name != expected_member
+            or not member.filename.endswith(".hdf5")
+            or member.flag_bits & 0x1
+            or member.compress_type != zipfile.ZIP_DEFLATED
+        ):
+            raise RuntimeError(
+                f"{key}: ZIP member must be the unencrypted deflated {expected_member} HDF5 file"
+            )
+        _VERIFIED_ARCHIVE_MEMBER_CACHE.add(member_cache_key)
+    return path, {"archive_key": key, "relative_path": relative_text, "sha256": digest}
+
+
+def archive_record_for_lane(
+    manifest: dict[str, Any], lane: Lane | dict[str, Any]
+) -> dict[str, str]:
+    key = hamlib_archive_key(lane)
+    matches = [
+        record
+        for record in manifest.get("hamlib_archives", [])
+        if isinstance(record, dict) and record.get("archive_key") == key
+    ]
+    if len(matches) != 1:
+        raise RuntimeError(f"{key}: campaign manifest archive binding is missing or ambiguous")
+    record = matches[0]
+    normalized = {
+        "archive_key": str(record.get("archive_key", "")),
+        "relative_path": str(record.get("relative_path", "")),
+        "sha256": str(record.get("sha256", "")),
+    }
+    if SHA256_RE.fullmatch(normalized["sha256"]) is None:
+        raise RuntimeError(f"{key}: campaign manifest archive digest is invalid")
+    return normalized
+
+
+def validate_evaluation_result_provenance(
+    *,
+    campaign_root: Path,
+    lane: Lane | dict[str, Any],
+    iteration: int,
+    result: dict[str, Any],
+    policy_path: Path,
+) -> None:
+    manifest, identity = validate_campaign_identity(campaign_root)
+    runner_provenance = validate_runner_provenance(campaign_root)
+    lane_id = lane.lane_id if isinstance(lane, Lane) else str(lane["lane_id"])
+    expected_identity = {
+        "lane_id": lane_id,
+        "iteration": iteration,
+        "campaign_id": manifest["campaign_id"],
+        "campaign_manifest_sha256": identity["campaign_manifest_sha256"],
+        "hamlib_archive": archive_record_for_lane(manifest, lane),
+        "runner_provenance": runner_provenance,
+    }
+    drift = {
+        key: {"actual": result.get(key), "expected": value}
+        for key, value in expected_identity.items()
+        if result.get(key) != value
+    }
+    if drift:
+        raise RuntimeError(f"{lane_id}/iter {iteration}: result identity/input drift: {drift}")
+    if policy_path.is_symlink() or not policy_path.is_file():
+        raise RuntimeError(f"{lane_id}/iter {iteration}: evaluated policy snapshot is unsafe")
+    policy_hash = sha256_file(policy_path)
+    if result.get("policy_sha256") != policy_hash:
+        raise RuntimeError(f"{lane_id}/iter {iteration}: evaluated policy bytes changed")
+    initial_policy = campaign_root / "lanes" / lane_id / "initial_simple_pf.py"
+    if initial_policy.is_symlink() or not initial_policy.is_file():
+        raise RuntimeError(f"{lane_id}: initial policy snapshot is unsafe")
+    if result.get("initial_policy_sha256") != sha256_file(initial_policy):
+        raise RuntimeError(f"{lane_id}/iter {iteration}: initial policy provenance drift")
+    baseline_path = campaign_root / "baselines" / f"{lane_id}.json"
+    if baseline_path.is_symlink() or not baseline_path.is_file():
+        raise RuntimeError(f"{lane_id}/iter {iteration}: baseline cache is missing or unsafe")
+    if result.get("baseline_cache_sha256") != sha256_file(baseline_path):
+        raise RuntimeError(f"{lane_id}/iter {iteration}: baseline cache bytes changed")
+    baseline = load_json(baseline_path)
+    for key in (
+        "baseline_schema_version",
+        "baseline_status",
+        "baseline_backend",
+        "baseline_accelerator",
+        "hamlib_archive",
+        "initial_policy_sha256",
+        "gpu_preflight",
+        "baseline_execution_configuration",
+        "baseline_runner_provenance",
+    ):
+        if result.get(key) != baseline.get(key):
+            raise RuntimeError(f"{lane_id}/iter {iteration}: result/baseline cache {key} drift")
+    if (
+        baseline.get("baseline_schema_version") != 2
+        or baseline.get("baseline_status") != "computed"
+        or baseline.get("baseline_backend") != "cupynumeric"
+        or baseline.get("baseline_accelerator") != "NVIDIA A100"
+        or baseline.get("baseline_runner_provenance") != runner_provenance
+        or not isinstance(baseline.get("gpu_preflight"), dict)
+        or baseline["gpu_preflight"].get("accelerator_family") != "NVIDIA A100 80GB"
+        or baseline["gpu_preflight"].get("allocated_gpu_count") != 1
+        or float(baseline["gpu_preflight"].get("gpu_memory_mib", 0.0)) < 80_000
+        or not str(baseline["gpu_preflight"].get("gpu_uuid", "")).startswith("GPU-")
+        or baseline["gpu_preflight"].get("array_backend_module") not in {"cupynumeric", "cunumeric"}
+        or not str(baseline["gpu_preflight"].get("nvidia_smi_path", "")).startswith("/")
+        or (
+            "cupynumeric"
+            not in str(baseline["gpu_preflight"].get("preflight_array_type", "")).lower()
+            and "cunumeric"
+            not in str(baseline["gpu_preflight"].get("preflight_array_type", "")).lower()
+        )
+        or (
+            "cupynumeric" not in str(baseline.get("baseline_array_type", "")).lower()
+            and "cunumeric" not in str(baseline.get("baseline_array_type", "")).lower()
+        )
+    ):
+        raise RuntimeError(f"{lane_id}/iter {iteration}: baseline is not verified A100 evidence")
+    execution = result.get("execution_configuration")
+    if not isinstance(execution, dict) or execution.get("schema_version") != 1:
+        raise RuntimeError(f"{lane_id}/iter {iteration}: execution configuration is missing")
+    replicated = result.get("baseline_replication")
+    if replicated is not None:
+        if iteration != 0 or not isinstance(replicated, dict):
+            raise RuntimeError(f"{lane_id}/iter {iteration}: invalid baseline replication marker")
+        for field in ("source_campaign_id", "source_manifest_sha256", "source_result_sha256"):
+            if SHA256_RE.fullmatch(str(replicated.get(field, ""))) is None:
+                raise RuntimeError(f"{lane_id}: malformed baseline replication {field}")
+        if baseline.get("baseline_computed_campaign_id") != replicated.get(
+            "source_campaign_id"
+        ) or baseline.get("baseline_computed_manifest_sha256") != replicated.get(
+            "source_manifest_sha256"
+        ):
+            raise RuntimeError(f"{lane_id}: replicated baseline source binding drift")
+        return
+    archive_preflight = campaign_root / "manifests" / "hamlib_archive_preflight.json"
+    if archive_preflight.is_symlink() or not archive_preflight.is_file():
+        raise RuntimeError(f"{lane_id}/iter {iteration}: archive preflight receipt is missing")
+    if execution.get("hamlib_archive_preflight_sha256") != sha256_file(archive_preflight):
+        raise RuntimeError(f"{lane_id}/iter {iteration}: archive preflight receipt drift")
+    expected_execution = (
+        ("gpu_baseline", "cupynumeric", True, "initial")
+        if iteration == 0
+        else ("cpu_policy", "numpy", False, "current")
+    )
+    actual_execution = (
+        execution.get("execution_mode"),
+        execution.get("array_backend"),
+        execution.get("compute_baseline"),
+        execution.get("policy_snapshot"),
+    )
+    if actual_execution != expected_execution:
+        raise RuntimeError(
+            f"{lane_id}/iter {iteration}: execution mode drift: "
+            f"actual={actual_execution}, expected={expected_execution}"
+        )
+    batch_id = execution.get("batch_id")
+    if not isinstance(batch_id, str) or not batch_id:
+        raise RuntimeError(f"{lane_id}/iter {iteration}: execution batch ID is missing")
+    submission_key = str(execution.get("submission_key", ""))
+    job_name = str(execution.get("job_name", ""))
+    slurm_job_id = str(execution.get("slurm_job_id", ""))
+    if (
+        re.fullmatch(r"[0-9a-f]{12}", submission_key) is None
+        or job_name != f"hpf_{submission_key}"
+        or re.fullmatch(r"\d+", slurm_job_id) is None
+        or not execution.get("slurm_account")
+        or not execution.get("slurm_partition")
+    ):
+        raise RuntimeError(f"{lane_id}/iter {iteration}: incomplete Slurm execution identity")
+    batch_manifest = (
+        campaign_root
+        / "iterations"
+        / f"iter_{iteration:04d}"
+        / "batches"
+        / batch_id
+        / "batch_manifest.json"
+    )
+    if batch_manifest.is_symlink() or not batch_manifest.is_file():
+        raise RuntimeError(f"{lane_id}/iter {iteration}: batch manifest is missing or unsafe")
+    if result.get("batch_manifest_sha256") != sha256_file(batch_manifest):
+        raise RuntimeError(f"{lane_id}/iter {iteration}: batch manifest bytes changed")
+    batch = load_json(batch_manifest)
+    batch_execution = batch.get("execution_configuration")
+    expected_batch_execution = {
+        "execution_mode": execution.get("execution_mode"),
+        "array_backend": execution.get("array_backend"),
+        "compute_baseline": execution.get("compute_baseline"),
+        "policy_snapshot": execution.get("policy_snapshot"),
+        "account": execution.get("slurm_account"),
+        "partition": execution.get("slurm_partition"),
+        "legate_fbmem": execution.get("legate_fbmem"),
+        "uv_base_dir": execution.get("uv_base_dir"),
+        "uv_cache_dir": execution.get("uv_cache_dir"),
+        "uv_python_install_dir": execution.get("uv_python_install_dir"),
+        "hamlib_archive_preflight_sha256": execution.get("hamlib_archive_preflight_sha256"),
+    }
+    if (
+        batch.get("campaign_id") != manifest["campaign_id"]
+        or batch.get("campaign_manifest_sha256") != identity["campaign_manifest_sha256"]
+        or batch.get("iteration") != iteration
+        or batch.get("batch_id") != batch_id
+        or batch.get("submission_key") != execution.get("submission_key")
+        or batch.get("job_name") != execution.get("job_name")
+        or batch.get("runner_provenance") != runner_provenance
+        or not isinstance(batch.get("policy_sha256s"), dict)
+        or batch["policy_sha256s"].get(lane_id) != policy_hash
+        or not isinstance(batch_execution, dict)
+        or any(batch_execution.get(key) != value for key, value in expected_batch_execution.items())
+    ):
+        raise RuntimeError(f"{lane_id}/iter {iteration}: batch intent/result provenance drift")
+
+
 def runner_bundle_paths(runner_root: Path) -> list[Path]:
     relative_paths = [
         Path(".python-version"),
         Path("pyproject.toml"),
         Path("manifests/active_lanes.csv"),
         Path("manifests/hamlib_electronic_active_space_instances_le32_qubits.csv"),
+        Path("manifests/hamlib_zip_sha256.txt"),
     ]
-    relative_paths.extend(
-        path.relative_to(runner_root) for path in sorted((runner_root / "scripts").glob("*.py"))
-    )
-    relative_paths.extend(
-        path.relative_to(runner_root) for path in sorted((runner_root / "slurm").glob("*.sbatch"))
-    )
+    relative_paths.extend(Path("scripts") / name for name in RUNNER_SCRIPT_FILES)
+    relative_paths.extend(Path("slurm") / name for name in RUNNER_SLURM_FILES)
     paths = [runner_root / relative for relative in relative_paths]
     missing = [path.relative_to(runner_root).as_posix() for path in paths if not path.is_file()]
     if missing:
         raise RuntimeError(f"runner provenance source files are missing: {missing}")
+    for path in paths:
+        metadata = path.lstat()
+        if path.is_symlink() or not stat.S_ISREG(metadata.st_mode):
+            raise RuntimeError(
+                f"runner provenance source must be a real regular file: "
+                f"{path.relative_to(runner_root).as_posix()}"
+            )
+    for directory_name, expected_suffix in (("scripts", ".py"), ("slurm", ".sbatch")):
+        directory = runner_root / directory_name
+        if directory.is_symlink() or not directory.is_dir():
+            raise RuntimeError(
+                f"runner provenance directory is missing or unsafe: {directory_name}"
+            )
+        expected = {
+            path.relative_to(runner_root).as_posix() for path in paths if path.parent == directory
+        }
+        actual: set[str] = set()
+        for item in directory.iterdir():
+            relative = item.relative_to(runner_root).as_posix()
+            if item.name == "__pycache__":
+                if (runner_root / "manifests" / "campaign_manifest.json").is_file():
+                    raise RuntimeError(f"forbidden runner bytecode tree: {relative}")
+                continue
+            if item.is_symlink() or not item.is_file() or item.suffix != expected_suffix:
+                raise RuntimeError(f"undeclared or unsafe runner provenance entry: {relative}")
+            actual.add(relative)
+        if actual != expected:
+            raise RuntimeError(
+                f"runner provenance {directory_name} closure changed: "
+                f"missing={sorted(expected - actual)}, extra={sorted(actual - expected)}"
+            )
     return paths
 
 
@@ -647,21 +1210,63 @@ def parse_codex_cli_version(output: str) -> str:
     return match.group(1)
 
 
-def probe_codex_cli_version(codex_bin: str) -> str:
+def ensure_private_npm_cache(campaign_root: Path) -> Path:
+    npm_cache = campaign_root / ".codex_npm"
+    try:
+        npm_cache.mkdir(mode=0o700, parents=True, exist_ok=False)
+    except FileExistsError:
+        pass
+    metadata = npm_cache.lstat()
+    if (
+        npm_cache.is_symlink()
+        or not stat.S_ISDIR(metadata.st_mode)
+        or metadata.st_uid != os.getuid()
+        or stat.S_IMODE(metadata.st_mode) & 0o077
+    ):
+        raise RuntimeError("campaign npm cache must be an owner-only real directory")
+    return npm_cache
+
+
+def probe_codex_cli_version(codex_bin: str, *, npm_cache: Path | None = None) -> str:
     command = shlex.split(codex_bin)
     if not command:
         raise ValueError("Codex command must not be empty")
+    env = os.environ.copy()
+    if npm_cache is not None:
+        env["npm_config_cache"] = str(npm_cache)
+        env["npm_config_update_notifier"] = "false"
     completed = subprocess.run(
         [*command, "--version"],
         text=True,
         capture_output=True,
         check=False,
         timeout=60,
+        env=env,
     )
     if completed.returncode != 0:
         detail = completed.stderr.strip() or completed.stdout.strip()
         raise RuntimeError(f"Codex version probe failed: {detail}")
     return parse_codex_cli_version("\n".join((completed.stdout, completed.stderr)))
+
+
+def probe_node_version() -> str:
+    completed = subprocess.run(
+        ["node", "--version"],
+        text=True,
+        capture_output=True,
+        check=False,
+        timeout=30,
+    )
+    if completed.returncode != 0:
+        detail = completed.stderr.strip() or completed.stdout.strip()
+        raise RuntimeError(f"Node.js version probe failed: {detail}")
+    match = re.fullmatch(r"v?(\d+\.\d+\.\d+)", completed.stdout.strip())
+    if match is None:
+        raise RuntimeError(f"could not parse Node.js version from {completed.stdout.strip()!r}")
+    version = match.group(1)
+    if int(version.split(".", 1)[0]) != 24:
+        raise RuntimeError(f"paper autoresearch requires Node.js 24.x, found {version}")
+    return version
 
 
 def has_mutation_evidence(campaign_root: Path) -> bool:
@@ -686,16 +1291,23 @@ def ensure_autoresearch_provenance(
     codex_bin: str,
 ) -> dict[str, Any]:
     runner = validate_runner_provenance(campaign_root)
-    codex_cli_version = probe_codex_cli_version(codex_bin)
+    path = campaign_root / "manifests" / "autoresearch_provenance.json"
+    if not path.is_file() and has_mutation_evidence(campaign_root):
+        raise RuntimeError("refusing to backfill missing provenance after mutation evidence exists")
+    npm_cache = ensure_private_npm_cache(campaign_root)
+    codex_cli_version = probe_codex_cli_version(codex_bin, npm_cache=npm_cache)
+    node_version = probe_node_version()
     expected = {
         "schema_version": 1,
         "model": model,
         "reasoning_effort": reasoning_effort,
         "codex_cli_version": codex_cli_version,
+        "node_version": node_version,
+        "npm_cache": ".codex_npm",
+        "codex_exec_flags": list(PAPER_CODEX_EXEC_FLAGS),
         "runner_bundle_sha256": runner["runner_bundle_sha256"],
         "uv_lock_sha256": runner["uv_lock_sha256"],
     }
-    path = campaign_root / "manifests" / "autoresearch_provenance.json"
     if path.is_file():
         actual = load_json(path)
         if actual != expected:
@@ -704,10 +1316,6 @@ def ensure_autoresearch_provenance(
                 "and lock must remain fixed within a campaign"
             )
     else:
-        if has_mutation_evidence(campaign_root):
-            raise RuntimeError(
-                "refusing to backfill missing provenance after mutation evidence exists"
-            )
         write_json(path, expected)
     return expected
 
@@ -888,13 +1496,155 @@ def describe_policy() -> Dict[str, object]:
 '''
 
 
+def validate_policy_ast(source: str, *, filename: str) -> ast.Module:
+    """Reject policy source with filesystem, process, network, or reflection capabilities."""
+    tree = ast.parse(source, filename=filename, mode="exec")
+    allowed_top_level = (
+        ast.Assign,
+        ast.AnnAssign,
+        ast.ClassDef,
+        ast.Expr,
+        ast.FunctionDef,
+        ast.Import,
+        ast.ImportFrom,
+    )
+    for statement in tree.body:
+        if not isinstance(statement, allowed_top_level):
+            raise ValueError(
+                f"policy module-level {type(statement).__name__} statements are not allowed"
+            )
+        if isinstance(statement, ast.Expr) and not (
+            isinstance(statement.value, ast.Constant) and isinstance(statement.value.value, str)
+        ):
+            raise ValueError("policy module-level expressions must be docstrings")
+        if isinstance(statement, ast.FunctionDef) and statement.decorator_list:
+            raise ValueError("policy function decorators are not allowed")
+        if isinstance(statement, ast.ClassDef):
+            if statement.bases or statement.keywords:
+                raise ValueError("policy classes cannot inherit or declare metaclasses")
+            for decorator in statement.decorator_list:
+                target = decorator.func if isinstance(decorator, ast.Call) else decorator
+                if not isinstance(target, ast.Name) or target.id != "dataclass":
+                    raise ValueError("only the dataclass policy class decorator is allowed")
+
+    for node in ast.walk(tree):
+        if isinstance(node, (ast.AsyncFunctionDef, ast.AsyncFor, ast.AsyncWith, ast.Await)):
+            raise ValueError("async policy code is not allowed")
+        if isinstance(
+            node, (ast.Global, ast.Nonlocal, ast.Delete, ast.While, ast.Yield, ast.YieldFrom)
+        ):
+            raise ValueError(f"policy {type(node).__name__} statements are not allowed")
+        if isinstance(node, ast.Name):
+            if node.id in FORBIDDEN_POLICY_NAMES or node.id.startswith("__"):
+                raise ValueError(f"policy name {node.id!r} is not allowed")
+        if isinstance(node, ast.Attribute) and node.attr.startswith("_"):
+            raise ValueError(f"private/dunder policy attribute {node.attr!r} is not allowed")
+        if isinstance(node, ast.Import):
+            for alias in node.names:
+                if alias.name not in SAFE_POLICY_IMPORTS:
+                    raise ValueError(f"policy import {alias.name!r} is not allowed")
+                if alias.name != "math":
+                    raise ValueError(
+                        f"policy module import {alias.name!r} is not allowed; "
+                        "import only explicit names"
+                    )
+        if isinstance(node, ast.ImportFrom):
+            if node.level != 0 or node.module not in SAFE_POLICY_IMPORTS:
+                raise ValueError(f"policy import from {node.module!r} is not allowed")
+            allowed_names = SAFE_POLICY_IMPORTS[node.module]
+            for alias in node.names:
+                if (
+                    alias.name == "*"
+                    or alias.name.startswith("_")
+                    or (allowed_names is not None and alias.name not in allowed_names)
+                ):
+                    raise ValueError(f"policy import {node.module}.{alias.name} is not allowed")
+        if isinstance(node, ast.Call) and isinstance(node.func, ast.Name):
+            if node.func.id in FORBIDDEN_POLICY_NAMES or node.func.id.startswith("__"):
+                raise ValueError(f"policy call {node.func.id!r} is not allowed")
+            if node.func.id == "range":
+                for argument in node.args:
+                    if (
+                        isinstance(argument, ast.Constant)
+                        and isinstance(argument.value, int)
+                        and abs(argument.value) > 100_000
+                    ):
+                        raise ValueError(
+                            "policy range literal exceeds the deterministic work limit"
+                        )
+    return tree
+
+
+def _safe_policy_import(
+    name: str,
+    globals_dict: dict[str, Any] | None = None,
+    locals_dict: dict[str, Any] | None = None,
+    fromlist: tuple[str, ...] | list[str] = (),
+    level: int = 0,
+):
+    del globals_dict, locals_dict
+    if level != 0 or name not in SAFE_POLICY_IMPORTS:
+        raise ImportError(f"policy import {name!r} is not allowed")
+    if not fromlist and name != "math":
+        raise ImportError(f"policy module import {name!r} is not allowed")
+    allowed_names = SAFE_POLICY_IMPORTS[name]
+    if allowed_names is not None and any(item not in allowed_names for item in fromlist):
+        raise ImportError(f"policy import list from {name!r} is not allowed")
+    return importlib.import_module(name)
+
+
 def load_policy_module(path: Path):
-    spec = importlib.util.spec_from_file_location(f"policy_{path.parent.name}", path)
-    if spec is None or spec.loader is None:
-        raise ImportError(f"could not import policy {path}")
-    module = importlib.util.module_from_spec(spec)
-    sys.modules[spec.name] = module
-    spec.loader.exec_module(module)
+    if path.is_symlink() or not path.is_file():
+        raise ImportError(f"policy must be a real regular file: {path}")
+    source = path.read_text(encoding="utf-8")
+    tree = validate_policy_ast(source, filename=str(path))
+    module_name = f"_hsopt_policy_{hashlib.sha256(source.encode('utf-8')).hexdigest()}"
+    module = types.ModuleType(module_name)
+    safe_builtins = {
+        "Exception": Exception,
+        "ValueError": ValueError,
+        "abs": abs,
+        "all": all,
+        "any": any,
+        "bool": bool,
+        "dict": dict,
+        "enumerate": enumerate,
+        "filter": filter,
+        "float": float,
+        "int": int,
+        "isinstance": isinstance,
+        "len": len,
+        "list": list,
+        "map": map,
+        "max": max,
+        "min": min,
+        "object": object,
+        "pow": pow,
+        "range": range,
+        "reversed": reversed,
+        "round": round,
+        "set": set,
+        "sorted": sorted,
+        "str": str,
+        "sum": sum,
+        "tuple": tuple,
+        "zip": zip,
+        "__build_class__": __build_class__,
+        "__import__": _safe_policy_import,
+    }
+    module.__dict__.update(
+        {
+            "__builtins__": safe_builtins,
+            "__file__": str(path),
+            "__package__": None,
+        }
+    )
+    code = compile(tree, str(path), "exec")
+    sys.modules[module_name] = module
+    try:
+        exec(code, module.__dict__, module.__dict__)
+    finally:
+        sys.modules.pop(module_name, None)
     return module
 
 

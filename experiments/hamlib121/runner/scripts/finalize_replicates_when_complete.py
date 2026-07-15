@@ -3,12 +3,26 @@ from __future__ import annotations
 
 import argparse
 import json
+import os
 import sqlite3
+import stat
 import subprocess
 import sys
+import tempfile
 import time
 from datetime import datetime, timezone
 from pathlib import Path
+
+_PRIVATE_PYCACHE_PREFIX = tempfile.mkdtemp(prefix="hsopt-hamlib121-pycache-")
+_private_pycache_stat = os.stat(_PRIVATE_PYCACHE_PREFIX, follow_symlinks=False)
+if (
+    not stat.S_ISDIR(_private_pycache_stat.st_mode)
+    or _private_pycache_stat.st_uid != os.getuid()
+    or stat.S_IMODE(_private_pycache_stat.st_mode) & 0o077
+):
+    raise RuntimeError("private Python bytecode prefix is not an owner-only real directory")
+sys.pycache_prefix = _PRIVATE_PYCACHE_PREFIX
+os.environ["PYTHONPYCACHEPREFIX"] = _PRIVATE_PYCACHE_PREFIX
 
 
 PAPER_RUNS = 5
@@ -64,6 +78,11 @@ def campaign_progress(
                 min_iteration, max_iteration = conn.execute(
                     "SELECT MIN(iteration), MAX(iteration) FROM lanes WHERE active=1"
                 ).fetchone()
+                open_batches = int(
+                    conn.execute(
+                        "SELECT COUNT(*) FROM eval_batches WHERE state!='collected'"
+                    ).fetchone()[0]
+                )
         except sqlite3.Error as exc:
             run_rows.append(
                 {
@@ -86,6 +105,7 @@ def campaign_progress(
             and max_iteration is not None
             and int(min_iteration) == expected_iterations
             and int(max_iteration) == expected_iterations
+            and open_batches == 0
         )
         run_rows.append(
             {
@@ -95,6 +115,7 @@ def campaign_progress(
                 "expected_proposals": expected_proposals,
                 "min_iteration": min_iteration,
                 "max_iteration": max_iteration,
+                "open_batches": open_batches,
                 "complete": complete,
                 "status": "complete" if complete else "incomplete",
             }

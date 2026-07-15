@@ -3,7 +3,6 @@ from __future__ import annotations
 
 import argparse
 import asyncio
-import importlib.util
 import json
 import math
 import os
@@ -12,27 +11,43 @@ import signal
 import shutil
 import stat
 import sys
+import tempfile
 from pathlib import Path
 
-from campaign_common import (
+_PRIVATE_PYCACHE_PREFIX = tempfile.mkdtemp(prefix="hsopt-hamlib121-pycache-")
+_private_pycache_stat = os.stat(_PRIVATE_PYCACHE_PREFIX, follow_symlinks=False)
+if (
+    not stat.S_ISDIR(_private_pycache_stat.st_mode)
+    or _private_pycache_stat.st_uid != os.getuid()
+    or stat.S_IMODE(_private_pycache_stat.st_mode) & 0o077
+):
+    raise RuntimeError("private Python bytecode prefix is not an owner-only real directory")
+sys.pycache_prefix = _PRIVATE_PYCACHE_PREFIX
+os.environ["PYTHONPYCACHEPREFIX"] = _PRIVATE_PYCACHE_PREFIX
+
+from campaign_common import (  # noqa: E402
     ALLOWED_TERM_ORDER_STRATEGIES,
     DEFAULT_CODEX_BIN,
     PAPER_MODEL,
     PAPER_REASONING_EFFORT,
+    PAPER_CODEX_EXEC_FLAGS,
     db_connect,
     ensure_autoresearch_provenance,
     ensure_dirs,
+    ensure_private_npm_cache,
     init_db,
+    load_policy_module,
     log_event,
     now_iso,
     order_terms,
 )
-from render_telemetry import main as render_main
+from render_telemetry import main as render_main  # noqa: E402
 
 
 def prepare_codex_tools(root: Path) -> Path:
     tools_dir = root / ".codex_tools"
     tools_dir.mkdir(parents=True, exist_ok=True)
+    ensure_private_npm_cache(root)
     shim_text = f'#!/bin/sh\nexec {sys.executable!r} "$@"\n'
     for name in ("python", "python3"):
         python_shim = tools_dir / name
@@ -47,13 +62,93 @@ def prepare_codex_tools(root: Path) -> Path:
     return tools_dir
 
 
-def ensure_yolo_allowed_on_this_host() -> None:
+def write_bytes_atomic(path: Path, payload: bytes) -> None:
+    path.parent.mkdir(parents=True, exist_ok=True)
+    temporary = path.with_name(f".{path.name}.{os.getpid()}.tmp")
+    if temporary.exists() or temporary.is_symlink():
+        raise RuntimeError(f"temporary policy path is unsafe: {temporary}")
+    try:
+        with temporary.open("xb") as handle:
+            handle.write(payload)
+            handle.flush()
+            os.fsync(handle.fileno())
+        os.replace(temporary, path)
+    finally:
+        temporary.unlink(missing_ok=True)
+
+
+def validate_codex_lifecycle(path: Path) -> tuple[bool, str | None]:
+    if path.is_symlink() or not path.is_file():
+        return False, "Codex JSONL lifecycle output is missing or unsafe"
+    event_types: list[str] = []
+    try:
+        for line_number, line in enumerate(path.read_text(encoding="utf-8").splitlines(), start=1):
+            if not line.strip():
+                continue
+            payload = json.loads(line)
+            event_type = payload.get("type")
+            if not isinstance(event_type, str) or not event_type:
+                return False, f"Codex JSONL line {line_number} has no event type"
+            event_types.append(event_type)
+    except (OSError, json.JSONDecodeError) as exc:
+        return False, f"invalid Codex JSONL lifecycle output: {exc}"
+    if "thread.started" not in event_types or "turn.completed" not in event_types:
+        return False, f"incomplete Codex lifecycle: {event_types}"
+    failures = [
+        event_type
+        for event_type in event_types
+        if event_type.endswith(".failed") or event_type.endswith(".error")
+    ]
+    if failures:
+        return False, f"Codex lifecycle reported failure events: {failures}"
+    return True, None
+
+
+async def terminate_process_group(process_group_id: int) -> None:
+    try:
+        os.killpg(process_group_id, signal.SIGTERM)
+    except ProcessLookupError:
+        return
+    for _ in range(20):
+        await asyncio.sleep(0.05)
+        try:
+            os.killpg(process_group_id, 0)
+        except ProcessLookupError:
+            return
+    try:
+        os.killpg(process_group_id, signal.SIGKILL)
+    except ProcessLookupError:
+        return
+    for _ in range(20):
+        await asyncio.sleep(0.05)
+        try:
+            os.killpg(process_group_id, 0)
+        except ProcessLookupError:
+            return
+    raise RuntimeError(f"mutation process group {process_group_id} survived SIGKILL")
+
+
+def isolated_policy_path(work_dir: Path) -> Path:
+    entries = list(work_dir.iterdir())
+    if len(entries) != 1 or entries[0].name != "simple_pf.py":
+        raise RuntimeError(
+            "isolated mutation workspace closure changed: "
+            f"{sorted(entry.name for entry in entries)}"
+        )
+    policy = entries[0]
+    metadata = policy.lstat()
+    if policy.is_symlink() or not stat.S_ISREG(metadata.st_mode):
+        raise RuntimeError("isolated candidate policy is not a real regular file")
+    return policy
+
+
+def ensure_mutation_host_allowed() -> None:
     slurm_job_id = os.environ.get("SLURM_JOB_ID") or os.environ.get("SLURM_JOBID")
     if slurm_job_id:
         raise RuntimeError(
-            "Refusing to launch Codex with --dangerously-bypass-approvals-and-sandbox "
-            f"inside Slurm job {slurm_job_id}. Run mutation agents on Omni/login only; "
-            "Slurm jobs must be evaluator/diagonalization jobs without Codex yolo mode."
+            f"Refusing to launch a mutation agent inside Slurm job {slurm_job_id}. "
+            "Run mutation agents on Omni/login only; "
+            "Slurm jobs must be evaluator/diagonalization jobs only."
         )
 
 
@@ -66,15 +161,7 @@ def load_lanes(conn, *, limit: int | None) -> list[dict]:
 
 def validate_policy(policy_path: Path) -> tuple[bool, str | None]:
     try:
-        source = policy_path.read_text(encoding="utf-8")
-        compile(source, str(policy_path), "exec")
-        module_name = f"_pf_policy_{abs(hash(policy_path))}"
-        spec = importlib.util.spec_from_file_location(module_name, policy_path)
-        if spec is None or spec.loader is None:
-            return False, "could not create import spec"
-        module = importlib.util.module_from_spec(spec)
-        sys.modules[module_name] = module
-        spec.loader.exec_module(module)
+        module = load_policy_module(policy_path)
         config = module.get_method_config()
         formula_order = int(getattr(config, "formula_order"))
         n_steps = int(getattr(config, "n_steps"))
@@ -277,8 +364,13 @@ async def run_one(
         stderr_path = iter_dir / "codex.stderr"
         last_message = iter_dir / "last_message.txt"
 
-        if policy_path.exists():
-            shutil.copy2(policy_path, before_path)
+        if policy_path.is_symlink() or not policy_path.is_file():
+            raise RuntimeError(f"live policy is missing or unsafe: {policy_path}")
+        before_bytes = policy_path.read_bytes()
+        write_bytes_atomic(before_path, before_bytes)
+        work_dir = Path(tempfile.mkdtemp(prefix=".candidate-work-", dir=iter_dir))
+        work_policy = work_dir / "simple_pf.py"
+        write_bytes_atomic(work_policy, before_bytes)
 
         previous_path = (
             root
@@ -301,14 +393,12 @@ async def run_one(
         )
         prompt_path.write_text(prompt, encoding="utf-8")
 
-        ensure_yolo_allowed_on_this_host()
+        ensure_mutation_host_allowed()
         command = [
             *shlex.split(codex_bin),
-            "exec",
-            "--dangerously-bypass-approvals-and-sandbox",
-            "--skip-git-repo-check",
+            *PAPER_CODEX_EXEC_FLAGS,
             "-C",
-            str(lane_dir),
+            str(work_dir),
             "-m",
             model,
             "-c",
@@ -318,63 +408,73 @@ async def run_one(
             prompt,
         ]
         env = os.environ.copy()
-        env.setdefault("npm_config_cache", str(Path.home() / ".npm"))
+        env["npm_config_cache"] = str(root / ".codex_npm")
+        env["npm_config_update_notifier"] = "false"
         env["PATH"] = f"{tools_dir}:{env.get('PATH', '')}"
-        with (
-            stdout_path.open("w", encoding="utf-8") as out,
-            stderr_path.open("w", encoding="utf-8") as err,
-        ):
-            proc = await asyncio.create_subprocess_exec(
-                *command,
-                stdout=out,
-                stderr=err,
-                env=env,
-                start_new_session=True,
-            )
-            try:
-                code = await asyncio.wait_for(proc.wait(), timeout=timeout_seconds)
-            except asyncio.TimeoutError:
+        for output_path in (stdout_path, stderr_path, last_message):
+            if output_path.is_symlink() or (output_path.exists() and not output_path.is_file()):
+                raise RuntimeError(f"mutation output path is unsafe: {output_path}")
+        last_message.unlink(missing_ok=True)
+        try:
+            with (
+                stdout_path.open("w", encoding="utf-8") as out,
+                stderr_path.open("w", encoding="utf-8") as err,
+            ):
+                proc = await asyncio.create_subprocess_exec(
+                    *command,
+                    stdout=out,
+                    stderr=err,
+                    env=env,
+                    start_new_session=True,
+                )
                 try:
-                    os.killpg(proc.pid, signal.SIGTERM)
-                except ProcessLookupError:
-                    pass
-                try:
-                    await asyncio.wait_for(proc.wait(), timeout=10)
+                    code = await asyncio.wait_for(proc.wait(), timeout=timeout_seconds)
                 except asyncio.TimeoutError:
-                    try:
-                        os.killpg(proc.pid, signal.SIGKILL)
-                    except ProcessLookupError:
-                        pass
+                    code = 124
+                    await terminate_process_group(proc.pid)
                     await proc.wait()
-                code = 124
-                with last_message.open("a", encoding="utf-8") as message:
-                    message.write(
-                        f"mutation timed out after {timeout_seconds} seconds; restored previous policy\\n"
-                    )
-        changed = (
-            policy_path.exists()
-            and before_path.exists()
-            and policy_path.read_bytes() != before_path.read_bytes()
-        )
-        valid, validation_error = (
-            validate_policy(policy_path)
-            if policy_path.exists()
-            else (False, "missing simple_pf.py")
-        )
-        mutation_succeeded = valid and code == 0 and changed
-        if code != 0:
-            mutation_error = f"Codex exited with status {code}"
-        elif not valid:
-            mutation_error = validation_error
-        elif not changed:
-            mutation_error = "Codex completed without changing simple_pf.py"
-        else:
-            mutation_error = None
-        if not mutation_succeeded and before_path.exists():
-            shutil.copy2(before_path, policy_path)
-        if policy_path.exists():
-            shutil.copy2(policy_path, after_path)
-        return lane["lane_id"], int(code), mutation_succeeded, mutation_error
+                else:
+                    # Codex may have spawned descendants that outlive its leader. Tear down the
+                    # entire isolated process group before inspecting or promoting any bytes.
+                    await terminate_process_group(proc.pid)
+
+            lifecycle_ok, lifecycle_error = validate_codex_lifecycle(stdout_path)
+            closure_error: str | None = None
+            try:
+                candidate_path = isolated_policy_path(work_dir)
+            except BaseException as exc:
+                candidate_path = work_policy
+                closure_error = f"{type(exc).__name__}: {exc}"
+            candidate_bytes = (
+                candidate_path.read_bytes()
+                if candidate_path.is_file() and not candidate_path.is_symlink()
+                else before_bytes
+            )
+            write_bytes_atomic(after_path, candidate_bytes)
+            changed = candidate_bytes != before_bytes
+            valid, validation_error = (
+                validate_policy(candidate_path) if closure_error is None else (False, closure_error)
+            )
+            mutation_succeeded = (
+                valid and lifecycle_ok and code == 0 and changed and closure_error is None
+            )
+            if code != 0:
+                mutation_error = f"Codex exited with status {code}"
+            elif not lifecycle_ok:
+                mutation_error = lifecycle_error
+            elif closure_error is not None:
+                mutation_error = closure_error
+            elif not valid:
+                mutation_error = validation_error
+            elif not changed:
+                mutation_error = "Codex completed without changing simple_pf.py"
+            else:
+                mutation_error = None
+            if mutation_succeeded:
+                write_bytes_atomic(policy_path, candidate_bytes)
+            return lane["lane_id"], int(code), mutation_succeeded, mutation_error
+        finally:
+            shutil.rmtree(work_dir, ignore_errors=False)
 
 
 async def run_all(args) -> int:

@@ -6,21 +6,43 @@ import csv
 import hashlib
 import json
 import math
+import os
 import re
 import shutil
 import sqlite3
+import stat
 import statistics
+import sys
 import tempfile
 from collections import Counter, defaultdict
 from pathlib import Path
 from typing import Any
 
-from campaign_common import (
+_PRIVATE_PYCACHE_PREFIX = tempfile.mkdtemp(prefix="hsopt-hamlib121-pycache-")
+_private_pycache_stat = os.stat(_PRIVATE_PYCACHE_PREFIX, follow_symlinks=False)
+if (
+    not stat.S_ISDIR(_private_pycache_stat.st_mode)
+    or _private_pycache_stat.st_uid != os.getuid()
+    or stat.S_IMODE(_private_pycache_stat.st_mode) & 0o077
+):
+    raise RuntimeError("private Python bytecode prefix is not an owner-only real directory")
+sys.pycache_prefix = _PRIVATE_PYCACHE_PREFIX
+os.environ["PYTHONPYCACHEPREFIX"] = _PRIVATE_PYCACHE_PREFIX
+
+from campaign_common import (  # noqa: E402
     PAPER_CODEX_CLI_VERSION,
+    PAPER_CODEX_EXEC_FLAGS,
     PAPER_MODEL,
     PAPER_REASONING_EFFORT,
+    EXPECTED_HAMLIB_ARCHIVES,
     load_json,
+    parse_hamlib_zip_checksums,
+    validate_evaluation_result_provenance,
+    validate_result_submission_receipt,
     validate_runner_provenance,
+    validate_campaign_identity,
+    validate_canonical_hamlib_source_manifest,
+    validate_canonical_hamlib_zip_checksum_manifest,
     write_json,
 )
 
@@ -49,6 +71,41 @@ FORBIDDEN_ABSOLUTE_PATH_PATTERNS = (
 PAPER_RUNS = 5
 PAPER_LANES = 121
 PAPER_ITERATIONS = 50
+SUPERVISOR_PROVENANCE_KEYS = {
+    "schema_version",
+    "campaign_id",
+    "campaign_manifest_sha256",
+    "start_iteration",
+    "proposal_iterations",
+    "batch_size",
+    "max_running_eval_jobs",
+    "max_concurrent_mutators",
+    "max_batch_wait_seconds",
+    "max_eval_retries",
+    "max_mutation_retries",
+    "mutation_retry_base_seconds",
+    "mutation_retry_max_seconds",
+    "poll_seconds",
+    "rescue_poll_seconds",
+    "model",
+    "reasoning_effort",
+    "codex_bin",
+    "codex_exec_flags",
+    "npm_cache",
+    "python_environments",
+    "account",
+    "gpu_partition",
+    "cpu_partition",
+    "fallback_enabled",
+    "fallback_partition",
+    "sync_host",
+    "submit_host",
+    "slurm_query_host",
+    "legate_fbmem",
+    "uv_base_dir",
+    "uv_cache_dir",
+    "uv_python_install_dir",
+}
 
 
 def validate_paper_autoresearch_provenance(provenance: dict[str, Any]) -> None:
@@ -56,6 +113,8 @@ def validate_paper_autoresearch_provenance(provenance: dict[str, Any]) -> None:
         "model": PAPER_MODEL,
         "reasoning_effort": PAPER_REASONING_EFFORT,
         "codex_cli_version": PAPER_CODEX_CLI_VERSION,
+        "npm_cache": ".codex_npm",
+        "codex_exec_flags": list(PAPER_CODEX_EXEC_FLAGS),
     }
     drift = {
         key: {"actual": provenance.get(key), "expected": value}
@@ -64,6 +123,67 @@ def validate_paper_autoresearch_provenance(provenance: dict[str, Any]) -> None:
     }
     if drift:
         raise RuntimeError(f"paper autoresearch provenance changed: {drift}")
+    node_version = str(provenance.get("node_version", ""))
+    if re.fullmatch(r"24\.\d+\.\d+", node_version) is None:
+        raise RuntimeError(
+            f"paper autoresearch provenance changed: Node.js 24.x required, got {node_version!r}"
+        )
+
+
+def validate_supervisor_provenance(
+    root: Path,
+    *,
+    manifest: dict[str, Any],
+    identity: dict[str, Any],
+    require_paper_protocol: bool,
+) -> dict[str, Any]:
+    path = root / "manifests" / "supervisor_provenance.json"
+    if path.is_symlink() or not path.is_file():
+        raise RuntimeError(f"{root.name}: missing or unsafe supervisor provenance")
+    payload = load_json(path)
+    if not isinstance(payload, dict) or set(payload) != SUPERVISOR_PROVENANCE_KEYS:
+        raise RuntimeError(f"{root.name}: malformed supervisor provenance")
+    if (
+        payload.get("schema_version") != 1
+        or payload.get("campaign_id") != manifest["campaign_id"]
+        or payload.get("campaign_manifest_sha256") != identity["campaign_manifest_sha256"]
+        or payload.get("npm_cache") != ".codex_npm"
+        or payload.get("python_environments") != [".venv", ".venv_cpu"]
+    ):
+        raise RuntimeError(f"{root.name}: supervisor identity/runtime provenance drift")
+    protocol = {
+        key: payload[key]
+        for key in (
+            "start_iteration",
+            "proposal_iterations",
+            "batch_size",
+            "max_running_eval_jobs",
+            "max_concurrent_mutators",
+            "model",
+            "reasoning_effort",
+            "codex_bin",
+            "codex_exec_flags",
+            "npm_cache",
+            "python_environments",
+        )
+    }
+    if require_paper_protocol:
+        expected = {
+            "start_iteration": 1,
+            "proposal_iterations": 50,
+            "batch_size": 8,
+            "max_running_eval_jobs": 8,
+            "max_concurrent_mutators": 4,
+            "model": PAPER_MODEL,
+            "reasoning_effort": PAPER_REASONING_EFFORT,
+            "codex_bin": "npx -y @openai/codex@0.144.0",
+            "codex_exec_flags": list(PAPER_CODEX_EXEC_FLAGS),
+            "npm_cache": ".codex_npm",
+            "python_environments": [".venv", ".venv_cpu"],
+        }
+        if protocol != expected:
+            raise RuntimeError(f"{root.name}: fixed paper supervisor protocol changed")
+    return protocol
 
 
 def parse_result(row: sqlite3.Row) -> dict[str, Any]:
@@ -208,13 +328,13 @@ def validate_canonical_lanes(lanes: list[dict[str, Any]]) -> None:
 
 
 def validate_canonical_campaign_manifest(root: Path) -> None:
+    validate_canonical_hamlib_source_manifest(CANONICAL_SOURCE_MANIFEST)
     for canonical in (CANONICAL_SOURCE_MANIFEST, CANONICAL_ACTIVE_MANIFEST):
         campaign_copy = root / "manifests" / canonical.name
         if not campaign_copy.is_file() or sha256_file(campaign_copy) != sha256_file(canonical):
             raise RuntimeError(f"{root.name}: campaign manifest copy differs from {canonical.name}")
 
-    manifest_path = root / "manifests" / "campaign_manifest.json"
-    payload = json.loads(manifest_path.read_text(encoding="utf-8"))
+    payload, identity = validate_campaign_identity(root)
     fixed_fields = {
         "requested_count": 401,
         "target_fit_count": PAPER_LANES,
@@ -223,6 +343,7 @@ def validate_canonical_campaign_manifest(root: Path) -> None:
         "memory_gib": 64.0,
         "workspace_factor": 4.0,
         "active_min_memory_gib": None,
+        "schema_version": 2,
     }
     drift = {
         key: {"actual": payload.get(key), "expected": expected}
@@ -231,11 +352,47 @@ def validate_canonical_campaign_manifest(root: Path) -> None:
     }
     if drift:
         raise RuntimeError(f"{root.name}: fixed campaign manifest fields changed: {drift}")
+    expected_paper_protocol = {
+        "replicate_runs": 5,
+        "active_lanes": PAPER_LANES,
+        "proposal_iterations": PAPER_ITERATIONS,
+        "baseline_backend": "cupynumeric",
+        "baseline_accelerator": "NVIDIA A100",
+        "baseline_replicated_from_run_01": True,
+        "policy_backend": "numpy",
+        "streaming_batch_size": 8,
+        "max_concurrent_mutators": 4,
+        "max_running_eval_jobs": 8,
+        "node_major": 24,
+        "codex_cli_version": PAPER_CODEX_CLI_VERSION,
+        "model": PAPER_MODEL,
+        "reasoning_effort": PAPER_REASONING_EFFORT,
+    }
+    if payload.get("paper_protocol") != expected_paper_protocol:
+        raise RuntimeError(f"{root.name}: fixed paper protocol manifest changed")
+    checksum_path = root / str(payload.get("hamlib_zip_checksums_file", ""))
+    if (
+        checksum_path.is_symlink()
+        or not checksum_path.is_file()
+        or payload.get("hamlib_zip_checksums_sha256") != sha256_file(checksum_path)
+    ):
+        raise RuntimeError(f"{root.name}: HamLib ZIP checksum manifest drift")
+    validate_canonical_hamlib_zip_checksum_manifest(checksum_path)
+    archive_records = parse_hamlib_zip_checksums(
+        checksum_path,
+        active_rows := [lane for lane in payload.get("lanes", []) if lane.get("exact_fit")],
+    )
+    if (
+        archive_records != payload.get("hamlib_archives")
+        or len(archive_records) != EXPECTED_HAMLIB_ARCHIVES
+    ):
+        raise RuntimeError(f"{root.name}: immutable 83-ZIP archive binding drift")
+    if identity.get("campaign_id") != payload.get("campaign_id"):
+        raise RuntimeError(f"{root.name}: campaign identity drift")
 
     with CANONICAL_ACTIVE_MANIFEST.open(encoding="utf-8") as handle:
         expected_rows = list(csv.DictReader(handle))
     fields = list(expected_rows[0])
-    active_rows = [lane for lane in payload.get("lanes", []) if lane.get("exact_fit")]
     normalized = [{field: str(row.get(field, "")) for field in fields} for row in active_rows]
     if normalized != expected_rows:
         raise RuntimeError(
@@ -249,6 +406,10 @@ def load_run(
     expected_iterations: int,
     allow_incomplete: bool,
 ) -> tuple[list[dict[str, Any]], dict[str, list[dict[str, Any]]]]:
+    manifest, _identity = validate_campaign_identity(root)
+    manifest_lane_by_id = {
+        str(lane["lane_id"]): lane for lane in manifest["lanes"] if lane.get("exact_fit")
+    }
     conn = sqlite3.connect(root / "campaign.sqlite")
     conn.row_factory = sqlite3.Row
     columns = {str(row["name"]) for row in conn.execute("PRAGMA table_info(evaluations)")}
@@ -263,6 +424,14 @@ def load_run(
     missing_columns = required_columns - columns
     if missing_columns:
         raise RuntimeError(f"{root}: missing decision columns {sorted(missing_columns)}")
+    open_batches = int(
+        conn.execute("SELECT COUNT(*) FROM eval_batches WHERE state!='collected'").fetchone()[0]
+    )
+    if not allow_incomplete and open_batches:
+        raise RuntimeError(
+            f"{root.name}: {open_batches} evaluation batch(es) are still open; "
+            "strict export requires every durable submission to be collected"
+        )
 
     lane_rows = [
         dict(row)
@@ -279,13 +448,31 @@ def load_run(
         ORDER BY lane_id, iteration
         """
     ).fetchall()
-    conn.close()
 
     by_lane: dict[str, list[dict[str, Any]]] = defaultdict(list)
     for row in evaluation_rows:
         item = dict(row)
         item["result"] = parse_result(row)
-        by_lane[str(row["lane_id"])].append(item)
+        lane_id = str(row["lane_id"])
+        iteration = int(row["iteration"])
+        result_path = root / "iterations" / f"iter_{iteration:04d}" / "results" / f"{lane_id}.json"
+        if result_path.is_symlink() or not result_path.is_file():
+            raise RuntimeError(
+                f"{root.name}/{lane_id}/iter {iteration}: result artifact is missing or unsafe"
+            )
+        artifact = load_json(result_path)
+        if artifact != item["result"]:
+            raise RuntimeError(
+                f"{root.name}/{lane_id}/iter {iteration}: SQLite result_json differs from "
+                "the checksummed iteration result artifact"
+            )
+        validate_result_submission_receipt(
+            conn,
+            lane_id=lane_id,
+            iteration=iteration,
+            result=artifact,
+        )
+        by_lane[lane_id].append(item)
 
     expected_iteration_set = set(range(0, expected_iterations + 1))
     for lane in lane_rows:
@@ -310,6 +497,13 @@ def load_run(
                 raise RuntimeError(
                     f"{root.name}/{lane_id}: missing iteration-0 policy {baseline_snapshot}"
                 )
+            validate_evaluation_result_provenance(
+                campaign_root=root,
+                lane=manifest_lane_by_id[lane_id],
+                iteration=0,
+                result=baseline_result,
+                policy_path=baseline_snapshot,
+            )
 
         incumbent_t = None if baseline is None else exact_t_count(baseline["result"])
         incumbent_iteration = None if baseline is None else 0
@@ -330,6 +524,14 @@ def load_run(
             if not snapshot.is_file():
                 raise RuntimeError(
                     f"{root.name}/{lane_id}/iter {iteration}: missing policy {snapshot}"
+                )
+            if str(row["status"]) == "ok":
+                validate_evaluation_result_provenance(
+                    campaign_root=root,
+                    lane=manifest_lane_by_id[lane_id],
+                    iteration=iteration,
+                    result=result,
+                    policy_path=snapshot,
                 )
             passes = bool(result.get("passes_chemical_accuracy_bound", False))
             if bool(row["passes_accuracy"]) != passes:
@@ -368,6 +570,7 @@ def load_run(
             if accepted:
                 incumbent_t = candidate_t
                 incumbent_iteration = iteration
+    conn.close()
     return lane_rows, by_lane
 
 
@@ -415,14 +618,50 @@ def main() -> None:
     all_candidate_rows: list[dict[str, Any]] = []
     lane_run_rows: list[dict[str, Any]] = []
     campaign_rows: list[dict[str, Any]] = []
+    baseline_provenance_rows: list[dict[str, Any]] = []
     trajectory_rows: list[dict[str, Any]] = []
     lane_run_index: dict[str, list[dict[str, Any]]] = defaultdict(list)
     canonical_lane_ids: list[str] | None = None
     canonical_baselines: dict[str, dict[str, Any]] = {}
     canonical_autoresearch_provenance: dict[str, Any] | None = None
+    canonical_input_binding: dict[str, Any] | None = None
+    canonical_supervisor_protocol: dict[str, Any] | None = None
+    source_campaign_identity: dict[str, str] | None = None
+    campaign_identities: list[dict[str, str]] = []
 
     for run_index, root in enumerate(run_roots, start=1):
         run_name = f"run_{run_index:02d}"
+        campaign_manifest, campaign_identity = validate_campaign_identity(root)
+        current_input_binding = {
+            "hamlib_zip_checksums_sha256": campaign_manifest.get("hamlib_zip_checksums_sha256"),
+            "hamlib_archives": campaign_manifest.get("hamlib_archives"),
+        }
+        if canonical_input_binding is None:
+            canonical_input_binding = current_input_binding
+        elif current_input_binding != canonical_input_binding:
+            raise RuntimeError(f"{run_name}: immutable HamLib ZIP binding differs from run_01")
+        current_identity = {
+            "run": run_name,
+            "campaign_id": str(campaign_manifest["campaign_id"]),
+            "campaign_manifest_sha256": str(campaign_identity["campaign_manifest_sha256"]),
+        }
+        if any(
+            item["campaign_id"] == current_identity["campaign_id"] for item in campaign_identities
+        ):
+            raise RuntimeError(f"{run_name}: replicate campaign ID is not independent")
+        campaign_identities.append(current_identity)
+        if run_index == 1:
+            source_campaign_identity = current_identity
+        supervisor_protocol = validate_supervisor_provenance(
+            root,
+            manifest=campaign_manifest,
+            identity=campaign_identity,
+            require_paper_protocol=complete_paper_export,
+        )
+        if canonical_supervisor_protocol is None:
+            canonical_supervisor_protocol = supervisor_protocol
+        elif supervisor_protocol != canonical_supervisor_protocol:
+            raise RuntimeError(f"{run_name}: supervisor protocol differs from run_01")
         runner_provenance = validate_runner_provenance(root)
         autoresearch_path = root / "manifests" / "autoresearch_provenance.json"
         if not autoresearch_path.is_file():
@@ -433,16 +672,27 @@ def main() -> None:
             "model",
             "reasoning_effort",
             "codex_cli_version",
+            "node_version",
+            "npm_cache",
             "runner_bundle_sha256",
             "uv_lock_sha256",
+            "codex_exec_flags",
         }
         if set(autoresearch_provenance) != expected_provenance_keys:
             raise RuntimeError(f"{run_name}: malformed autoresearch provenance")
         if autoresearch_provenance["schema_version"] != 1 or any(
             not isinstance(autoresearch_provenance[key], str) or not autoresearch_provenance[key]
-            for key in ("model", "reasoning_effort", "codex_cli_version")
+            for key in (
+                "model",
+                "reasoning_effort",
+                "codex_cli_version",
+                "node_version",
+                "npm_cache",
+            )
         ):
             raise RuntimeError(f"{run_name}: malformed autoresearch provenance values")
+        if autoresearch_provenance["codex_exec_flags"] != list(PAPER_CODEX_EXEC_FLAGS):
+            raise RuntimeError(f"{run_name}: mutation sandbox flags differ from paper protocol")
         if (
             autoresearch_provenance["runner_bundle_sha256"]
             != runner_provenance["runner_bundle_sha256"]
@@ -485,6 +735,30 @@ def main() -> None:
                 continue
             baseline_row = next(row for row in rows if int(row["iteration"]) == 0)
             baseline_result = baseline_row["result"]
+            baseline_result_path = root / "iterations" / "iter_0000" / "results" / f"{lane_id}.json"
+            replication = baseline_result.get("baseline_replication")
+            if run_index == 1:
+                if replication is not None:
+                    raise RuntimeError(
+                        f"{run_name}/{lane_id}: source baseline cannot be replicated"
+                    )
+            else:
+                assert source_campaign_identity is not None
+                source_result_path = (
+                    run_roots[0] / "iterations" / "iter_0000" / "results" / f"{lane_id}.json"
+                )
+                expected_replication = {
+                    "schema_version": 1,
+                    "source_campaign_id": source_campaign_identity["campaign_id"],
+                    "source_manifest_sha256": source_campaign_identity["campaign_manifest_sha256"],
+                    "source_result_sha256": sha256_file(source_result_path),
+                }
+                if replication != expected_replication:
+                    raise RuntimeError(
+                        f"{run_name}/{lane_id}: baseline replication provenance drift"
+                    )
+            if not baseline_result_path.is_file():
+                raise RuntimeError(f"{run_name}/{lane_id}: baseline result file is missing")
             baseline_t = exact_t_count(baseline_result)
             baseline_snapshot = policy_path(root, lane_id, 0)
             baseline_fingerprint = {
@@ -496,6 +770,43 @@ def main() -> None:
                 canonical_baselines[lane_id] = baseline_fingerprint
             elif baseline_fingerprint != canonical_baselines[lane_id]:
                 raise RuntimeError(f"{run_name}/{lane_id}: baseline differs from run_01")
+            if run_index == 1:
+                gpu = baseline_result.get("gpu_preflight") or {}
+                execution = baseline_result.get("execution_configuration") or {}
+                archive = baseline_result.get("hamlib_archive") or {}
+                baseline_provenance_rows.append(
+                    {
+                        "lane_id": lane_id,
+                        "campaign_id": baseline_result.get("campaign_id"),
+                        "campaign_manifest_sha256": baseline_result.get("campaign_manifest_sha256"),
+                        "result_sha256": sha256_file(baseline_result_path),
+                        "baseline_cache_sha256": baseline_result.get("baseline_cache_sha256"),
+                        "policy_sha256": baseline_result.get("policy_sha256"),
+                        "initial_policy_sha256": baseline_result.get("initial_policy_sha256"),
+                        "batch_manifest_sha256": baseline_result.get("batch_manifest_sha256"),
+                        "runner_bundle_sha256": (
+                            baseline_result.get("runner_provenance") or {}
+                        ).get("runner_bundle_sha256"),
+                        "archive_key": archive.get("archive_key"),
+                        "archive_relative_path": archive.get("relative_path"),
+                        "archive_sha256": archive.get("sha256"),
+                        "baseline_backend": baseline_result.get("baseline_backend"),
+                        "baseline_accelerator": baseline_result.get("baseline_accelerator"),
+                        "baseline_array_type": baseline_result.get("baseline_array_type"),
+                        "gpu_name": gpu.get("gpu_name"),
+                        "gpu_uuid": gpu.get("gpu_uuid"),
+                        "gpu_memory_mib": gpu.get("gpu_memory_mib"),
+                        "cuda_visible_devices": gpu.get("cuda_visible_devices"),
+                        "preflight_array_type": gpu.get("preflight_array_type"),
+                        "nvidia_smi_path": gpu.get("nvidia_smi_path"),
+                        "slurm_job_id": execution.get("slurm_job_id"),
+                        "slurm_account": execution.get("slurm_account"),
+                        "slurm_partition": execution.get("slurm_partition"),
+                        "ground_state_energy_hartree": baseline_result.get(
+                            "ground_state_energy_hartree"
+                        ),
+                    }
+                )
             incumbent_row = baseline_row
             incumbent_t = baseline_t
             for iteration in range(0, args.expected_iterations + 1):
@@ -602,7 +913,7 @@ def main() -> None:
 
     lane_aggregate_rows: list[dict[str, Any]] = []
     exported_policy_paths: set[Path] = set()
-    policy_export_plan: list[tuple[Path, Path]] = []
+    policy_export_plan: list[tuple[Path, Path, str]] = []
     run_root_by_name = {f"run_{index:02d}": root for index, root in enumerate(run_roots, start=1)}
     for lane_id in canonical_lane_ids or []:
         rows = lane_run_index[lane_id]
@@ -617,9 +928,6 @@ def main() -> None:
             / lane_id
             / f"best_{best['run']}_iter_{best_iteration:04d}_simple_pf.py"
         )
-        policy_export_plan.extend(
-            ((initial_source, initial_relative), (best_source, best_relative))
-        )
         exported_policy_paths.update((initial_relative, best_relative))
         initial_hash = sha256_file(initial_source)
         best_hash = sha256_file(best_source)
@@ -627,6 +935,12 @@ def main() -> None:
             raise RuntimeError(f"{lane_id}: exported initial policy hash mismatch")
         if best_hash != str(best["best_policy_sha256"]):
             raise RuntimeError(f"{lane_id}: exported best policy hash mismatch")
+        policy_export_plan.extend(
+            (
+                (initial_source, initial_relative, initial_hash),
+                (best_source, best_relative, best_hash),
+            )
+        )
 
         lane_aggregate_rows.append(
             {
@@ -685,6 +999,10 @@ def main() -> None:
             "candidate_rows": (len(all_candidate_rows), expected_candidate_rows),
             "lane_run_rows": (len(lane_run_rows), expected_lane_run_rows),
             "lane_aggregate_rows": (len(lane_aggregate_rows), args.expected_lanes),
+            "baseline_provenance_rows": (
+                len(baseline_provenance_rows),
+                args.expected_lanes,
+            ),
             "policy_sources": (
                 len(exported_policy_paths),
                 expected_policy_sources,
@@ -716,11 +1034,14 @@ def main() -> None:
         "exported_candidate_rows": len(all_candidate_rows),
         "exported_lane_run_rows": len(lane_run_rows),
         "exported_lane_aggregate_rows": len(lane_aggregate_rows),
+        "exported_baseline_provenance_rows": len(baseline_provenance_rows),
         "exported_policy_sources": len(exported_policy_paths),
+        "hamlib_zip_checksum_manifest": "hamlib_zip_sha256.txt",
         "expected_complete_counts": {
             "candidate_rows": expected_candidate_rows,
             "lane_run_rows": expected_lane_run_rows,
             "lane_aggregate_rows": args.expected_lanes,
+            "baseline_provenance_rows": args.expected_lanes,
             "policy_sources": expected_policy_sources,
         },
         "provenance_file": "provenance.json",
@@ -730,6 +1051,14 @@ def main() -> None:
     export_provenance = {
         **canonical_autoresearch_provenance,
         "replicate_runs_verified": len(run_roots),
+        "campaign_identities": campaign_identities,
+        "hamlib_zip_checksums_sha256": None
+        if canonical_input_binding is None
+        else canonical_input_binding["hamlib_zip_checksums_sha256"],
+        "hamlib_archive_count": 0
+        if canonical_input_binding is None
+        else len(canonical_input_binding["hamlib_archives"]),
+        "supervisor_protocol": canonical_supervisor_protocol,
     }
     baseline_steps = [float(row["baseline_n_steps"]) for row in lane_aggregate_rows]
     best_steps = [float(row["best_n_steps"]) for row in lane_aggregate_rows]
@@ -788,10 +1117,24 @@ def main() -> None:
         )
     )
     try:
-        for source, relative in policy_export_plan:
+        for source, relative, expected_sha256 in policy_export_plan:
             destination = staging_dir / relative
             destination.parent.mkdir(parents=True, exist_ok=True)
             shutil.copy2(source, destination)
+            if sha256_file(destination) != expected_sha256:
+                raise RuntimeError(
+                    f"policy changed while exporting: {source} -> {relative.as_posix()}"
+                )
+        checksum_manifest_source = RUNNER_ROOT / "manifests" / "hamlib_zip_sha256.txt"
+        checksum_manifest_destination = staging_dir / "hamlib_zip_sha256.txt"
+        shutil.copy2(checksum_manifest_source, checksum_manifest_destination)
+        if sha256_file(checksum_manifest_destination) != sha256_file(checksum_manifest_source):
+            raise RuntimeError("HamLib ZIP checksum manifest changed while exporting")
+        write_csv(
+            staging_dir / "baseline_provenance.csv",
+            baseline_provenance_rows,
+            list(baseline_provenance_rows[0]) if baseline_provenance_rows else [],
+        )
         write_csv(
             staging_dir / "candidate_log.csv",
             all_candidate_rows,

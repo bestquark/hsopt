@@ -22,7 +22,6 @@ POLICY_SNAPSHOT="${POLICY_SNAPSHOT:-current}"
 cd "$CAMPAIGN_ROOT"
 mkdir -p logs "iterations/iter_$(printf "%04d" "$ITERATION")/results" baselines
 
-export PATH="$HOME/.local/bin:$PATH"
 if [[ -n "${CAMPAIGN_UV_BASE_DIR:-}" ]]; then
   export XDG_CACHE_HOME="${CAMPAIGN_UV_BASE_DIR}/.cache"
   export XDG_DATA_HOME="${CAMPAIGN_UV_BASE_DIR}/.local/share"
@@ -39,12 +38,31 @@ export CAMPAIGN_HDF5_SUBPROCESS=1
 export CAMPAIGN_LEGATE_FBMEM="${CAMPAIGN_LEGATE_FBMEM:-70000}"
 export CAMPAIGN_SYNTH_WORKERS="${CAMPAIGN_SYNTH_WORKERS:-30}"
 
-uv sync --locked --extra gpu
-
 export VIRTUAL_ENV="$PWD/.venv"
-export PATH="$VIRTUAL_ENV/bin:$PATH"
+unset PYTHONHOME PYTHONPATH
+SHA256SUM=/usr/bin/sha256sum
+if [[ ! -x "$SHA256SUM" ]]; then
+  echo "missing trusted $SHA256SUM" >&2
+  exit 2
+fi
+EXPECTED_LOCK_LINE="$("$SHA256SUM" uv.lock)"
+EXPECTED_LOCK_SHA256="${EXPECTED_LOCK_LINE%% *}"
+RUNNER_LINE="$("$SHA256SUM" manifests/runner_provenance.json)"
+EXPECTED_RUNNER_SHA256="${RUNNER_LINE%% *}"
+IDENTITY_LINE="$("$SHA256SUM" manifests/campaign_identity.json)"
+EXPECTED_IDENTITY_SHA256="${IDENTITY_LINE%% *}"
+if [[ ! -x "$VIRTUAL_ENV/bin/python" \
+      || ! -f "$VIRTUAL_ENV/.hsopt-uv-lock-sha256" \
+      || ! -f "$VIRTUAL_ENV/.hsopt-runner-provenance-sha256" \
+      || ! -f "$VIRTUAL_ENV/.hsopt-campaign-identity-sha256" ]] || \
+   [[ "$(<"$VIRTUAL_ENV/.hsopt-uv-lock-sha256")" != "$EXPECTED_LOCK_SHA256" \
+      || "$(<"$VIRTUAL_ENV/.hsopt-runner-provenance-sha256")" != "$EXPECTED_RUNNER_SHA256" \
+      || "$(<"$VIRTUAL_ENV/.hsopt-campaign-identity-sha256")" != "$EXPECTED_IDENTITY_SHA256" ]]; then
+  echo "missing/stale prebuilt locked GPU environment; run scripts/prebuild_cluster_environments.py" >&2
+  exit 2
+fi
 SITE_PACKAGES="$("$VIRTUAL_ENV/bin/python" -c 'import sysconfig; print(sysconfig.get_paths()["purelib"])')"
-export PYTHONPATH="$SITE_PACKAGES${PYTHONPATH:+:$PYTHONPATH}"
+export PYTHONPATH="$SITE_PACKAGES"
 NVIDIA_LIB_PATHS="$("$VIRTUAL_ENV/bin/python" - <<'PY'
 from pathlib import Path
 import site
@@ -58,12 +76,29 @@ print(":".join(paths))
 PY
 )"
 if [[ -n "$NVIDIA_LIB_PATHS" ]]; then
-  export LD_LIBRARY_PATH="$NVIDIA_LIB_PATHS${LD_LIBRARY_PATH:+:$LD_LIBRARY_PATH}"
+  export LD_LIBRARY_PATH="$NVIDIA_LIB_PATHS"
 fi
+
+CAMPAIGN_NVIDIA_SMI=""
+for candidate in /usr/bin/nvidia-smi /usr/local/nvidia/bin/nvidia-smi /usr/local/cuda/bin/nvidia-smi; do
+  if [[ -x "$candidate" ]]; then
+    resolved="$(/usr/bin/readlink -f "$candidate")"
+    read -r owner mode < <(/usr/bin/stat -Lc '%u %a' "$resolved")
+    if [[ "$owner" == "0" ]] && (( (8#$mode & 0022) == 0 )); then
+      CAMPAIGN_NVIDIA_SMI="$resolved"
+      break
+    fi
+  fi
+done
+if [[ -z "$CAMPAIGN_NVIDIA_SMI" ]]; then
+  echo "no root-owned, non-writable NVIDIA system tool was found" >&2
+  exit 2
+fi
+export CAMPAIGN_NVIDIA_SMI
 
 LEGATE=.venv/bin/legate
 if [[ ! -x "$LEGATE" ]]; then
-  echo "missing $LEGATE after uv sync --extra gpu" >&2
+  echo "missing $LEGATE in prebuilt GPU environment" >&2
   exit 2
 fi
 BASELINE_FLAG=()
@@ -83,10 +118,10 @@ echo "slurm_job_id=${SLURM_JOB_ID:-}"
 echo "started=$(date -Is)"
 echo "campaign_array_backend=$CAMPAIGN_ARRAY_BACKEND"
 echo "legate=$("$LEGATE" --version 2>&1 | head -n 1 || true)"
-nvidia-smi --query-gpu=index,name,memory.total --format=csv,noheader || true
+"$CAMPAIGN_NVIDIA_SMI" --query-gpu=index,name,memory.total --format=csv,noheader
 echo "lane_count=$(grep -cve '^[[:space:]]*$' "$LANE_IDS_FILE")"
 
-nvidia-smi dmon -s pucm -d 5 -o DT > "logs/gpu_dmon_iter_${ITERATION}_batch_${BATCH_ID}.log" 2>&1 &
+"$CAMPAIGN_NVIDIA_SMI" dmon -s pucm -d 5 -o DT > "logs/gpu_dmon_iter_${ITERATION}_batch_${BATCH_ID}.log" 2>&1 &
 MONITOR_PID=$!
 trap 'kill "$MONITOR_PID" 2>/dev/null || true' EXIT
 

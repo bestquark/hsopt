@@ -5,11 +5,27 @@ import argparse
 import json
 import os
 import re
+import shlex
+import stat
 import subprocess
+import sys
+import tempfile
 import time
 from pathlib import Path
 
-from campaign_common import db_connect, ensure_dirs, init_db, log_event
+_PRIVATE_PYCACHE_PREFIX = tempfile.mkdtemp(prefix="hsopt-hamlib121-pycache-")
+_private_pycache_stat = os.stat(_PRIVATE_PYCACHE_PREFIX, follow_symlinks=False)
+if (
+    not stat.S_ISDIR(_private_pycache_stat.st_mode)
+    or _private_pycache_stat.st_uid != os.getuid()
+    or stat.S_IMODE(_private_pycache_stat.st_mode) & 0o077
+):
+    raise RuntimeError("private Python bytecode prefix is not an owner-only real directory")
+sys.pycache_prefix = _PRIVATE_PYCACHE_PREFIX
+os.environ["PYTHONPYCACHEPREFIX"] = _PRIVATE_PYCACHE_PREFIX
+
+from campaign_common import db_connect, ensure_dirs, init_db, log_event  # noqa: E402
+from submit_eval_batch import validate_slurm_name, validate_ssh_host  # noqa: E402
 
 
 STUCK_REASON_MARKERS = (
@@ -73,8 +89,12 @@ def pending_eval_tasks(
         return []
 
     job_selector = ",".join(normalized_job_ids)
+    query_host = validate_ssh_host(query_host, "query_host")
+    primary_partition = validate_slurm_name(primary_partition, "primary_partition")
     completed = run_remote(
-        f"timeout 20s squeue -h -j {job_selector} -t PD -o '%i|%P|%j|%R'",
+        shlex.join(
+            ["timeout", "20s", "squeue", "-h", "-j", job_selector, "-t", "PD", "-o", "%i|%P|%j|%R"]
+        ),
         query_host=query_host,
     )
     if completed.returncode != 0:
@@ -106,6 +126,9 @@ def rescue_once(
     primary_partition: str,
     query_host: str,
 ) -> list[dict]:
+    fallback_partition = validate_slurm_name(fallback_partition, "fallback_partition")
+    primary_partition = validate_slurm_name(primary_partition, "primary_partition")
+    query_host = validate_ssh_host(query_host, "query_host")
     rescued: list[dict] = []
     for job_id, reason in pending_eval_tasks(
         primary_partition,
@@ -113,9 +136,23 @@ def rescue_once(
         job_ids=job_ids,
     ):
         completed = run_remote(
-            f"timeout 20s scontrol update JobId={job_id} Partition={fallback_partition}",
+            shlex.join(
+                [
+                    "timeout",
+                    "20s",
+                    "scontrol",
+                    "update",
+                    f"JobId={job_id}",
+                    f"Partition={fallback_partition}",
+                ]
+            ),
             query_host=query_host,
         )
+        if completed.returncode != 0:
+            raise RuntimeError(
+                f"failed to move job {job_id} to {fallback_partition}: "
+                f"{completed.stderr.strip() or completed.stdout.strip()}"
+            )
         rescued.append(
             {
                 "job_id": job_id,

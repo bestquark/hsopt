@@ -7,22 +7,37 @@ import fcntl
 import json
 import os
 import re
+import shlex
 import shutil
 import subprocess
 import sys
+import tempfile
 import time
 from collections import defaultdict, deque
 from dataclasses import dataclass
 from pathlib import Path
 
-from campaign_common import (
+import stat
+
+_PRIVATE_PYCACHE_PREFIX = tempfile.mkdtemp(prefix="hsopt-hamlib121-pycache-")
+_private_pycache_stat = os.stat(_PRIVATE_PYCACHE_PREFIX, follow_symlinks=False)
+if (
+    not stat.S_ISDIR(_private_pycache_stat.st_mode)
+    or _private_pycache_stat.st_uid != os.getuid()
+    or stat.S_IMODE(_private_pycache_stat.st_mode) & 0o077
+):
+    raise RuntimeError("private Python bytecode prefix is not an owner-only real directory")
+sys.pycache_prefix = _PRIVATE_PYCACHE_PREFIX
+os.environ["PYTHONPYCACHEPREFIX"] = _PRIVATE_PYCACHE_PREFIX
+
+from campaign_common import (  # noqa: E402
     DEFAULT_CODEX_BIN,
+    PAPER_CODEX_EXEC_FLAGS,
     PAPER_MODEL,
     PAPER_REASONING_EFFORT,
     db_connect,
     ensure_autoresearch_provenance,
     ensure_dirs,
-    eval_submission_identity,
     init_db,
     load_json,
     load_open_eval_batches,
@@ -30,9 +45,25 @@ from campaign_common import (
     mark_eval_batch_collected,
     mark_eval_batch_submitted,
     now_iso,
-    register_eval_batch,
+    validate_campaign_identity,
+    validate_evaluation_result_provenance,
+    write_json,
 )
-from mutate_iteration import load_lanes, prepare_codex_tools, run_one
+from mutate_iteration import load_lanes, prepare_codex_tools, run_one  # noqa: E402
+
+
+TERMINAL_JOB_STATES = {
+    "BOOT_FAIL",
+    "CANCELLED",
+    "COMPLETED",
+    "DEADLINE",
+    "FAILED",
+    "NODE_FAIL",
+    "OUT_OF_MEMORY",
+    "PREEMPTED",
+    "REVOKED",
+    "TIMEOUT",
+}
 
 
 @dataclass
@@ -57,9 +88,12 @@ def result_path(root: Path, iteration: int, lane_id: str) -> Path:
 
 
 def job_is_done(job_id: str, slurm_query_host: str) -> bool:
+    if re.fullmatch(r"\d+", job_id) is None:
+        raise ValueError(f"invalid Slurm job ID {job_id!r}")
+    squeue_remote = shlex.join(["squeue", "-h", "-j", job_id, "-o", "%A|%T"])
     try:
         queued = subprocess.run(
-            ["ssh", slurm_query_host, f"squeue -h -j {job_id} -o '%T'"],
+            ["ssh", slurm_query_host, squeue_remote],
             text=True,
             capture_output=True,
             check=False,
@@ -68,16 +102,23 @@ def job_is_done(job_id: str, slurm_query_host: str) -> bool:
     except subprocess.TimeoutExpired:
         print(f"squeue timed out for job {job_id}", flush=True)
         return False
-    if queued.returncode == 0:
-        return not bool(queued.stdout.strip())
+    if queued.returncode != 0:
+        raise RuntimeError(
+            f"squeue failed for job {job_id}: {queued.stderr.strip() or queued.stdout.strip()}"
+        )
 
+    queued_states = []
+    for line in queued.stdout.splitlines():
+        fields = line.strip().split("|", 1)
+        if len(fields) == 2 and fields[0].strip() == job_id:
+            queued_states.append(fields[1].strip().split("+", 1)[0].upper())
+    if queued_states:
+        return all(state in TERMINAL_JOB_STATES for state in queued_states)
+
+    sacct_remote = shlex.join(["sacct", "-n", "-X", "-j", job_id, "--format=JobIDRaw,State", "-P"])
     try:
         accounted = subprocess.run(
-            [
-                "ssh",
-                slurm_query_host,
-                f"sacct -n -X -j {job_id} --format=State --parsable2",
-            ],
+            ["ssh", slurm_query_host, sacct_remote],
             text=True,
             capture_output=True,
             check=False,
@@ -86,29 +127,20 @@ def job_is_done(job_id: str, slurm_query_host: str) -> bool:
     except subprocess.TimeoutExpired:
         print(f"sacct timed out for job {job_id}", flush=True)
         return False
-    states = [
-        line.split("|", 1)[0].strip().split()[0]
-        for line in accounted.stdout.splitlines()
-        if line.strip()
-    ]
+    if accounted.returncode != 0:
+        raise RuntimeError(
+            f"sacct failed for job {job_id}: {accounted.stderr.strip() or accounted.stdout.strip()}"
+        )
+    states = []
+    for line in accounted.stdout.splitlines():
+        fields = line.strip().split("|", 1)
+        if len(fields) == 2 and fields[0].strip() == job_id:
+            states.append(fields[1].strip().split("+", 1)[0].upper())
     if not states:
-        message = accounted.stderr.strip() or queued.stderr.strip()
-        if message:
-            print(message, flush=True)
-        return False
-    terminal_states = {
-        "BOOT_FAIL",
-        "CANCELLED",
-        "COMPLETED",
-        "DEADLINE",
-        "FAILED",
-        "NODE_FAIL",
-        "OUT_OF_MEMORY",
-        "PREEMPTED",
-        "REVOKED",
-        "TIMEOUT",
-    }
-    return all(state.rstrip("+") in terminal_states for state in states)
+        raise RuntimeError(
+            f"Slurm returned no state for job {job_id}; refusing to assume completion"
+        )
+    return all(state in TERMINAL_JOB_STATES for state in states)
 
 
 def rescue_pending(
@@ -173,7 +205,6 @@ def submit_batch(
         sync_host,
         "--submit-host",
         submit_host,
-        "--compute-baseline",
     ]
     if legate_fbmem:
         command.extend(["--legate-fbmem", legate_fbmem])
@@ -189,7 +220,13 @@ def submit_batch(
     return EvalJob(job_id=job_id, iteration=iteration, batch_id=batch_id, lane_ids=lane_ids)
 
 
-def collect_iteration(root: Path, iteration: int, sync_host: str, lane_ids: list[str]) -> None:
+def collect_iteration(
+    root: Path,
+    iteration: int,
+    sync_host: str,
+    lane_ids: list[str],
+    batch_id: str,
+) -> None:
     command = [
         sys.executable,
         "scripts/collect_iteration.py",
@@ -199,6 +236,8 @@ def collect_iteration(root: Path, iteration: int, sync_host: str, lane_ids: list
         str(iteration),
         "--sync-host",
         sync_host,
+        "--expected-batch-id",
+        batch_id,
     ]
     for lane_id in lane_ids:
         command.extend(["--lane-id", lane_id])
@@ -306,27 +345,93 @@ def next_failed_mutation_attempt(root: Path, *, lane_id: str, iteration: int) ->
     return max(existing, default=0) + 1
 
 
+def ensure_supervisor_provenance(root: Path, args: argparse.Namespace) -> dict[str, object]:
+    manifest, identity = validate_campaign_identity(root)
+    expected: dict[str, object] = {
+        "schema_version": 1,
+        "campaign_id": manifest["campaign_id"],
+        "campaign_manifest_sha256": identity["campaign_manifest_sha256"],
+        "start_iteration": args.start_iteration,
+        "proposal_iterations": args.iterations,
+        "batch_size": args.batch_size,
+        "max_running_eval_jobs": args.max_running_eval_jobs,
+        "max_concurrent_mutators": args.max_concurrent_mutators,
+        "max_batch_wait_seconds": args.max_batch_wait_seconds,
+        "max_eval_retries": args.max_eval_retries,
+        "max_mutation_retries": args.max_mutation_retries,
+        "mutation_retry_base_seconds": args.mutation_retry_base_seconds,
+        "mutation_retry_max_seconds": args.mutation_retry_max_seconds,
+        "poll_seconds": args.poll_seconds,
+        "rescue_poll_seconds": args.rescue_poll_seconds,
+        "model": args.model,
+        "reasoning_effort": args.reasoning_effort,
+        "codex_bin": args.codex_bin,
+        "codex_exec_flags": list(PAPER_CODEX_EXEC_FLAGS),
+        "npm_cache": ".codex_npm",
+        "python_environments": [".venv", ".venv_cpu"],
+        "account": args.account,
+        "gpu_partition": args.partition,
+        "cpu_partition": args.cpu_partition,
+        "fallback_enabled": bool(args.enable_partition_fallback),
+        "fallback_partition": args.fallback_partition,
+        "sync_host": args.sync_host,
+        "submit_host": args.submit_host,
+        "slurm_query_host": args.slurm_query_host,
+        "legate_fbmem": args.legate_fbmem or "70000",
+        "uv_base_dir": args.uv_base_dir,
+        "uv_cache_dir": args.uv_cache_dir,
+        "uv_python_install_dir": args.uv_python_install_dir,
+    }
+    path = root / "manifests" / "supervisor_provenance.json"
+    if path.is_file():
+        if load_json(path) != expected:
+            raise RuntimeError("streaming supervisor execution configuration drifted")
+    else:
+        write_json(path, expected)
+    return expected
+
+
 async def supervise(args: argparse.Namespace) -> int:
     root = args.campaign_root.resolve()
     ensure_dirs(root)
     supervisor_lock = acquire_supervisor_lock(root)
     conn = db_connect(root)
     init_db(conn)
-    lanes = load_lanes(conn, limit=args.limit)
-    accepted_baselines = conn.execute(
-        "SELECT COUNT(*) FROM evaluations WHERE iteration=0 AND accepted=1"
-    ).fetchone()[0]
-    if int(accepted_baselines) < len(lanes):
+    all_lanes = load_lanes(conn, limit=None)
+    if len(all_lanes) != 121:
         raise RuntimeError(
-            f"campaign has {accepted_baselines}/{len(lanes)} accepted iteration-0 baselines; "
+            f"paper supervisor requires exactly 121 active lanes, found {len(all_lanes)}"
+        )
+    baseline_rows = conn.execute(
+        "SELECT lane_id, status, accepted, result_json FROM evaluations WHERE iteration=0"
+    ).fetchall()
+    baseline_by_lane = {str(row["lane_id"]): row for row in baseline_rows}
+    if len(baseline_by_lane) != len(all_lanes):
+        raise RuntimeError(
+            f"campaign has {len(baseline_by_lane)}/{len(all_lanes)} iteration-0 baselines; "
             "evaluate and collect the initial policy snapshot before starting mutation supervision"
         )
+    for lane in all_lanes:
+        lane_id = str(lane["lane_id"])
+        row = baseline_by_lane[lane_id]
+        result = json.loads(str(row["result_json"] or "{}"))
+        if str(row["status"]) != "ok" or int(row["accepted"] or 0) != 1:
+            raise RuntimeError(f"{lane_id}: iteration-0 baseline is not accepted/ok")
+        validate_evaluation_result_provenance(
+            campaign_root=root,
+            lane=lane,
+            iteration=0,
+            result=result,
+            policy_path=root / "lanes" / lane_id / "initial_simple_pf.py",
+        )
+    lanes = all_lanes if args.limit is None else all_lanes[: args.limit]
     ensure_autoresearch_provenance(
         campaign_root=root,
         model=args.model,
         reasoning_effort=args.reasoning_effort,
         codex_bin=args.codex_bin,
     )
+    ensure_supervisor_provenance(root, args)
     lane_by_id = {lane["lane_id"]: lane for lane in lanes}
     lane_order = [lane["lane_id"] for lane in lanes]
     lane_state, next_iteration = initialize_lane_progress(
@@ -346,20 +451,9 @@ async def supervise(args: argparse.Namespace) -> int:
     batch_index = highest_existing_batch_index(root, conn)
     last_rescue = 0.0
 
-    manifest = load_json(root / "manifests" / "campaign_manifest.json")
-    cluster_root = str(manifest["cluster_root"])
     open_batch_lane_ids: set[str] = set()
     open_records = load_open_eval_batches(conn)
     for record in open_records:
-        expected_key, expected_name = eval_submission_identity(
-            cluster_root=cluster_root,
-            iteration=record.iteration,
-            batch_id=record.batch_id,
-            policy_snapshot="current",
-            lane_ids=record.lane_ids,
-        )
-        if (record.submission_key, record.job_name) != (expected_key, expected_name):
-            raise RuntimeError(f"batch {record.batch_id}: persisted submission identity changed")
         if record.iteration < args.start_iteration or record.iteration > args.iterations:
             raise RuntimeError(
                 f"batch {record.batch_id}: iteration {record.iteration} is outside requested "
@@ -375,9 +469,6 @@ async def supervise(args: argparse.Namespace) -> int:
                     f"batch {record.batch_id}: lane {lane_id} does not retain pending iteration "
                     f"{record.iteration}"
                 )
-            open_batch_lane_ids.add(lane_id)
-            next_iteration[lane_id] = record.iteration
-            lane_state[lane_id] = "evaluating"
 
         job = EvalJob(
             job_id=record.job_id,
@@ -386,6 +477,8 @@ async def supervise(args: argparse.Namespace) -> int:
             lane_ids=record.lane_ids,
         )
         if job.job_id is None:
+            # Re-entering the deterministic submit path first also repairs a crash after the
+            # SQLite prepared record but before its exact lane/batch intent files were durable.
             job = await asyncio.to_thread(
                 submit_batch,
                 root=root,
@@ -404,6 +497,26 @@ async def supervise(args: argparse.Namespace) -> int:
             )
             assert job.job_id is not None
             mark_eval_batch_submitted(conn, batch_id=record.batch_id, job_id=job.job_id)
+
+        batch_manifest_path = (
+            root
+            / "iterations"
+            / f"iter_{record.iteration:04d}"
+            / "batches"
+            / record.batch_id
+            / "batch_manifest.json"
+        )
+        batch_manifest = load_json(batch_manifest_path)
+        if (
+            batch_manifest.get("submission_key") != record.submission_key
+            or batch_manifest.get("job_name") != record.job_name
+            or batch_manifest.get("lane_ids") != record.lane_ids
+        ):
+            raise RuntimeError(f"batch {record.batch_id}: persisted submission identity changed")
+        for lane_id in record.lane_ids:
+            open_batch_lane_ids.add(lane_id)
+            next_iteration[lane_id] = record.iteration
+            lane_state[lane_id] = "evaluating"
         running_jobs[record.batch_id] = job
 
     timestamp = time.monotonic()
@@ -697,21 +810,6 @@ async def supervise(args: argparse.Namespace) -> int:
                     first_ready_at.pop(iteration, None)
                 batch_index += 1
                 batch_id = f"iter{iteration:04d}_batch{batch_index:04d}"
-                submission_key, job_name = eval_submission_identity(
-                    cluster_root=cluster_root,
-                    iteration=iteration,
-                    batch_id=batch_id,
-                    policy_snapshot="current",
-                    lane_ids=lane_ids,
-                )
-                register_eval_batch(
-                    conn,
-                    batch_id=batch_id,
-                    iteration=iteration,
-                    lane_ids=lane_ids,
-                    submission_key=submission_key,
-                    job_name=job_name,
-                )
                 for lane_id in lane_ids:
                     lane_state[lane_id] = "submitting"
                 try:
@@ -787,7 +885,12 @@ async def supervise(args: argparse.Namespace) -> int:
             job = running_jobs[batch_id]
             assert job.job_id is not None
             await asyncio.to_thread(
-                collect_iteration, root, job.iteration, args.sync_host, job.lane_ids
+                collect_iteration,
+                root,
+                job.iteration,
+                args.sync_host,
+                job.lane_ids,
+                job.batch_id,
             )
             successful_lane_ids: list[str] = []
             retry_lane_ids: list[str] = []
@@ -907,16 +1010,16 @@ def main() -> None:
         description="Run per-lane streaming mutation/evaluation batches."
     )
     parser.add_argument("--campaign-root", type=Path, default=Path.cwd())
-    parser.add_argument("--iterations", type=int, default=10)
+    parser.add_argument("--iterations", type=int, default=50)
     parser.add_argument("--start-iteration", type=int, default=1)
-    parser.add_argument("--batch-size", type=int, default=10)
+    parser.add_argument("--batch-size", type=int, default=8)
     parser.add_argument("--max-batch-wait-seconds", type=int, default=900)
     parser.add_argument("--max-running-eval-jobs", type=int, default=8)
     parser.add_argument("--max-eval-retries", type=int, default=3)
     parser.add_argument("--max-mutation-retries", type=int, default=20)
     parser.add_argument("--mutation-retry-base-seconds", type=int, default=60)
     parser.add_argument("--mutation-retry-max-seconds", type=int, default=900)
-    parser.add_argument("--max-concurrent-mutators", type=int, default=16)
+    parser.add_argument("--max-concurrent-mutators", type=int, default=4)
     parser.add_argument("--poll-seconds", type=int, default=10)
     parser.add_argument("--rescue-poll-seconds", type=int, default=60)
     parser.add_argument("--account", default=os.environ.get("HSOPT_SLURM_ACCOUNT"))
@@ -961,6 +1064,24 @@ def main() -> None:
         missing.append("--fallback-partition or HSOPT_FALLBACK_PARTITION")
     if missing:
         parser.error("missing cluster configuration: " + ", ".join(missing))
+    paper_fixed = {
+        "--start-iteration": (args.start_iteration, 1),
+        "--iterations": (args.iterations, 50),
+        "--batch-size": (args.batch_size, 8),
+        "--max-concurrent-mutators": (args.max_concurrent_mutators, 4),
+        "--max-running-eval-jobs": (args.max_running_eval_jobs, 8),
+        "--model": (args.model, PAPER_MODEL),
+        "--reasoning-effort": (args.reasoning_effort, PAPER_REASONING_EFFORT),
+        "--codex-bin": (args.codex_bin, DEFAULT_CODEX_BIN),
+        "--mutation-limit": (args.limit, None),
+    }
+    drift = {
+        flag: {"actual": actual, "expected": expected}
+        for flag, (actual, expected) in paper_fixed.items()
+        if actual != expected
+    }
+    if drift:
+        parser.error(f"fixed paper streaming configuration changed: {drift}")
     raise SystemExit(asyncio.run(supervise(args)))
 
 

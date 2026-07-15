@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import asyncio
 import csv
 import hashlib
 import importlib.util
@@ -7,10 +8,12 @@ import json
 import math
 import os
 import re
+import signal
 import shutil
 import sqlite3
 import subprocess
 import sys
+import zipfile
 from pathlib import Path
 from types import ModuleType
 from types import SimpleNamespace
@@ -25,6 +28,7 @@ SOURCE_MANIFEST = (
     RUNNER_ROOT / "manifests" / "hamlib_electronic_active_space_instances_le32_qubits.csv"
 )
 ACTIVE_MANIFEST = RUNNER_ROOT / "manifests" / "active_lanes.csv"
+ZIP_CHECKSUM_MANIFEST = RUNNER_ROOT / "manifests" / "hamlib_zip_sha256.txt"
 SOURCE_MANIFEST_SHA256 = "ff7f9acce5f5140d65f84ebe33df92276c9058d13a8de4a0ed254b7ad868e489"
 ACTIVE_MANIFEST_SHA256 = "32c9c2c117f11894df9e4999f5ee1a9bffd94ef41558a158a17ca0c634cc47fe"
 
@@ -36,12 +40,20 @@ def _load_runner_module(stem: str) -> ModuleType:
     assert spec is not None and spec.loader is not None
     module = importlib.util.module_from_spec(spec)
     sys.modules[module_name] = module
+    previous_common = sys.modules.get("campaign_common")
     old_path = list(sys.path)
     try:
         sys.path.insert(0, str(SCRIPTS_ROOT))
+        if stem != "campaign_common" and "CAMPAIGN_COMMON" in globals():
+            sys.modules["campaign_common"] = globals()["CAMPAIGN_COMMON"]
         spec.loader.exec_module(module)
     finally:
         sys.path[:] = old_path
+        if stem != "campaign_common" and "CAMPAIGN_COMMON" in globals():
+            if previous_common is None:
+                sys.modules.pop("campaign_common", None)
+            else:
+                sys.modules["campaign_common"] = previous_common
     return module
 
 
@@ -49,10 +61,13 @@ CAMPAIGN_COMMON = _load_runner_module("campaign_common")
 EVALUATE_WORKER = _load_runner_module("evaluate_worker")
 PREPARE_CAMPAIGN = _load_runner_module("prepare_campaign")
 COLLECT_ITERATION = _load_runner_module("collect_iteration")
+MUTATE_ITERATION = _load_runner_module("mutate_iteration")
 STREAM_SUPERVISOR = _load_runner_module("supervise_streaming_batches")
 FINALIZE_REPLICATES = _load_runner_module("finalize_replicates_when_complete")
 EXPORT_REPLICATES = _load_runner_module("export_replicate_results")
 RESCUE_PARTITIONS = _load_runner_module("rescue_pending_eval_partitions")
+SUBMIT_EVAL = _load_runner_module("submit_eval_batch")
+REPLICATE_BASELINE = _load_runner_module("replicate_initial_baseline")
 
 
 def _sha256(path: Path) -> str:
@@ -75,6 +90,26 @@ def _copy_runner_provenance_sources(root: Path) -> None:
         shutil.copy2(source, destination)
 
 
+def _write_archive_preflight_receipt(root: Path) -> None:
+    manifest, identity = CAMPAIGN_COMMON.validate_campaign_identity(root)
+    runner = CAMPAIGN_COMMON.validate_runner_provenance(root)
+    CAMPAIGN_COMMON.write_json(
+        root / "manifests" / "hamlib_archive_preflight.json",
+        {
+            "schema_version": 1,
+            "campaign_id": manifest["campaign_id"],
+            "campaign_manifest_sha256": identity["campaign_manifest_sha256"],
+            "runner_provenance": runner,
+            "hamlib_zip_checksums_sha256": manifest["hamlib_zip_checksums_sha256"],
+            "active_lanes_verified": 121,
+            "archives_verified": 83,
+            "archive_keys": sorted(
+                str(record["archive_key"]) for record in manifest["hamlib_archives"]
+            ),
+        },
+    )
+
+
 def _write_synthetic_export_run(root: Path) -> None:
     _copy_runner_provenance_sources(root)
     runner_provenance = CAMPAIGN_COMMON.build_runner_provenance(root)
@@ -86,6 +121,9 @@ def _write_synthetic_export_run(root: Path) -> None:
             "model": "gpt-5.5",
             "reasoning_effort": "high",
             "codex_cli_version": "0.144.0",
+            "node_version": "24.11.1",
+            "npm_cache": ".codex_npm",
+            "codex_exec_flags": list(CAMPAIGN_COMMON.PAPER_CODEX_EXEC_FLAGS),
             **{key: runner_provenance[key] for key in ("runner_bundle_sha256", "uv_lock_sha256")},
         },
     )
@@ -99,8 +137,221 @@ def _write_synthetic_export_run(root: Path) -> None:
     initial_policy.write_text("# initial\n", encoding="utf-8")
     candidate_policy.write_text("# improved\n", encoding="utf-8")
 
-    def result(total_t: int, *, incumbent: bool) -> dict[str, object]:
+    nonce = hashlib.sha256(str(root).encode("utf-8")).hexdigest()
+    campaign_id = CAMPAIGN_COMMON.derive_campaign_id(nonce)
+    archive_record = {
+        "archive_key": "synthetic:lane.zip",
+        "relative_path": "synthetic/lane.zip",
+        "sha256": "a" * 64,
+    }
+    campaign_manifest = {
+        "schema_version": 2,
+        "preparation_nonce": nonce,
+        "campaign_id": campaign_id,
+        "hamlib_archives": [archive_record],
+        "lanes": [
+            {
+                "lane_id": lane_id,
+                "collection": "synthetic",
+                "file": "lane.hdf5",
+                "dataset": "hamiltonian",
+                "molecule": "H2",
+                "nqubits": 4,
+                "electrons": 2,
+                "terms": 15,
+                "one_norm": 1.0,
+                "exact_fit": True,
+            }
+        ],
+    }
+    campaign_manifest_path = root / "manifests" / "campaign_manifest.json"
+    CAMPAIGN_COMMON.write_json(campaign_manifest_path, campaign_manifest)
+    campaign_manifest_sha256 = _sha256(campaign_manifest_path)
+    CAMPAIGN_COMMON.write_json(
+        root / "manifests" / "campaign_identity.json",
+        {
+            "schema_version": 1,
+            "campaign_id": campaign_id,
+            "campaign_manifest_sha256": campaign_manifest_sha256,
+        },
+    )
+    archive_preflight_path = root / "manifests" / "hamlib_archive_preflight.json"
+    CAMPAIGN_COMMON.write_json(
+        archive_preflight_path,
+        {
+            "schema_version": 1,
+            "campaign_id": campaign_id,
+            "campaign_manifest_sha256": campaign_manifest_sha256,
+            "archives_verified": 1,
+        },
+    )
+    archive_preflight_sha256 = _sha256(archive_preflight_path)
+    CAMPAIGN_COMMON.write_json(
+        root / "manifests" / "supervisor_provenance.json",
+        {
+            "schema_version": 1,
+            "campaign_id": campaign_id,
+            "campaign_manifest_sha256": campaign_manifest_sha256,
+            "start_iteration": 1,
+            "proposal_iterations": 1,
+            "batch_size": 1,
+            "max_running_eval_jobs": 1,
+            "max_concurrent_mutators": 1,
+            "max_batch_wait_seconds": 1,
+            "max_eval_retries": 1,
+            "max_mutation_retries": 1,
+            "mutation_retry_base_seconds": 1,
+            "mutation_retry_max_seconds": 1,
+            "poll_seconds": 1,
+            "rescue_poll_seconds": 1,
+            "model": "gpt-5.5",
+            "reasoning_effort": "high",
+            "codex_bin": "npx -y @openai/codex@0.144.0",
+            "codex_exec_flags": list(CAMPAIGN_COMMON.PAPER_CODEX_EXEC_FLAGS),
+            "npm_cache": ".codex_npm",
+            "python_environments": [".venv", ".venv_cpu"],
+            "account": "test-account",
+            "gpu_partition": "test-gpu",
+            "cpu_partition": "test-cpu",
+            "fallback_enabled": False,
+            "fallback_partition": None,
+            "sync_host": "test-sync",
+            "submit_host": "test-submit",
+            "slurm_query_host": "test-query",
+            "legate_fbmem": "70000",
+            "uv_base_dir": None,
+            "uv_cache_dir": None,
+            "uv_python_install_dir": None,
+        },
+    )
+
+    baseline_execution = {
+        "schema_version": 1,
+        "execution_mode": "gpu_baseline",
+        "array_backend": "cupynumeric",
+        "compute_baseline": True,
+        "policy_snapshot": "initial",
+        "batch_id": "initial_baseline",
+        "submission_key": "0" * 12,
+        "job_name": f"hpf_{'0' * 12}",
+        "slurm_job_id": "1000",
+        "slurm_account": "test-account",
+        "slurm_partition": "test-gpu",
+        "legate_fbmem": "70000",
+        "uv_base_dir": None,
+        "uv_cache_dir": None,
+        "uv_python_install_dir": None,
+        "hamlib_archive_preflight_sha256": archive_preflight_sha256,
+        "worker_id": 0,
+        "num_workers": 1,
+    }
+    baseline = {
+        "baseline_schema_version": 2,
+        "baseline_status": "computed",
+        "baseline_backend": "cupynumeric",
+        "baseline_accelerator": "NVIDIA A100",
+        "baseline_build_backend": "numpy_host_dense_then_cupynumeric_transfer",
+        "baseline_array_type": "cupynumeric.ndarray",
+        "ground_state_energy_hartree": -1.0,
+        "sector_dim": 6,
+        "hamlib_archive": archive_record,
+        "initial_policy_sha256": _sha256(initial_policy),
+        "baseline_computed_campaign_id": campaign_id,
+        "baseline_computed_manifest_sha256": campaign_manifest_sha256,
+        "gpu_preflight": {
+            "accelerator_family": "NVIDIA A100 80GB",
+            "allocated_gpu_count": 1,
+            "array_backend": "cupynumeric",
+            "array_backend_module": "cupynumeric",
+            "gpu_name": "NVIDIA A100-SXM4-80GB",
+            "gpu_uuid": "GPU-00000000-0000-0000-0000-000000000000",
+            "gpu_memory_mib": 81920.0,
+            "nvidia_smi_path": "/usr/bin/nvidia-smi",
+            "preflight_array_type": "cupynumeric.ndarray",
+        },
+        "baseline_execution_configuration": baseline_execution,
+        "baseline_runner_provenance": runner_provenance,
+    }
+    baseline_path = root / "baselines" / f"{lane_id}.json"
+    CAMPAIGN_COMMON.write_json(baseline_path, baseline)
+
+    def execution(iteration: int) -> tuple[dict[str, object], dict[str, object], str]:
+        is_baseline = iteration == 0
+        key = str(iteration) * 12
+        batch_id = "initial_baseline" if is_baseline else "iter0001_batch0001"
+        mode = "gpu_baseline" if is_baseline else "cpu_policy"
+        backend = "cupynumeric" if is_baseline else "numpy"
+        snapshot = "initial" if is_baseline else "current"
+        partition = "test-gpu" if is_baseline else "test-cpu"
+        policy = initial_policy if is_baseline else candidate_policy
+        worker = {
+            "schema_version": 1,
+            "execution_mode": mode,
+            "array_backend": backend,
+            "compute_baseline": is_baseline,
+            "policy_snapshot": snapshot,
+            "batch_id": batch_id,
+            "submission_key": key,
+            "job_name": f"hpf_{key}",
+            "slurm_job_id": str(1000 + iteration),
+            "slurm_account": "test-account",
+            "slurm_partition": partition,
+            "legate_fbmem": "70000" if is_baseline else None,
+            "uv_base_dir": None,
+            "uv_cache_dir": None,
+            "uv_python_install_dir": None,
+            "hamlib_archive_preflight_sha256": archive_preflight_sha256,
+            "worker_id": 0,
+            "num_workers": 1,
+        }
+        submitted = {
+            "schema_version": 1,
+            "execution_mode": mode,
+            "array_backend": backend,
+            "compute_baseline": is_baseline,
+            "policy_snapshot": snapshot,
+            "account": "test-account",
+            "partition": partition,
+            "slurm_script": (
+                "slurm/evaluate_batch.sbatch" if is_baseline else "slurm/evaluate_batch_cpu.sbatch"
+            ),
+            "legate_fbmem": "70000" if is_baseline else None,
+            "uv_base_dir": None,
+            "uv_cache_dir": None,
+            "uv_python_install_dir": None,
+            "hamlib_archive_preflight_sha256": archive_preflight_sha256,
+        }
+        batch = {
+            "schema_version": 1,
+            "campaign_id": campaign_id,
+            "campaign_manifest_sha256": campaign_manifest_sha256,
+            "batch_id": batch_id,
+            "iteration": iteration,
+            "lane_ids": [lane_id],
+            "policy_snapshot": snapshot,
+            "policy_sha256s": {lane_id: _sha256(policy)},
+            "submission_key": key,
+            "job_name": f"hpf_{key}",
+            "execution_configuration": submitted,
+            "runner_provenance": runner_provenance,
+        }
+        batch_path = (
+            root
+            / "iterations"
+            / f"iter_{iteration:04d}"
+            / "batches"
+            / batch_id
+            / "batch_manifest.json"
+        )
+        CAMPAIGN_COMMON.write_json(batch_path, batch)
+        return worker, submitted, _sha256(batch_path)
+
+    def result(total_t: int, *, incumbent: bool, iteration: int) -> dict[str, object]:
+        policy = initial_policy if iteration == 0 else candidate_policy
+        worker_execution, _submitted, batch_hash = execution(iteration)
         payload: dict[str, object] = {
+            "lane_id": lane_id,
+            "iteration": iteration,
             "status": "ok",
             "passes_chemical_accuracy_bound": True,
             "total_t_gates_qpe": total_t,
@@ -110,6 +361,18 @@ def _write_synthetic_export_run(root: Path) -> None:
             "qpe_grid_spacing_hartree": 0.0001,
             "qpe_bits": 5,
             "qpe_unitary_applications": 31,
+            "policy_path": str(policy),
+            "policy_snapshot": "initial" if iteration == 0 else "current",
+            "policy_sha256": _sha256(policy),
+            "initial_policy_sha256": _sha256(initial_policy),
+            "campaign_id": campaign_id,
+            "campaign_manifest_sha256": campaign_manifest_sha256,
+            "runner_provenance": runner_provenance,
+            "hamlib_archive": archive_record,
+            "baseline_cache_sha256": _sha256(baseline_path),
+            "execution_configuration": worker_execution,
+            "batch_manifest_sha256": batch_hash,
+            **baseline,
             "config": {
                 "formula_order": 2,
                 "n_steps": 10 if not incumbent else 9,
@@ -161,12 +424,37 @@ def _write_synthetic_export_run(root: Path) -> None:
             "2026-07-15T00:00:00Z",
         ),
     )
+    for iteration in (0, 1):
+        key = str(iteration) * 12
+        batch_id = "initial_baseline" if iteration == 0 else "iter0001_batch0001"
+        conn.execute(
+            """
+            INSERT INTO eval_batches(
+              batch_id, iteration, lane_ids_json, submission_key, job_name, job_id,
+              state, created_at, updated_at, submitted_at, collected_at
+            ) VALUES (?, ?, ?, ?, ?, ?, 'collected', ?, ?, ?, ?)
+            """,
+            (
+                batch_id,
+                iteration,
+                json.dumps([lane_id]),
+                key,
+                f"hpf_{key}",
+                str(1000 + iteration),
+                "2026-07-15T00:00:00Z",
+                "2026-07-15T00:00:00Z",
+                "2026-07-15T00:00:00Z",
+                "2026-07-15T00:00:00Z",
+            ),
+        )
     mutation_summary = f"See [candidate](file://{candidate_policy})."
     for iteration, total_t, accepted, policy, incumbent in (
         (0, 100, 1, initial_policy, False),
         (1, 90, 1, candidate_policy, True),
     ):
-        payload = result(total_t, incumbent=incumbent)
+        payload = result(total_t, incumbent=incumbent, iteration=iteration)
+        result_path = root / "iterations" / f"iter_{iteration:04d}" / "results" / f"{lane_id}.json"
+        CAMPAIGN_COMMON.write_json(result_path, payload)
         conn.execute(
             """
             INSERT INTO evaluations(
@@ -219,6 +507,8 @@ def prepared_campaign(tmp_path: Path) -> Path:
         check=False,
     )
     assert completed.returncode == 0, completed.stderr or completed.stdout
+    _copy_runner_provenance_sources(campaign_root)
+    _write_archive_preflight_receipt(campaign_root)
     return campaign_root
 
 
@@ -243,6 +533,84 @@ def test_fixed_manifest_selects_exact_121_lanes_from_401_rows() -> None:
         active_lanes,
         ACTIVE_MANIFEST,
     )
+
+
+def test_canonical_83_zip_manifest_is_exact_and_immutable(tmp_path: Path) -> None:
+    assert ZIP_CHECKSUM_MANIFEST.stat().st_size == 9_383
+    assert _sha256(ZIP_CHECKSUM_MANIFEST) == (
+        "2a5958a86a6adaa30bd98b325701830f618f7663ddcd925509213ad3ae187def"
+    )
+    with ACTIVE_MANIFEST.open(encoding="utf-8") as handle:
+        lanes = list(csv.DictReader(handle))
+    records = CAMPAIGN_COMMON.parse_hamlib_zip_checksums(ZIP_CHECKSUM_MANIFEST, lanes)
+    assert len(records) == 83
+    assert [record["archive_key"] for record in records] == sorted(
+        record["archive_key"] for record in records
+    )
+    CAMPAIGN_COMMON.validate_canonical_hamlib_zip_checksum_manifest(ZIP_CHECKSUM_MANIFEST)
+
+    drifted = tmp_path / "hamlib_zip_sha256.txt"
+    payload = ZIP_CHECKSUM_MANIFEST.read_text(encoding="utf-8")
+    drifted.write_text(("0" if payload[0] != "0" else "1") + payload[1:], encoding="utf-8")
+    with pytest.raises(RuntimeError, match="checksum manifest drift"):
+        CAMPAIGN_COMMON.validate_canonical_hamlib_zip_checksum_manifest(drifted)
+
+    unsafe = tmp_path / "unsafe.txt"
+    unsafe.write_text("a" * 64 + "  ../escape.zip\n", encoding="utf-8")
+    with pytest.raises(RuntimeError, match="unsafe/noncanonical"):
+        CAMPAIGN_COMMON.parse_hamlib_zip_checksums(unsafe, lanes)
+
+
+def test_archive_verification_is_memoized_and_checks_member_contract(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    data_root = tmp_path / "hamlib"
+    archive = data_root / "synthetic" / "lane.zip"
+    archive.parent.mkdir(parents=True)
+    with zipfile.ZipFile(archive, "w", compression=zipfile.ZIP_DEFLATED) as handle:
+        handle.writestr("lane.hdf5", b"synthetic hdf5 payload")
+    lane = {"collection": "synthetic", "file": "lane.hdf5"}
+    record = {
+        "archive_key": "synthetic:lane.zip",
+        "relative_path": "synthetic/lane.zip",
+        "sha256": _sha256(archive),
+    }
+    CAMPAIGN_COMMON._VERIFIED_ARCHIVE_CACHE.clear()
+    CAMPAIGN_COMMON._VERIFIED_ARCHIVE_MEMBER_CACHE.clear()
+    real_sha256 = CAMPAIGN_COMMON.sha256_file
+    calls = 0
+
+    def counted(path: Path) -> str:
+        nonlocal calls
+        calls += 1
+        return real_sha256(path)
+
+    monkeypatch.setattr(CAMPAIGN_COMMON, "sha256_file", counted)
+    first = CAMPAIGN_COMMON.validate_hamlib_archive(
+        data_root=data_root, lane=lane, archive_records=[record]
+    )
+    second = CAMPAIGN_COMMON.validate_hamlib_archive(
+        data_root=data_root, lane=lane, archive_records=[record]
+    )
+    assert first == second
+    assert calls == 1
+
+    stored = data_root / "synthetic" / "stored.zip"
+    with zipfile.ZipFile(stored, "w", compression=zipfile.ZIP_STORED) as handle:
+        handle.writestr("stored.hdf5", b"payload")
+    stored_lane = {"collection": "synthetic", "file": "stored.hdf5"}
+    stored_record = {
+        "archive_key": "synthetic:stored.zip",
+        "relative_path": "synthetic/stored.zip",
+        "sha256": real_sha256(stored),
+    }
+    with pytest.raises(RuntimeError, match="unencrypted deflated"):
+        CAMPAIGN_COMMON.validate_hamlib_archive(
+            data_root=data_root,
+            lane=stored_lane,
+            archive_records=[stored_record],
+        )
 
 
 def test_runner_and_agent_provenance_are_pinned_and_immutable(
@@ -281,13 +649,19 @@ def test_runner_and_agent_provenance_are_pinned_and_immutable(
     campaign = tmp_path / "campaign"
     _copy_runner_provenance_sources(campaign)
     CAMPAIGN_COMMON.ensure_runner_provenance(campaign_root=campaign, runner_root=campaign)
-    monkeypatch.setattr(CAMPAIGN_COMMON, "probe_codex_cli_version", lambda _command: "0.144.0")
+    monkeypatch.setattr(
+        CAMPAIGN_COMMON,
+        "probe_codex_cli_version",
+        lambda *_args, **_kwargs: "0.144.0",
+    )
+    monkeypatch.setattr(CAMPAIGN_COMMON, "probe_node_version", lambda: "24.11.1")
     recorded = CAMPAIGN_COMMON.ensure_autoresearch_provenance(
         campaign_root=campaign,
         model="gpt-5.5",
         reasoning_effort="high",
         codex_bin=CAMPAIGN_COMMON.DEFAULT_CODEX_BIN,
     )
+    assert recorded["npm_cache"] == ".codex_npm"
     assert (
         CAMPAIGN_COMMON.ensure_autoresearch_provenance(
             campaign_root=campaign,
@@ -329,6 +703,14 @@ def test_prepare_campaign_creates_121_active_lanes_and_policies(
     assert manifest["active_fit_count"] == 121
     assert manifest["cluster_root"] == "/cluster/hsopt-test"
     assert manifest["hamlib_data_root"] == "/data/hamlib-test"
+    assert len(manifest["hamlib_archives"]) == 83
+    assert manifest["hamlib_zip_checksums_sha256"] == _sha256(ZIP_CHECKSUM_MANIFEST)
+    assert (
+        CAMPAIGN_COMMON.derive_campaign_id(manifest["preparation_nonce"]) == manifest["campaign_id"]
+    )
+    validated_manifest, identity = CAMPAIGN_COMMON.validate_campaign_identity(prepared_campaign)
+    assert validated_manifest == manifest
+    assert identity["campaign_id"] == manifest["campaign_id"]
 
     database = prepared_campaign / "campaign.sqlite"
     with sqlite3.connect(f"file:{database}?mode=ro", uri=True) as conn:
@@ -351,6 +733,155 @@ def test_prepare_campaign_creates_121_active_lanes_and_policies(
         (prepared_campaign / "manifests" / "runner_provenance.json").read_text(encoding="utf-8")
     ) == CAMPAIGN_COMMON.build_runner_provenance(RUNNER_ROOT)
     EXPORT_REPLICATES.validate_canonical_campaign_manifest(prepared_campaign)
+
+
+def test_prepare_campaign_resumes_after_identity_with_missing_database_and_policies(
+    prepared_campaign: Path,
+) -> None:
+    identity_path = prepared_campaign / "manifests" / "campaign_identity.json"
+    identity_before = identity_path.read_bytes()
+    shutil.rmtree(prepared_campaign / "lanes")
+    (prepared_campaign / "campaign.sqlite").unlink()
+
+    completed = subprocess.run(
+        [
+            sys.executable,
+            str(SCRIPTS_ROOT / "prepare_campaign.py"),
+            "--source-csv",
+            str(SOURCE_MANIFEST),
+            "--campaign-root",
+            str(prepared_campaign),
+            "--cluster-root",
+            "/cluster/hsopt-test",
+            "--hamlib-data-root",
+            "/data/hamlib-test",
+        ],
+        cwd=RUNNER_ROOT,
+        env={**os.environ, "PYTHONDONTWRITEBYTECODE": "1"},
+        text=True,
+        capture_output=True,
+        check=False,
+    )
+
+    assert completed.returncode == 0, completed.stderr or completed.stdout
+    assert identity_path.read_bytes() == identity_before
+    assert len(list((prepared_campaign / "lanes").glob("*/simple_pf.py"))) == 121
+    assert len(list((prepared_campaign / "lanes").glob("*/initial_simple_pf.py"))) == 121
+    with sqlite3.connect(prepared_campaign / "campaign.sqlite") as conn:
+        assert conn.execute("SELECT COUNT(*) FROM lanes WHERE active=1").fetchone()[0] == 121
+
+
+def test_prepare_campaign_reconstructs_identity_after_manifest_only_crash(
+    prepared_campaign: Path,
+) -> None:
+    manifest_path = prepared_campaign / "manifests" / "campaign_manifest.json"
+    identity_path = prepared_campaign / "manifests" / "campaign_identity.json"
+    manifest_before = manifest_path.read_bytes()
+    identity_before = json.loads(identity_path.read_text(encoding="utf-8"))
+    identity_path.unlink()
+    shutil.rmtree(prepared_campaign / "lanes")
+    (prepared_campaign / "campaign.sqlite").unlink()
+
+    completed = subprocess.run(
+        [
+            sys.executable,
+            str(SCRIPTS_ROOT / "prepare_campaign.py"),
+            "--source-csv",
+            str(SOURCE_MANIFEST),
+            "--campaign-root",
+            str(prepared_campaign),
+            "--cluster-root",
+            "/cluster/hsopt-test",
+            "--hamlib-data-root",
+            "/data/hamlib-test",
+        ],
+        cwd=RUNNER_ROOT,
+        env={**os.environ, "PYTHONDONTWRITEBYTECODE": "1"},
+        text=True,
+        capture_output=True,
+        check=False,
+    )
+
+    assert completed.returncode == 0, completed.stderr or completed.stdout
+    assert manifest_path.read_bytes() == manifest_before
+    assert json.loads(identity_path.read_text(encoding="utf-8")) == identity_before
+    manifest, identity = CAMPAIGN_COMMON.validate_campaign_identity(prepared_campaign)
+    assert manifest["campaign_id"] == identity["campaign_id"]
+    with sqlite3.connect(prepared_campaign / "campaign.sqlite") as conn:
+        assert conn.execute("SELECT COUNT(*) FROM lanes WHERE active=1").fetchone()[0] == 121
+
+
+def test_prepare_campaign_rejects_stray_identity_without_manifest(
+    prepared_campaign: Path,
+) -> None:
+    (prepared_campaign / "manifests" / "campaign_manifest.json").unlink()
+    completed = subprocess.run(
+        [
+            sys.executable,
+            str(SCRIPTS_ROOT / "prepare_campaign.py"),
+            "--source-csv",
+            str(SOURCE_MANIFEST),
+            "--campaign-root",
+            str(prepared_campaign),
+            "--cluster-root",
+            "/cluster/hsopt-test",
+            "--hamlib-data-root",
+            "/data/hamlib-test",
+        ],
+        cwd=RUNNER_ROOT,
+        env={**os.environ, "PYTHONDONTWRITEBYTECODE": "1"},
+        text=True,
+        capture_output=True,
+        check=False,
+    )
+
+    assert completed.returncode != 0
+    assert "identity but no manifest; refusing ambiguity" in completed.stderr
+
+
+def test_campaign_identity_fails_closed_on_manifest_drift(prepared_campaign: Path) -> None:
+    manifest_path = prepared_campaign / "manifests" / "campaign_manifest.json"
+    manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
+    manifest["cluster_root"] = "/cluster/rebound-to-another-run"
+    CAMPAIGN_COMMON.write_json(manifest_path, manifest)
+    with pytest.raises(RuntimeError, match="identity or manifest hash drift"):
+        CAMPAIGN_COMMON.validate_campaign_identity(prepared_campaign)
+
+
+def test_remote_claim_is_atomic_identity_bound_and_path_safe() -> None:
+    campaign_id = "a" * 64
+    manifest_hash = "b" * 64
+    payload = json.loads(
+        SUBMIT_EVAL.remote_claim_payload(
+            campaign_id=campaign_id,
+            manifest_sha256=manifest_hash,
+        )
+    )
+    assert payload == {
+        "schema_version": 1,
+        "campaign_id": campaign_id,
+        "campaign_manifest_sha256": manifest_hash,
+    }
+    command = SUBMIT_EVAL.remote_claim_command(
+        cluster_root="/cluster/paper/run_01",
+        campaign_id=campaign_id,
+        manifest_sha256=manifest_hash,
+    )
+    assert "flock -x" in command
+    assert "set -C" in command
+    assert "${tmp##*/}" in command
+    assert "refusing to claim non-empty campaign root" in command
+    assert "remote campaign claim mismatch" in command
+    with pytest.raises(ValueError, match="absolute POSIX path"):
+        SUBMIT_EVAL.remote_claim_command(
+            cluster_root="relative/path",
+            campaign_id=campaign_id,
+            manifest_sha256=manifest_hash,
+        )
+    with pytest.raises(ValueError, match="safe SSH host alias"):
+        SUBMIT_EVAL.validate_ssh_host("-oProxyCommand=bad", "sync_host")
+    with pytest.raises(ValueError, match="unsafe for Slurm"):
+        SUBMIT_EVAL.slurm_export_safe("70000,BASH_ENV=/tmp/payload", "legate_fbmem")
 
 
 def test_prepare_campaign_rejects_fixed_protocol_drift(tmp_path: Path) -> None:
@@ -379,6 +910,56 @@ def test_prepare_campaign_rejects_fixed_protocol_drift(tmp_path: Path) -> None:
     assert completed.returncode != 0
     assert "fixed HamLib121 benchmark parameters changed" in completed.stderr
     assert not campaign_root.exists()
+
+
+def test_prepare_campaign_rejects_same_size_drift_in_an_inactive_source_row(
+    tmp_path: Path,
+) -> None:
+    rows = CAMPAIGN_COMMON.read_manifest_rows(SOURCE_MANIFEST, max_qubits=32)
+    inactive = next(
+        row
+        for index, row in enumerate(rows)
+        if not CAMPAIGN_COMMON.fit_lane(
+            row,
+            index,
+            memory_gib=64.0,
+            workspace_factor=4.0,
+        ).exact_fit
+    )
+    needle = str(inactive["file"]).encode("utf-8")
+    replacement = bytes([needle[0] + 1]) + needle[1:]
+    source_bytes = SOURCE_MANIFEST.read_bytes()
+    assert source_bytes.count(needle) == 1
+    drifted_bytes = source_bytes.replace(needle, replacement, 1)
+    assert len(drifted_bytes) == len(source_bytes)
+    drifted = tmp_path / SOURCE_MANIFEST.name
+    drifted.write_bytes(drifted_bytes)
+
+    campaign_root = tmp_path / "inactive-row-drift"
+    completed = subprocess.run(
+        [
+            sys.executable,
+            str(SCRIPTS_ROOT / "prepare_campaign.py"),
+            "--source-csv",
+            str(drifted),
+            "--campaign-root",
+            str(campaign_root),
+            "--cluster-root",
+            "/cluster/hsopt-test",
+            "--hamlib-data-root",
+            "/data/hamlib-test",
+        ],
+        cwd=RUNNER_ROOT,
+        env={**os.environ, "PYTHONDONTWRITEBYTECODE": "1"},
+        text=True,
+        capture_output=True,
+        check=False,
+    )
+
+    assert completed.returncode != 0
+    assert "canonical HamLib source manifest drift" in completed.stderr
+    assert not (campaign_root / "manifests" / "campaign_identity.json").exists()
+    assert not (campaign_root / "campaign.sqlite").exists()
 
 
 def test_decide_candidate_accepts_only_feasible_strict_improvements(tmp_path: Path) -> None:
@@ -484,6 +1065,65 @@ def test_custom_order_is_an_exact_permutation_and_cannot_mutate_source_terms() -
     assert detached == original
 
 
+def test_safe_policy_loader_accepts_the_fixed_policy_and_rejects_host_capabilities(
+    prepared_campaign: Path,
+    tmp_path: Path,
+) -> None:
+    initial_policy = next((prepared_campaign / "lanes").glob("*/initial_simple_pf.py"))
+    loaded = CAMPAIGN_COMMON.load_policy_module(initial_policy)
+    assert loaded.get_method_config().n_steps > 0
+
+    representative = tmp_path / "representative.py"
+    representative.write_text(
+        """
+from dataclasses import dataclass
+from typing import Dict
+import math
+
+@dataclass(frozen=True)
+class Config:
+    n_steps: int = 2
+
+def choose(term: Dict[str, object], config: Config) -> float:
+    return math.sqrt(abs(float(term["coefficient"]))) / config.n_steps
+""".lstrip(),
+        encoding="utf-8",
+    )
+    representative_module = CAMPAIGN_COMMON.load_policy_module(representative)
+    assert representative_module.choose(
+        {"coefficient": -4.0}, representative_module.Config()
+    ) == pytest.approx(1.0)
+
+    sentinel = tmp_path / "policy-escaped.txt"
+    malicious_sources = {
+        "os import": "import os\n",
+        "subprocess import": "import subprocess\n",
+        "pathlib import": "from pathlib import Path\n",
+        "socket import": "import socket\n",
+        "dataclasses module escape": (
+            "import dataclasses\n"
+            f"value = dataclasses.sys.modules['os'].system('touch {sentinel}')\n"
+        ),
+        "typing module escape": (
+            f"import typing\nvalue = typing.sys.modules['os'].system('touch {sentinel}')\n"
+        ),
+        "private math import": "from math import __loader__\n",
+        "open builtin": f"open({str(sentinel)!r}, 'w').write('escaped')\n",
+        "eval builtin": "eval('1 + 1')\n",
+        "exec builtin": "exec('value = 1')\n",
+        "dynamic import": "__import__('os')\n",
+        "dunder reflection": "value = (1).__class__\n",
+        "private module reflection": "import math\nvalue = math.__dict__\n",
+        "unbounded loop": "def spin():\n    while True:\n        pass\n",
+    }
+    for label, source in malicious_sources.items():
+        policy = tmp_path / f"malicious-{label.replace(' ', '-')}.py"
+        policy.write_text(source, encoding="utf-8")
+        with pytest.raises((ImportError, ValueError)):
+            CAMPAIGN_COMMON.load_policy_module(policy)
+        assert not sentinel.exists(), label
+
+
 def test_omitted_rotations_are_charged_to_the_triangle_inequality_budget() -> None:
     config = SimpleNamespace(formula_order=1, n_steps=2, zero_angle_threshold=1.0)
     terms = [{"label": "X", "coefficient": 0.2}]
@@ -561,6 +1201,153 @@ def test_streaming_progress_helpers_resume_and_number_batches(tmp_path: Path) ->
     first_lock.close()
     resumed_lock = STREAM_SUPERVISOR.acquire_supervisor_lock(tmp_path)
     resumed_lock.close()
+
+
+def test_mutation_runs_in_isolated_workspace_and_promotes_only_exact_closure(
+    prepared_campaign: Path,
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    manifest = json.loads(
+        (prepared_campaign / "manifests" / "campaign_manifest.json").read_text(encoding="utf-8")
+    )
+    lane = next(lane for lane in manifest["lanes"] if lane["exact_fit"])
+    live_policy = prepared_campaign / "lanes" / lane["lane_id"] / "simple_pf.py"
+    original = live_policy.read_bytes()
+    calls: list[list[str]] = []
+    work_dirs: list[Path] = []
+    add_extra_file = False
+
+    class FakeProcess:
+        pid = 4242
+
+        async def wait(self) -> int:
+            return 0
+
+    async def fake_create_subprocess_exec(
+        *command: str,
+        **kwargs: object,
+    ) -> FakeProcess:
+        args = list(command)
+        calls.append(args)
+        work_dir = Path(args[args.index("-C") + 1])
+        work_dirs.append(work_dir)
+        candidate = work_dir / "simple_pf.py"
+        candidate.write_bytes(candidate.read_bytes() + b"\n# isolated mutation\n")
+        if add_extra_file:
+            (work_dir / "undeclared.txt").write_text("escape", encoding="utf-8")
+        stdout = kwargs["stdout"]
+        assert hasattr(stdout, "write")
+        stdout.write('{"type":"thread.started"}\n')
+        stdout.write('{"type":"turn.completed"}\n')
+        stdout.flush()
+        last_message = Path(args[args.index("-o") + 1])
+        last_message.write_text("changed the policy", encoding="utf-8")
+        return FakeProcess()
+
+    terminated: list[int] = []
+
+    async def fake_terminate_process_group(process_group_id: int) -> None:
+        terminated.append(process_group_id)
+
+    monkeypatch.setattr(
+        MUTATE_ITERATION.asyncio,
+        "create_subprocess_exec",
+        fake_create_subprocess_exec,
+    )
+    monkeypatch.setattr(
+        MUTATE_ITERATION,
+        "terminate_process_group",
+        fake_terminate_process_group,
+    )
+    tools_dir = tmp_path / "tools"
+    tools_dir.mkdir()
+
+    lane_id, code, succeeded, error = asyncio.run(
+        MUTATE_ITERATION.run_one(
+            root=prepared_campaign,
+            lane=lane,
+            iteration=1,
+            model="gpt-5.5",
+            reasoning_effort="high",
+            codex_bin="codex-test",
+            timeout_seconds=30,
+            tools_dir=tools_dir,
+            semaphore=asyncio.Semaphore(1),
+        )
+    )
+    assert (lane_id, code, succeeded, error) == (lane["lane_id"], 0, True, None)
+    promoted = live_policy.read_bytes()
+    assert promoted != original
+    assert promoted.endswith(b"# isolated mutation\n")
+    assert calls[0][1 : 1 + len(CAMPAIGN_COMMON.PAPER_CODEX_EXEC_FLAGS)] == list(
+        CAMPAIGN_COMMON.PAPER_CODEX_EXEC_FLAGS
+    )
+    assert "--dangerously-bypass-approvals-and-sandbox" not in calls[0]
+    assert work_dirs[0] != live_policy.parent
+    assert not work_dirs[0].exists()
+    assert terminated == [4242]
+
+    add_extra_file = True
+    lane_id, code, succeeded, error = asyncio.run(
+        MUTATE_ITERATION.run_one(
+            root=prepared_campaign,
+            lane=lane,
+            iteration=2,
+            model="gpt-5.5",
+            reasoning_effort="high",
+            codex_bin="codex-test",
+            timeout_seconds=30,
+            tools_dir=tools_dir,
+            semaphore=asyncio.Semaphore(1),
+        )
+    )
+    assert (lane_id, code, succeeded) == (lane["lane_id"], 0, False)
+    assert error is not None and "workspace closure changed" in error
+    assert live_policy.read_bytes() == promoted
+    assert not work_dirs[1].exists()
+    assert terminated == [4242, 4242]
+
+
+def test_process_group_teardown_kills_background_child_before_it_can_write(
+    tmp_path: Path,
+) -> None:
+    sentinel = tmp_path / "background-child-survived.txt"
+    ready = tmp_path / "background-child-ready.txt"
+    child_source = (
+        "import time; from pathlib import Path; "
+        f"time.sleep(1.5); Path({str(sentinel)!r}).write_text('survived')"
+    )
+    parent_source = (
+        "import subprocess, sys; from pathlib import Path; "
+        f"subprocess.Popen([sys.executable, '-c', {child_source!r}]); "
+        f"Path({str(ready)!r}).write_text('ready')"
+    )
+
+    async def exercise() -> int:
+        process = await asyncio.create_subprocess_exec(
+            sys.executable,
+            "-c",
+            parent_source,
+            stdout=asyncio.subprocess.DEVNULL,
+            stderr=asyncio.subprocess.DEVNULL,
+            start_new_session=True,
+        )
+        process_group_id = process.pid
+        await process.wait()
+        assert ready.is_file()
+        try:
+            await MUTATE_ITERATION.terminate_process_group(process_group_id)
+            await asyncio.sleep(1.7)
+        finally:
+            try:
+                os.killpg(process_group_id, signal.SIGKILL)
+            except ProcessLookupError:
+                pass
+        return process_group_id
+
+    assert asyncio.run(exercise()) > 0
+    assert not sentinel.exists()
 
 
 def test_eval_batches_persist_submission_and_retry_state(prepared_campaign: Path) -> None:
@@ -664,7 +1451,7 @@ def test_submit_dry_run_has_no_writes_or_network_tools(
     manifest = json.loads(
         (prepared_campaign / "manifests" / "campaign_manifest.json").read_text(encoding="utf-8")
     )
-    lane_id = next(lane["lane_id"] for lane in manifest["lanes"] if lane["exact_fit"])
+    active_lane_ids = [lane["lane_id"] for lane in manifest["lanes"] if lane["exact_fit"]]
     empty_path = tmp_path / "no-external-tools"
     empty_path.mkdir()
     before = _tree_snapshot(prepared_campaign)
@@ -676,12 +1463,13 @@ def test_submit_dry_run_has_no_writes_or_network_tools(
             "--campaign-root",
             str(prepared_campaign),
             "--iteration",
-            "1",
+            "0",
             "--batch-id",
             "dry-run-batch",
-            "--lane-id",
-            lane_id,
+            "--all-active",
             "--compute-baseline",
+            "--policy-snapshot",
+            "initial",
             "--account",
             "test-account",
             "--partition",
@@ -707,7 +1495,7 @@ def test_submit_dry_run_has_no_writes_or_network_tools(
     assert completed.returncode == 0, completed.stderr or completed.stdout
     plan = json.loads(completed.stdout)
     assert plan["dry_run"] is True
-    assert plan["lane_ids"] == [lane_id]
+    assert plan["lane_ids"] == active_lane_ids
     assert plan["execution_mode"] == "gpu_baseline"
     assert plan["slurm_script"] == "slurm/evaluate_batch.sbatch"
     assert _tree_snapshot(prepared_campaign) == before
@@ -727,7 +1515,7 @@ def test_submit_dry_run_has_no_writes_or_network_tools(
             "--batch-id",
             "dry-run-absent",
             "--lane-id",
-            lane_id,
+            active_lane_ids[0],
             "--account",
             "test-account",
             "--partition",
@@ -748,6 +1536,149 @@ def test_submit_dry_run_has_no_writes_or_network_tools(
     )
     assert absent.returncode != 0
     assert not absent_campaign.exists()
+
+
+def test_initial_baseline_submission_is_durable_before_network_and_identity_bound(
+    prepared_campaign: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    calls: list[tuple[list[str], str | None]] = []
+
+    def fake_run(command: list[str], **kwargs: object) -> subprocess.CompletedProcess[str]:
+        input_text = kwargs.get("input_text")
+        assert input_text is None or isinstance(input_text, str)
+        calls.append((command, input_text))
+        is_submit = command[0] == "ssh" and input_text is not None and "sbatch" in input_text
+        return subprocess.CompletedProcess(
+            args=command,
+            returncode=0,
+            stdout="123456\n" if is_submit else "",
+            stderr="",
+        )
+
+    monkeypatch.setattr(SUBMIT_EVAL, "run_with_retries", fake_run)
+    monkeypatch.setattr(
+        sys,
+        "argv",
+        [
+            "submit_eval_batch.py",
+            "--campaign-root",
+            str(prepared_campaign),
+            "--iteration",
+            "0",
+            "--batch-id",
+            "initial_baseline",
+            "--all-active",
+            "--compute-baseline",
+            "--policy-snapshot",
+            "initial",
+            "--account",
+            "test-account",
+            "--partition",
+            "test-gpu",
+            "--cpu-partition",
+            "test-cpu",
+            "--sync-host",
+            "test-sync",
+            "--submit-host",
+            "test-submit",
+        ],
+    )
+    SUBMIT_EVAL.main()
+    assert capsys.readouterr().out.strip() == "123456"
+    assert [command[0][0] for command in calls] == ["ssh", "rsync", "ssh"]
+    assert calls[0][1] is not None and "hsopt-campaign-claim" in calls[0][1]
+
+    with sqlite3.connect(prepared_campaign / "campaign.sqlite") as conn:
+        row = conn.execute(
+            "SELECT state, job_id, lane_ids_json, submission_key, job_name "
+            "FROM eval_batches WHERE batch_id='initial_baseline'"
+        ).fetchone()
+    assert row is not None
+    state, job_id, lane_ids_json, submission_key, job_name = row
+    assert (state, job_id, job_name) == ("submitted", "123456", f"hpf_{submission_key}")
+    assert len(json.loads(lane_ids_json)) == 121
+    batch_manifest = json.loads(
+        (
+            prepared_campaign
+            / "iterations"
+            / "iter_0000"
+            / "batches"
+            / "initial_baseline"
+            / "batch_manifest.json"
+        ).read_text(encoding="utf-8")
+    )
+    manifest, identity = CAMPAIGN_COMMON.validate_campaign_identity(prepared_campaign)
+    assert batch_manifest["campaign_id"] == manifest["campaign_id"]
+    assert batch_manifest["campaign_manifest_sha256"] == identity["campaign_manifest_sha256"]
+    assert batch_manifest["runner_provenance"] == CAMPAIGN_COMMON.validate_runner_provenance(
+        prepared_campaign
+    )
+    assert len(batch_manifest["policy_sha256s"]) == 121
+    assert batch_manifest["execution_configuration"]["execution_mode"] == "gpu_baseline"
+    assert "--protect-args" in calls[1][0]
+    assert calls[1][0][calls[1][0].index(".venv_cpu/") - 1] == "--exclude"
+    assert calls[2][1] is not None
+    assert "--export='ALL," not in calls[2][1]
+    assert "flock -x 8" in calls[2][1]
+    assert calls[2][0][-2:] == ["bash", "-s"]
+
+
+def test_sync_only_rsync_excludes_both_cluster_environments(
+    prepared_campaign: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    calls: list[tuple[list[str], str | None]] = []
+
+    def fake_run(command: list[str], **kwargs: object) -> subprocess.CompletedProcess[str]:
+        input_text = kwargs.get("input_text")
+        assert input_text is None or isinstance(input_text, str)
+        calls.append((command, input_text))
+        return subprocess.CompletedProcess(args=command, returncode=0, stdout="", stderr="")
+
+    monkeypatch.setattr(SUBMIT_EVAL, "run_with_retries", fake_run)
+    monkeypatch.setattr(
+        sys,
+        "argv",
+        [
+            "submit_eval_batch.py",
+            "--campaign-root",
+            str(prepared_campaign),
+            "--iteration",
+            "0",
+            "--batch-id",
+            "sync-only-baseline",
+            "--all-active",
+            "--compute-baseline",
+            "--policy-snapshot",
+            "initial",
+            "--account",
+            "test-account",
+            "--partition",
+            "test-gpu",
+            "--cpu-partition",
+            "test-cpu",
+            "--sync-host",
+            "test-sync",
+            "--submit-host",
+            "test-submit",
+            "--sync-only",
+        ],
+    )
+
+    SUBMIT_EVAL.main()
+    assert [command[0] for command, _input in calls] == ["ssh", "rsync"]
+    rsync_command = calls[1][0]
+    assert rsync_command[rsync_command.index(".venv/") - 1] == "--exclude"
+    assert rsync_command[rsync_command.index(".venv_cpu/") - 1] == "--exclude"
+    with sqlite3.connect(prepared_campaign / "campaign.sqlite") as conn:
+        assert (
+            conn.execute(
+                "SELECT COUNT(*) FROM eval_batches WHERE batch_id='sync-only-baseline'"
+            ).fetchone()[0]
+            == 0
+        )
 
 
 def test_partition_rescue_is_scoped_to_campaign_jobs(
@@ -788,6 +1719,48 @@ def test_partition_rescue_is_scoped_to_campaign_jobs(
         )
 
 
+def test_collector_cannot_close_a_batch_with_a_missing_lane_result(tmp_path: Path) -> None:
+    root = tmp_path / "missing-result"
+    _write_synthetic_export_run(root)
+    with sqlite3.connect(root / "campaign.sqlite") as conn:
+        conn.execute(
+            "UPDATE eval_batches SET lane_ids_json=?, state='submitted', collected_at=NULL "
+            "WHERE batch_id='iter0001_batch0001'",
+            (json.dumps(["0000_test_lane", "0001_missing_lane"]),),
+        )
+        conn.commit()
+
+    completed = subprocess.run(
+        [
+            sys.executable,
+            str(SCRIPTS_ROOT / "collect_iteration.py"),
+            "--campaign-root",
+            str(root),
+            "--iteration",
+            "1",
+            "--cluster-root",
+            "/cluster/synthetic",
+            "--batch-id",
+            "iter0001_batch0001",
+            "--skip-rsync",
+        ],
+        cwd=RUNNER_ROOT,
+        env={**os.environ, "PYTHONDONTWRITEBYTECODE": "1"},
+        text=True,
+        capture_output=True,
+        check=False,
+    )
+
+    assert completed.returncode != 0
+    assert "result closure is incomplete or ambiguous" in completed.stderr
+    assert "0001_missing_lane" in completed.stderr
+    with sqlite3.connect(root / "campaign.sqlite") as conn:
+        state, collected_at = conn.execute(
+            "SELECT state, collected_at FROM eval_batches WHERE batch_id='iter0001_batch0001'"
+        ).fetchone()
+    assert (state, collected_at) == ("submitted", None)
+
+
 def test_campaign_progress_reports_missing_databases_as_incomplete(tmp_path: Path) -> None:
     replicate_root = tmp_path / "replicates"
     progress = FINALIZE_REPLICATES.campaign_progress(
@@ -824,6 +1797,64 @@ def test_campaign_progress_reports_missing_databases_as_incomplete(tmp_path: Pat
     )
     assert completed.returncode == 1
     assert not replicate_root.exists()
+
+
+def test_partial_initial_baseline_replication_resumes_idempotently(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    source = tmp_path / "source"
+    target = tmp_path / "target"
+    _write_synthetic_export_run(source)
+    _write_synthetic_export_run(target)
+    lane_id = "0000_test_lane"
+    source_result = source / "iterations" / "iter_0000" / "results" / f"{lane_id}.json"
+    payload = json.loads(source_result.read_text(encoding="utf-8"))
+    payload.update(
+        {
+            "accepted": True,
+            "decision_reason": "initial_baseline",
+            "relative_gain_percent": None,
+            "incumbent_iteration": None,
+            "incumbent_t_gates_qpe": None,
+            "mutation_summary": "deterministic baseline",
+        }
+    )
+    CAMPAIGN_COMMON.write_json(source_result, payload)
+
+    target_result = target / "iterations" / "iter_0000" / "results" / f"{lane_id}.json"
+    target_baseline = target / "baselines" / f"{lane_id}.json"
+    target_result.unlink()
+    target_baseline.unlink()
+    shutil.copy2(source / "baselines" / f"{lane_id}.json", target_baseline)
+    monkeypatch.setattr(REPLICATE_BASELINE, "EXPECTED_LANES", 1)
+    monkeypatch.setattr(
+        sys,
+        "argv",
+        [
+            "replicate_initial_baseline.py",
+            "--source-campaign",
+            str(source),
+            "--target-campaign",
+            str(target),
+        ],
+    )
+
+    REPLICATE_BASELINE.main()
+    receipt = target / "manifests" / "baseline_replication_receipt.json"
+    assert target_result.is_file()
+    assert receipt.is_file()
+    replicated = json.loads(target_result.read_text(encoding="utf-8"))
+    source_manifest, source_identity = CAMPAIGN_COMMON.validate_campaign_identity(source)
+    assert replicated["baseline_replication"] == {
+        "schema_version": 1,
+        "source_campaign_id": source_manifest["campaign_id"],
+        "source_manifest_sha256": source_identity["campaign_manifest_sha256"],
+        "source_result_sha256": _sha256(source_result),
+    }
+    snapshot = _tree_snapshot(target)
+    REPLICATE_BASELINE.main()
+    assert _tree_snapshot(target) == snapshot
 
 
 def test_export_helpers_sanitize_paths_and_checksum_outputs(tmp_path: Path) -> None:
@@ -878,6 +1909,9 @@ def test_complete_paper_export_requires_the_fixed_agent_configuration() -> None:
         "model": CAMPAIGN_COMMON.PAPER_MODEL,
         "reasoning_effort": CAMPAIGN_COMMON.PAPER_REASONING_EFFORT,
         "codex_cli_version": CAMPAIGN_COMMON.PAPER_CODEX_CLI_VERSION,
+        "node_version": "24.11.1",
+        "npm_cache": ".codex_npm",
+        "codex_exec_flags": list(CAMPAIGN_COMMON.PAPER_CODEX_EXEC_FLAGS),
     }
     EXPORT_REPLICATES.validate_paper_autoresearch_provenance(correct)
     for key in correct:
@@ -941,7 +1975,9 @@ def test_strict_exporter_validates_and_normalizes_a_complete_fixture(
     assert summary["exported_candidate_rows"] == 1
     assert summary["exported_lane_run_rows"] == 1
     assert summary["exported_lane_aggregate_rows"] == 1
+    assert summary["exported_baseline_provenance_rows"] == 1
     assert summary["exported_policy_sources"] == 2
+    assert summary["hamlib_zip_checksum_manifest"] == "hamlib_zip_sha256.txt"
     assert summary["confidence_interval_95_percent"] is None
     assert summary["provenance_file"] == "provenance.json"
     assert "replicate_root" not in summary
@@ -950,7 +1986,9 @@ def test_strict_exporter_validates_and_normalizes_a_complete_fixture(
     assert provenance["model"] == "gpt-5.5"
     assert provenance["reasoning_effort"] == "high"
     assert provenance["codex_cli_version"] == "0.144.0"
+    assert provenance["node_version"] == "24.11.1"
     assert provenance["replicate_runs_verified"] == 1
+    assert provenance["supervisor_protocol"]["batch_size"] == 1
 
     candidate_log = (output / "candidate_log.csv").read_text(encoding="utf-8")
     lane_summary = (output / "lane_run_summary.csv").read_text(encoding="utf-8")
@@ -958,6 +1996,15 @@ def test_strict_exporter_validates_and_normalizes_a_complete_fixture(
     assert str(run_root) not in lane_summary
     assert "run_01/iterations/iter_0001" in candidate_log
     assert "run_01/iterations/iter_0001" in lane_summary
+
+    baseline_provenance = list(
+        csv.DictReader((output / "baseline_provenance.csv").open(encoding="utf-8"))
+    )
+    assert len(baseline_provenance) == 1
+    assert baseline_provenance[0]["lane_id"] == "0000_test_lane"
+    assert baseline_provenance[0]["gpu_uuid"].startswith("GPU-")
+    exported_zip_manifest = output / "hamlib_zip_sha256.txt"
+    assert exported_zip_manifest.read_bytes() == ZIP_CHECKSUM_MANIFEST.read_bytes()
 
     checksum_lines = (output / "SHA256SUMS").read_text(encoding="utf-8").splitlines()
     assert checksum_lines
@@ -990,9 +2037,50 @@ def test_strict_exporter_validates_and_normalizes_a_complete_fixture(
         check=False,
     )
     assert failed.returncode != 0
-    assert "machine-specific absolute paths" in failed.stderr
+    assert "evaluated policy bytes changed" in failed.stderr
     assert not leaky_output.exists()
     assert not list(tmp_path.glob(".leaky-normalized.staging-*"))
+
+
+def test_strict_export_rejects_an_open_submitted_batch(tmp_path: Path) -> None:
+    replicate_root = tmp_path / "replicates"
+    run_root = replicate_root / "run_01"
+    output = tmp_path / "normalized"
+    _write_synthetic_export_run(run_root)
+    with sqlite3.connect(run_root / "campaign.sqlite") as conn:
+        conn.execute(
+            "UPDATE eval_batches SET state='submitted', collected_at=NULL "
+            "WHERE batch_id='iter0001_batch0001'"
+        )
+        conn.commit()
+
+    completed = subprocess.run(
+        [
+            sys.executable,
+            str(SCRIPTS_ROOT / "export_replicate_results.py"),
+            "--replicate-root",
+            str(replicate_root),
+            "--output-dir",
+            str(output),
+            "--runs",
+            "1",
+            "--expected-lanes",
+            "1",
+            "--expected-iterations",
+            "1",
+            "--diagnostic-shape",
+        ],
+        cwd=RUNNER_ROOT,
+        env={**os.environ, "PYTHONDONTWRITEBYTECODE": "1"},
+        text=True,
+        capture_output=True,
+        check=False,
+    )
+
+    assert completed.returncode != 0
+    assert "evaluation batch(es) are still open" in completed.stderr
+    assert "strict export requires every durable submission to be collected" in completed.stderr
+    assert not output.exists()
 
 
 def test_exporter_rejects_cross_run_provenance_drift(tmp_path: Path) -> None:
@@ -1032,6 +2120,96 @@ def test_exporter_rejects_cross_run_provenance_drift(tmp_path: Path) -> None:
     assert not output.exists()
 
 
+@pytest.mark.parametrize(
+    ("tamper", "message"),
+    (
+        ("policy", "evaluated policy bytes changed"),
+        ("baseline", "baseline cache bytes changed"),
+        ("batch", "batch manifest bytes changed"),
+    ),
+)
+def test_result_replay_rejects_mutable_evidence(
+    tmp_path: Path,
+    tamper: str,
+    message: str,
+) -> None:
+    root = tmp_path / tamper
+    _write_synthetic_export_run(root)
+    lane_id = "0000_test_lane"
+    result = json.loads(
+        (root / "iterations" / "iter_0001" / "results" / f"{lane_id}.json").read_text(
+            encoding="utf-8"
+        )
+    )
+    policy = root / "iterations" / "iter_0001" / "mutations" / lane_id / "after_simple_pf.py"
+    if tamper == "policy":
+        policy.write_text("# policy tampered after evaluation\n", encoding="utf-8")
+    elif tamper == "baseline":
+        baseline = root / "baselines" / f"{lane_id}.json"
+        baseline.write_text(baseline.read_text(encoding="utf-8") + "\n", encoding="utf-8")
+    else:
+        batch = (
+            root
+            / "iterations"
+            / "iter_0001"
+            / "batches"
+            / "iter0001_batch0001"
+            / "batch_manifest.json"
+        )
+        batch.write_text(batch.read_text(encoding="utf-8") + "\n", encoding="utf-8")
+    manifest, _identity = CAMPAIGN_COMMON.validate_campaign_identity(root)
+    with pytest.raises(RuntimeError, match=message):
+        CAMPAIGN_COMMON.validate_evaluation_result_provenance(
+            campaign_root=root,
+            lane=manifest["lanes"][0],
+            iteration=1,
+            result=result,
+            policy_path=policy,
+        )
+
+
+def test_baseline_semantics_require_verified_a100_cupynumeric_evidence(tmp_path: Path) -> None:
+    root = tmp_path / "a100-drift"
+    _write_synthetic_export_run(root)
+    lane_id = "0000_test_lane"
+    result_path = root / "iterations" / "iter_0000" / "results" / f"{lane_id}.json"
+    result = json.loads(result_path.read_text(encoding="utf-8"))
+    baseline_path = root / "baselines" / f"{lane_id}.json"
+    baseline = json.loads(baseline_path.read_text(encoding="utf-8"))
+    baseline["baseline_accelerator"] = "NVIDIA H100"
+    baseline["gpu_preflight"]["accelerator_family"] = "NVIDIA H100"
+    CAMPAIGN_COMMON.write_json(baseline_path, baseline)
+    result["baseline_accelerator"] = "NVIDIA H100"
+    result["gpu_preflight"] = baseline["gpu_preflight"]
+    result["baseline_cache_sha256"] = _sha256(baseline_path)
+    manifest, _identity = CAMPAIGN_COMMON.validate_campaign_identity(root)
+    with pytest.raises(RuntimeError, match="not verified A100 evidence"):
+        CAMPAIGN_COMMON.validate_evaluation_result_provenance(
+            campaign_root=root,
+            lane=manifest["lanes"][0],
+            iteration=0,
+            result=result,
+            policy_path=root / "lanes" / lane_id / "initial_simple_pf.py",
+        )
+
+
+def test_campaign_runner_snapshot_rejects_bytecode_and_undeclared_files(tmp_path: Path) -> None:
+    snapshot = tmp_path / "snapshot"
+    _copy_runner_provenance_sources(snapshot)
+    CAMPAIGN_COMMON.write_json(
+        snapshot / "manifests" / "campaign_manifest.json",
+        {"campaign_id": "synthetic"},
+    )
+    pycache = snapshot / "scripts" / "__pycache__"
+    pycache.mkdir()
+    with pytest.raises(RuntimeError, match="forbidden runner bytecode"):
+        CAMPAIGN_COMMON.build_runner_provenance(snapshot)
+    pycache.rmdir()
+    (snapshot / "scripts" / "undeclared.py").write_text("# drift\n", encoding="utf-8")
+    with pytest.raises(RuntimeError, match="closure changed"):
+        CAMPAIGN_COMMON.build_runner_provenance(snapshot)
+
+
 def test_runner_has_no_personal_roots_and_slurm_scripts_parse() -> None:
     text_suffixes = {".csv", ".json", ".lock", ".md", ".py", ".sbatch", ".toml"}
     generated_parts = {".codex_npm", ".venv", ".venv_cpu", "__pycache__"}
@@ -1058,6 +2236,24 @@ def test_runner_has_no_personal_roots_and_slurm_scripts_parse() -> None:
     runner_readme = (RUNNER_ROOT / "README.md").read_text(encoding="utf-8")
     assert "\npython3 scripts/" not in runner_readme
     assert "uv run --locked python scripts/" in runner_readme
+    for required in (
+        "Node.js 24.x",
+        "hamlib_zip_sha256.txt",
+        "2a5958a86a6adaa30bd98b325701830f618f7663ddcd925509213ad3ae187def",
+        "prebuild_cluster_environments.py",
+        "--batch-size 8",
+        "--max-concurrent-mutators 4",
+        "--max-running-eval-jobs 8",
+        "not five full A100",
+    ):
+        assert required in runner_readme
+
+    for entrypoint in sorted((RUNNER_ROOT / "scripts").glob("*.py")):
+        if entrypoint.name == "campaign_common.py":
+            continue
+        source = entrypoint.read_text(encoding="utf-8")
+        assert "sys.pycache_prefix" in source
+        assert 'os.environ["PYTHONPYCACHEPREFIX"]' in source
 
     bash = shutil.which("bash")
     assert bash is not None
@@ -1069,3 +2265,6 @@ def test_runner_has_no_personal_roots_and_slurm_scripts_parse() -> None:
             check=False,
         )
         assert completed.returncode == 0, f"{script}: {completed.stderr}"
+        source = script.read_text(encoding="utf-8")
+        assert "uv sync" not in source
+        assert ".hsopt-uv-lock-sha256" in source

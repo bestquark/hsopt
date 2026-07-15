@@ -4,13 +4,41 @@ from __future__ import annotations
 import argparse
 import json
 import os
+import shlex
 import shutil
+import stat
 import subprocess
+import sys
+import tempfile
 from pathlib import Path
 from typing import Any
 
-from campaign_common import db_connect, ensure_dirs, init_db, log_event, now_iso, write_json
-from render_telemetry import main as render_main
+_PRIVATE_PYCACHE_PREFIX = tempfile.mkdtemp(prefix="hsopt-hamlib121-pycache-")
+_private_pycache_stat = os.stat(_PRIVATE_PYCACHE_PREFIX, follow_symlinks=False)
+if (
+    not stat.S_ISDIR(_private_pycache_stat.st_mode)
+    or _private_pycache_stat.st_uid != os.getuid()
+    or stat.S_IMODE(_private_pycache_stat.st_mode) & 0o077
+):
+    raise RuntimeError("private Python bytecode prefix is not an owner-only real directory")
+sys.pycache_prefix = _PRIVATE_PYCACHE_PREFIX
+os.environ["PYTHONPYCACHEPREFIX"] = _PRIVATE_PYCACHE_PREFIX
+
+from campaign_common import (  # noqa: E402
+    db_connect,
+    ensure_dirs,
+    init_db,
+    log_event,
+    mark_eval_batch_collected,
+    now_iso,
+    validate_absolute_posix_path,
+    validate_campaign_identity,
+    validate_evaluation_result_provenance,
+    validate_result_submission_receipt,
+    write_json,
+)
+from render_telemetry import main as render_main  # noqa: E402
+from submit_eval_batch import validate_ssh_host  # noqa: E402
 
 
 SQLITE_INT_MAX = 2**63 - 1
@@ -120,14 +148,18 @@ def decide_candidate(
 def rsync_from_cluster(
     cluster_root: str, campaign_root: Path, iteration: int, sync_host: str
 ) -> None:
+    cluster_root = validate_absolute_posix_path(cluster_root, "cluster_root")
+    sync_host = validate_ssh_host(sync_host, "sync_host")
     src = f"{sync_host}:{cluster_root.rstrip('/')}/iterations/iter_{iteration:04d}/results/"
     dst = campaign_root / "iterations" / f"iter_{iteration:04d}" / "results"
     dst.mkdir(parents=True, exist_ok=True)
-    subprocess.run(["rsync", "-ah", "--partial", src, f"{dst}/"], check=True)
+    subprocess.run(["rsync", "-ah", "--partial", "--protect-args", src, f"{dst}/"], check=True)
     baseline_dst = campaign_root / "baselines"
     baseline_dst.mkdir(parents=True, exist_ok=True)
     probe = subprocess.run(
-        ["ssh", sync_host, f"test -d {cluster_root.rstrip()}/baselines"],
+        ["ssh", sync_host, "bash", "-s"],
+        input=f"test -d {shlex.quote(cluster_root.rstrip('/') + '/baselines')}\n",
+        text=True,
         stdout=subprocess.DEVNULL,
         stderr=subprocess.DEVNULL,
         check=False,
@@ -138,6 +170,7 @@ def rsync_from_cluster(
                 "rsync",
                 "-ah",
                 "--partial",
+                "--protect-args",
                 f"{sync_host}:{cluster_root.rstrip('/')}/baselines/",
                 f"{baseline_dst}/",
             ],
@@ -156,13 +189,27 @@ def main() -> None:
     parser.add_argument("--skip-rsync", action="store_true")
     parser.add_argument("--lane-id", action="append", default=[])
     parser.add_argument("--lane-ids-file", type=Path)
+    parser.add_argument(
+        "--batch-id",
+        help=(
+            "Close this durable submission record after collecting its exact result closure. "
+            "Use this for the manually submitted iteration-0 baseline; the streaming "
+            "supervisor closes its own batches."
+        ),
+    )
+    parser.add_argument(
+        "--expected-batch-id",
+        help=(
+            "Require every result to match this currently submitted batch, but leave the "
+            "batch lifecycle transition to the streaming supervisor."
+        ),
+    )
     args = parser.parse_args()
 
     root = args.campaign_root.resolve()
-    paths = ensure_dirs(root)
-    manifest = json.loads(
-        (paths["manifests"] / "campaign_manifest.json").read_text(encoding="utf-8")
-    )
+    ensure_dirs(root)
+    manifest, _campaign_identity = validate_campaign_identity(root)
+    lane_by_id = {str(lane["lane_id"]): lane for lane in manifest["lanes"] if lane.get("exact_fit")}
     cluster_root = args.cluster_root or manifest["cluster_root"]
     if not args.skip_rsync and not args.sync_host:
         parser.error("pass --sync-host or set HSOPT_SYNC_HOST unless using --skip-rsync")
@@ -180,25 +227,98 @@ def main() -> None:
             for line in args.lane_ids_file.read_text(encoding="utf-8").splitlines()
             if line.strip() and not line.lstrip().startswith("#")
         )
+    if args.batch_id is not None and args.expected_batch_id is not None:
+        parser.error("--batch-id and --expected-batch-id are mutually exclusive")
+    expected_batch_id = args.batch_id or args.expected_batch_id
+    expected_batch = None
+    if expected_batch_id is not None:
+        row = conn.execute(
+            "SELECT iteration, lane_ids_json, state FROM eval_batches WHERE batch_id=?",
+            (expected_batch_id,),
+        ).fetchone()
+        if row is None:
+            raise RuntimeError(f"batch {expected_batch_id}: durable submission intent is missing")
+        if int(row["iteration"]) != args.iteration:
+            raise RuntimeError(
+                f"batch {expected_batch_id}: iteration {row['iteration']} does not match "
+                f"requested iteration {args.iteration}"
+            )
+        batch_lane_ids = json.loads(str(row["lane_ids_json"]))
+        if (
+            not isinstance(batch_lane_ids, list)
+            or not batch_lane_ids
+            or any(not isinstance(lane_id, str) or not lane_id for lane_id in batch_lane_ids)
+            or len(set(batch_lane_ids)) != len(batch_lane_ids)
+        ):
+            raise RuntimeError(f"batch {expected_batch_id}: malformed durable lane closure")
+        if selected_lane_ids and selected_lane_ids != set(batch_lane_ids):
+            raise RuntimeError(
+                f"batch {expected_batch_id}: explicit lane selection differs from durable intent"
+            )
+        selected_lane_ids = set(batch_lane_ids)
+        expected_batch = {
+            "batch_id": expected_batch_id,
+            "lane_ids": batch_lane_ids,
+            "state": str(row["state"]),
+        }
+        allowed_states = {"submitted", "collected"} if args.batch_id is not None else {"submitted"}
+        if expected_batch["state"] not in allowed_states:
+            raise RuntimeError(
+                f"batch {expected_batch_id}: cannot collect batch in state "
+                f"{expected_batch['state']!r}"
+            )
     if selected_lane_ids:
         result_paths = [path for path in result_paths if path.stem in selected_lane_ids]
+
+    if expected_batch is not None:
+        actual_result_ids = {path.stem for path in result_paths}
+        expected_result_ids = set(expected_batch["lane_ids"])
+        if actual_result_ids != expected_result_ids:
+            raise RuntimeError(
+                f"batch {expected_batch_id}: result closure is incomplete or ambiguous: "
+                f"missing={sorted(expected_result_ids - actual_result_ids)}, "
+                f"extra={sorted(actual_result_ids - expected_result_ids)}"
+            )
 
     ok_count = 0
     error_count = 0
     accepted_count = 0
     rejected_count = 0
+    validated_status_by_lane: dict[str, str] = {}
     for path in result_paths:
         result = json.loads(path.read_text(encoding="utf-8"))
         lane_id = result.get("lane_id")
         if not lane_id:
-            continue
+            raise RuntimeError(f"result {path.name!r} is missing its lane_id")
+        if lane_id != path.stem:
+            raise RuntimeError(
+                f"result filename/lane identity mismatch: {path.name!r} contains {lane_id!r}"
+            )
         status = result.get("status", "error")
+        if lane_id not in lane_by_id:
+            raise RuntimeError(f"result names unknown or inactive lane {lane_id!r}")
+        validate_result_submission_receipt(
+            conn,
+            lane_id=str(lane_id),
+            iteration=args.iteration,
+            result=result,
+            expected_batch_id=expected_batch_id,
+        )
+        validated_status_by_lane[str(lane_id)] = str(status)
+        proposal_path = proposal_policy_path(root, args.iteration, lane_id)
+        if status == "ok":
+            validate_evaluation_result_provenance(
+                campaign_root=root,
+                lane=lane_by_id[lane_id],
+                iteration=args.iteration,
+                result=result,
+                policy_path=proposal_path,
+            )
         if status == "ok":
             ok_count += 1
         else:
             error_count += 1
 
-        proposal_path = proposal_policy_path(root, args.iteration, lane_id)
         incumbent = previous_incumbent(conn, lane_id, args.iteration)
         accepted, decision_reason, relative_gain = decide_candidate(
             iteration=args.iteration,
@@ -318,6 +438,27 @@ def main() -> None:
                 ),
             )
     conn.commit()
+    if (
+        args.batch_id is not None
+        and expected_batch is not None
+        and expected_batch["state"] != "collected"
+    ):
+        successful_lane_ids = [
+            lane_id
+            for lane_id in expected_batch["lane_ids"]
+            if validated_status_by_lane[lane_id] == "ok"
+        ]
+        retry_lane_ids = [
+            lane_id
+            for lane_id in expected_batch["lane_ids"]
+            if validated_status_by_lane[lane_id] != "ok"
+        ]
+        mark_eval_batch_collected(
+            conn,
+            batch_id=expected_batch["batch_id"],
+            successful_lane_ids=successful_lane_ids,
+            retry_lane_ids=retry_lane_ids,
+        )
     log_event(
         conn,
         kind="collect",
