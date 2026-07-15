@@ -131,10 +131,9 @@ uv run hsgepa optimize --smoke --run-root runs/hsgepa/smoke --max-metric-calls 6
 
 ## Compatibility
 
-Some PFS evaluator environment variables and molecule manifests still use the
-`TROVOLUT_` prefix and `.trovolut.json` names. They are retained so old campaign
-scripts and lane wrappers keep working while the repo/package identity moves to
-`hsopt`.
+Some PFS evaluator environment variables still use the `TROVOLUT_` prefix so
+existing campaign scripts and lane wrappers keep working. Lane discovery and
+the `hsopt` CLI do not require per-lane manifest files.
 
 The old Python CLI aliases `t-autoresearch` and `t-gepa` are still registered
 for existing scripts, but the primary commands and skills use `hsopt` and
