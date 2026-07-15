@@ -1,0 +1,13 @@
+.venv/
+.venv_cpu/
+campaign.sqlite
+campaign.sqlite-shm
+campaign.sqlite-wal
+.supervisor.lock
+baselines/
+iterations/
+lanes/
+logs/
+telemetry/
+manifests/campaign_manifest.json
+manifests/replicate_manifest.json

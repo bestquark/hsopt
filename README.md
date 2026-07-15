@@ -16,6 +16,9 @@ Raw campaign workspaces stay outside the benchmark tree. Only compact,
 completion-gated results for the five 121-Hamiltonian campaigns and the ten
 reaction comparisons belong on `main`.
 
+The portable paper runners and final-artifact gates are documented in
+[`experiments/`](experiments/README.md).
+
 The older CPU/GPU/QPU constraint framework, GPU-memory experiments, generic
 telemetry APIs, broad protocol examples, and large run artifacts are preserved
 off `main` on branches listed in `BRANCHES.md`.
