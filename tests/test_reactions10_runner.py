@@ -49,6 +49,20 @@ def test_runner_readme_uses_the_locked_runner_projects_for_every_stage() -> None
     assert "python /external/reactions10_run/runner/" not in readme
 
 
+def test_supervisor_shell_quotes_slurm_format_for_csh_login_shell(monkeypatch) -> None:
+    supervisor = _load_module("supervise_campaign")
+    commands: list[list[str]] = []
+
+    def fake_run(command, **_kwargs):
+        commands.append(command)
+        return subprocess.CompletedProcess(command, 0, stdout="123|RUNNING\n", stderr="")
+
+    monkeypatch.setattr(supervisor.subprocess, "run", fake_run)
+
+    assert supervisor.query_slurm_states("nvlogin", ["123"], 30) == {"123": "RUNNING"}
+    assert commands == [["ssh", "nvlogin", "squeue -h -j 123 -o '%A|%T'"]]
+
+
 def _load_module(stem: str, *, campaign_common: ModuleType | None = None) -> ModuleType:
     path = RUNNER_ROOT / f"{stem}.py"
     module_name = f"_hsopt_reactions10_runner_test_{stem}"

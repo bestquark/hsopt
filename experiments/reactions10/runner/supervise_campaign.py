@@ -4,6 +4,7 @@ from __future__ import annotations
 import argparse
 import json
 import os
+import shlex
 import stat
 import subprocess
 import sys
@@ -71,8 +72,9 @@ def latest_submitted_jobs(state: dict[str, Any], iteration: int) -> dict[str, st
 
 def query_slurm_states(host: str, job_ids: list[str], timeout_seconds: int) -> dict[str, str]:
     joined = ",".join(job_ids)
+    squeue_remote = shlex.join(["squeue", "-h", "-j", joined, "-o", "%A|%T"])
     squeue = subprocess.run(
-        ["ssh", host, "squeue", "-h", "-j", joined, "-o", "%A|%T"],
+        ["ssh", host, squeue_remote],
         check=False,
         text=True,
         capture_output=True,
@@ -87,10 +89,8 @@ def query_slurm_states(host: str, job_ids: list[str], timeout_seconds: int) -> d
             states[fields[0]] = fields[1].split("+", 1)[0].strip().upper()
     absent = [job_id for job_id in job_ids if job_id not in states]
     if absent:
-        sacct = subprocess.run(
+        sacct_remote = shlex.join(
             [
-                "ssh",
-                host,
                 "sacct",
                 "-n",
                 "-X",
@@ -98,7 +98,10 @@ def query_slurm_states(host: str, job_ids: list[str], timeout_seconds: int) -> d
                 ",".join(absent),
                 "--format=JobIDRaw,State",
                 "-P",
-            ],
+            ]
+        )
+        sacct = subprocess.run(
+            ["ssh", host, sacct_remote],
             check=False,
             text=True,
             capture_output=True,
