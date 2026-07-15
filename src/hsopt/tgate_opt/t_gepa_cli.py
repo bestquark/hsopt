@@ -27,9 +27,6 @@ from .common import (
 from .t_autoresearch_cli import build_agent_prompt
 
 
-DEFAULT_RUN_ROOT = REPO_ROOT / "runs" / "hsgepa"
-
-
 def default_seed_prompt() -> str:
     return """You are optimizing product-formula synthesis precision for lower compiled T count.
 
@@ -419,7 +416,11 @@ def build_parser() -> argparse.ArgumentParser:
     seed.set_defaults(func=cmd_seed_prompt)
 
     dataset = sub.add_parser("dataset", help="Write a default train dataset JSON for T-gate prompt optimization.")
-    dataset.add_argument("--output", default=str(DEFAULT_RUN_ROOT / "dataset.json"))
+    dataset.add_argument(
+        "--output",
+        required=True,
+        help="Explicit path for the generated dataset (keep campaign inputs outside the checkout).",
+    )
     dataset.add_argument("--family", default=DEFAULT_FAMILY)
     dataset.add_argument("--smoke", action="store_true", help="Use only the cheapest H2 lane.")
     dataset.set_defaults(func=cmd_dataset)
@@ -431,7 +432,11 @@ def build_parser() -> argparse.ArgumentParser:
     eval_prompt.add_argument("--example-id")
     eval_prompt.add_argument("--target-iterations", type=int, default=1)
     eval_prompt.add_argument("--max-agent-seconds", type=int, default=900)
-    eval_prompt.add_argument("--run-root", default=str(DEFAULT_RUN_ROOT / "manual"))
+    eval_prompt.add_argument(
+        "--run-root",
+        required=True,
+        help="Explicit external directory for the isolated trial workspace.",
+    )
     eval_prompt.add_argument("--model")
     eval_prompt.add_argument("--dry-run", action="store_true")
     eval_prompt.set_defaults(func=cmd_evaluate_prompt)
@@ -442,7 +447,11 @@ def build_parser() -> argparse.ArgumentParser:
     optimize.add_argument("--valset")
     optimize.add_argument("--family", default=DEFAULT_FAMILY)
     optimize.add_argument("--smoke", action="store_true")
-    optimize.add_argument("--run-root", default=str(DEFAULT_RUN_ROOT / "latest"))
+    optimize.add_argument(
+        "--run-root",
+        required=True,
+        help="Explicit external directory for GEPA state, trial workspaces, and results.",
+    )
     optimize.add_argument("--model", help="Optional Codex model used inside each trial agent launch.")
     optimize.add_argument("--max-metric-calls", type=int, default=12)
     optimize.add_argument("--parallel", action=argparse.BooleanOptionalAction, default=False)

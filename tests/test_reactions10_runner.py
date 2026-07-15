@@ -29,6 +29,26 @@ EXPECTED_INPUT_HASHES = {
 }
 
 
+def test_runner_readme_uses_the_locked_runner_projects_for_every_stage() -> None:
+    readme = (RUNNER_ROOT / "README.md").read_text(encoding="utf-8")
+
+    assert 'uv sync --locked --project "$SOURCE_ENV"' in readme
+    assert (
+        'uv run --locked --project "$SOURCE_ENV" python "$SOURCE_RUNNER/prepare_campaign.py"'
+        in readme
+    )
+    assert "uv sync --locked --project '$CLUSTER_ROOT/runner/environment'" in readme
+    for script_name in (
+        "verify_hamiltonians.py",
+        "submit_iteration.py",
+        "supervise_campaign.py",
+        "export_results.py",
+    ):
+        assert 'uv run --locked --project "$CAMPAIGN_ENV" python' in readme
+        assert f'"$CAMPAIGN_RUNNER/{script_name}"' in readme
+    assert "python /external/reactions10_run/runner/" not in readme
+
+
 def _load_module(stem: str, *, campaign_common: ModuleType | None = None) -> ModuleType:
     path = RUNNER_ROOT / f"{stem}.py"
     module_name = f"_hsopt_reactions10_runner_test_{stem}"

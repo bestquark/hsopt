@@ -23,7 +23,13 @@ The older CPU/GPU/QPU constraint framework, GPU-memory experiments, generic
 telemetry APIs, broad protocol examples, and large run artifacts are preserved
 off `main` on branches listed in `BRANCHES.md`.
 
-## Install the Skills
+## Install the Agent Skills
+
+The agent skills and the benchmark runtime are separate prerequisites.
+Installing the skills teaches an agent the HSOpt workflow, but it does not
+clone `examples/pfs/` or install the Python dependencies. Conversely, cloning
+this repository does not register the skills with your agent. Complete both
+steps when you want the agent to run the local benchmarks.
 
 Install the hsopt agent skills directly from GitHub:
 
@@ -61,8 +67,10 @@ For local testing from inside this repo:
 npx skills add . --list
 ```
 
-These commands install the agent-facing skills. To run the local Python CLIs and
-benchmarks, set up the repo environment:
+## Clone the Benchmark Runtime
+
+Separately clone and sync the repository to run the Python CLIs and fixed
+benchmark evaluators:
 
 ```bash
 git clone https://github.com/bestquark/hsopt.git
@@ -128,9 +136,15 @@ uv run hsopt prompt examples/pfs/h2 --evaluator energy
 Seed a GEPA prompt-optimization run:
 
 ```bash
-uv run hsgepa dataset --smoke --output runs/hsgepa/dataset_smoke.json
-uv run hsgepa optimize --smoke --run-root runs/hsgepa/smoke --max-metric-calls 6 --no-parallel
+HSOPT_RUNS=/absolute/path/outside/hsopt
+mkdir -p "$HSOPT_RUNS/hsgepa"
+uv run hsgepa dataset --smoke --output "$HSOPT_RUNS/hsgepa/dataset_smoke.json"
+uv run hsgepa optimize --smoke --run-root "$HSOPT_RUNS/hsgepa/smoke" \
+  --max-metric-calls 6 --no-parallel
 ```
+
+`hsgepa dataset`, `evaluate-prompt`, and `optimize` require explicit output or
+run paths. Keep those mutable workspaces outside the repository checkout.
 
 ## Compatibility
 

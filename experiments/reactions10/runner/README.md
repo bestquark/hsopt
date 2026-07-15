@@ -16,52 +16,76 @@ runner, lockfile, and hashes, and pins autoresearch to:
 - model `gpt-5.5`
 - reasoning effort `high`
 
-Create the Python 3.12 environment first:
+Set the absolute paths once. `SOURCE_RUNNER` is the runner in a clean HSOpt
+checkout; `CAMPAIGN_ROOT` and `CLUSTER_ROOT` must be outside that checkout:
 
 ```bash
-cd experiments/reactions10/runner/environment
-uv sync --frozen
+SOURCE_RUNNER=/absolute/path/to/hsopt/experiments/reactions10/runner
+SOURCE_ENV="$SOURCE_RUNNER/environment"
+CAMPAIGN_ROOT=/external/reactions10_run
+CLUSTER_ROOT=/cluster/path/reactions10_run
 ```
 
-Prepare a campaign. All paths and cluster settings are explicit; this runner
-contains no personal host, account, partition, or storage defaults.
+Create the locked Python 3.12 environment from the runner's own project and
+lockfile. The explicit `--project` makes this command independent of the
+caller's current working directory:
 
 ```bash
-python experiments/reactions10/runner/prepare_campaign.py \
-  --campaign-root /external/reactions10_run \
+uv sync --locked --project "$SOURCE_ENV"
+```
+
+Prepare a campaign with that environment. All paths and cluster settings are
+explicit; this runner contains no personal host, account, partition, or
+storage defaults.
+
+```bash
+uv run --locked --project "$SOURCE_ENV" python "$SOURCE_RUNNER/prepare_campaign.py" \
+  --campaign-root "$CAMPAIGN_ROOT" \
   --problem-cache /external/reaction_seed/problem_cache \
-  --cluster-root /cluster/path/reactions10_run \
-  --cluster-python /cluster/path/reactions10_run/runner/environment/.venv/bin/python
+  --cluster-root "$CLUSTER_ROOT" \
+  --cluster-python "$CLUSTER_ROOT/runner/environment/.venv/bin/python"
 ```
 
-Before any evaluation can be submitted, verify the cached eigensystems and the
-actual `ground_state` vectors used for phase matching. Verification also
-reconstructs the identity and cached Pauli terms and requires them to reproduce
-the dense Hamiltonian:
+Preparation snapshots the runner and its lockfile into the campaign. Use that
+immutable campaign snapshot—not the source checkout—for verification,
+submission, supervision, and export:
 
 ```bash
-python /external/reactions10_run/runner/verify_hamiltonians.py \
-  --campaign-root /external/reactions10_run
+CAMPAIGN_RUNNER="$CAMPAIGN_ROOT/runner"
+CAMPAIGN_ENV="$CAMPAIGN_RUNNER/environment"
+```
+
+Before any evaluation can be submitted, verify the cached eigensystems and
+the actual `ground_state` vectors used for phase matching. Verification also
+reconstructs the identity and cached Pauli terms and requires them to reproduce
+the dense Hamiltonian. `uv run --locked --project` binds the command to the
+snapshotted environment regardless of the current directory:
+
+```bash
+uv run --locked --project "$CAMPAIGN_ENV" python \
+  "$CAMPAIGN_RUNNER/verify_hamiltonians.py" --campaign-root "$CAMPAIGN_ROOT"
 ```
 
 Sync iteration 0 without submitting, then create the locked environment on the
 cluster from `runner/environment/uv.lock`:
 
 ```bash
-python /external/reactions10_run/runner/submit_iteration.py \
-  --campaign-root /external/reactions10_run --iteration 0 \
+uv run --locked --project "$CAMPAIGN_ENV" python \
+  "$CAMPAIGN_RUNNER/submit_iteration.py" \
+  --campaign-root "$CAMPAIGN_ROOT" --iteration 0 \
   --sync-host YOUR_SYNC_HOST --submit-host YOUR_SUBMIT_HOST \
   --account YOUR_SLURM_ACCOUNT --partition YOUR_CPU_PARTITION --sync-only
 
 ssh YOUR_SUBMIT_HOST \
-  'cd /cluster/path/reactions10_run/runner/environment && uv sync --frozen'
+  "uv sync --locked --project '$CLUSTER_ROOT/runner/environment'"
 ```
 
 Then run the restart-safe supervisor:
 
 ```bash
-python /external/reactions10_run/runner/supervise_campaign.py \
-  --campaign-root /external/reactions10_run \
+uv run --locked --project "$CAMPAIGN_ENV" python \
+  "$CAMPAIGN_RUNNER/supervise_campaign.py" \
+  --campaign-root "$CAMPAIGN_ROOT" \
   --sync-host YOUR_SYNC_HOST \
   --submit-host YOUR_SUBMIT_HOST \
   --account YOUR_SLURM_ACCOUNT \
@@ -113,4 +137,12 @@ decisions, and state—not the convenience copies—are the source of truth.
 
 The campaign is complete only after iterations 0 through 50 are collected for
 all 20 lanes. `export_results.py` performs the independent strict export used
-for paper artifacts.
+for paper artifacts. Export with the same snapshotted locked environment, and
+keep the first export external until its completion gates pass:
+
+```bash
+uv run --locked --project "$CAMPAIGN_ENV" python \
+  "$CAMPAIGN_RUNNER/export_results.py" \
+  --campaign-root "$CAMPAIGN_ROOT" \
+  --output-dir /external/reactions10_export
+```

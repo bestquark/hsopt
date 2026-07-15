@@ -7,6 +7,10 @@ Use this split to keep `main` small and make future work explicit.
 - `codex/archive-showroom-20260715`: tracked MkDocs showroom source and the
   GitHub Pages deployment workflow removed from `main` during the 2026-07-15
   cleanup.
+- `codex/safety-pre-cleanup-20260715`: exact tracked snapshot of the July 2026
+  pre-cleanup worktree, including the older HamLib policy trajectories. Keep it
+  as recovery evidence; do not use it as a campaign runtime or merge it back
+  wholesale.
 - `backup/pre-hsopt-cleanup-20260511`: exact backup of the dirty workspace
   before the hsopt cleanup.
 - `resource/classical-compute`: branch point for the broader classical compute

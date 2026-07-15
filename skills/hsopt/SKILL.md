@@ -14,6 +14,15 @@ Invocation note:
 - Some clients may expose it as `/hsopt`.
 - The repo CLI is `uv run hsopt ...`.
 
+## Prerequisites
+
+Treat the installed agent skill and the benchmark runtime as separate pieces.
+Installing the skill supplies these instructions; it does not clone the fixed
+benchmark files or install their Python dependencies. Direct evaluator runs
+also require a local HSOpt checkout with `uv sync` completed. Run the commands
+below from that checkout's root. Cloning the repository alone likewise does not
+register this skill with the agent.
+
 ## First Step
 
 Inspect lanes and pick the active benchmark:
