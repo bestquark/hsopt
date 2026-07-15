@@ -9,11 +9,30 @@ deprecated/*.json
 deprecated/legion_prof
 encryptcontent.cache
 
-# hsopt local campaign/evaluator artifacts
-runs/
-examples/pfs/*/.trovolut_eval_*/
-examples/pfs/autoresearch_*_report_*/
-examples/pfs/remote_*runs*/
+# External experiment workspaces; normalized paper artifacts belong in experiments/.
+/analysis/
+/output/
+/runs/
+
+# examples/pfs contains definitions/evaluators only, never campaign workspaces.
+/examples/pfs/*/run_*/
+/examples/pfs/*_campaign_*/
+/examples/pfs/*_baseline_*/
+/examples/pfs/*_replicates_*/
+/examples/pfs/*_policy_trajectories_*/
+/examples/pfs/**/.codex_tools/
+/examples/pfs/**/campaign.sqlite
+/examples/pfs/**/campaign.sqlite-shm
+/examples/pfs/**/campaign.sqlite-wal
+/examples/pfs/**/iterations/
+/examples/pfs/**/logs/
+/examples/pfs/**/telemetry/
+/examples/pfs/*/.trovolut_eval_*/
+/examples/pfs/*/.hsopt_eval_*/
+/examples/pfs/autoresearch_*_report_*/
+/examples/pfs/remote_*runs*/
+/examples/pfs/problem_cache/hamlib_*.json
+/examples/pfs/problem_cache/hamlib_*.npz
 
 docs/tutorials/opt/
 docs/tutorials/data/

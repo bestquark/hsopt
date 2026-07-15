@@ -64,53 +64,33 @@ uv run hsopt extrapolate-femoco --target-baseline-t-count 1e12 \
   --plot runs/femoco_extrapolation_uncertainty.svg
 ```
 
-By default this reads local campaign `events.jsonl` files under
-`remote_sleepy_runs_20260506_cupynumeric/` when that ignored run-artifact tree is
-present, fits a Bayesian linear regression for log gain factor, reports a
-posterior interval, and can write an SVG uncertainty plot. Use `--gain-table`
-for hand-curated records with `molecule`, `baseline_t_count`, and
-`optimized_t_count`, and override FeMoco assumptions with flags such as
-`--active-orbitals`, `--n-qubits`, and `--total-pauli-rotation-terms`. If the
-target Pauli term count is not supplied, the CLI uses `active_orbitals**4` as a
-rough feature value for extrapolation.
+Pass `--gain-table` with records containing `molecule`, `baseline_t_count`, and
+`optimized_t_count`, or pass `--campaign-root` for an external workspace that
+contains campaign `events.jsonl` files. The command fits a Bayesian linear
+regression for log gain factor, reports a posterior interval, and can write an
+SVG uncertainty plot. Override FeMoco assumptions with flags such as
+`--active-orbitals`, `--n-qubits`, and `--total-pauli-rotation-terms`.
 
-## Autoresearch Campaign
+## Repository Boundary
 
-The experiment grid for the large-molecule benchmarks is:
+This tree contains benchmark definitions, fixed evaluators, and editable lane
+policies. It does not contain campaign databases, mutation histories, scheduler
+logs, telemetry, or agent transcripts.
 
-- molecules: `n2`, `co`, `nh3`, `hcn`
-- constraints: `energy`, `fidelity`
-- target iterations per lane: `100`
-- target simulation time: `t=1`, from each molecule's `MoleculeSpec`
+The paper campaigns are:
 
-That gives `4 * 2 = 8` independent hsopt/Codex autoresearch lanes.
+- five independent autoresearch runs over the fixed 121-Hamiltonian set;
+- the ten-reaction comparison between equal-share and reaction-aware error
+  allocation.
+
+Their runners and compact normalized results belong under
+`experiments/hamlib121/` and `experiments/reactions10/`. Full campaign
+workspaces stay external.
 
 The active mutation target is only the lane-local `simple_pf.py`. Do not edit
 `chemistry.py`, `evaluate_energy.py`, `evaluate_fidelity.py`, molecule
 definitions, active spaces, geometries, basis sets, target times, or
 localization as part of an optimization run.
-
-Each lane needs a `campaign_env.json` recording the fixed evaluator contract:
-
-```json
-{
-  "TROVOLUT_PFS_EVALUATOR": "energy",
-  "TROVOLUT_PFS_FIDELITY_EPSILON": null
-}
-```
-
-Use `TROVOLUT_PFS_EVALUATOR=energy` for the energy constraint and
-`TROVOLUT_PFS_EVALUATOR=fidelity` for the fidelity constraint. Leave
-`TROVOLUT_PFS_FIDELITY_EPSILON` unset unless a specific fidelity budget is part
-of the experiment.
-
-On the cluster, add the cuPyNumeric/Legate settings before the campaign launch:
-
-```bash
-export TROVOLUT_PFS_ARRAY_BACKEND=cupynumeric
-export TROVOLUT_PFS_LEGATE_GPUS=4
-export TROVOLUT_PFS_LEGATE_FBMEM=20000
-```
 
 Hamiltonian factorizations (SF, DF, THC) are not used in the product-formula
 campaign. Factorization reduces the 1-norm, which benefits oracle-based methods
