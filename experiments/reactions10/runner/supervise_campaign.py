@@ -3,13 +3,27 @@ from __future__ import annotations
 
 import argparse
 import json
+import os
+import stat
 import subprocess
 import sys
+import tempfile
 import time
 from pathlib import Path
 from typing import Any
 
-from campaign_common import (
+_PRIVATE_PYCACHE_PREFIX = tempfile.mkdtemp(prefix="hsopt-runner-pycache-")
+_private_pycache_stat = os.stat(_PRIVATE_PYCACHE_PREFIX, follow_symlinks=False)
+if (
+    not stat.S_ISDIR(_private_pycache_stat.st_mode)
+    or _private_pycache_stat.st_uid != os.getuid()
+    or stat.S_IMODE(_private_pycache_stat.st_mode) & 0o077
+):
+    raise RuntimeError("private Python bytecode prefix is not an owner-only real directory")
+sys.pycache_prefix = _PRIVATE_PYCACHE_PREFIX
+os.environ["PYTHONPYCACHEPREFIX"] = _PRIVATE_PYCACHE_PREFIX
+
+from campaign_common import (  # noqa: E402
     campaign_lock,
     ensure_campaign_runner_runtime,
     open_collect_transactions,

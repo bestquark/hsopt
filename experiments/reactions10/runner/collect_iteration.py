@@ -6,11 +6,26 @@ import copy
 import hashlib
 import json
 import math
+import os
+import stat
 import subprocess
+import sys
+import tempfile
 from pathlib import Path
 from typing import Any
 
-from campaign_common import (
+_PRIVATE_PYCACHE_PREFIX = tempfile.mkdtemp(prefix="hsopt-runner-pycache-")
+_private_pycache_stat = os.stat(_PRIVATE_PYCACHE_PREFIX, follow_symlinks=False)
+if (
+    not stat.S_ISDIR(_private_pycache_stat.st_mode)
+    or _private_pycache_stat.st_uid != os.getuid()
+    or stat.S_IMODE(_private_pycache_stat.st_mode) & 0o077
+):
+    raise RuntimeError("private Python bytecode prefix is not an owner-only real directory")
+sys.pycache_prefix = _PRIVATE_PYCACHE_PREFIX
+os.environ["PYTHONPYCACHEPREFIX"] = _PRIVATE_PYCACHE_PREFIX
+
+from campaign_common import (  # noqa: E402
     SCHEMA_VERSION,
     campaign_lock,
     campaign_paths,
@@ -32,6 +47,17 @@ from campaign_common import (
     validate_iteration,
     write_json,
     write_state,
+)
+from mutate_iteration import (  # noqa: E402
+    EXEC_ACK_PROTOCOL,
+    archived_attempt_directory_paths,
+    archived_attempt_evidence,
+    exact_directory_paths,
+    exact_regular_file_records,
+    nonempty_text_sha256,
+    validate_codex_lifecycle,
+    validate_exec_acknowledgement,
+    validate_process_crosslink,
 )
 
 
@@ -69,6 +95,9 @@ def prevalidate_iteration(
     drift are fatal because another evaluation cannot repair them.
     """
     by_id = lane_map(manifest)
+    campaign_id = str(manifest.get("campaign_id", ""))
+    if not campaign_id or state.get("campaign_id") != campaign_id:
+        raise RuntimeError("campaign identity drift")
     results: dict[str, dict[str, Any]] = {}
     candidate_hashes: dict[str, str] = {}
     retryable: dict[str, str] = {}
@@ -95,12 +124,9 @@ def prevalidate_iteration(
                 or record.get("candidate_policy_sha256") != candidate_hash
             ):
                 raise RuntimeError("candidate and immutable mutation record disagree")
-            candidate_files = sorted(
-                path.relative_to(candidate.parent).as_posix()
-                for path in candidate.parent.rglob("*")
-                if path.is_file()
-            )
-            if candidate_files != ["simple_pf.py"]:
+            candidate_files = exact_regular_file_records(candidate.parent)
+            candidate_directories = exact_directory_paths(candidate.parent)
+            if list(candidate_files) != ["simple_pf.py"] or candidate_directories:
                 raise RuntimeError("candidate directory contains unexpected files")
             if iteration == 0:
                 if (
@@ -118,6 +144,13 @@ def prevalidate_iteration(
                 intent_path = mutation_root / "intent.json"
                 launch_intent_path = mutation_root / "launch_intent.json"
                 launch_receipt_path = mutation_root / "launch.json"
+                process_path = mutation_root / "process.json"
+                stdout_path = mutation_root / "codex.stdout"
+                stderr_path = mutation_root / "codex.stderr"
+                last_message_path = mutation_root / "last_message.txt"
+                parent_snapshot = mutation_root / "parent_simple_pf.py"
+                work_dir = mutation_root / "work"
+                work_policy = work_dir / "simple_pf.py"
                 if not all(
                     path.is_file()
                     for path in (
@@ -125,12 +158,24 @@ def prevalidate_iteration(
                         intent_path,
                         launch_intent_path,
                         launch_receipt_path,
+                        process_path,
+                        stdout_path,
+                        stderr_path,
+                        last_message_path,
+                        parent_snapshot,
+                        work_policy,
                     )
                 ):
                     raise RuntimeError("proposal lacks durable prompt/launch evidence")
                 intent = read_json(intent_path)
                 launch_intent = read_json(launch_intent_path)
                 launch_receipt = read_json(launch_receipt_path)
+                process_record = read_json(process_path)
+                work_records = exact_regular_file_records(work_dir)
+                work_directories = exact_directory_paths(work_dir)
+                changed = work_policy.read_bytes() != parent_snapshot.read_bytes()
+                unexpected_work_files = sorted(set(work_records) - {"simple_pf.py"})
+                lifecycle = validate_codex_lifecycle(stdout_path)
                 if (
                     record.get("kind") != "autoresearch_proposal"
                     or record.get("parent_iteration") != lane_state.get("incumbent_iteration")
@@ -143,20 +188,75 @@ def prevalidate_iteration(
                     or record.get("intent_sha256") != sha256_file(intent_path)
                     or record.get("launch_intent_sha256") != sha256_file(launch_intent_path)
                     or record.get("launch_receipt_sha256") != sha256_file(launch_receipt_path)
+                    or record.get("exec_acknowledgement_sha256") != sha256_file(launch_receipt_path)
+                    or record.get("exec_acknowledgement_status") != "codex_started"
+                    or record.get("exec_ack_protocol") != EXEC_ACK_PROTOCOL
                     or launch_intent.get("command_sha256") != record.get("launch_command_sha256")
+                    or launch_intent.get("launch_nonce") != record.get("launch_nonce")
+                    or launch_intent.get("exec_ack_protocol") != EXEC_ACK_PROTOCOL
+                    or launch_intent.get("required_start_event") != "thread.started"
+                    or launch_intent.get("required_terminal_event") != "turn.completed"
                     or launch_receipt.get("command_sha256") != record.get("launch_command_sha256")
-                    or launch_receipt.get("status") != "launched"
+                    or launch_receipt.get("launch_nonce") != record.get("launch_nonce")
+                    or launch_receipt.get("status") != "codex_started"
+                    or launch_receipt.get("exec_ack_protocol") != EXEC_ACK_PROTOCOL
+                    or record.get("codex_thread_id") != launch_receipt.get("codex_thread_id")
+                    or record.get("codex_start_event_sha256")
+                    != launch_receipt.get("codex_start_event_sha256")
+                    or record.get("codex_terminal_event_sha256")
+                    != process_record.get("codex_terminal_event_sha256")
+                    or record.get("codex_lifecycle_status") != "turn_completed"
+                    or record.get("codex_usage") != process_record.get("codex_usage")
+                    or record.get("codex_usage_sha256") != process_record.get("codex_usage_sha256")
+                    or any(process_record.get(field) != value for field, value in lifecycle.items())
+                    or record.get("work_file_records") != work_records
+                    or record.get("work_directory_paths") != work_directories
+                    or record.get("work_policy_sha256") != sha256_file(work_policy)
+                    or record.get("unexpected_work_files") != unexpected_work_files
+                    or record.get("changed") is not changed
+                    or record.get("archived_attempt_evidence")
+                    != archived_attempt_evidence(mutation_root)
+                    or record.get("archived_attempt_directory_paths")
+                    != archived_attempt_directory_paths(mutation_root)
+                    or record.get("process_sha256") != sha256_file(process_path)
+                    or record.get("codex_stdout_sha256") != sha256_file(stdout_path)
+                    or record.get("codex_stderr_sha256") != sha256_file(stderr_path)
+                    or record.get("last_message_sha256") != nonempty_text_sha256(last_message_path)
+                    or process_record.get("codex_stdout_sha256") != sha256_file(stdout_path)
+                    or process_record.get("codex_stderr_sha256") != sha256_file(stderr_path)
+                    or process_record.get("last_message_sha256")
+                    != nonempty_text_sha256(last_message_path)
+                    or record.get("returncode") != process_record.get("returncode")
+                    or record.get("timed_out") != process_record.get("timed_out")
+                    or record.get("mutation_outcome") not in {"mutated", "fallback_parent"}
+                    or (
+                        record.get("mutation_outcome") == "mutated"
+                        and (
+                            not changed
+                            or record.get("valid") is not True
+                            or bool(unexpected_work_files)
+                            or bool(work_directories)
+                        )
+                    )
                 ):
                     raise RuntimeError("proposal parent lineage/count mismatch")
-                process_path = mutation_root / "process.json"
-                if record.get("process_sha256") != (
-                    sha256_file(process_path) if process_path.is_file() else None
-                ):
-                    raise RuntimeError("proposal process receipt hash mismatch")
-                if process_path.is_file() and read_json(process_path).get(
-                    "command_sha256"
-                ) != record.get("launch_command_sha256"):
-                    raise RuntimeError("proposal process command hash mismatch")
+                validate_exec_acknowledgement(
+                    launch_receipt,
+                    command_sha256=str(record.get("launch_command_sha256")),
+                    work_dir=work_dir,
+                    launch_nonce=str(record.get("launch_nonce")),
+                )
+                validate_process_crosslink(
+                    process_record,
+                    launch_receipt=launch_receipt,
+                    launch_receipt_sha256=sha256_file(launch_receipt_path),
+                    command_sha256=str(record.get("launch_command_sha256")),
+                )
+                candidate_source = (
+                    work_policy if record.get("mutation_outcome") == "mutated" else parent_snapshot
+                )
+                if candidate.read_bytes() != candidate_source.read_bytes():
+                    raise RuntimeError("candidate bytes do not match recorded mutation outcome")
         except Exception as exc:
             fatal[lane_id] = f"{type(exc).__name__}: {exc}"
             continue
@@ -167,6 +267,8 @@ def prevalidate_iteration(
             lane=lane,
             iteration=iteration,
             candidate_hash=candidate_hashes[lane_id],
+            campaign_id=campaign_id,
+            campaign_manifest_sha256=str(state.get("manifest_sha256", "")),
         )
         if error is not None:
             try:

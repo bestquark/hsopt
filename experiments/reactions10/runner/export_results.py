@@ -13,13 +13,28 @@ import csv
 import hashlib
 import json
 import math
+import os
 import re
 import shutil
+import stat
 import statistics
+import sys
 import tempfile
 from dataclasses import dataclass
 from pathlib import Path, PurePosixPath
 from typing import Any, Iterable, Mapping, Sequence
+
+
+_PRIVATE_PYCACHE_PREFIX = tempfile.mkdtemp(prefix="hsopt-runner-pycache-")
+_private_pycache_stat = os.stat(_PRIVATE_PYCACHE_PREFIX, follow_symlinks=False)
+if (
+    not stat.S_ISDIR(_private_pycache_stat.st_mode)
+    or _private_pycache_stat.st_uid != os.getuid()
+    or stat.S_IMODE(_private_pycache_stat.st_mode) & 0o077
+):
+    raise RuntimeError("private Python bytecode prefix is not an owner-only real directory")
+sys.pycache_prefix = _PRIVATE_PYCACHE_PREFIX
+os.environ["PYTHONPYCACHEPREFIX"] = _PRIVATE_PYCACHE_PREFIX
 
 
 PAPER_PROPOSAL_ITERATIONS = 50
@@ -33,6 +48,8 @@ PAPER_MODEL = "gpt-5.5"
 PAPER_REASONING_EFFORT = "high"
 PAPER_CODEX_CLI_VERSION = "0.144.0"
 PAPER_CODEX_PACKAGE = "@openai/codex@0.144.0"
+CAMPAIGN_ID_DOMAIN = b"hsopt-reactions10-campaign-v1\0"
+EXEC_ACK_PROTOCOL = "codex_jsonl_lifecycle_v1"
 ARCHIVED_REACTION_BENCHMARK_SHA256 = (
     "09b713ebd784614ec774c73c22c0228b084d82bd9a3ea176589caf06918d965e"
 )
@@ -40,7 +57,34 @@ ARCHIVED_REACTION_EVALUATOR_SHA256 = (
     "b81d8e936f71c0cbab76ba8f0b134b4ecbf2c610d95aaca04136b7aeb5309425"
 )
 FAILURE_SCORE_BASE = 1.0e15
-RUNTIME_SNAPSHOT_DIRS = frozenset({".venv", "__pycache__", ".pytest_cache", ".ruff_cache"})
+RUNTIME_SNAPSHOT_DIRS = frozenset({".venv", ".pytest_cache", ".ruff_cache"})
+SUBMISSION_ID_DOMAIN = b"hsopt-reactions10-submission-v1\0"
+HAMILTONIAN_THRESHOLDS = {
+    "hermiticity_error": 1.0e-12,
+    "pauli_dense_max_abs_residual_hartree": 1.0e-10,
+    "pauli_dense_relative_frobenius_residual": 1.0e-10,
+    "max_spectrum_delta_hartree": 1.0e-10,
+    "cached_ground_vector_residual": 1.0e-8,
+    "evaluator_ground_state_outside_sector_norm": 1.0e-10,
+    "evaluator_ground_state_residual": 1.0e-8,
+}
+CAMPAIGN_TOP_FILES = frozenset({"manifest.json", "state.json"})
+CAMPAIGN_TOP_DIRECTORIES = frozenset(
+    {
+        ".locks",
+        "baselines",
+        "iterations",
+        "lanes",
+        "logs",
+        "problem_cache",
+        "receipts",
+        "runner",
+        "source",
+        "transactions",
+    }
+)
+ITERATION_FILES = frozenset({"decisions.json", "validation.json"})
+ITERATION_DIRECTORIES = frozenset({"batches", "candidates", "mutations", "results"})
 SEED_ABS_TOL = 1.0e-10
 SEED_REL_TOL = 1.0e-9
 PAPER_INPUT_HASHES = {
@@ -63,6 +107,7 @@ REACTION_KEYS = (
 )
 SHA256_RE = re.compile(r"[0-9a-f]{64}\Z")
 ITERATION_DIR_RE = re.compile(r"iter_(\d{4})\Z")
+BATCH_ID_RE = re.compile(r"iter(\d{4})_batch(\d+)\Z")
 DERIVED_ABS_TOL = 2.0e-12
 DERIVED_REL_TOL = 2.0e-12
 
@@ -81,6 +126,7 @@ class LaneSpec:
     terms: tuple[tuple[str, float], ...]
     seed_policy_sha256: str
     seed_result_expectation: dict[str, Any] | None = None
+    campaign_id: str | None = None
 
 
 @dataclass
@@ -100,6 +146,12 @@ class Candidate:
     passes_reaction_constraint: bool
     passes_contract: bool
     accepted: bool = False
+
+
+@dataclass(frozen=True)
+class DirectoryEntries:
+    files: frozenset[str]
+    directories: frozenset[str]
 
 
 def _duplicate_key_guard(pairs: list[tuple[str, Any]]) -> dict[str, Any]:
@@ -131,6 +183,60 @@ def sha256_file(path: Path) -> str:
         for block in iter(lambda: handle.read(1024 * 1024), b""):
             digest.update(block)
     return digest.hexdigest()
+
+
+def classify_directory(directory: Path, context: str) -> DirectoryEntries:
+    """Classify direct children without accepting symlinks or special entries."""
+    if directory.is_symlink() or not directory.is_dir():
+        raise ExportValidationError(f"{context} must be a real directory: {directory}")
+    files: set[str] = set()
+    directories: set[str] = set()
+    symlinks: list[str] = []
+    special: list[str] = []
+    for child in directory.iterdir():
+        if child.is_symlink():
+            symlinks.append(child.name)
+        elif child.is_file():
+            files.add(child.name)
+        elif child.is_dir():
+            directories.add(child.name)
+        else:
+            special.append(child.name)
+    if symlinks:
+        raise ExportValidationError(f"{context} contains symlinks: {sorted(symlinks)}")
+    if special:
+        raise ExportValidationError(f"{context} contains special entries: {sorted(special)}")
+    return DirectoryEntries(frozenset(files), frozenset(directories))
+
+
+def require_exact_directory(
+    directory: Path,
+    *,
+    context: str,
+    files: Iterable[str] = (),
+    directories: Iterable[str] = (),
+    optional_files: Iterable[str] = (),
+    optional_directories: Iterable[str] = (),
+) -> DirectoryEntries:
+    """Require exact direct-child types, including narrowly named optional files."""
+    entries = classify_directory(directory, context)
+    required_files = frozenset(files)
+    required_directories = frozenset(directories)
+    allowed_files = required_files | frozenset(optional_files)
+    allowed_directories = required_directories | frozenset(optional_directories)
+    missing_files = required_files - entries.files
+    missing_directories = required_directories - entries.directories
+    extra_files = entries.files - allowed_files
+    extra_directories = entries.directories - allowed_directories
+    if missing_files or missing_directories or extra_files or extra_directories:
+        raise ExportValidationError(
+            f"{context} has the wrong exact structure: "
+            f"missing_files={sorted(missing_files)}, "
+            f"missing_directories={sorted(missing_directories)}, "
+            f"extra_files={sorted(extra_files)}, "
+            f"extra_directories={sorted(extra_directories)}"
+        )
+    return entries
 
 
 def require_mapping(value: object, context: str) -> dict[str, Any]:
@@ -183,6 +289,17 @@ def require_sha256(value: object, context: str) -> str:
     if SHA256_RE.fullmatch(digest) is None:
         raise ExportValidationError(f"{context} must be a lowercase SHA-256 digest")
     return digest
+
+
+def validate_campaign_identity(manifest: Mapping[str, Any]) -> str:
+    nonce = require_sha256(manifest.get("preparation_nonce"), "manifest.json.preparation_nonce")
+    campaign_id = require_sha256(manifest.get("campaign_id"), "manifest.json.campaign_id")
+    expected = hashlib.sha256(CAMPAIGN_ID_DOMAIN + bytes.fromhex(nonce)).hexdigest()
+    if campaign_id != expected:
+        raise ExportValidationError(
+            "manifest.json.campaign_id does not derive from preparation_nonce"
+        )
+    return campaign_id
 
 
 def require_exact_target(value: object, context: str) -> None:
@@ -290,8 +407,22 @@ def validate_manifest(manifest: object) -> dict[str, LaneSpec]:
         raise ExportValidationError(
             "manifest.json.experiment must be 'reactions10_autoresearch' for a paper export"
         )
-    if "schema_version" in payload:
-        require_int(payload["schema_version"], "manifest.json.schema_version", minimum=1)
+    if require_int(payload.get("schema_version"), "manifest.json.schema_version") != 1:
+        raise ExportValidationError("manifest.json.schema_version must be exactly 1")
+    execution = require_mapping(payload.get("execution"), "manifest.json.execution")
+    if set(execution) != {"cluster_root", "cluster_python", "batch_size"}:
+        raise ExportValidationError("manifest.json.execution has an unexpected schema")
+    _require_absolute_posix_path(
+        execution.get("cluster_root"), "manifest.json.execution.cluster_root"
+    )
+    _require_absolute_posix_path(
+        execution.get("cluster_python"), "manifest.json.execution.cluster_python"
+    )
+    batch_size = require_int(
+        execution.get("batch_size"), "manifest.json.execution.batch_size", minimum=1
+    )
+    if batch_size > PAPER_LANE_COUNT:
+        raise ExportValidationError("manifest.json.execution.batch_size exceeds lane count")
     if (
         require_int(
             payload.get("proposal_iterations"), "manifest.json.proposal_iterations", minimum=0
@@ -321,6 +452,7 @@ def validate_manifest(manifest: object) -> dict[str, LaneSpec]:
         != PAPER_REACTION_COUNT
     ):
         raise ExportValidationError("manifest reaction_count must be exactly 10")
+    campaign_id = validate_campaign_identity(payload)
 
     target_key = next(
         (key for key in ("chemical_accuracy_hartree", "reaction_target_hartree") if key in payload),
@@ -403,6 +535,7 @@ def validate_manifest(manifest: object) -> dict[str, LaneSpec]:
             terms,
             seed_policy_sha256,
             seed_expectation,
+            campaign_id,
         )
         lanes[lane_id] = spec
         pair_set.add((reaction_key, contract))
@@ -483,9 +616,153 @@ def _collect_hash_provenance(value: object) -> dict[str, str]:
 def _safe_relative_path(value: object, context: str) -> Path:
     text = require_string(value, context)
     path = Path(text)
-    if path.is_absolute() or not path.parts or ".." in path.parts:
+    if (
+        path.is_absolute()
+        or not path.parts
+        or ".." in path.parts
+        or "\\" in text
+        or "\x00" in text
+        or path.as_posix() != text
+        or any(part in {"", "."} for part in text.split("/"))
+    ):
         raise ExportValidationError(f"{context} must be a safe relative path")
     return path
+
+
+def _require_absolute_posix_path(value: object, context: str, *, allow_root: bool = False) -> str:
+    text = require_string(value, context)
+    if any(character in text for character in ("\n", "\r", "\x00")):
+        raise ExportValidationError(f"{context} contains newline or NUL")
+    path = PurePosixPath(text)
+    components = text.split("/")[1:]
+    if (
+        not path.is_absolute()
+        or any(component in {".", ".."} for component in components)
+        or (text != "/" and any(not component for component in components))
+        or path.as_posix() != text
+        or (not allow_root and path == PurePosixPath("/"))
+    ):
+        raise ExportValidationError(f"{context} must be a canonical absolute POSIX path")
+    return text
+
+
+def validate_campaign_top_level(campaign_root: Path) -> None:
+    """Require the complete runner-owned campaign boundary and no top-level noise."""
+    require_exact_directory(
+        campaign_root,
+        context="campaign root",
+        files=CAMPAIGN_TOP_FILES,
+        directories=CAMPAIGN_TOP_DIRECTORIES,
+    )
+    require_exact_directory(
+        campaign_root / "source",
+        context="campaign source root",
+        directories={"repo"},
+    )
+    require_exact_directory(
+        campaign_root / "baselines",
+        context="campaign baselines root",
+        files={"hamiltonian_verification.json"},
+    )
+
+
+def validate_lane_structure(campaign_root: Path, lanes: Mapping[str, LaneSpec]) -> None:
+    lanes_root = campaign_root / "lanes"
+    require_exact_directory(
+        lanes_root,
+        context="campaign lanes root",
+        directories=set(lanes),
+    )
+    for lane_id, lane in lanes.items():
+        lane_root = lanes_root / lane_id
+        require_exact_directory(
+            lane_root,
+            context=f"lane {lane_id} root",
+            files={
+                "initial_simple_pf.py",
+                "last_result.json",
+                "metadata.json",
+                "simple_pf.py",
+            },
+            directories={"best"},
+        )
+        require_exact_directory(
+            lane_root / "best",
+            context=f"lane {lane_id} best root",
+            files={"result.json", "simple_pf.py"},
+        )
+        if sha256_file(lane_root / "initial_simple_pf.py") != lane.seed_policy_sha256:
+            raise ExportValidationError(
+                f"lane {lane_id} initial policy differs from its fixed seed"
+            )
+        metadata = require_mapping(
+            read_json(lane_root / "metadata.json"), f"lane {lane_id} metadata"
+        )
+        metadata_identity = {
+            "lane_id": lane.lane_id,
+            "reaction_key": lane.reaction_key,
+            "reaction": lane.reaction,
+            "contract": lane.contract,
+            "species": list(lane.species),
+            "terms": [
+                {"species": species, "coefficient": coefficient}
+                for species, coefficient in lane.terms
+            ],
+            "seed_policy_sha256": lane.seed_policy_sha256,
+            "seed_result_expectation": lane.seed_result_expectation,
+        }
+        drift = {
+            key: {"actual": metadata.get(key), "expected": expected}
+            for key, expected in metadata_identity.items()
+            if metadata.get(key) != expected
+        }
+        if drift:
+            raise ExportValidationError(f"lane {lane_id} metadata differs from manifest: {drift}")
+
+
+def validate_exact_tree_files(base: Path, expected_files: Iterable[str], context: str) -> None:
+    """Require an exact recursive regular-file tree with no empty/unrecorded directories."""
+    if base.is_symlink() or not base.is_dir():
+        raise ExportValidationError(f"{context} must be a real directory: {base}")
+    expected: set[str] = set()
+    expected_directories: set[str] = set()
+    for raw in expected_files:
+        relative = _safe_relative_path(raw, f"{context} expected file")
+        relative_name = relative.as_posix()
+        if relative_name in expected:
+            raise ExportValidationError(f"{context} repeats expected file {relative_name}")
+        expected.add(relative_name)
+        parent = relative.parent
+        while parent != Path("."):
+            expected_directories.add(parent.as_posix())
+            parent = parent.parent
+
+    actual_files: set[str] = set()
+    actual_directories: set[str] = set()
+    symlinks: list[str] = []
+    special: list[str] = []
+    for path in base.rglob("*"):
+        relative_name = path.relative_to(base).as_posix()
+        if path.is_symlink():
+            symlinks.append(relative_name)
+        elif path.is_file():
+            actual_files.add(relative_name)
+        elif path.is_dir():
+            actual_directories.add(relative_name)
+        else:
+            special.append(relative_name)
+    if symlinks:
+        raise ExportValidationError(f"{context} contains symlinks: {sorted(symlinks)}")
+    if special:
+        raise ExportValidationError(f"{context} contains special entries: {sorted(special)}")
+    if actual_files != expected or actual_directories != expected_directories:
+        raise ExportValidationError(
+            f"{context} differs from its recorded file tree: "
+            f"missing_files={sorted(expected - actual_files)}, "
+            f"extra_files={sorted(actual_files - expected)}, "
+            f"missing_directories={sorted(expected_directories - actual_directories)}, "
+            f"extra_directories={sorted(actual_directories - expected_directories)}"
+        )
 
 
 def _validate_file_record(path: Path, record: object, context: str) -> None:
@@ -501,7 +778,7 @@ def _validate_file_record(path: Path, record: object, context: str) -> None:
 
 
 def validate_snapshot_tree(base: Path, records: object, context: str) -> None:
-    """Require a declared snapshot tree, ignoring only explicit runtime directories."""
+    """Require an exact regular snapshot tree, pruning only real mutable runtime dirs."""
     declared_payload = require_mapping(records, context)
     if not declared_payload:
         raise ExportValidationError(f"{context} must not be empty")
@@ -511,40 +788,65 @@ def validate_snapshot_tree(base: Path, records: object, context: str) -> None:
         )
 
     declared: set[str] = set()
+    declared_directories: set[str] = set()
     for relative_text, record in declared_payload.items():
         relative = _safe_relative_path(relative_text, f"{context} key")
         if any(part in RUNTIME_SNAPSHOT_DIRS for part in relative.parts):
             raise ExportValidationError(f"{context} declares excluded runtime path {relative}")
+        if "__pycache__" in relative.parts:
+            raise ExportValidationError(f"{context} declares forbidden __pycache__ path {relative}")
         relative_name = relative.as_posix()
         if relative_name in declared:
             raise ExportValidationError(f"{context} has duplicate path {relative_name}")
         declared.add(relative_name)
+        parent = relative.parent
+        while parent != Path("."):
+            declared_directories.add(parent.as_posix())
+            parent = parent.parent
         _validate_file_record(base / relative, record, f"{context}.{relative_name}")
 
     actual: set[str] = set()
+    actual_directories: set[str] = set()
     symlinks: list[str] = []
     special: list[str] = []
-    for path in base.rglob("*"):
-        relative = path.relative_to(base)
-        if any(part in RUNTIME_SNAPSHOT_DIRS for part in relative.parts):
-            continue
-        relative_name = relative.as_posix()
-        if path.is_symlink():
-            symlinks.append(relative_name)
-        elif path.is_file():
-            actual.add(relative_name)
-        elif not path.is_dir():
-            special.append(relative_name)
+
+    def walk(directory: Path, relative_root: Path) -> None:
+        with os.scandir(directory) as entries:
+            for entry in entries:
+                relative = relative_root / entry.name
+                relative_name = relative.as_posix()
+                try:
+                    mode = entry.stat(follow_symlinks=False).st_mode
+                except FileNotFoundError as exc:
+                    raise ExportValidationError(
+                        f"{context} entry disappeared during validation: {relative_name}"
+                    ) from exc
+                if stat.S_ISLNK(mode):
+                    symlinks.append(relative_name)
+                elif stat.S_ISDIR(mode):
+                    if entry.name in RUNTIME_SNAPSHOT_DIRS:
+                        continue
+                    actual_directories.add(relative_name)
+                    walk(Path(entry.path), relative)
+                elif stat.S_ISREG(mode):
+                    actual.add(relative_name)
+                else:
+                    special.append(relative_name)
+
+    walk(base, Path())
     if symlinks:
         raise ExportValidationError(f"{context} contains undeclared symlinks: {sorted(symlinks)}")
     if special:
         raise ExportValidationError(
             f"{context} contains special filesystem entries: {sorted(special)}"
         )
-    if actual != declared:
+    if actual != declared or actual_directories != declared_directories:
         raise ExportValidationError(
-            f"{context} file set differs from its manifest: "
-            f"missing={sorted(declared - actual)}, extra={sorted(actual - declared)}"
+            f"{context} tree differs from its manifest: "
+            f"missing_files={sorted(declared - actual)}, "
+            f"extra_files={sorted(actual - declared)}, "
+            f"missing_directories={sorted(declared_directories - actual_directories)}, "
+            f"extra_directories={sorted(actual_directories - declared_directories)}"
         )
 
 
@@ -789,11 +1091,11 @@ def validate_declared_campaign_files(campaign_root: Path, manifest: Mapping[str,
         raise ExportValidationError(
             "manifest problem-cache hashes differ from the fixed checksum-file snapshot"
         )
-    actual_cache_files = {
-        path.name for path in (campaign_root / "problem_cache").iterdir() if path.is_file()
-    }
-    if actual_cache_files != set(normalized_cache_files):
-        raise ExportValidationError("problem-cache snapshot file set differs from its manifest")
+    require_exact_directory(
+        campaign_root / "problem_cache",
+        context="campaign problem-cache root",
+        files=set(normalized_cache_files),
+    )
     for filename, digest in cache_files.items():
         relative = _safe_relative_path(
             filename, f"manifest.json.inputs.problem_cache_files.{filename}"
@@ -807,6 +1109,7 @@ def validate_declared_campaign_files(campaign_root: Path, manifest: Mapping[str,
 
 
 def validate_provenance(manifest: Mapping[str, Any]) -> dict[str, Any]:
+    campaign_id = validate_campaign_identity(manifest)
     model = _collect_setting(manifest, ("model", "codex_model"), PAPER_MODEL, "model")
     reasoning = _collect_setting(
         manifest,
@@ -840,6 +1143,7 @@ def validate_provenance(manifest: Mapping[str, Any]) -> dict[str, Any]:
     ):
         raise ExportValidationError("clean repository provenance has a nonempty status digest")
     return {
+        "campaign_id": campaign_id,
         "repository_branch": branch,
         "repository_commit": commit,
         "codex_cli_version": cli,
@@ -862,11 +1166,22 @@ def validate_result(
     lane: LaneSpec,
     iteration: int,
     policy_path: Path,
+    manifest_sha256: str,
 ) -> Candidate:
     context = f"iteration {iteration}/{lane.lane_id} result"
     payload = require_mapping(result, context)
     if payload.get("status") != "ok":
         raise ExportValidationError(f"{context}.status must be 'ok'")
+    if lane.campaign_id is not None and payload.get("campaign_id") != lane.campaign_id:
+        raise ExportValidationError(f"{context}.campaign_id mismatch")
+    if (
+        require_sha256(
+            payload.get("campaign_manifest_sha256"),
+            f"{context}.campaign_manifest_sha256",
+        )
+        != manifest_sha256
+    ):
+        raise ExportValidationError(f"{context}.campaign_manifest_sha256 mismatch")
     if payload.get("lane_id") != lane.lane_id:
         raise ExportValidationError(f"{context}.lane_id mismatch")
     if payload.get("reaction_key") != lane.reaction_key:
@@ -877,6 +1192,17 @@ def validate_result(
         raise ExportValidationError(f"{context}.contract mismatch")
     if require_int(payload.get("iteration"), f"{context}.iteration") != iteration:
         raise ExportValidationError(f"{context}.iteration mismatch")
+    expected_candidate_relative = (
+        Path("iterations") / f"iter_{iteration:04d}" / "candidates" / lane.lane_id / "simple_pf.py"
+    )
+    if _safe_relative_path(
+        payload.get("candidate_relative_path"),
+        f"{context}.candidate_relative_path",
+    ) != expected_candidate_relative or _safe_relative_path(
+        payload.get("problem_cache_relative_path"),
+        f"{context}.problem_cache_relative_path",
+    ) != Path("problem_cache"):
+        raise ExportValidationError(f"{context} portable candidate/cache provenance mismatch")
     require_exact_target(
         payload.get("reaction_target_hartree"), f"{context}.reaction_target_hartree"
     )
@@ -1301,6 +1627,60 @@ def _record_hash(record: Mapping[str, Any], aliases: Sequence[str], context: str
     return values[0][1]
 
 
+def _canonical_json_sha256(value: object) -> str:
+    return hashlib.sha256(
+        json.dumps(value, sort_keys=True, separators=(",", ":")).encode("utf-8")
+    ).hexdigest()
+
+
+def validate_codex_jsonl_lifecycle(stdout_path: Path, context: str) -> dict[str, Any]:
+    if not stdout_path.is_file() or stdout_path.is_symlink():
+        raise ExportValidationError(f"{context} Codex JSONL stdout is missing or unsafe")
+    events: list[dict[str, Any]] = []
+    for line_number, raw_line in enumerate(stdout_path.read_bytes().splitlines(), 1):
+        if not raw_line.strip():
+            continue
+        try:
+            event = json.loads(raw_line.decode("utf-8"), object_pairs_hook=_duplicate_key_guard)
+        except (UnicodeDecodeError, json.JSONDecodeError, ValueError) as exc:
+            raise ExportValidationError(
+                f"{context} Codex JSONL line {line_number} is invalid"
+            ) from exc
+        event = require_mapping(event, f"{context} Codex JSONL line {line_number}")
+        require_string(event.get("type"), f"{context} Codex JSONL line {line_number}.type")
+        events.append(event)
+    starts = [
+        (index, event) for index, event in enumerate(events) if event["type"] == "thread.started"
+    ]
+    terminals = [
+        (index, event) for index, event in enumerate(events) if event["type"] == "turn.completed"
+    ]
+    failures = [event for event in events if event["type"] in {"turn.failed", "error"}]
+    if len(starts) != 1 or len(terminals) != 1 or failures or starts[0][0] >= terminals[0][0]:
+        raise ExportValidationError(
+            f"{context} Codex JSONL does not prove one successful lifecycle"
+        )
+    start = starts[0][1]
+    terminal = terminals[0][1]
+    thread_id = require_string(start.get("thread_id"), f"{context} Codex thread ID")
+    if len(thread_id) > 256:
+        raise ExportValidationError(f"{context} Codex thread ID is too long")
+    usage = require_mapping(terminal.get("usage"), f"{context} Codex usage")
+    if not usage or any(
+        isinstance(value, bool) or not isinstance(value, int) or value < 0
+        for value in usage.values()
+    ):
+        raise ExportValidationError(f"{context} Codex usage is malformed")
+    return {
+        "codex_thread_id": thread_id,
+        "codex_start_event_sha256": _canonical_json_sha256(start),
+        "codex_lifecycle_status": "turn_completed",
+        "codex_terminal_event_sha256": _canonical_json_sha256(terminal),
+        "codex_usage": usage,
+        "codex_usage_sha256": _canonical_json_sha256(usage),
+    }
+
+
 def validate_mutation_record(
     record: object,
     *,
@@ -1315,17 +1695,92 @@ def validate_mutation_record(
 ) -> None:
     context = f"iteration {iteration}/{lane.lane_id} mutation record"
     payload = require_mapping(record, context)
-    if payload.get("lane_id") != lane.lane_id:
-        raise ExportValidationError(f"{context}.lane_id mismatch")
-    if require_int(payload.get("iteration"), f"{context}.iteration") != iteration:
-        raise ExportValidationError(f"{context}.iteration mismatch")
-    if payload.get("kind") != "autoresearch_proposal":
-        raise ExportValidationError(f"{context}.kind must be 'autoresearch_proposal'")
-    if payload.get("status") != "candidate_ready":
-        raise ExportValidationError(f"{context}.status must be 'candidate_ready'")
-    if require_int(payload.get("schema_version"), f"{context}.schema_version") != 1:
-        raise ExportValidationError(f"{context}.schema_version must be 1")
-    expected_provenance: dict[str, object] = {
+    expected_record_fields = {
+        "schema_version",
+        "lane_id",
+        "iteration",
+        "kind",
+        "status",
+        "mutation_outcome",
+        "parent_iteration",
+        "parent_policy_sha256",
+        "prompt_sha256",
+        "intent_sha256",
+        "launch_command_sha256",
+        "launch_nonce",
+        "launch_intent_sha256",
+        "launch_receipt_sha256",
+        "exec_acknowledgement_sha256",
+        "exec_acknowledgement_status",
+        "exec_ack_protocol",
+        "codex_thread_id",
+        "codex_start_event_sha256",
+        "codex_lifecycle_status",
+        "codex_terminal_event_sha256",
+        "codex_usage",
+        "codex_usage_sha256",
+        "archived_attempt_evidence",
+        "archived_attempt_directory_paths",
+        "process_sha256",
+        "codex_stdout_sha256",
+        "codex_stderr_sha256",
+        "last_message_sha256",
+        "work_file_records",
+        "work_directory_paths",
+        "work_policy_sha256",
+        "candidate_policy_sha256",
+        "codex_package",
+        "codex_cli_version",
+        "codex_version_output",
+        "model",
+        "reasoning_effort",
+        "sandbox",
+        "ephemeral",
+        "ignored_user_config",
+        "ignored_rules",
+        "returncode",
+        "timed_out",
+        "changed",
+        "valid",
+        "validation_error",
+        "unexpected_work_files",
+        "recovered_after_interruption",
+        "created_at",
+        "completed_at",
+    }
+    if set(payload) != expected_record_fields:
+        raise ExportValidationError(f"{context} has an unexpected schema")
+    if payload.get("returncode") != 0 or payload.get("timed_out") is not False:
+        raise ExportValidationError(
+            f"{context} lacks successful process lifecycle completion evidence"
+        )
+    if (
+        require_int(payload.get("schema_version"), f"{context}.schema_version") != 1
+        or require_int(payload.get("iteration"), f"{context}.iteration") != iteration
+        or require_int(payload.get("parent_iteration"), f"{context}.parent_iteration")
+        != expected_parent_iteration
+        or require_int(payload.get("returncode"), f"{context}.returncode") != 0
+    ):
+        raise ExportValidationError(f"{context} integer identity fields are invalid")
+    for field in (
+        "ephemeral",
+        "ignored_user_config",
+        "ignored_rules",
+        "timed_out",
+        "changed",
+        "valid",
+        "recovered_after_interruption",
+    ):
+        require_bool(payload.get(field), f"{context}.{field}")
+    identity = {
+        "schema_version": 1,
+        "lane_id": lane.lane_id,
+        "iteration": iteration,
+        "kind": "autoresearch_proposal",
+        "status": "candidate_ready",
+        "parent_iteration": expected_parent_iteration,
+        "parent_policy_sha256": expected_parent_sha256,
+        "candidate_policy_sha256": candidate_sha256,
         "codex_package": PAPER_CODEX_PACKAGE,
         "codex_cli_version": PAPER_CODEX_CLI_VERSION,
         "model": PAPER_MODEL,
@@ -1334,101 +1789,72 @@ def validate_mutation_record(
         "ephemeral": True,
         "ignored_user_config": True,
         "ignored_rules": True,
+        "returncode": 0,
+        "timed_out": False,
+        "exec_acknowledgement_status": "codex_started",
+        "exec_ack_protocol": EXEC_ACK_PROTOCOL,
+        "codex_lifecycle_status": "turn_completed",
     }
     drift = {
-        key: {"actual": payload.get(key), "expected": value}
-        for key, value in expected_provenance.items()
-        if payload.get(key) != value
+        key: {"actual": payload.get(key), "expected": expected}
+        for key, expected in identity.items()
+        if payload.get(key) != expected
     }
     if drift:
-        raise ExportValidationError(f"{context} paper provenance changed: {drift}")
-    for key in ("ephemeral", "ignored_user_config", "ignored_rules"):
-        if not require_bool(payload.get(key), f"{context}.{key}"):
-            raise ExportValidationError(f"{context}.{key} must be true")
-    prompt_sha256 = require_sha256(payload.get("prompt_sha256"), f"{context}.prompt_sha256")
-    timed_out = require_bool(payload.get("timed_out"), f"{context}.timed_out")
-    changed = require_bool(payload.get("changed"), f"{context}.changed")
-    valid = require_bool(payload.get("valid"), f"{context}.valid")
-    recovered = require_bool(
+        raise ExportValidationError(f"{context} identity/provenance drift: {drift}")
+    require_bool(
         payload.get("recovered_after_interruption"),
         f"{context}.recovered_after_interruption",
     )
-    unexpected_work_files = require_list(
-        payload.get("unexpected_work_files"), f"{context}.unexpected_work_files"
-    )
-    if any(not isinstance(item, str) or not item for item in unexpected_work_files):
-        raise ExportValidationError(f"{context}.unexpected_work_files must contain paths")
+    for field in ("created_at", "completed_at"):
+        require_string(payload.get(field), f"{context}.{field}")
     version_output = require_string(
         payload.get("codex_version_output"), f"{context}.codex_version_output"
     )
-    if PAPER_CODEX_CLI_VERSION not in version_output:
+    if re.findall(r"(?<![0-9.])([0-9]+\.[0-9]+\.[0-9]+)(?![0-9.])", version_output) != [
+        PAPER_CODEX_CLI_VERSION
+    ]:
         raise ExportValidationError(f"{context}.codex_version_output changed")
-    returncode = payload.get("returncode")
-    if returncode is not None:
-        returncode = require_int(returncode, f"{context}.returncode")
-    outcome = require_string(payload.get("mutation_outcome"), f"{context}.mutation_outcome")
-    if outcome not in {"mutated", "fallback_parent"}:
-        raise ExportValidationError(f"{context}.mutation_outcome is invalid")
-    if (
-        require_int(payload.get("parent_iteration"), f"{context}.parent_iteration")
-        != expected_parent_iteration
-    ):
-        raise ExportValidationError(
-            f"{context}.parent_iteration does not match the replayed incumbent"
-        )
-    parent_sha256 = _record_hash(
-        payload,
-        ("parent_policy_sha256", "before_policy_sha256", "parent_sha256"),
-        context,
-    )
-    if parent_sha256 != expected_parent_sha256:
-        raise ExportValidationError(
-            f"{context} parent hash {parent_sha256} does not match replayed incumbent "
-            f"{expected_parent_sha256}"
-        )
-    recorded_candidate_sha256 = _record_hash(
-        payload,
-        ("candidate_policy_sha256", "after_policy_sha256", "policy_sha256"),
-        context,
-    )
-    if recorded_candidate_sha256 != candidate_sha256:
-        raise ExportValidationError(
-            f"{context} candidate hash {recorded_candidate_sha256} does not match "
-            f"{candidate_sha256}"
-        )
 
-    if not mutation_root.is_dir() or mutation_root.is_symlink():
-        raise ExportValidationError(f"{context} mutation directory is missing or a symlink")
     prompt_path = mutation_root / "prompt.md"
     parent_snapshot_path = mutation_root / "parent_simple_pf.py"
     intent_path = mutation_root / "intent.json"
     launch_intent_path = mutation_root / "launch_intent.json"
     launch_receipt_path = mutation_root / "launch.json"
     process_path = mutation_root / "process.json"
+    stdout_path = mutation_root / "codex.stdout"
+    stderr_path = mutation_root / "codex.stderr"
+    last_message_path = mutation_root / "last_message.txt"
     for path, label in (
         (prompt_path, "prompt"),
         (parent_snapshot_path, "parent snapshot"),
         (intent_path, "intent"),
         (launch_intent_path, "launch intent"),
         (launch_receipt_path, "launch receipt"),
+        (process_path, "process receipt"),
+        (stdout_path, "Codex stdout"),
+        (stderr_path, "Codex stderr"),
+        (last_message_path, "Codex last message"),
     ):
         if not path.is_file() or path.is_symlink():
             raise ExportValidationError(f"{context} {label} is missing or non-regular")
-    prompt_bytes = prompt_path.read_bytes()
+    if last_message_path.stat().st_size <= 0:
+        raise ExportValidationError(f"{context} Codex last message is empty")
     try:
-        prompt_text = prompt_bytes.decode("utf-8")
-    except UnicodeDecodeError as exc:
+        prompt_text = prompt_path.read_text(encoding="utf-8")
+    except UnicodeError as exc:
         raise ExportValidationError(f"{context} prompt is not UTF-8") from exc
-    if hashlib.sha256(prompt_bytes).hexdigest() != prompt_sha256:
-        raise ExportValidationError(f"{context} prompt hash mismatch")
-    if sha256_file(parent_snapshot_path) != expected_parent_sha256:
-        raise ExportValidationError(f"{context} parent policy snapshot hash mismatch")
+    prompt_sha256 = require_sha256(payload.get("prompt_sha256"), f"{context}.prompt_sha256")
+    if sha256_file(prompt_path) != prompt_sha256 or sha256_file(parent_snapshot_path) != (
+        expected_parent_sha256
+    ):
+        raise ExportValidationError(f"{context} prompt or parent snapshot hash mismatch")
 
     intent = require_mapping(read_json(intent_path), f"{context} intent")
     expected_parent_relative = (
         expected_parent_policy_path.resolve().relative_to(campaign_root.resolve()).as_posix()
     )
-    intent_fields: dict[str, object] = {
+    expected_intent = {
         "schema_version": 1,
         "lane_id": lane.lane_id,
         "iteration": iteration,
@@ -1441,14 +1867,14 @@ def validate_mutation_record(
         "model": PAPER_MODEL,
         "reasoning_effort": PAPER_REASONING_EFFORT,
     }
-    intent_drift = {
-        field: {"actual": intent.get(field), "expected": expected}
-        for field, expected in intent_fields.items()
-        if intent.get(field) != expected
-    }
-    if intent_drift:
-        raise ExportValidationError(f"{context} intent drift: {intent_drift}")
-    require_string(intent.get("created_at"), f"{context} intent.created_at")
+    if set(intent) != {*expected_intent, "created_at"} or any(
+        intent.get(key) != value for key, value in expected_intent.items()
+    ):
+        raise ExportValidationError(f"{context} intent schema/identity drift")
+    if require_string(intent.get("created_at"), f"{context} intent.created_at") != payload.get(
+        "created_at"
+    ):
+        raise ExportValidationError(f"{context} record creation time differs from intent")
     if require_sha256(payload.get("intent_sha256"), f"{context}.intent_sha256") != sha256_file(
         intent_path
     ):
@@ -1457,15 +1883,22 @@ def validate_mutation_record(
     launch_command_sha256 = require_sha256(
         payload.get("launch_command_sha256"), f"{context}.launch_command_sha256"
     )
+    launch_nonce = require_sha256(payload.get("launch_nonce"), f"{context}.launch_nonce")
     launch_intent = require_mapping(read_json(launch_intent_path), f"{context} launch intent")
-    launch_intent_fields: dict[str, object] = {
+    expected_launch_intent = {
         "schema_version": 1,
         "lane_id": lane.lane_id,
         "iteration": iteration,
         "command_sha256": launch_command_sha256,
+        "launch_nonce": launch_nonce,
+        "exec_ack_protocol": EXEC_ACK_PROTOCOL,
+        "required_start_event": "thread.started",
+        "required_terminal_event": "turn.completed",
     }
-    if any(launch_intent.get(key) != value for key, value in launch_intent_fields.items()):
-        raise ExportValidationError(f"{context} launch intent identity/command mismatch")
+    if set(launch_intent) != {*expected_launch_intent, "requested_at"} or any(
+        launch_intent.get(key) != value for key, value in expected_launch_intent.items()
+    ):
+        raise ExportValidationError(f"{context} launch intent schema/identity drift")
     require_string(launch_intent.get("requested_at"), f"{context} launch intent.requested_at")
     if require_sha256(
         payload.get("launch_intent_sha256"), f"{context}.launch_intent_sha256"
@@ -1473,127 +1906,208 @@ def validate_mutation_record(
         raise ExportValidationError(f"{context} launch intent file hash mismatch")
 
     launch_receipt = require_mapping(read_json(launch_receipt_path), f"{context} launch receipt")
+    launch_fields = {
+        "schema_version",
+        "pid",
+        "pgid",
+        "exec_pid",
+        "work_dir",
+        "command_sha256",
+        "status",
+        "exec_ack_protocol",
+        "launch_nonce",
+        "low_level_exec_status",
+        "started_at_epoch",
+        "exec_confirmed_at_epoch",
+        "codex_thread_id",
+        "codex_start_event_sha256",
+        "codex_started_at_epoch",
+    }
+    if set(launch_receipt) != launch_fields:
+        raise ExportValidationError(f"{context} launch receipt has an unexpected schema")
     if (
-        require_int(
-            launch_receipt.get("schema_version"), f"{context} launch receipt.schema_version"
-        )
-        != 1
-        or launch_receipt.get("status") != "launched"
-        or require_sha256(
-            launch_receipt.get("command_sha256"),
-            f"{context} launch receipt.command_sha256",
-        )
-        != launch_command_sha256
+        require_int(launch_receipt.get("schema_version"), f"{context} launch.schema_version") != 1
+        or launch_receipt.get("status") != "codex_started"
+        or launch_receipt.get("low_level_exec_status") != "exec_confirmed"
+        or launch_receipt.get("exec_ack_protocol") != EXEC_ACK_PROTOCOL
+        or launch_receipt.get("command_sha256") != launch_command_sha256
+        or launch_receipt.get("launch_nonce") != launch_nonce
     ):
-        raise ExportValidationError(f"{context} does not prove an actual Codex launch")
-    launch_pid = require_int(launch_receipt.get("pid"), f"{context} launch receipt.pid", minimum=1)
-    launch_pgid = require_int(
-        launch_receipt.get("pgid"), f"{context} launch receipt.pgid", minimum=1
+        raise ExportValidationError(f"{context} does not prove a Codex startup")
+    launch_pid = require_int(launch_receipt.get("pid"), f"{context} launch.pid", minimum=2)
+    launch_pgid = require_int(launch_receipt.get("pgid"), f"{context} launch.pgid", minimum=2)
+    launch_exec_pid = require_int(
+        launch_receipt.get("exec_pid"), f"{context} launch.exec_pid", minimum=2
     )
-    if launch_pid != launch_pgid:
-        raise ExportValidationError(f"{context} launch receipt PID/PGID mismatch")
-    work_dir_text = require_string(
-        launch_receipt.get("work_dir"), f"{context} launch receipt.work_dir"
+    if launch_pid != launch_pgid or launch_exec_pid == launch_pid:
+        raise ExportValidationError(f"{context} launch PID/PGID/exec PID mismatch")
+    work_dir_text = _require_absolute_posix_path(
+        launch_receipt.get("work_dir"), f"{context} launch.work_dir"
     )
     work_dir = PurePosixPath(work_dir_text)
-    if (
-        not work_dir.is_absolute()
-        or work_dir.name != "work"
-        or work_dir.parent.name != lane.lane_id
-    ):
-        raise ExportValidationError(f"{context} launch receipt work directory is malformed")
-    started_at_epoch = require_finite(
-        launch_receipt.get("started_at_epoch"), f"{context} launch receipt.started_at_epoch"
+    expected_work_suffix = (
+        "iterations",
+        f"iter_{iteration:04d}",
+        "mutations",
+        lane.lane_id,
+        "work",
     )
-    if started_at_epoch <= 0.0:
-        raise ExportValidationError(f"{context} launch receipt start time is invalid")
-    if require_sha256(
-        payload.get("launch_receipt_sha256"), f"{context}.launch_receipt_sha256"
-    ) != sha256_file(launch_receipt_path):
-        raise ExportValidationError(f"{context} launch receipt file hash mismatch")
+    if tuple(work_dir.parts[-len(expected_work_suffix) :]) != expected_work_suffix:
+        raise ExportValidationError(f"{context} launch work directory is malformed")
+    timestamps = [
+        require_finite(launch_receipt.get(field), f"{context} launch.{field}")
+        for field in ("started_at_epoch", "exec_confirmed_at_epoch", "codex_started_at_epoch")
+    ]
+    if timestamps[0] <= 0.0 or timestamps != sorted(timestamps):
+        raise ExportValidationError(f"{context} launch timestamps are invalid")
+    launch_receipt_sha256 = sha256_file(launch_receipt_path)
+    if any(
+        require_sha256(payload.get(field), f"{context}.{field}") != launch_receipt_sha256
+        for field in ("launch_receipt_sha256", "exec_acknowledgement_sha256")
+    ):
+        raise ExportValidationError(f"{context} launch receipt hash is not cross-linked")
 
-    recorded_process_sha256 = payload.get("process_sha256")
-    if process_path.exists():
-        if not process_path.is_file() or process_path.is_symlink():
-            raise ExportValidationError(f"{context} process receipt is non-regular")
-        process = require_mapping(read_json(process_path), f"{context} process receipt")
-        if require_sha256(recorded_process_sha256, f"{context}.process_sha256") != sha256_file(
-            process_path
-        ):
-            raise ExportValidationError(f"{context} process receipt file hash mismatch")
-        command_raw = require_list(process.get("command"), f"{context} process.command")
-        if any(not isinstance(item, str) for item in command_raw):
-            raise ExportValidationError(f"{context} process.command must contain strings")
-        last_message_path = str(work_dir.parent / "last_message.txt")
-        expected_sanitized_command = [
-            "npx",
-            "-y",
-            PAPER_CODEX_PACKAGE,
-            "exec",
-            "--skip-git-repo-check",
-            "--ephemeral",
-            "--ignore-user-config",
-            "--ignore-rules",
-            "-s",
-            "workspace-write",
-            "-C",
-            work_dir_text,
-            "-m",
-            PAPER_MODEL,
-            "-c",
-            f'model_reasoning_effort="{PAPER_REASONING_EFFORT}"',
-            "-o",
-            last_message_path,
-            "<prompt recorded in prompt.md>",
-        ]
-        if command_raw != expected_sanitized_command:
-            raise ExportValidationError(f"{context} process command changed")
-        original_command = [*command_raw[:-1], prompt_text]
-        recomputed_command_sha256 = hashlib.sha256(
-            "\0".join(original_command).encode("utf-8")
-        ).hexdigest()
-        if recomputed_command_sha256 != launch_command_sha256:
-            raise ExportValidationError(f"{context} launch command hash cannot be replayed")
-        if (
-            require_sha256(process.get("command_sha256"), f"{context} process.command_sha256")
-            != launch_command_sha256
-        ):
-            raise ExportValidationError(f"{context} process command digest mismatch")
-        if require_sha256(
-            process.get("launch_receipt_sha256"),
-            f"{context} process.launch_receipt_sha256",
-        ) != sha256_file(launch_receipt_path):
-            raise ExportValidationError(f"{context} process references a different launch receipt")
-        if require_int(process.get("returncode"), f"{context} process.returncode") != returncode:
-            raise ExportValidationError(f"{context} process/record returncode mismatch")
-        if require_bool(process.get("timed_out"), f"{context} process.timed_out") is not timed_out:
-            raise ExportValidationError(f"{context} process/record timeout mismatch")
-        if require_int(process.get("pid"), f"{context} process.pid", minimum=1) != launch_pid:
-            raise ExportValidationError(f"{context} process/launch PID mismatch")
-        process_error = process.get("process_error")
-        if process_error is not None and (not isinstance(process_error, str) or not process_error):
-            raise ExportValidationError(f"{context} process_error must be null or nonempty text")
-        require_string(process.get("started_at"), f"{context} process.started_at")
-        require_string(process.get("completed_at"), f"{context} process.completed_at")
-    else:
-        if recorded_process_sha256 is not None:
-            raise ExportValidationError(f"{context} missing process receipt has a recorded hash")
-        if not recovered or outcome != "fallback_parent" or returncode is not None or timed_out:
-            raise ExportValidationError(
-                f"{context} process receipt may be absent only after recovered post-launch death"
-            )
-    if outcome == "mutated":
-        if (
-            candidate_sha256 == expected_parent_sha256
-            or not changed
-            or not valid
-            or returncode != 0
-            or timed_out
-            or unexpected_work_files
-        ):
-            raise ExportValidationError(f"{context} mutated outcome is inconsistent")
-    elif candidate_sha256 != expected_parent_sha256:
-        raise ExportValidationError(f"{context} fallback_parent did not preserve parent bytes")
+    if require_sha256(payload.get("process_sha256"), f"{context}.process_sha256") != sha256_file(
+        process_path
+    ):
+        raise ExportValidationError(f"{context} process receipt file hash mismatch")
+    process = require_mapping(read_json(process_path), f"{context} process receipt")
+    process_fields = {
+        "command",
+        "command_sha256",
+        "returncode",
+        "timed_out",
+        "process_error",
+        "lifecycle_error",
+        "pid",
+        "pgid",
+        "exec_pid",
+        "exec_acknowledgement_status",
+        "exec_ack_protocol",
+        "launch_nonce",
+        "codex_thread_id",
+        "codex_start_event_sha256",
+        "codex_lifecycle_status",
+        "codex_terminal_event_sha256",
+        "codex_usage",
+        "codex_usage_sha256",
+        "codex_stdout_sha256",
+        "codex_stderr_sha256",
+        "last_message_sha256",
+        "launch_receipt_sha256",
+        "started_at",
+        "completed_at",
+    }
+    if set(process) != process_fields:
+        raise ExportValidationError(f"{context} process receipt has an unexpected schema")
+    command_raw = require_list(process.get("command"), f"{context} process.command")
+    last_message_text = str(work_dir.parent / "last_message.txt")
+    expected_command = [
+        "npx",
+        "-y",
+        PAPER_CODEX_PACKAGE,
+        "exec",
+        "--json",
+        "--skip-git-repo-check",
+        "--ephemeral",
+        "--ignore-user-config",
+        "--ignore-rules",
+        "-s",
+        "workspace-write",
+        "-C",
+        work_dir_text,
+        "-m",
+        PAPER_MODEL,
+        "-c",
+        f'model_reasoning_effort="{PAPER_REASONING_EFFORT}"',
+        "-o",
+        last_message_text,
+        "<prompt recorded in prompt.md>",
+    ]
+    if command_raw != expected_command or _canonical_json_sha256(process.get("codex_usage")) != (
+        process.get("codex_usage_sha256")
+    ):
+        raise ExportValidationError(f"{context} process command or usage digest changed")
+    if hashlib.sha256("\0".join([*command_raw[:-1], prompt_text]).encode("utf-8")).hexdigest() != (
+        launch_command_sha256
+    ):
+        raise ExportValidationError(f"{context} launch command hash cannot be replayed")
+    if (
+        process.get("command_sha256") != launch_command_sha256
+        or process.get("launch_receipt_sha256") != launch_receipt_sha256
+        or require_int(process.get("pid"), f"{context} process.pid", minimum=2) != launch_pid
+        or require_int(process.get("pgid"), f"{context} process.pgid", minimum=2) != launch_pgid
+        or require_int(process.get("exec_pid"), f"{context} process.exec_pid", minimum=2)
+        != launch_exec_pid
+        or process.get("exec_acknowledgement_status") != "codex_started"
+        or process.get("exec_ack_protocol") != EXEC_ACK_PROTOCOL
+        or process.get("launch_nonce") != launch_nonce
+        or require_int(process.get("returncode"), f"{context} process.returncode") != 0
+        or require_bool(process.get("timed_out"), f"{context} process.timed_out") is not False
+        or process.get("process_error") is not None
+        or process.get("lifecycle_error") is not None
+    ):
+        raise ExportValidationError(f"{context} process/launch lifecycle cross-link mismatch")
+    require_string(process.get("started_at"), f"{context} process.started_at")
+    require_string(process.get("completed_at"), f"{context} process.completed_at")
+
+    lifecycle = validate_codex_jsonl_lifecycle(stdout_path, context)
+    for field, expected in lifecycle.items():
+        if process.get(field) != expected or payload.get(field) != expected:
+            raise ExportValidationError(f"{context} {field} differs from Codex JSONL")
+    if launch_receipt.get("codex_thread_id") != lifecycle["codex_thread_id"] or (
+        launch_receipt.get("codex_start_event_sha256") != lifecycle["codex_start_event_sha256"]
+    ):
+        raise ExportValidationError(f"{context} launch receipt differs from Codex JSONL")
+    for field, path in (
+        ("codex_stdout_sha256", stdout_path),
+        ("codex_stderr_sha256", stderr_path),
+        ("last_message_sha256", last_message_path),
+    ):
+        digest = sha256_file(path)
+        if process.get(field) != digest or payload.get(field) != digest:
+            raise ExportValidationError(f"{context} {field} evidence hash mismatch")
+
+    validate_archived_attempt_evidence(mutation_root, record=payload, context=context)
+    declared_work_files = validate_recorded_file_tree(
+        mutation_root / "work",
+        records=payload.get("work_file_records"),
+        directory_paths=payload.get("work_directory_paths"),
+        context=f"{context} work tree",
+    )
+    if "simple_pf.py" not in declared_work_files:
+        raise ExportValidationError(f"{context} work tree has no policy")
+    unexpected = _validated_directory_paths(
+        payload.get("unexpected_work_files"), f"{context}.unexpected_work_files"
+    )
+    if set(unexpected) != declared_work_files - {"simple_pf.py"}:
+        raise ExportValidationError(f"{context}.unexpected_work_files differs from work tree")
+    work_policy_path = mutation_root / "work" / "simple_pf.py"
+    work_policy_sha256 = sha256_file(work_policy_path)
+    if (
+        require_sha256(payload.get("work_policy_sha256"), f"{context}.work_policy_sha256")
+        != work_policy_sha256
+    ):
+        raise ExportValidationError(f"{context} work policy hash mismatch")
+    changed = work_policy_path.read_bytes() != parent_snapshot_path.read_bytes()
+    if require_bool(payload.get("changed"), f"{context}.changed") is not changed:
+        raise ExportValidationError(f"{context}.changed differs from work/parent bytes")
+    valid = require_bool(payload.get("valid"), f"{context}.valid")
+    validation_error = payload.get("validation_error")
+    if (valid and validation_error is not None) or (
+        not valid and (not isinstance(validation_error, str) or not validation_error)
+    ):
+        raise ExportValidationError(f"{context}.validation_error is inconsistent")
+    work_directories = _validated_directory_paths(
+        payload.get("work_directory_paths"), f"{context}.work_directory_paths"
+    )
+    use_mutation = changed and valid and not unexpected and not work_directories
+    expected_outcome = "mutated" if use_mutation else "fallback_parent"
+    if payload.get("mutation_outcome") != expected_outcome:
+        raise ExportValidationError(f"{context}.mutation_outcome differs from work evidence")
+    expected_candidate_sha256 = work_policy_sha256 if use_mutation else expected_parent_sha256
+    if candidate_sha256 != expected_candidate_sha256:
+        raise ExportValidationError(f"{context} candidate bytes do not follow mutation outcome")
 
 
 def validate_baseline_record(
@@ -1604,6 +2118,31 @@ def validate_baseline_record(
 ) -> None:
     context = f"iteration 0/{lane.lane_id} baseline record"
     payload = require_mapping(record, context)
+    expected_fields = {
+        "schema_version",
+        "lane_id",
+        "iteration",
+        "kind",
+        "status",
+        "parent_iteration",
+        "parent_policy_sha256",
+        "prompt_sha256",
+        "candidate_policy_sha256",
+        "seed_policy_sha256",
+        "codex_package",
+        "codex_cli_version",
+        "model",
+        "reasoning_effort",
+        "returncode",
+        "timed_out",
+        "changed",
+        "valid",
+        "validation_error",
+        "created_at",
+        "completed_at",
+    }
+    if set(payload) != expected_fields:
+        raise ExportValidationError(f"{context} has an unexpected schema")
     if payload.get("lane_id") != lane.lane_id:
         raise ExportValidationError(f"{context}.lane_id mismatch")
     if require_int(payload.get("schema_version"), f"{context}.schema_version") != 1:
@@ -1615,6 +2154,18 @@ def validate_baseline_record(
     for key in ("parent_iteration", "parent_policy_sha256", "prompt_sha256"):
         if payload.get(key) is not None:
             raise ExportValidationError(f"{context}.{key} must be null")
+    for key in ("codex_package", "codex_cli_version", "model", "reasoning_effort", "returncode"):
+        if payload.get(key) is not None:
+            raise ExportValidationError(f"{context}.{key} must be null")
+    if (
+        require_bool(payload.get("timed_out"), f"{context}.timed_out") is not False
+        or require_bool(payload.get("changed"), f"{context}.changed") is not False
+        or require_bool(payload.get("valid"), f"{context}.valid") is not True
+        or payload.get("validation_error") is not None
+    ):
+        raise ExportValidationError(f"{context} baseline status fields are inconsistent")
+    require_string(payload.get("created_at"), f"{context}.created_at")
+    require_string(payload.get("completed_at"), f"{context}.completed_at")
     recorded_candidate = _record_hash(
         payload,
         ("candidate_policy_sha256", "policy_sha256"),
@@ -1785,142 +2336,1115 @@ def validate_decision(
     _optional_decision_hash(decision, "best_policy_sha256", selected.policy_sha256, context)
 
 
-def exact_child_names(directory: Path, *, directories: bool, context: str) -> set[str]:
-    if not directory.is_dir():
-        raise ExportValidationError(f"missing directory: {directory}")
-    symlinks = [item.name for item in directory.iterdir() if item.is_symlink()]
-    if symlinks:
-        raise ExportValidationError(f"{context} contains symlinks: {sorted(symlinks)}")
-    children = [item for item in directory.iterdir() if item.is_dir() == directories]
-    return {item.name for item in children}
-
-
 def validate_iteration_directories(iterations_dir: Path) -> None:
-    if not iterations_dir.is_dir():
-        raise ExportValidationError(f"missing iterations directory: {iterations_dir}")
-    seen = {
-        int(match.group(1))
-        for item in iterations_dir.iterdir()
-        if item.is_dir() and (match := ITERATION_DIR_RE.fullmatch(item.name)) is not None
+    require_exact_directory(
+        iterations_dir,
+        context="campaign iterations root",
+        directories={f"iter_{iteration:04d}" for iteration in PAPER_EVALUATION_ITERATIONS},
+    )
+
+
+def index_state_batches(state: object) -> dict[int, dict[str, dict[str, Any]]]:
+    payload = require_mapping(state, "state.json")
+    raw_batches = require_mapping(payload.get("batches"), "state.json.batches")
+    indexed: dict[int, dict[str, dict[str, Any]]] = {
+        iteration: {} for iteration in PAPER_EVALUATION_ITERATIONS
     }
-    expected = set(PAPER_EVALUATION_ITERATIONS)
-    if seen != expected:
+    seen_submission_keys: set[str] = set()
+    seen_job_names: set[str] = set()
+    seen_job_ids: set[str] = set()
+    for state_key, raw_batch in raw_batches.items():
+        context = f"state.json.batches.{state_key}"
+        batch = require_mapping(raw_batch, context)
+        batch_id = require_string(batch.get("batch_id"), f"{context}.batch_id")
+        if state_key != batch_id:
+            raise ExportValidationError(f"{context}.batch_id differs from its state key")
+        match = BATCH_ID_RE.fullmatch(batch_id)
+        if match is None:
+            raise ExportValidationError(f"{context} has an invalid runner batch ID")
+        iteration = require_int(batch.get("iteration"), f"{context}.iteration")
+        if iteration not in PAPER_EVALUATION_ITERATIONS or int(match.group(1)) != iteration:
+            raise ExportValidationError(f"{context} has an invalid iteration identity")
+        for attempt_index, raw_attempt in enumerate(
+            require_list(batch.get("attempts"), f"{context}.attempts")
+        ):
+            attempt_context = f"{context}.attempts[{attempt_index}]"
+            attempt = require_mapping(raw_attempt, attempt_context)
+            submission_key = require_sha256(
+                attempt.get("submission_key"), f"{attempt_context}.submission_key"
+            )
+            job_name = require_string(attempt.get("job_name"), f"{attempt_context}.job_name")
+            job_id = require_string(attempt.get("job_id"), f"{attempt_context}.job_id")
+            if re.fullmatch(r"[0-9]+", job_id) is None:
+                raise ExportValidationError(f"{attempt_context}.job_id is not numeric")
+            if (
+                submission_key in seen_submission_keys
+                or job_name in seen_job_names
+                or job_id in seen_job_ids
+            ):
+                raise ExportValidationError(
+                    f"{attempt_context} reuses a submission key, job name, or job receipt ID"
+                )
+            seen_submission_keys.add(submission_key)
+            seen_job_names.add(job_name)
+            seen_job_ids.add(job_id)
+        indexed[iteration][batch_id] = batch
+    missing = [iteration for iteration, batches in indexed.items() if not batches]
+    if missing:
         raise ExportValidationError(
-            f"campaign iteration set must be exactly 0..50; missing={sorted(expected - seen)}, "
-            f"extra={sorted(seen - expected)}"
+            f"fully collected campaign has no persisted batches for iterations {missing}"
         )
+    return indexed
+
+
+def _initial_batch_partition(lane_ids: Sequence[str], batch_size: int) -> list[list[str]]:
+    batch_count = max(1, math.ceil(len(lane_ids) / batch_size))
+    return [list(lane_ids[index::batch_count]) for index in range(batch_count)]
+
+
+def _submission_identity(
+    *,
+    campaign_id: str,
+    manifest_sha256: str,
+    cluster_root: str,
+    iteration: int,
+    batch_id: str,
+    attempt: int,
+    lane_ids: Sequence[str],
+    iteration_root: Path,
+) -> tuple[str, str]:
+    identity = {
+        "campaign_id": campaign_id,
+        "manifest_sha256": manifest_sha256,
+        "cluster_root": cluster_root,
+        "iteration": iteration,
+        "batch_id": batch_id,
+        "attempt": attempt,
+        "candidates": [
+            {
+                "lane_id": lane_id,
+                "policy_sha256": sha256_file(
+                    iteration_root / "candidates" / lane_id / "simple_pf.py"
+                ),
+            }
+            for lane_id in lane_ids
+        ],
+    }
+    digest = hashlib.sha256(
+        SUBMISSION_ID_DOMAIN
+        + json.dumps(identity, sort_keys=True, separators=(",", ":")).encode("utf-8")
+    ).hexdigest()
+    return digest, f"rx_{digest[:32]}"
+
+
+def validate_batch_structure(
+    iteration_root: Path,
+    *,
+    iteration: int,
+    batches: Mapping[str, Mapping[str, Any]],
+    lane_ids: Sequence[str],
+    campaign_id: str,
+    manifest_sha256: str,
+    cluster_root: str,
+    cluster_python: str,
+    batch_size: int,
+) -> None:
+    batches_root = iteration_root / "batches"
+    expected_partition = _initial_batch_partition(lane_ids, batch_size)
+    expected_batches = {
+        f"iter{iteration:04d}_batch{index:02d}": group
+        for index, group in enumerate(expected_partition)
+    }
+    if set(batches) != set(expected_batches):
+        raise ExportValidationError(
+            f"iteration {iteration} batch IDs differ from the deterministic partition"
+        )
+    require_exact_directory(
+        batches_root,
+        context=f"iteration {iteration} batches root",
+        directories=set(batches),
+    )
+    for batch_id, raw_batch in batches.items():
+        context = f"iteration {iteration} batch {batch_id}"
+        batch = require_mapping(raw_batch, context)
+        required_batch_fields = {
+            "batch_id",
+            "iteration",
+            "campaign_id",
+            "manifest_sha256",
+            "lane_ids",
+            "state",
+            "retry_lane_ids",
+            "retry_count",
+            "attempts",
+            "created_at",
+            "updated_at",
+            "collected_at",
+        }
+        allowed_batch_fields = required_batch_fields | {"retry_fingerprint"}
+        if not required_batch_fields.issubset(batch) or set(batch) - allowed_batch_fields:
+            raise ExportValidationError(f"{context} has an unexpected final schema")
+        batch_lane_ids = [
+            require_string(value, f"{context}.lane_ids")
+            for value in require_list(batch.get("lane_ids"), f"{context}.lane_ids")
+        ]
+        retry_count = require_int(batch.get("retry_count"), f"{context}.retry_count", minimum=0)
+        if (
+            batch.get("batch_id") != batch_id
+            or require_int(batch.get("iteration"), f"{context}.iteration") != iteration
+            or batch.get("campaign_id") != campaign_id
+            or batch.get("manifest_sha256") != manifest_sha256
+            or batch_lane_ids != expected_batches[batch_id]
+            or batch.get("state") != "collected"
+            or require_list(batch.get("retry_lane_ids"), f"{context}.retry_lane_ids")
+            or retry_count < 0
+        ):
+            raise ExportValidationError(f"{context} final identity/partition/state mismatch")
+        require_string(batch.get("created_at"), f"{context}.created_at")
+        require_string(batch.get("updated_at"), f"{context}.updated_at")
+        require_string(batch.get("collected_at"), f"{context}.collected_at")
+        if retry_count:
+            require_sha256(batch.get("retry_fingerprint"), f"{context}.retry_fingerprint")
+        elif "retry_fingerprint" in batch:
+            raise ExportValidationError(f"{context} has retry fingerprint without retries")
+        attempts = require_list(batch.get("attempts"), f"{context}.attempts")
+        if not attempts:
+            raise ExportValidationError(f"{context} has no durable submission attempt")
+        if retry_count != len(attempts) - 1:
+            raise ExportValidationError(f"{context}.retry_count does not match attempt history")
+        attempts_by_name: dict[str, dict[str, Any]] = {}
+        previous_retry_lane_ids: list[str] | None = None
+        for index, raw_attempt in enumerate(attempts, 1):
+            attempt = require_mapping(raw_attempt, f"{context} attempt")
+            number = require_int(attempt.get("attempt"), f"{context} attempt number", minimum=1)
+            if number != index:
+                raise ExportValidationError(f"{context} attempts are not sequential")
+            name = f"attempt_{number:02d}"
+            if name in attempts_by_name:
+                raise ExportValidationError(f"{context} repeats attempt {number}")
+            attempts_by_name[name] = attempt
+            attempt_context = f"{context} {name}"
+            required_attempt_fields = {
+                "attempt",
+                "campaign_id",
+                "manifest_sha256",
+                "lane_ids",
+                "submission_key",
+                "job_name",
+                "lane_ids_path",
+                "state",
+                "job_id",
+                "created_at",
+                "submitted_at",
+                "execution",
+            }
+            is_final = index == len(attempts)
+            if is_final:
+                required_attempt_fields.add("collected_at")
+            else:
+                required_attempt_fields.add("retry_reason")
+            if set(attempt) != required_attempt_fields:
+                raise ExportValidationError(f"{attempt_context} has an unexpected schema")
+            active_lane_ids = [
+                require_string(value, f"{attempt_context}.lane_ids")
+                for value in require_list(attempt.get("lane_ids"), f"{attempt_context}.lane_ids")
+            ]
+            if (
+                not active_lane_ids
+                or len(active_lane_ids) != len(set(active_lane_ids))
+                or not set(active_lane_ids).issubset(set(batch_lane_ids))
+                or attempt.get("campaign_id") != campaign_id
+                or attempt.get("manifest_sha256") != manifest_sha256
+            ):
+                raise ExportValidationError(f"{attempt_context} lane/campaign identity mismatch")
+            if index == 1 and active_lane_ids != batch_lane_ids:
+                raise ExportValidationError(
+                    f"{attempt_context} first attempt is not the full batch"
+                )
+            if previous_retry_lane_ids is not None and active_lane_ids != previous_retry_lane_ids:
+                raise ExportValidationError(f"{attempt_context} does not match prior retry reason")
+            expected_key, expected_job = _submission_identity(
+                campaign_id=campaign_id,
+                manifest_sha256=manifest_sha256,
+                cluster_root=cluster_root,
+                iteration=iteration,
+                batch_id=batch_id,
+                attempt=number,
+                lane_ids=active_lane_ids,
+                iteration_root=iteration_root,
+            )
+            if (
+                attempt.get("submission_key") != expected_key
+                or attempt.get("job_name") != expected_job
+                or re.fullmatch(
+                    r"[0-9]+", require_string(attempt.get("job_id"), f"{attempt_context}.job_id")
+                )
+                is None
+                or attempt.get("state") != ("collected" if is_final else "retry_ready")
+            ):
+                raise ExportValidationError(
+                    f"{attempt_context} submission/job/final state mismatch"
+                )
+            require_string(attempt.get("created_at"), f"{attempt_context}.created_at")
+            require_string(attempt.get("submitted_at"), f"{attempt_context}.submitted_at")
+            if is_final:
+                require_string(attempt.get("collected_at"), f"{attempt_context}.collected_at")
+                previous_retry_lane_ids = None
+            else:
+                retry_reason = require_mapping(
+                    attempt.get("retry_reason"), f"{attempt_context}.retry_reason"
+                )
+                if not retry_reason or not all(
+                    isinstance(value, str) and value for value in retry_reason.values()
+                ):
+                    raise ExportValidationError(f"{attempt_context}.retry_reason is invalid")
+                previous_retry_lane_ids = [
+                    lane_id for lane_id in batch_lane_ids if lane_id in retry_reason
+                ]
+                if set(previous_retry_lane_ids) != set(retry_reason):
+                    raise ExportValidationError(f"{attempt_context}.retry_reason lanes are invalid")
+            execution = require_mapping(attempt.get("execution"), f"{attempt_context}.execution")
+            expected_execution_fields = {
+                "sync_host",
+                "submit_host",
+                "account",
+                "partition",
+                "workers",
+                "cpus_per_task",
+                "memory",
+                "time_limit",
+                "cluster_root",
+                "cluster_python",
+            }
+            if set(execution) != expected_execution_fields:
+                raise ExportValidationError(f"{attempt_context}.execution has unexpected schema")
+            for field in (
+                "sync_host",
+                "submit_host",
+                "account",
+                "partition",
+                "memory",
+                "time_limit",
+            ):
+                require_string(execution.get(field), f"{attempt_context}.execution.{field}")
+            if (
+                require_int(
+                    execution.get("workers"), f"{attempt_context}.execution.workers", minimum=1
+                )
+                < 1
+                or require_int(
+                    execution.get("cpus_per_task"),
+                    f"{attempt_context}.execution.cpus_per_task",
+                    minimum=1,
+                )
+                < 1
+                or execution.get("cluster_root") != cluster_root
+                or execution.get("cluster_python") != cluster_python
+            ):
+                raise ExportValidationError(f"{attempt_context}.execution identity mismatch")
+        batch_root = batches_root / batch_id
+        require_exact_directory(
+            batch_root,
+            context=context,
+            files={"batch.json"},
+            directories=set(attempts_by_name),
+        )
+        if read_json(batch_root / "batch.json") != batch:
+            raise ExportValidationError(f"{context} mirror differs from state.json")
+        for attempt_name, attempt in attempts_by_name.items():
+            attempt_context = f"{context} {attempt_name}"
+            attempt_root = batch_root / attempt_name
+            require_exact_directory(
+                attempt_root,
+                context=attempt_context,
+                files={"lane_ids.txt"},
+            )
+            expected_relative = (
+                Path("iterations")
+                / f"iter_{iteration:04d}"
+                / "batches"
+                / batch_id
+                / attempt_name
+                / "lane_ids.txt"
+            )
+            recorded_relative = _safe_relative_path(
+                attempt.get("lane_ids_path"), f"{attempt_context}.lane_ids_path"
+            )
+            if recorded_relative != expected_relative:
+                raise ExportValidationError(f"{attempt_context}.lane_ids_path changed")
+            expected_lane_ids = [
+                require_string(value, f"{attempt_context}.lane_ids")
+                for value in require_list(attempt.get("lane_ids"), f"{attempt_context}.lane_ids")
+            ]
+            if (attempt_root / "lane_ids.txt").read_text(encoding="utf-8").splitlines() != (
+                expected_lane_ids
+            ):
+                raise ExportValidationError(f"{attempt_context} lane_ids.txt differs from state")
+
+
+def validate_iteration_structure(
+    iteration_root: Path,
+    *,
+    iteration: int,
+    lane_ids: Sequence[str],
+    batches: Mapping[str, Mapping[str, Any]],
+    campaign_id: str,
+    manifest_sha256: str,
+    cluster_root: str,
+    cluster_python: str,
+    batch_size: int,
+) -> None:
+    lane_id_set = set(lane_ids)
+    require_exact_directory(
+        iteration_root,
+        context=f"iteration {iteration} root",
+        files=ITERATION_FILES,
+        directories=ITERATION_DIRECTORIES,
+    )
+    require_exact_directory(
+        iteration_root / "candidates",
+        context=f"iteration {iteration} candidates root",
+        directories=lane_id_set,
+    )
+    for lane_id in lane_ids:
+        require_exact_directory(
+            iteration_root / "candidates" / lane_id,
+            context=f"iteration {iteration}/{lane_id} candidate root",
+            files={"simple_pf.py"},
+        )
+    require_exact_directory(
+        iteration_root / "results",
+        context=f"iteration {iteration} results root",
+        files={f"{lane_id}.json" for lane_id in lane_ids},
+    )
+    require_exact_directory(
+        iteration_root / "mutations",
+        context=f"iteration {iteration} mutations root",
+        directories=lane_id_set,
+    )
+    validation = require_mapping(
+        read_json(iteration_root / "validation.json"),
+        f"iteration {iteration} validation report",
+    )
+    if (
+        require_int(
+            validation.get("schema_version"), f"iteration {iteration} validation.schema_version"
+        )
+        != 1
+        or require_int(validation.get("iteration"), f"iteration {iteration} validation.iteration")
+        != iteration
+        or require_int(
+            validation.get("validated_lane_count"),
+            f"iteration {iteration} validation.validated_lane_count",
+        )
+        != PAPER_LANE_COUNT
+        or require_mapping(
+            validation.get("retryable_errors"),
+            f"iteration {iteration} validation.retryable_errors",
+        )
+        or require_mapping(
+            validation.get("fatal_errors"), f"iteration {iteration} validation.fatal_errors"
+        )
+    ):
+        raise ExportValidationError(f"iteration {iteration} validation report is not complete")
+    require_string(validation.get("validated_at"), f"iteration {iteration} validation.validated_at")
+    validate_batch_structure(
+        iteration_root,
+        iteration=iteration,
+        batches=batches,
+        lane_ids=lane_ids,
+        campaign_id=campaign_id,
+        manifest_sha256=manifest_sha256,
+        cluster_root=cluster_root,
+        cluster_python=cluster_python,
+        batch_size=batch_size,
+    )
+
+
+def _exact_tree_entries(base: Path, context: str) -> tuple[dict[str, Path], set[str]]:
+    if not base.is_dir() or base.is_symlink():
+        raise ExportValidationError(f"{context} must be a real directory: {base}")
+    files: dict[str, Path] = {}
+    directories: set[str] = set()
+
+    def walk(directory: Path, relative_root: Path) -> None:
+        with os.scandir(directory) as entries:
+            for entry in entries:
+                relative = relative_root / entry.name
+                relative_name = relative.as_posix()
+                mode = entry.stat(follow_symlinks=False).st_mode
+                if stat.S_ISLNK(mode):
+                    raise ExportValidationError(f"{context} contains a symlink: {relative_name}")
+                if stat.S_ISDIR(mode):
+                    directories.add(relative_name)
+                    walk(Path(entry.path), relative)
+                elif stat.S_ISREG(mode):
+                    files[relative_name] = Path(entry.path)
+                else:
+                    raise ExportValidationError(
+                        f"{context} contains a special entry: {relative_name}"
+                    )
+
+    walk(base, Path())
+    return files, directories
+
+
+def _validated_directory_paths(value: object, context: str) -> list[str]:
+    paths = [
+        _safe_relative_path(raw, f"{context}[{index}]").as_posix()
+        for index, raw in enumerate(require_list(value, context))
+    ]
+    if paths != sorted(set(paths)):
+        raise ExportValidationError(f"{context} must be sorted and duplicate-free")
+    return paths
+
+
+def validate_recorded_file_tree(
+    base: Path,
+    *,
+    records: object,
+    directory_paths: object,
+    context: str,
+) -> set[str]:
+    payload = require_mapping(records, f"{context} file records")
+    declared_files: set[str] = set()
+    for relative_text, raw_record in payload.items():
+        relative = _safe_relative_path(relative_text, f"{context} file-record key")
+        relative_name = relative.as_posix()
+        record = require_mapping(raw_record, f"{context}.{relative_name}")
+        if set(record) != {"sha256", "size_bytes"}:
+            raise ExportValidationError(f"{context}.{relative_name} has an unexpected schema")
+        _validate_file_record(base / relative, record, f"{context}.{relative_name}")
+        declared_files.add(relative_name)
+    declared_directories = set(
+        _validated_directory_paths(directory_paths, f"{context} directory paths")
+    )
+    actual_files, actual_directories = _exact_tree_entries(base, context)
+    if set(actual_files) != declared_files or actual_directories != declared_directories:
+        raise ExportValidationError(
+            f"{context} differs from its recorded file tree: "
+            f"missing_files={sorted(declared_files - set(actual_files))}, "
+            f"extra_files={sorted(set(actual_files) - declared_files)}, "
+            f"missing_directories={sorted(declared_directories - actual_directories)}, "
+            f"extra_directories={sorted(actual_directories - declared_directories)}"
+        )
+    return declared_files
+
+
+def validate_archived_attempt_evidence(
+    mutation_root: Path,
+    *,
+    record: Mapping[str, Any],
+    context: str,
+) -> bool:
+    raw_evidence = require_list(
+        record.get("archived_attempt_evidence"),
+        f"{context}.archived_attempt_evidence",
+    )
+    archive_root = mutation_root / "archived_attempts"
+    if not raw_evidence:
+        if record.get("archived_attempt_directory_paths") != [] or archive_root.exists():
+            raise ExportValidationError(f"{context} has unrecorded archived attempt state")
+        return False
+
+    records: dict[str, dict[str, Any]] = {}
+    ordered_paths: list[str] = []
+    nonce_names: set[str] = set()
+    for index, raw_item in enumerate(raw_evidence):
+        item_context = f"{context}.archived_attempt_evidence[{index}]"
+        item = require_mapping(raw_item, item_context)
+        if set(item) != {"path", "sha256", "size_bytes"}:
+            raise ExportValidationError(f"{item_context} has an unexpected schema")
+        full_relative = _safe_relative_path(item.get("path"), f"{item_context}.path")
+        if (
+            len(full_relative.parts) < 3
+            or full_relative.parts[0] != "archived_attempts"
+            or SHA256_RE.fullmatch(full_relative.parts[1]) is None
+        ):
+            raise ExportValidationError(f"{item_context}.path is not nonce-scoped archive evidence")
+        archive_relative = Path(*full_relative.parts[1:])
+        archive_name = archive_relative.as_posix()
+        if archive_name in records:
+            raise ExportValidationError(f"{item_context} repeats an archive file")
+        records[archive_name] = {
+            "sha256": require_sha256(item.get("sha256"), f"{item_context}.sha256"),
+            "size_bytes": require_int(
+                item.get("size_bytes"), f"{item_context}.size_bytes", minimum=0
+            ),
+        }
+        ordered_paths.append(full_relative.as_posix())
+        nonce_names.add(full_relative.parts[1])
+    if ordered_paths != sorted(ordered_paths):
+        raise ExportValidationError(f"{context}.archived_attempt_evidence is not sorted")
+
+    prefixed_directories = _validated_directory_paths(
+        record.get("archived_attempt_directory_paths"),
+        f"{context}.archived_attempt_directory_paths",
+    )
+    archive_directories: list[str] = []
+    directory_nonces: set[str] = set()
+    for relative_text in prefixed_directories:
+        relative = Path(relative_text)
+        if (
+            len(relative.parts) < 2
+            or relative.parts[0] != "archived_attempts"
+            or SHA256_RE.fullmatch(relative.parts[1]) is None
+        ):
+            raise ExportValidationError(f"{context} archived directory is not archive-scoped")
+        directory_nonces.add(relative.parts[1])
+        archive_directories.append(Path(*relative.parts[1:]).as_posix())
+    if directory_nonces != nonce_names or any(
+        nonce not in archive_directories for nonce in nonce_names
+    ):
+        raise ExportValidationError(f"{context} archived nonce directory closure is invalid")
+    validate_recorded_file_tree(
+        archive_root,
+        records=records,
+        directory_paths=archive_directories,
+        context=f"{context} archived attempt tree",
+    )
+    for nonce in nonce_names:
+        failure_path = archive_root / nonce / "failure.json"
+        if failure_path.relative_to(archive_root).as_posix() not in records:
+            raise ExportValidationError(f"{context} archived attempt {nonce} lacks failure.json")
+        failure = require_mapping(read_json(failure_path), f"{context} archive {nonce} failure")
+        if set(failure) != {"schema_version", "launch_nonce", "reason", "archived_at"}:
+            raise ExportValidationError(f"{context} archive {nonce} failure schema changed")
+        if (
+            require_int(failure.get("schema_version"), f"{context} archive schema") != 1
+            or failure.get("launch_nonce") != nonce
+        ):
+            raise ExportValidationError(f"{context} archive {nonce} identity mismatch")
+        require_string(failure.get("reason"), f"{context} archive {nonce}.reason")
+        require_string(failure.get("archived_at"), f"{context} archive {nonce}.archived_at")
+    return True
+
+
+def validate_mutation_directory_structure(
+    mutation_root: Path,
+    *,
+    iteration: int,
+    lane_id: str,
+    record: Mapping[str, Any],
+) -> None:
+    context = f"iteration {iteration}/{lane_id} mutation root"
+    if iteration == 0:
+        require_exact_directory(mutation_root, context=context, files={"record.json"})
+        return
+
+    has_archives = validate_archived_attempt_evidence(mutation_root, record=record, context=context)
+    required_files = {
+        "codex.stderr",
+        "codex.stdout",
+        "intent.json",
+        "last_message.txt",
+        "launch.json",
+        "launch_intent.json",
+        "parent_simple_pf.py",
+        "process.json",
+        "prompt.md",
+        "record.json",
+    }
+    require_exact_directory(
+        mutation_root,
+        context=context,
+        files=required_files,
+        directories={"work", *({"archived_attempts"} if has_archives else set())},
+    )
+    raw_unexpected = require_list(
+        record.get("unexpected_work_files"), f"{context}.unexpected_work_files"
+    )
+    unexpected: list[str] = []
+    for index, value in enumerate(raw_unexpected):
+        relative = _safe_relative_path(value, f"{context}.unexpected_work_files[{index}]")
+        name = relative.as_posix()
+        if name == "simple_pf.py":
+            raise ExportValidationError(f"{context} records its required policy as unexpected")
+        unexpected.append(name)
+    if unexpected != sorted(set(unexpected)):
+        raise ExportValidationError(
+            f"{context}.unexpected_work_files must be sorted and duplicate-free"
+        )
+    declared_work_files = validate_recorded_file_tree(
+        mutation_root / "work",
+        records=record.get("work_file_records"),
+        directory_paths=record.get("work_directory_paths"),
+        context=f"{context} work tree",
+    )
+    if "simple_pf.py" not in declared_work_files:
+        raise ExportValidationError(f"{context} work tree has no simple_pf.py")
+    if set(unexpected) != declared_work_files - {"simple_pf.py"}:
+        raise ExportValidationError(f"{context}.unexpected_work_files differs from work records")
+    if require_sha256(
+        record.get("work_policy_sha256"), f"{context}.work_policy_sha256"
+    ) != sha256_file(mutation_root / "work" / "simple_pf.py"):
+        raise ExportValidationError(f"{context} work policy hash mismatch")
+
+
+def validate_hamiltonian_verification(
+    verification_path: Path,
+    *,
+    manifest: Mapping[str, Any],
+    manifest_sha256: str,
+    campaign_root: Path,
+) -> None:
+    context = "baselines/hamiltonian_verification.json"
+    payload = require_mapping(read_json(verification_path), context)
+    expected_top_fields = {
+        "schema_version",
+        "experiment",
+        "diagonalization",
+        "pauli_dense_check",
+        "hamiltonian_count",
+        "all_verified",
+        "manifest_sha256",
+        "verified_at",
+        "rows",
+    }
+    if set(payload) != expected_top_fields:
+        raise ExportValidationError(f"{context} has an unexpected schema")
+    if (
+        require_int(payload.get("schema_version"), f"{context}.schema_version") != 1
+        or payload.get("experiment") != "reactions10_hamiltonian_cache_verification"
+        or payload.get("diagonalization")
+        != "numpy.linalg.eigh on fixed-electron Hamiltonian sectors"
+        or payload.get("pauli_dense_check")
+        != (
+            "identity_coefficient plus cached evaluator Pauli labels/coefficients "
+            "against the cached dense Hamiltonian"
+        )
+        or require_bool(payload.get("all_verified"), f"{context}.all_verified") is not True
+        or require_int(payload.get("hamiltonian_count"), f"{context}.hamiltonian_count") != 21
+        or require_sha256(payload.get("manifest_sha256"), f"{context}.manifest_sha256")
+        != manifest_sha256
+    ):
+        raise ExportValidationError(f"{context} is incomplete or stale")
+    require_string(payload.get("verified_at"), f"{context}.verified_at")
+
+    inputs = require_mapping(manifest.get("inputs"), "manifest.json.inputs")
+    cache_records = require_mapping(
+        inputs.get("problem_cache_files"), "manifest.json.inputs.problem_cache_files"
+    )
+    expected_npz = {name for name in cache_records if name.endswith(".npz")}
+    if len(expected_npz) != 21:
+        raise ExportValidationError("manifest does not contain exactly 21 Hamiltonian NPZ files")
+    rows = require_list(payload.get("rows"), f"{context}.rows")
+    if len(rows) != 21:
+        raise ExportValidationError(f"{context}.rows must contain exactly 21 entries")
+    expected_row_fields = {
+        "species",
+        "cache_file",
+        "cache_sha256",
+        "metadata_sha256",
+        "n_qubits",
+        "active_electrons",
+        "sector_dimension",
+        "hermiticity_error",
+        "pauli_dense_max_abs_residual_hartree",
+        "pauli_dense_relative_frobenius_residual",
+        "cached_ground_energy_hartree",
+        "recomputed_ground_energy_hartree",
+        "ground_energy_delta_hartree",
+        "max_spectrum_delta_hartree",
+        "cached_ground_vector_residual",
+        "evaluator_ground_state_input_norm",
+        "evaluator_ground_state_outside_sector_norm",
+        "evaluator_ground_state_residual",
+        "ground_eigenspace_dimension",
+        "evaluator_recomputed_ground_eigenspace_overlap",
+        "evaluator_cached_ground_eigenspace_overlap",
+        "verified",
+        "wall_seconds",
+    }
+    seen_cache_files: set[str] = set()
+    seen_species: set[str] = set()
+    species_order: list[str] = []
+    for index, raw_row in enumerate(rows):
+        row_context = f"{context}.rows[{index}]"
+        row = require_mapping(raw_row, row_context)
+        if set(row) != expected_row_fields:
+            raise ExportValidationError(f"{row_context} has an unexpected schema")
+        cache_file = _safe_relative_path(row.get("cache_file"), f"{row_context}.cache_file")
+        if len(cache_file.parts) != 1 or cache_file.suffix != ".npz":
+            raise ExportValidationError(f"{row_context}.cache_file is not a bare NPZ filename")
+        cache_name = cache_file.name
+        if cache_name in seen_cache_files or cache_name not in expected_npz:
+            raise ExportValidationError(f"{row_context}.cache_file is duplicated or undeclared")
+        metadata_name = cache_file.with_suffix(".json").name
+        expected_cache_hash = require_sha256(
+            cache_records.get(cache_name), f"manifest cache hash {cache_name}"
+        )
+        expected_metadata_hash = require_sha256(
+            cache_records.get(metadata_name), f"manifest cache hash {metadata_name}"
+        )
+        cache_path = campaign_root / "problem_cache" / cache_name
+        metadata_path = campaign_root / "problem_cache" / metadata_name
+        if (
+            not cache_path.is_file()
+            or cache_path.is_symlink()
+            or not metadata_path.is_file()
+            or metadata_path.is_symlink()
+            or require_sha256(row.get("cache_sha256"), f"{row_context}.cache_sha256")
+            != expected_cache_hash
+            or require_sha256(row.get("metadata_sha256"), f"{row_context}.metadata_sha256")
+            != expected_metadata_hash
+            or sha256_file(cache_path) != expected_cache_hash
+            or sha256_file(metadata_path) != expected_metadata_hash
+        ):
+            raise ExportValidationError(f"{row_context} cache/metadata hash mismatch")
+        metadata = require_mapping(read_json(metadata_path), f"cache metadata {metadata_name}")
+        species = require_string(row.get("species"), f"{row_context}.species")
+        if species != metadata.get("molecule") or species in seen_species:
+            raise ExportValidationError(f"{row_context}.species is duplicated or mismatched")
+        n_qubits = require_int(row.get("n_qubits"), f"{row_context}.n_qubits", minimum=1)
+        active_electrons = require_int(
+            row.get("active_electrons"), f"{row_context}.active_electrons", minimum=1
+        )
+        if (
+            n_qubits > 10
+            or n_qubits != require_int(metadata.get("n_qubits"), f"{metadata_name}.n_qubits")
+            or active_electrons
+            != require_int(metadata.get("active_electrons"), f"{metadata_name}.active_electrons")
+        ):
+            raise ExportValidationError(f"{row_context} cache identity fields mismatch")
+        sector_dimension = require_int(
+            row.get("sector_dimension"), f"{row_context}.sector_dimension", minimum=1
+        )
+        ground_dimension = require_int(
+            row.get("ground_eigenspace_dimension"),
+            f"{row_context}.ground_eigenspace_dimension",
+            minimum=1,
+        )
+        if (
+            active_electrons > n_qubits
+            or sector_dimension != math.comb(n_qubits, active_electrons)
+            or ground_dimension > sector_dimension
+        ):
+            raise ExportValidationError(f"{row_context} sector/eigenspace dimensions are invalid")
+        for field, threshold in HAMILTONIAN_THRESHOLDS.items():
+            value = require_finite(row.get(field), f"{row_context}.{field}")
+            if value < 0.0 or value > threshold:
+                raise ExportValidationError(f"{row_context}.{field} exceeds {threshold}")
+        ground_delta = require_finite(
+            row.get("ground_energy_delta_hartree"),
+            f"{row_context}.ground_energy_delta_hartree",
+        )
+        if abs(ground_delta) > 1.0e-10:
+            raise ExportValidationError(f"{row_context}.ground_energy_delta_hartree is excessive")
+        cached_ground = require_finite(
+            row.get("cached_ground_energy_hartree"),
+            f"{row_context}.cached_ground_energy_hartree",
+        )
+        recomputed_ground = require_finite(
+            row.get("recomputed_ground_energy_hartree"),
+            f"{row_context}.recomputed_ground_energy_hartree",
+        )
+        require_close(
+            recomputed_ground - cached_ground,
+            ground_delta,
+            f"{row_context} ground-energy arithmetic",
+        )
+        input_norm = require_finite(
+            row.get("evaluator_ground_state_input_norm"),
+            f"{row_context}.evaluator_ground_state_input_norm",
+        )
+        if abs(input_norm - 1.0) > 1.0e-10:
+            raise ExportValidationError(f"{row_context} evaluator ground-state norm drift")
+        for field in (
+            "evaluator_recomputed_ground_eigenspace_overlap",
+            "evaluator_cached_ground_eigenspace_overlap",
+        ):
+            overlap = require_finite(row.get(field), f"{row_context}.{field}")
+            if overlap < 1.0 - 1.0e-8 or overlap > 1.0 + 1.0e-8:
+                raise ExportValidationError(f"{row_context}.{field} is invalid")
+        if require_bool(row.get("verified"), f"{row_context}.verified") is not True:
+            raise ExportValidationError(f"{row_context} is not verified")
+        if require_finite(row.get("wall_seconds"), f"{row_context}.wall_seconds") < 0.0:
+            raise ExportValidationError(f"{row_context}.wall_seconds is negative")
+        seen_cache_files.add(cache_name)
+        seen_species.add(species)
+        species_order.append(species)
+    if seen_cache_files != expected_npz:
+        raise ExportValidationError(f"{context} does not cover the fixed 21 Hamiltonians")
+    if species_order != sorted(species_order):
+        raise ExportValidationError(f"{context}.rows are not in deterministic species order")
 
 
 def validate_state(
     state: object,
     *,
+    manifest: Mapping[str, Any],
     manifest_sha256: str,
     lanes: Mapping[str, LaneSpec],
     incumbents: Mapping[str, Candidate],
     campaign_root: Path,
 ) -> None:
     payload = require_mapping(state, "state.json")
+    expected_state_fields = {
+        "schema_version",
+        "experiment",
+        "manifest_sha256",
+        "campaign_id",
+        "created_at",
+        "updated_at",
+        "current_collected_iteration",
+        "next_iteration",
+        "lanes",
+        "batches",
+        "last_validation_errors",
+        "hamiltonian_verification_sha256",
+    }
+    if set(payload) != expected_state_fields:
+        raise ExportValidationError("state.json has an unexpected final schema")
     if (
-        "manifest_sha256" in payload
-        and require_sha256(payload["manifest_sha256"], "state.json.manifest_sha256")
+        require_int(payload.get("schema_version"), "state.json.schema_version") != 1
+        or payload.get("experiment") != "reactions10_autoresearch"
+    ):
+        raise ExportValidationError("state.json schema/experiment mismatch")
+    require_string(payload.get("created_at"), "state.json.created_at")
+    require_string(payload.get("updated_at"), "state.json.updated_at")
+    campaign_ids = {lane.campaign_id for lane in lanes.values()}
+    if len(campaign_ids) != 1 or None in campaign_ids:
+        raise ExportValidationError("manifest lanes do not share one fixed campaign identity")
+    campaign_id = next(iter(campaign_ids))
+    if payload.get("campaign_id") != campaign_id:
+        raise ExportValidationError("state.json.campaign_id does not match manifest.json")
+    if (
+        require_sha256(payload.get("manifest_sha256"), "state.json.manifest_sha256")
         != manifest_sha256
     ):
         raise ExportValidationError("state.json.manifest_sha256 does not match manifest.json")
-    iteration_key = (
-        "current_collected_iteration"
-        if "current_collected_iteration" in payload
-        else "current_iteration"
-    )
-    if require_int(payload.get(iteration_key), f"state.json.{iteration_key}") != 50:
-        raise ExportValidationError(f"state.json.{iteration_key} must be exactly 50")
-    if "next_iteration" in payload and payload["next_iteration"] is not None:
-        next_iteration = require_int(payload["next_iteration"], "state.json.next_iteration")
-        if next_iteration not in (51,):
-            raise ExportValidationError("state.json.next_iteration must be 51 or null")
+    if (
+        require_int(
+            payload.get("current_collected_iteration"),
+            "state.json.current_collected_iteration",
+        )
+        != 50
+        or payload.get("next_iteration") is not None
+        or require_mapping(
+            payload.get("last_validation_errors"), "state.json.last_validation_errors"
+        )
+    ):
+        raise ExportValidationError("state.json is not in the exact completed state")
 
-    raw_lanes = payload.get("lanes")
-    if isinstance(raw_lanes, list):
-        state_lanes = {
-            require_string(item.get("lane_id"), "state lane.lane_id"): item
-            for item in (require_mapping(value, "state lane") for value in raw_lanes)
-        }
-    else:
-        state_lanes = require_mapping(raw_lanes, "state.json.lanes")
+    verification_path = campaign_root / "baselines" / "hamiltonian_verification.json"
+    validate_hamiltonian_verification(
+        verification_path,
+        manifest=manifest,
+        manifest_sha256=manifest_sha256,
+        campaign_root=campaign_root,
+    )
+    if require_sha256(
+        payload.get("hamiltonian_verification_sha256"),
+        "state.json.hamiltonian_verification_sha256",
+    ) != sha256_file(verification_path):
+        raise ExportValidationError("state.json does not bind the Hamiltonian verification report")
+
+    state_lanes = require_mapping(payload.get("lanes"), "state.json.lanes")
     if set(state_lanes) != set(lanes):
         raise ExportValidationError("state.json lane set differs from manifest")
+    final_decisions = normalize_decisions(
+        read_json(
+            campaign_root
+            / "iterations"
+            / f"iter_{PAPER_PROPOSAL_ITERATIONS:04d}"
+            / "decisions.json"
+        ),
+        PAPER_PROPOSAL_ITERATIONS,
+    )
+    final_decisions_by_lane = {
+        require_string(decision.get("lane_id"), "iteration 50 final decision.lane_id"): decision
+        for decision in final_decisions
+    }
+    if len(final_decisions_by_lane) != PAPER_LANE_COUNT or set(final_decisions_by_lane) != set(
+        lanes
+    ):
+        raise ExportValidationError("iteration 50 final decision lane set is invalid")
 
     for lane_id in sorted(lanes):
         context = f"state.json.lanes.{lane_id}"
         lane_state = require_mapping(state_lanes[lane_id], context)
+        expected_lane_state_fields = {
+            "last_collected_iteration",
+            "proposal_count",
+            "incumbent_iteration",
+            "incumbent_policy_path",
+            "incumbent_policy_sha256",
+            "incumbent_t_gate_count",
+            "incumbent_result_path",
+            "status",
+            "last_result_sha256",
+        }
+        if set(lane_state) != expected_lane_state_fields:
+            raise ExportValidationError(f"{context} has an unexpected final schema")
         incumbent = incumbents[lane_id]
-        iteration_field = (
-            "incumbent_iteration" if "incumbent_iteration" in lane_state else "best_iteration"
-        )
-        t_field = (
-            "incumbent_t_gate_count"
-            if "incumbent_t_gate_count" in lane_state
-            else "best_t_gate_count"
-        )
-        if require_int(lane_state.get(iteration_field), f"{context}.{iteration_field}") != (
+        if require_int(lane_state.get("incumbent_iteration"), f"{context}.incumbent_iteration") != (
             incumbent.iteration
         ):
-            raise ExportValidationError(f"{context}.{iteration_field} does not match replay")
-        if require_int(lane_state.get(t_field), f"{context}.{t_field}") != (
-            incumbent.total_t_gate_count
-        ):
-            raise ExportValidationError(f"{context}.{t_field} does not match replay")
-        state_hashes: list[str] = []
-        for key in ("incumbent_policy_sha256", "best_policy_sha256"):
-            if key in lane_state:
-                state_hashes.append(require_sha256(lane_state[key], f"{context}.{key}"))
-        best_result = lane_state.get("best_result")
-        if best_result is not None:
-            best_payload = require_mapping(best_result, f"{context}.best_result")
-            state_hashes.append(
-                require_sha256(
-                    best_payload.get("policy_sha256"), f"{context}.best_result.policy_sha256"
-                )
+            raise ExportValidationError(f"{context}.incumbent_iteration does not match replay")
+        if require_int(
+            lane_state.get("incumbent_t_gate_count"), f"{context}.incumbent_t_gate_count"
+        ) != (incumbent.total_t_gate_count):
+            raise ExportValidationError(f"{context}.incumbent_t_gate_count does not match replay")
+        if (
+            require_sha256(
+                lane_state.get("incumbent_policy_sha256"), f"{context}.incumbent_policy_sha256"
             )
-            if best_payload.get("lane_id") != lane_id:
-                raise ExportValidationError(f"{context}.best_result.lane_id mismatch")
-            if (
-                require_int(best_payload.get("iteration"), f"{context}.best_result.iteration")
-                != incumbent.iteration
-            ):
-                raise ExportValidationError(f"{context}.best_result.iteration mismatch")
-            if (
-                require_int(
-                    best_payload.get("total_t_gate_count"),
-                    f"{context}.best_result.total_t_gate_count",
-                )
-                != incumbent.total_t_gate_count
-            ):
-                raise ExportValidationError(f"{context}.best_result T count mismatch")
-        if not state_hashes:
-            raise ExportValidationError(f"{context} does not record the incumbent policy hash")
-        if any(value != incumbent.policy_sha256 for value in state_hashes):
+            != incumbent.policy_sha256
+        ):
             raise ExportValidationError(f"{context} incumbent policy hash does not match replay")
         if (
-            "last_collected_iteration" in lane_state
-            and require_int(
-                lane_state["last_collected_iteration"], f"{context}.last_collected_iteration"
+            require_int(
+                lane_state.get("last_collected_iteration"), f"{context}.last_collected_iteration"
             )
             != 50
         ):
             raise ExportValidationError(f"{context}.last_collected_iteration must be 50")
-        if (
-            "proposal_count" in lane_state
-            and require_int(lane_state["proposal_count"], f"{context}.proposal_count")
-            != PAPER_PROPOSAL_ITERATIONS
+        if require_int(lane_state.get("proposal_count"), f"{context}.proposal_count") != (
+            PAPER_PROPOSAL_ITERATIONS
         ):
             raise ExportValidationError(f"{context}.proposal_count must be 50")
+        expected_status = (
+            "accepted"
+            if require_bool(
+                final_decisions_by_lane[lane_id].get("accepted"),
+                f"iteration 50/{lane_id} final decision.accepted",
+            )
+            else "rejected"
+        )
+        if lane_state.get("status") != expected_status:
+            raise ExportValidationError(f"{context}.status does not match iteration 50")
 
+        lane_root = campaign_root / "lanes" / lane_id
         for policy_path in (
-            campaign_root / "lanes" / lane_id / "simple_pf.py",
-            campaign_root / "lanes" / lane_id / "best" / "simple_pf.py",
+            lane_root / "simple_pf.py",
+            lane_root / "best" / "simple_pf.py",
         ):
-            if policy_path.exists() and sha256_file(policy_path) != incumbent.policy_sha256:
+            if sha256_file(policy_path) != incumbent.policy_sha256:
                 raise ExportValidationError(f"{policy_path} does not match the replayed incumbent")
+
+        expected_incumbent_result = (
+            Path("iterations") / f"iter_{incumbent.iteration:04d}" / "results" / f"{lane_id}.json"
+        )
+        expected_incumbent_policy = (
+            Path("iterations")
+            / f"iter_{incumbent.iteration:04d}"
+            / "candidates"
+            / lane_id
+            / "simple_pf.py"
+        )
+        if (
+            _safe_relative_path(
+                lane_state.get("incumbent_policy_path"), f"{context}.incumbent_policy_path"
+            )
+            != expected_incumbent_policy
+        ):
+            raise ExportValidationError(f"{context}.incumbent_policy_path does not match replay")
+        recorded_incumbent_result = _safe_relative_path(
+            lane_state.get("incumbent_result_path"), f"{context}.incumbent_result_path"
+        )
+        if recorded_incumbent_result != expected_incumbent_result:
+            raise ExportValidationError(f"{context}.incumbent_result_path does not match replay")
+        incumbent_result_hash = sha256_file(campaign_root / expected_incumbent_result)
+        if sha256_file(lane_root / "best" / "result.json") != incumbent_result_hash:
+            raise ExportValidationError(f"{context} best result differs from replayed incumbent")
+
+        final_result = (
+            campaign_root
+            / "iterations"
+            / f"iter_{PAPER_PROPOSAL_ITERATIONS:04d}"
+            / "results"
+            / f"{lane_id}.json"
+        )
+        final_result_hash = sha256_file(final_result)
+        if (
+            require_sha256(lane_state.get("last_result_sha256"), f"{context}.last_result_sha256")
+            != final_result_hash
+            or sha256_file(lane_root / "last_result.json") != final_result_hash
+        ):
+            raise ExportValidationError(f"{context} last result differs from iteration 50")
+
+
+def validate_collection_transactions(
+    campaign_root: Path,
+    *,
+    manifest_sha256: str,
+    campaign_id: str,
+) -> None:
+    transactions_root = campaign_root / "transactions"
+    expected_files = {
+        f"collect_iter_{iteration:04d}.json" for iteration in PAPER_EVALUATION_ITERATIONS
+    }
+    require_exact_directory(
+        transactions_root,
+        context="campaign collection transactions",
+        files=expected_files,
+    )
+    for iteration in PAPER_EVALUATION_ITERATIONS:
+        context = f"collection transaction {iteration}"
+        payload = require_mapping(
+            read_json(transactions_root / f"collect_iter_{iteration:04d}.json"), context
+        )
+        expected_fields = {
+            "schema_version",
+            "phase",
+            "iteration",
+            "manifest_sha256",
+            "created_at",
+            "decisions",
+            "desired_state",
+            "replayed_at",
+            "committed_at",
+            "desired_state_sha256",
+        }
+        if set(payload) != expected_fields:
+            raise ExportValidationError(f"{context} has an unexpected committed schema")
+        if (
+            require_int(payload.get("schema_version"), f"{context}.schema_version") != 1
+            or payload.get("phase") != "committed"
+            or require_int(payload.get("iteration"), f"{context}.iteration") != iteration
+            or require_sha256(payload.get("manifest_sha256"), f"{context}.manifest_sha256")
+            != manifest_sha256
+        ):
+            raise ExportValidationError(f"{context} is open, stale, or malformed")
+        for field in ("created_at", "replayed_at", "committed_at"):
+            require_string(payload.get(field), f"{context}.{field}")
+        decisions = require_list(payload.get("decisions"), f"{context}.decisions")
+        if len(decisions) != PAPER_LANE_COUNT:
+            raise ExportValidationError(f"{context} does not contain exactly 20 decisions")
+        desired_state = require_mapping(payload.get("desired_state"), f"{context}.desired_state")
+        if (
+            desired_state.get("campaign_id") != campaign_id
+            or desired_state.get("manifest_sha256") != manifest_sha256
+            or require_int(
+                desired_state.get("current_collected_iteration"),
+                f"{context}.desired_state.current_collected_iteration",
+            )
+            != iteration
+            or desired_state.get("next_iteration")
+            != (iteration + 1 if iteration < PAPER_PROPOSAL_ITERATIONS else None)
+        ):
+            raise ExportValidationError(f"{context}.desired_state completion markers mismatch")
+        desired_hash = hashlib.sha256(
+            json.dumps(desired_state, sort_keys=True, separators=(",", ":")).encode("utf-8")
+        ).hexdigest()
+        if (
+            require_sha256(payload.get("desired_state_sha256"), f"{context}.desired_state_sha256")
+            != desired_hash
+        ):
+            raise ExportValidationError(f"{context}.desired_state hash mismatch")
+        iteration_decisions = normalize_decisions(
+            read_json(campaign_root / "iterations" / f"iter_{iteration:04d}" / "decisions.json"),
+            iteration,
+        )
+        if decisions != iteration_decisions:
+            raise ExportValidationError(f"{context}.decisions differ from immutable iteration")
+        if iteration == PAPER_PROPOSAL_ITERATIONS and desired_state != require_mapping(
+            read_json(campaign_root / "state.json"), "state.json"
+        ):
+            raise ExportValidationError(
+                f"{context}.desired_state differs from the committed final state.json"
+            )
 
 
 def load_and_replay(
@@ -1932,17 +3456,38 @@ def load_and_replay(
     dict[str, Candidate],
     dict[str, Any],
 ]:
+    validate_campaign_top_level(campaign_root)
     manifest_path = campaign_root / "manifest.json"
     state_path = campaign_root / "state.json"
     manifest = require_mapping(read_json(manifest_path), "manifest.json")
+    manifest_hash = sha256_file(manifest_path)
     lanes = validate_manifest(manifest)
+    validate_lane_structure(campaign_root, lanes)
     provenance = validate_provenance(manifest)
     validate_declared_campaign_files(campaign_root, manifest)
     state = read_json(state_path)
+    batch_index = index_state_batches(state)
     iterations_dir = campaign_root / "iterations"
     validate_iteration_directories(iterations_dir)
 
-    lane_ids = set(lanes)
+    lane_ids = list(lanes)
+    lane_id_set = set(lane_ids)
+    campaign_id = require_sha256(manifest.get("campaign_id"), "manifest.json.campaign_id")
+    execution = require_mapping(manifest.get("execution"), "manifest.json.execution")
+    cluster_root = _require_absolute_posix_path(
+        execution.get("cluster_root"), "manifest.json.execution.cluster_root"
+    )
+    cluster_python = _require_absolute_posix_path(
+        execution.get("cluster_python"), "manifest.json.execution.cluster_python"
+    )
+    batch_size = require_int(
+        execution.get("batch_size"), "manifest.json.execution.batch_size", minimum=1
+    )
+    validate_collection_transactions(
+        campaign_root,
+        manifest_sha256=manifest_hash,
+        campaign_id=campaign_id,
+    )
     incumbents: dict[str, Candidate] = {}
     candidates: list[Candidate] = []
     candidate_record_count = 0
@@ -1953,25 +3498,17 @@ def load_and_replay(
         iter_dir = iterations_dir / f"iter_{iteration:04d}"
         candidates_dir = iter_dir / "candidates"
         results_dir = iter_dir / "results"
-        candidate_dirs = exact_child_names(
-            candidates_dir, directories=True, context=f"iteration {iteration} candidates"
+        validate_iteration_structure(
+            iter_dir,
+            iteration=iteration,
+            lane_ids=lane_ids,
+            batches=batch_index[iteration],
+            campaign_id=campaign_id,
+            manifest_sha256=manifest_hash,
+            cluster_root=cluster_root,
+            cluster_python=cluster_python,
+            batch_size=batch_size,
         )
-        if candidate_dirs != lane_ids:
-            raise ExportValidationError(
-                f"iteration {iteration} candidate lane set mismatch: "
-                f"missing={sorted(lane_ids - candidate_dirs)}, "
-                f"extra={sorted(candidate_dirs - lane_ids)}"
-            )
-        result_names = exact_child_names(
-            results_dir, directories=False, context=f"iteration {iteration} results"
-        )
-        expected_result_names = {f"{lane_id}.json" for lane_id in lane_ids}
-        if result_names != expected_result_names:
-            raise ExportValidationError(
-                f"iteration {iteration} result file set mismatch: "
-                f"missing={sorted(expected_result_names - result_names)}, "
-                f"extra={sorted(result_names - expected_result_names)}"
-            )
 
         decisions = normalize_decisions(read_json(iter_dir / "decisions.json"), iteration)
         if len(decisions) != PAPER_LANE_COUNT:
@@ -1988,20 +3525,21 @@ def load_and_replay(
                     f"iteration {iteration} duplicate decision for {lane_id}"
                 )
             decisions_by_lane[lane_id] = decision
-        if set(decisions_by_lane) != lane_ids:
+        if set(decisions_by_lane) != lane_id_set:
             raise ExportValidationError(f"iteration {iteration} decision lane set mismatch")
 
         mutation_records: dict[str, dict[str, Any]] = {}
         mutation_dir = iter_dir / "mutations"
-        mutation_dirs = exact_child_names(
-            mutation_dir, directories=True, context=f"iteration {iteration} mutations"
-        )
-        if mutation_dirs != lane_ids:
-            raise ExportValidationError(f"iteration {iteration} mutation lane set mismatch")
         for lane_id in sorted(lane_ids):
             mutation_records[lane_id] = require_mapping(
                 read_json(mutation_dir / lane_id / "record.json"),
                 f"iteration {iteration}/{lane_id} mutation record",
+            )
+            validate_mutation_directory_structure(
+                mutation_dir / lane_id,
+                iteration=iteration,
+                lane_id=lane_id,
+                record=mutation_records[lane_id],
             )
         if iteration > 0:
             mutation_record_count += len(mutation_records)
@@ -2009,14 +3547,6 @@ def load_and_replay(
         for lane_id in sorted(lane_ids):
             lane = lanes[lane_id]
             policy_path = candidates_dir / lane_id / "simple_pf.py"
-            candidate_files = {
-                item.name for item in (candidates_dir / lane_id).iterdir() if item.is_file()
-            }
-            if candidate_files != {"simple_pf.py"}:
-                raise ExportValidationError(
-                    f"iteration {iteration}/{lane_id} candidate directory must contain only "
-                    "simple_pf.py"
-                )
             result_path = results_dir / f"{lane_id}.json"
             result = read_json(result_path)
             candidate = validate_result(
@@ -2024,6 +3554,7 @@ def load_and_replay(
                 lane=lane,
                 iteration=iteration,
                 policy_path=policy_path,
+                manifest_sha256=manifest_hash,
             )
             # Private in-memory annotation only; never emitted.
             candidate.result["_validated_result_sha256"] = sha256_file(result_path)
@@ -2085,7 +3616,8 @@ def load_and_replay(
         )
     validate_state(
         state,
-        manifest_sha256=sha256_file(manifest_path),
+        manifest=manifest,
+        manifest_sha256=manifest_hash,
         lanes=lanes,
         incumbents=incumbents,
         campaign_root=campaign_root,
@@ -2349,10 +3881,11 @@ def assert_no_campaign_root_leak(output_root: Path, campaign_root: Path) -> None
 
 
 def export_campaign(campaign_root: Path, output_dir: Path) -> None:
-    campaign_root = campaign_root.resolve()
+    campaign_root = campaign_root.expanduser().absolute()
     output_dir = output_dir.expanduser().absolute()
-    if not campaign_root.is_dir():
-        raise ExportValidationError(f"campaign root is not a directory: {campaign_root}")
+    if campaign_root.is_symlink() or not campaign_root.is_dir():
+        raise ExportValidationError(f"campaign root must be a real directory: {campaign_root}")
+    campaign_root = campaign_root.resolve()
     if output_dir.exists():
         raise ExportValidationError(
             f"output path already exists; refusing to overwrite: {output_dir}"
@@ -2373,6 +3906,7 @@ def export_campaign(campaign_root: Path, output_dir: Path) -> None:
         write_json(
             temporary / "provenance.json",
             {
+                "campaign_id": manifest["campaign_id"],
                 "campaign_manifest_sha256": sha256_file(campaign_root / "manifest.json"),
                 "campaign_state_sha256": sha256_file(campaign_root / "state.json"),
                 "experiment": manifest["experiment"],

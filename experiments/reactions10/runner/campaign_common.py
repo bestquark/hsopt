@@ -9,10 +9,11 @@ import math
 import os
 import re
 import shutil
+import stat
 import sys
 import time
 from dataclasses import asdict, is_dataclass
-from pathlib import Path
+from pathlib import Path, PurePosixPath
 from typing import Any, Iterator, Sequence
 
 
@@ -43,6 +44,37 @@ ARCHIVED_REACTION_EVALUATOR_SHA256 = (
 
 SAFE_ID_RE = re.compile(r"[A-Za-z0-9_.-]+")
 SHA256_RE = re.compile(r"[0-9a-f]{64}")
+CAMPAIGN_ID_DOMAIN = b"hsopt-reactions10-campaign-v1\0"
+# Python bytecode is executable input, not disposable runtime state.  Every
+# runner entry point redirects bytecode into a new private prefix, so a
+# __pycache__ below either immutable snapshot is always provenance drift.
+RUNTIME_SNAPSHOT_DIRS = frozenset({".venv", ".pytest_cache", ".ruff_cache"})
+
+
+def derive_campaign_id(preparation_nonce: str) -> str:
+    if SHA256_RE.fullmatch(preparation_nonce) is None:
+        raise ValueError("preparation nonce must be exactly 32 random bytes encoded as hex")
+    return hashlib.sha256(CAMPAIGN_ID_DOMAIN + bytes.fromhex(preparation_nonce)).hexdigest()
+
+
+def validate_absolute_posix_path(value: str, field: str, *, allow_root: bool = False) -> str:
+    if not isinstance(value, str) or not value:
+        raise ValueError(f"{field} must be a non-empty absolute POSIX path")
+    if any(character in value for character in ("\n", "\r", "\x00")):
+        raise ValueError(f"{field} cannot contain newline or NUL")
+    path = PurePosixPath(value)
+    if not path.is_absolute():
+        raise ValueError(f"{field} must be an absolute POSIX path")
+    components = value.split("/")[1:]
+    if any(component in {".", ".."} for component in components):
+        raise ValueError(f"{field} cannot contain '.' or '..' components")
+    if value != "/" and any(not component for component in components):
+        raise ValueError(f"{field} cannot contain empty path components")
+    if path.as_posix() != value:
+        raise ValueError(f"{field} must be a canonical POSIX path")
+    if not allow_root and path == PurePosixPath("/"):
+        raise ValueError(f"{field} cannot be the filesystem root")
+    return value
 
 
 def now_iso() -> str:
@@ -135,8 +167,64 @@ def file_record(path: Path, *, relative_to: Path | None = None) -> dict[str, Any
     }
 
 
+def exact_flat_regular_file_names(root: Path, context: str) -> list[str]:
+    """Return one directory's file names, rejecting links, dirs, and special entries."""
+
+    if not root.is_dir() or root.is_symlink():
+        raise RuntimeError(f"{context} is missing, non-directory, or a symlink")
+    names: list[str] = []
+    with os.scandir(root) as entries:
+        for entry in entries:
+            mode = entry.stat(follow_symlinks=False).st_mode
+            if not stat.S_ISREG(mode):
+                raise RuntimeError(f"{context} contains a non-regular entry: {entry.name}")
+            names.append(entry.name)
+    return sorted(names)
+
+
 def manifest_sha256(path: Path) -> str:
     return sha256_file(path)
+
+
+def _snapshot_tree_entries(base: Path, context: str) -> tuple[set[str], set[str]]:
+    """Return regular files/directories while pruning explicit mutable runtime trees."""
+
+    if not base.is_dir() or base.is_symlink():
+        raise RuntimeError(f"{context} snapshot root is missing, non-directory, or a symlink")
+    files: set[str] = set()
+    directories: set[str] = set()
+    symlinks: list[str] = []
+    special: list[str] = []
+
+    def walk(directory: Path, relative_root: Path) -> None:
+        with os.scandir(directory) as entries:
+            for entry in entries:
+                relative = relative_root / entry.name
+                relative_name = relative.as_posix()
+                try:
+                    mode = entry.stat(follow_symlinks=False).st_mode
+                except FileNotFoundError as exc:
+                    raise RuntimeError(
+                        f"{context} snapshot entry disappeared during verification: {relative_name}"
+                    ) from exc
+                if stat.S_ISLNK(mode):
+                    symlinks.append(relative_name)
+                elif stat.S_ISDIR(mode):
+                    if entry.name in RUNTIME_SNAPSHOT_DIRS:
+                        continue
+                    directories.add(relative_name)
+                    walk(Path(entry.path), relative)
+                elif stat.S_ISREG(mode):
+                    files.add(relative_name)
+                else:
+                    special.append(relative_name)
+
+    walk(base, Path())
+    if symlinks:
+        raise RuntimeError(f"{context} snapshot contains symlinks: {sorted(symlinks)}")
+    if special:
+        raise RuntimeError(f"{context} snapshot contains special entries: {sorted(special)}")
+    return files, directories
 
 
 def verify_snapshot_records(root: Path, manifest: dict[str, Any]) -> None:
@@ -147,18 +235,46 @@ def verify_snapshot_records(root: Path, manifest: dict[str, Any]) -> None:
         records = manifest.get(manifest_key)
         if not isinstance(records, dict) or not records:
             raise RuntimeError(f"campaign manifest has no {manifest_key}")
+        declared_files: set[str] = set()
+        declared_directories: set[str] = set()
         for relative, record in records.items():
-            relative_path = Path(str(relative))
-            if relative_path.is_absolute() or ".." in relative_path.parts:
+            if not isinstance(relative, str):
+                raise RuntimeError(f"unsafe snapshotted path in {manifest_key}: {relative!r}")
+            relative_path = Path(relative)
+            normalized = relative_path.as_posix()
+            if (
+                relative_path.is_absolute()
+                or not relative_path.parts
+                or normalized in {"", "."}
+                or normalized != relative
+                or ".." in relative_path.parts
+                or any(part in RUNTIME_SNAPSHOT_DIRS for part in relative_path.parts)
+                or normalized in declared_files
+            ):
                 raise RuntimeError(f"unsafe snapshotted path in {manifest_key}: {relative}")
+            declared_files.add(normalized)
+            for parent in relative_path.parents:
+                if parent == Path("."):
+                    break
+                declared_directories.add(parent.as_posix())
             path = base / relative_path
             if (
                 not path.is_file()
+                or path.is_symlink()
                 or not isinstance(record, dict)
                 or record.get("sha256") != sha256_file(path)
                 or record.get("size_bytes") != path.stat().st_size
             ):
                 raise RuntimeError(f"snapshotted campaign source drift: {path}")
+        actual_files, actual_directories = _snapshot_tree_entries(base, manifest_key)
+        if actual_files != declared_files or actual_directories != declared_directories:
+            raise RuntimeError(
+                f"{manifest_key} snapshot tree drift: "
+                f"missing_files={sorted(declared_files - actual_files)}, "
+                f"undeclared_files={sorted(actual_files - declared_files)}, "
+                f"missing_directories={sorted(declared_directories - actual_directories)}, "
+                f"unexpected_directories={sorted(actual_directories - declared_directories)}"
+            )
 
 
 def verify_campaign_cache(root: Path, manifest: dict[str, Any]) -> None:
@@ -166,7 +282,7 @@ def verify_campaign_cache(root: Path, manifest: dict[str, Any]) -> None:
     cache_root = root.resolve() / "problem_cache"
     if not isinstance(expected, dict) or len(expected) != EXPECTED_CACHE_FILES:
         raise RuntimeError("campaign manifest has no fixed 42-file cache checksum map")
-    actual_names = sorted(path.name for path in cache_root.iterdir() if path.is_file())
+    actual_names = exact_flat_regular_file_names(cache_root, "campaign problem cache")
     if set(actual_names) != set(expected):
         raise RuntimeError("campaign problem-cache file set drift")
     for name, digest in expected.items():
@@ -248,6 +364,15 @@ def require_campaign(
     actual_hash = manifest_sha256(paths["manifest"])
     if state.get("manifest_sha256") != actual_hash:
         raise RuntimeError("manifest.json changed after campaign preparation")
+    preparation_nonce = manifest.get("preparation_nonce")
+    campaign_id = manifest.get("campaign_id")
+    if (
+        not isinstance(preparation_nonce, str)
+        or not isinstance(campaign_id, str)
+        or derive_campaign_id(preparation_nonce) != campaign_id
+        or state.get("campaign_id") != campaign_id
+    ):
+        raise RuntimeError("campaign preparation nonce/identity drift")
     if int(manifest.get("proposal_iterations", -1)) != PROPOSAL_ITERATIONS:
         raise RuntimeError("campaign does not use the fixed 50-proposal contract")
     if manifest.get("evaluation_iterations") != list(range(PROPOSAL_ITERATIONS + 1)):
@@ -361,7 +486,7 @@ def verify_problem_cache(cache_root: Path, checksum_path: Path) -> dict[str, str
         raise RuntimeError(
             f"fixed cache checksum list must contain {EXPECTED_CACHE_FILES} files, found {len(expected)}"
         )
-    actual_files = sorted(path.name for path in cache_root.iterdir() if path.is_file())
+    actual_files = exact_flat_regular_file_names(cache_root, "source problem cache")
     if set(actual_files) != set(expected):
         missing = sorted(set(expected) - set(actual_files))
         extra = sorted(set(actual_files) - set(expected))
@@ -520,10 +645,22 @@ def load_benchmark(root: Path):
     return module
 
 
-def evaluate_candidate(root: Path, lane: dict[str, Any], iteration: int) -> dict[str, Any]:
-    policy_path = candidate_path(root, iteration, str(lane["lane_id"]))
+def evaluate_candidate(
+    root: Path,
+    lane: dict[str, Any],
+    iteration: int,
+    *,
+    campaign_id: str,
+    campaign_manifest_sha256: str,
+) -> dict[str, Any]:
+    lane_id = str(lane["lane_id"])
+    policy_path = candidate_path(root, iteration, lane_id)
     if not policy_path.is_file():
         raise FileNotFoundError(f"immutable candidate is missing: {policy_path}")
+    if exact_flat_regular_file_names(policy_path.parent, "immutable candidate directory") != [
+        "simple_pf.py"
+    ]:
+        raise RuntimeError(f"immutable candidate directory is not exact for {lane_id}")
     record_path = mutation_dir(root, iteration, str(lane["lane_id"])) / "record.json"
     record = read_json(record_path)
     policy_hash = sha256_file(policy_path)
@@ -541,8 +678,19 @@ def evaluate_candidate(root: Path, lane: dict[str, Any], iteration: int) -> dict
     if not isinstance(result, dict):
         raise TypeError("evaluate_policy must return a dict")
     result = dict(result)
+    result["campaign_id"] = campaign_id
+    result["campaign_manifest_sha256"] = campaign_manifest_sha256
+    result["candidate_relative_path"] = relative_to_campaign(root, policy_path)
+    result["problem_cache_relative_path"] = "problem_cache"
     result["evaluated_at"] = now_iso()
-    validate_result(result, lane=lane, iteration=iteration, candidate_hash=policy_hash)
+    validate_result(
+        result,
+        lane=lane,
+        iteration=iteration,
+        candidate_hash=policy_hash,
+        campaign_id=campaign_id,
+        campaign_manifest_sha256=campaign_manifest_sha256,
+    )
     return result
 
 
@@ -571,16 +719,24 @@ def validate_result(
     lane: dict[str, Any],
     iteration: int,
     candidate_hash: str,
+    campaign_id: str,
+    campaign_manifest_sha256: str,
 ) -> None:
     lane_id = str(lane["lane_id"])
     if result.get("status") != "ok":
         raise ValueError(f"{lane_id}: evaluator status is {result.get('status')!r}")
     identity = {
+        "campaign_id": campaign_id,
+        "campaign_manifest_sha256": campaign_manifest_sha256,
         "lane_id": lane_id,
         "reaction_key": str(lane["reaction_key"]),
         "contract": str(lane["contract"]),
         "iteration": int(iteration),
         "policy_sha256": candidate_hash,
+        "candidate_relative_path": (
+            f"iterations/iter_{iteration:04d}/candidates/{lane_id}/simple_pf.py"
+        ),
+        "problem_cache_relative_path": "problem_cache",
     }
     for field, expected in identity.items():
         if result.get(field) != expected:
@@ -817,6 +973,8 @@ def result_validation_error(
     lane: dict[str, Any],
     iteration: int,
     candidate_hash: str,
+    campaign_id: str,
+    campaign_manifest_sha256: str,
 ) -> str | None:
     try:
         if not path.is_file():
@@ -824,7 +982,14 @@ def result_validation_error(
         payload = read_json(path)
         if not isinstance(payload, dict):
             raise TypeError("result JSON is not an object")
-        validate_result(payload, lane=lane, iteration=iteration, candidate_hash=candidate_hash)
+        validate_result(
+            payload,
+            lane=lane,
+            iteration=iteration,
+            candidate_hash=candidate_hash,
+            campaign_id=campaign_id,
+            campaign_manifest_sha256=campaign_manifest_sha256,
+        )
         return None
     except Exception as exc:
         return f"{type(exc).__name__}: {exc}"

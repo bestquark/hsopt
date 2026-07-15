@@ -4,17 +4,32 @@ from __future__ import annotations
 import argparse
 import asyncio
 import json
+import math
 import os
 import re
+import secrets
 import shutil
 import signal
+import stat
 import subprocess
 import sys
+import tempfile
 import time
 from pathlib import Path
 from typing import Any
 
-from campaign_common import (
+_PRIVATE_PYCACHE_PREFIX = tempfile.mkdtemp(prefix="hsopt-runner-pycache-")
+_private_pycache_stat = os.stat(_PRIVATE_PYCACHE_PREFIX, follow_symlinks=False)
+if (
+    not stat.S_ISDIR(_private_pycache_stat.st_mode)
+    or _private_pycache_stat.st_uid != os.getuid()
+    or stat.S_IMODE(_private_pycache_stat.st_mode) & 0o077
+):
+    raise RuntimeError("private Python bytecode prefix is not an owner-only real directory")
+sys.pycache_prefix = _PRIVATE_PYCACHE_PREFIX
+os.environ["PYTHONPYCACHEPREFIX"] = _PRIVATE_PYCACHE_PREFIX
+
+from campaign_common import (  # noqa: E402
     CODEX_CLI_VERSION,
     CODEX_COMMAND,
     CODEX_PACKAGE,
@@ -39,6 +54,288 @@ from campaign_common import (
     validate_policy,
     write_json,
 )
+
+
+EXEC_ACK_PROTOCOL = "codex_jsonl_lifecycle_v1"
+CODEX_START_EVENT = "thread.started"
+CODEX_TERMINAL_EVENT = "turn.completed"
+SHA256_RE = re.compile(r"[0-9a-f]{64}")
+
+
+def canonical_event_sha256(event: dict[str, Any]) -> str:
+    return sha256_text(json.dumps(event, sort_keys=True, separators=(",", ":")))
+
+
+def nonempty_text_sha256(path: Path) -> str:
+    if not path.is_file() or path.is_symlink():
+        raise RuntimeError(f"required text evidence is missing or unsafe: {path}")
+    payload = path.read_bytes()
+    try:
+        text = payload.decode("utf-8")
+    except UnicodeDecodeError as exc:
+        raise RuntimeError(f"required text evidence is not UTF-8: {path}") from exc
+    if not text.strip():
+        raise RuntimeError(f"required text evidence is empty: {path}")
+    return sha256_file(path)
+
+
+def validate_exec_acknowledgement(
+    receipt: dict[str, Any],
+    *,
+    command_sha256: str,
+    work_dir: Path,
+    launcher_pid: int | None = None,
+    launch_nonce: str | None = None,
+) -> None:
+    pid = int(receipt.get("pid", -1))
+    pgid = int(receipt.get("pgid", -1))
+    exec_pid = int(receipt.get("exec_pid", -1))
+    try:
+        started_at = float(receipt.get("started_at_epoch"))
+        exec_confirmed_at = float(receipt.get("exec_confirmed_at_epoch"))
+        codex_started_at = float(receipt.get("codex_started_at_epoch"))
+    except (TypeError, ValueError) as exc:
+        raise RuntimeError("invalid Codex exec acknowledgement timestamps") from exc
+    if (
+        receipt.get("schema_version") != SCHEMA_VERSION
+        or receipt.get("status") != "codex_started"
+        or receipt.get("exec_ack_protocol") != EXEC_ACK_PROTOCOL
+        or receipt.get("low_level_exec_status") != "exec_confirmed"
+        or receipt.get("command_sha256") != command_sha256
+        or receipt.get("work_dir") != str(work_dir.resolve())
+        or pid <= 1
+        or pgid != pid
+        or exec_pid <= 1
+        or exec_pid == pid
+        or (launcher_pid is not None and pid != launcher_pid)
+        or SHA256_RE.fullmatch(str(receipt.get("launch_nonce", ""))) is None
+        or (launch_nonce is not None and receipt.get("launch_nonce") != launch_nonce)
+        or not isinstance(receipt.get("codex_thread_id"), str)
+        or not receipt.get("codex_thread_id")
+        or len(str(receipt.get("codex_thread_id"))) > 256
+        or SHA256_RE.fullmatch(str(receipt.get("codex_start_event_sha256", ""))) is None
+        or not all(map(math.isfinite, (started_at, exec_confirmed_at, codex_started_at)))
+        or exec_confirmed_at < started_at
+        or codex_started_at < exec_confirmed_at
+    ):
+        raise RuntimeError("invalid Codex exec acknowledgement")
+
+
+def validate_process_crosslink(
+    process_record: dict[str, Any],
+    *,
+    launch_receipt: dict[str, Any],
+    launch_receipt_sha256: str,
+    command_sha256: str,
+) -> None:
+    usage = process_record.get("codex_usage")
+    usage_hash = (
+        sha256_text(json.dumps(usage, sort_keys=True, separators=(",", ":")))
+        if isinstance(usage, dict)
+        else None
+    )
+    if (
+        process_record.get("command_sha256") != command_sha256
+        or process_record.get("launch_receipt_sha256") != launch_receipt_sha256
+        or process_record.get("pid") != launch_receipt.get("pid")
+        or process_record.get("pgid") != launch_receipt.get("pgid")
+        or process_record.get("exec_pid") != launch_receipt.get("exec_pid")
+        or process_record.get("exec_acknowledgement_status") != "codex_started"
+        or process_record.get("exec_ack_protocol") != EXEC_ACK_PROTOCOL
+        or process_record.get("launch_nonce") != launch_receipt.get("launch_nonce")
+        or process_record.get("codex_thread_id") != launch_receipt.get("codex_thread_id")
+        or process_record.get("codex_start_event_sha256")
+        != launch_receipt.get("codex_start_event_sha256")
+        or process_record.get("codex_lifecycle_status") != "turn_completed"
+        or SHA256_RE.fullmatch(str(process_record.get("codex_terminal_event_sha256", ""))) is None
+        or process_record.get("codex_usage_sha256") != usage_hash
+        or not usage
+        or any(
+            isinstance(value, bool) or not isinstance(value, int) or value < 0
+            for value in usage.values()
+        )
+        or any(
+            SHA256_RE.fullmatch(str(process_record.get(field, ""))) is None
+            for field in (
+                "codex_stdout_sha256",
+                "codex_stderr_sha256",
+                "last_message_sha256",
+            )
+        )
+        or process_record.get("returncode") != 0
+        or process_record.get("timed_out") is not False
+        or not isinstance(process_record.get("last_message_sha256"), str)
+    ):
+        raise RuntimeError("Codex process receipt does not cross-link its exec acknowledgement")
+
+
+def validate_codex_lifecycle(stdout_path: Path) -> dict[str, Any]:
+    """Require one real Codex thread start and one successful terminal turn event."""
+
+    if not stdout_path.is_file() or stdout_path.is_symlink():
+        raise RuntimeError("Codex JSONL stdout is missing or unsafe")
+    events: list[dict[str, Any]] = []
+    for line_number, raw_line in enumerate(stdout_path.read_bytes().splitlines(), 1):
+        if not raw_line.strip():
+            continue
+        try:
+            event = json.loads(raw_line.decode("utf-8"))
+        except (UnicodeDecodeError, json.JSONDecodeError) as exc:
+            raise RuntimeError(f"Codex JSONL line {line_number} is invalid") from exc
+        if not isinstance(event, dict) or not isinstance(event.get("type"), str):
+            raise RuntimeError(f"Codex JSONL line {line_number} is not an event object")
+        events.append(event)
+    starts = [
+        (index, event) for index, event in enumerate(events) if event["type"] == CODEX_START_EVENT
+    ]
+    terminals = [
+        (index, event)
+        for index, event in enumerate(events)
+        if event["type"] == CODEX_TERMINAL_EVENT
+    ]
+    failures = [event for event in events if event["type"] in {"turn.failed", "error"}]
+    if (
+        len(starts) != 1
+        or len(terminals) != 1
+        or failures
+        or starts[0][0] >= terminals[0][0]
+        or terminals[0][0] != len(events) - 1
+    ):
+        raise RuntimeError(
+            "Codex JSONL does not prove one successful start-to-completion lifecycle"
+        )
+    start = starts[0][1]
+    terminal = terminals[0][1]
+    thread_id = start.get("thread_id")
+    usage = terminal.get("usage")
+    if (
+        not isinstance(thread_id, str)
+        or not thread_id
+        or len(thread_id) > 256
+        or not isinstance(usage, dict)
+        or not usage
+        or any(
+            isinstance(value, bool) or not isinstance(value, int) or value < 0
+            for value in usage.values()
+        )
+    ):
+        raise RuntimeError("Codex JSONL lifecycle identity or usage is malformed")
+    return {
+        "codex_lifecycle_status": "turn_completed",
+        "codex_thread_id": thread_id,
+        "codex_start_event_sha256": canonical_event_sha256(start),
+        "codex_terminal_event_sha256": canonical_event_sha256(terminal),
+        "codex_usage": usage,
+        "codex_usage_sha256": sha256_text(json.dumps(usage, sort_keys=True, separators=(",", ":"))),
+    }
+
+
+def exact_regular_file_records(root: Path) -> dict[str, dict[str, Any]]:
+    """Hash an exact evidence tree and reject links or non-regular entries."""
+
+    if not root.is_dir() or root.is_symlink():
+        raise RuntimeError(f"evidence root is missing, non-directory, or a symlink: {root}")
+    records: dict[str, dict[str, Any]] = {}
+    for path in sorted(root.rglob("*")):
+        relative = path.relative_to(root).as_posix()
+        if path.is_symlink():
+            raise RuntimeError(f"evidence tree contains a symlink: {relative}")
+        if path.is_dir():
+            continue
+        mode = path.stat(follow_symlinks=False).st_mode
+        if not stat.S_ISREG(mode):
+            raise RuntimeError(f"evidence tree contains a special entry: {relative}")
+        records[relative] = {"sha256": sha256_file(path), "size_bytes": path.stat().st_size}
+    return records
+
+
+def exact_directory_paths(root: Path) -> list[str]:
+    if not root.is_dir() or root.is_symlink():
+        raise RuntimeError(f"evidence root is missing, non-directory, or a symlink: {root}")
+    directories: list[str] = []
+    for path in sorted(root.rglob("*")):
+        relative = path.relative_to(root).as_posix()
+        if path.is_symlink():
+            raise RuntimeError(f"evidence tree contains a symlink: {relative}")
+        mode = path.stat(follow_symlinks=False).st_mode
+        if stat.S_ISDIR(mode):
+            directories.append(relative)
+        elif not stat.S_ISREG(mode):
+            raise RuntimeError(f"evidence tree contains a special entry: {relative}")
+    return directories
+
+
+def archived_attempt_evidence(directory: Path) -> list[dict[str, Any]]:
+    archive_root = directory / "archived_attempts"
+    if not archive_root.exists():
+        return []
+    records = exact_regular_file_records(archive_root)
+    return [
+        {"path": f"archived_attempts/{path}", **record} for path, record in sorted(records.items())
+    ]
+
+
+def archived_attempt_directory_paths(directory: Path) -> list[str]:
+    archive_root = directory / "archived_attempts"
+    if not archive_root.exists():
+        return []
+    directories = exact_directory_paths(archive_root)
+    if not directories:
+        raise RuntimeError("archived_attempts exists without a nonce evidence directory")
+    return [f"archived_attempts/{path}" for path in directories]
+
+
+def archive_failed_attempt(directory: Path, *, launch_nonce: str, reason: str) -> None:
+    if SHA256_RE.fullmatch(launch_nonce) is None:
+        raise RuntimeError("cannot archive an attempt with an invalid launch nonce")
+    archive = directory / "archived_attempts" / launch_nonce
+    archive.mkdir(parents=True, exist_ok=True)
+    failure_path = archive / "failure.json"
+    if failure_path.is_file():
+        failure = read_json(failure_path)
+        if failure.get("launch_nonce") != launch_nonce:
+            raise RuntimeError("partial failed-attempt archive has a different nonce")
+    else:
+        write_json(
+            failure_path,
+            {
+                "schema_version": SCHEMA_VERSION,
+                "launch_nonce": launch_nonce,
+                "reason": reason,
+                "archived_at": now_iso(),
+            },
+        )
+    # Move the mutable work tree first and the durable launch intent last.  If
+    # interrupted, the still-present intent causes recovery to resume this
+    # idempotent archive instead of reusing partial failed work.
+    work = directory / "work"
+    archived_work = archive / "work"
+    if work.exists():
+        if archived_work.exists():
+            raise RuntimeError("partial failed-attempt archive contains two work trees")
+        if work.is_symlink() or not work.is_dir():
+            raise RuntimeError("failed-attempt work evidence is not a real directory")
+        exact_regular_file_records(work)
+        exact_directory_paths(work)
+        work.replace(archived_work)
+    for name in (
+        "launch.json",
+        "process.json",
+        "codex.stdout",
+        "codex.stderr",
+        "last_message.txt",
+        "launch_intent.json",
+    ):
+        source = directory / name
+        if source.exists():
+            if source.is_symlink() or not source.is_file():
+                raise RuntimeError(f"failed-attempt evidence is unsafe: {source}")
+            destination = archive / name
+            if destination.exists():
+                raise RuntimeError(f"partial failed-attempt archive duplicates {name}")
+            source.replace(destination)
+    exact_regular_file_records(archive)
+    exact_directory_paths(archive)
 
 
 def ensure_not_slurm() -> None:
@@ -192,6 +489,27 @@ def mutation_record_is_complete(
     launch_intent_path = directory / "launch_intent.json"
     launch_receipt_path = directory / "launch.json"
     process_path = directory / "process.json"
+    work_dir = directory / "work"
+    work_policy = work_dir / "simple_pf.py"
+    parent_snapshot = directory / "parent_simple_pf.py"
+    stdout_path = directory / "codex.stdout"
+    stderr_path = directory / "codex.stderr"
+    last_message_path = directory / "last_message.txt"
+    launch_intent = read_json(launch_intent_path) if launch_intent_path.is_file() else {}
+    launch_receipt = read_json(launch_receipt_path) if launch_receipt_path.is_file() else {}
+    process_record = read_json(process_path) if process_path.is_file() else {}
+    command_sha256 = str(record.get("launch_command_sha256", ""))
+    launch_nonce = str(record.get("launch_nonce", ""))
+    work_records = exact_regular_file_records(work_dir) if work_dir.is_dir() else {}
+    work_directories = exact_directory_paths(work_dir) if work_dir.is_dir() else []
+    unexpected_work_files = sorted(set(work_records) - {"simple_pf.py"})
+    archived_evidence = archived_attempt_evidence(directory)
+    archived_directories = archived_attempt_directory_paths(directory)
+    changed = (
+        work_policy.is_file()
+        and parent_snapshot.is_file()
+        and work_policy.read_bytes() != parent_snapshot.read_bytes()
+    )
     if (
         record.get("schema_version") != SCHEMA_VERSION
         or record.get("lane_id") != lane["lane_id"]
@@ -204,28 +522,80 @@ def mutation_record_is_complete(
         or not intent_path.is_file()
         or not launch_intent_path.is_file()
         or not launch_receipt_path.is_file()
+        or not process_path.is_file()
+        or not stdout_path.is_file()
+        or not stderr_path.is_file()
+        or not last_message_path.is_file()
+        or record.get("last_message_sha256") != nonempty_text_sha256(last_message_path)
         or record.get("prompt_sha256") != sha256_text(prompt_path.read_text(encoding="utf-8"))
         or read_json(intent_path).get("prompt_sha256") != record.get("prompt_sha256")
         or record.get("intent_sha256") != sha256_file(intent_path)
-        or read_json(launch_intent_path).get("command_sha256")
-        != record.get("launch_command_sha256")
+        or launch_intent.get("command_sha256") != command_sha256
+        or launch_intent.get("launch_nonce") != launch_nonce
+        or launch_intent.get("exec_ack_protocol") != EXEC_ACK_PROTOCOL
+        or launch_intent.get("required_start_event") != CODEX_START_EVENT
+        or launch_intent.get("required_terminal_event") != CODEX_TERMINAL_EVENT
         or record.get("launch_intent_sha256") != sha256_file(launch_intent_path)
-        or read_json(launch_receipt_path).get("command_sha256")
-        != record.get("launch_command_sha256")
-        or read_json(launch_receipt_path).get("status") != "launched"
+        or launch_receipt.get("command_sha256") != command_sha256
+        or launch_receipt.get("status") != "codex_started"
+        or launch_receipt.get("launch_nonce") != launch_nonce
+        or launch_receipt.get("exec_ack_protocol") != EXEC_ACK_PROTOCOL
         or record.get("launch_receipt_sha256") != sha256_file(launch_receipt_path)
-        or record.get("process_sha256")
-        != (sha256_file(process_path) if process_path.is_file() else None)
+        or record.get("exec_acknowledgement_sha256") != sha256_file(launch_receipt_path)
+        or record.get("exec_acknowledgement_status") != "codex_started"
+        or record.get("exec_ack_protocol") != EXEC_ACK_PROTOCOL
+        or record.get("codex_thread_id") != launch_receipt.get("codex_thread_id")
+        or record.get("codex_start_event_sha256") != launch_receipt.get("codex_start_event_sha256")
+        or record.get("codex_terminal_event_sha256")
+        != process_record.get("codex_terminal_event_sha256")
+        or record.get("codex_lifecycle_status") != "turn_completed"
+        or record.get("codex_usage") != process_record.get("codex_usage")
+        or record.get("codex_usage_sha256") != process_record.get("codex_usage_sha256")
+        or record.get("archived_attempt_evidence") != archived_evidence
+        or record.get("archived_attempt_directory_paths") != archived_directories
+        or record.get("process_sha256") != sha256_file(process_path)
+        or record.get("work_file_records") != work_records
+        or record.get("work_directory_paths") != work_directories
+        or record.get("work_policy_sha256")
+        != (sha256_file(work_policy) if work_policy.is_file() else None)
+        or record.get("unexpected_work_files") != unexpected_work_files
+        or record.get("changed") is not changed
+        or record.get("codex_stdout_sha256") != sha256_file(stdout_path)
+        or record.get("codex_stderr_sha256") != sha256_file(stderr_path)
+        or process_record.get("codex_stdout_sha256") != sha256_file(stdout_path)
+        or process_record.get("codex_stderr_sha256") != sha256_file(stderr_path)
+        or process_record.get("last_message_sha256") != nonempty_text_sha256(last_message_path)
+        or record.get("returncode") != process_record.get("returncode")
+        or record.get("timed_out") != process_record.get("timed_out")
+        or record.get("mutation_outcome") not in {"mutated", "fallback_parent"}
         or (
-            process_path.is_file()
-            and read_json(process_path).get("command_sha256") != record.get("launch_command_sha256")
+            record.get("mutation_outcome") == "mutated"
+            and (
+                not changed
+                or record.get("valid") is not True
+                or bool(unexpected_work_files)
+                or bool(work_directories)
+            )
         )
     ):
         raise RuntimeError(
             f"immutable mutation record drift for {lane['lane_id']} iteration {iteration}"
         )
-    candidate_files = [path.name for path in candidate.parent.iterdir() if path.is_file()]
-    if candidate_files != ["simple_pf.py"]:
+    validate_exec_acknowledgement(
+        launch_receipt,
+        command_sha256=command_sha256,
+        work_dir=work_dir,
+        launch_nonce=launch_nonce,
+    )
+    validate_process_crosslink(
+        process_record,
+        launch_receipt=launch_receipt,
+        launch_receipt_sha256=sha256_file(launch_receipt_path),
+        command_sha256=command_sha256,
+    )
+    candidate_files = exact_regular_file_records(candidate.parent)
+    candidate_directories = exact_directory_paths(candidate.parent)
+    if list(candidate_files) != ["simple_pf.py"] or candidate_directories:
         raise RuntimeError(f"candidate directory is not isolated for {lane['lane_id']}")
     return True
 
@@ -335,25 +705,40 @@ def ensure_mutation_workspace(
     if not parent_source.is_file() or sha256_file(parent_source) != intent["parent_policy_sha256"]:
         raise RuntimeError("intent parent source path/hash drift")
     prompt_path = directory / "prompt.md"
+    if prompt_path.is_symlink():
+        raise RuntimeError("intent prompt path is a symlink")
     if prompt_path.exists():
+        if not prompt_path.is_file():
+            raise RuntimeError("intent prompt path is not a regular file")
         if sha256_text(prompt_path.read_text(encoding="utf-8")) != intent["prompt_sha256"]:
             raise RuntimeError("intent prompt hash drift")
     else:
         prompt_path.write_text(prompt_text, encoding="utf-8")
     parent_snapshot = directory / "parent_simple_pf.py"
+    if parent_snapshot.is_symlink():
+        raise RuntimeError("intent parent snapshot is a symlink")
     if parent_snapshot.exists():
+        if not parent_snapshot.is_file():
+            raise RuntimeError("intent parent snapshot is not a regular file")
         if sha256_file(parent_snapshot) != intent["parent_policy_sha256"]:
             raise RuntimeError("intent parent snapshot hash drift")
     else:
         shutil.copy2(parent_source, parent_snapshot)
     work_dir = directory / "work"
+    if work_dir.is_symlink():
+        raise RuntimeError("mutation work path is a symlink")
     if not work_dir.exists():
         work_dir.mkdir(parents=True)
         shutil.copy2(parent_snapshot, work_dir / "simple_pf.py")
+    elif not work_dir.is_dir():
+        raise RuntimeError("mutation work path is not a real directory")
     elif not (work_dir / "simple_pf.py").exists():
         if any(work_dir.iterdir()):
             raise RuntimeError("mutation work directory lacks simple_pf.py but is not empty")
         shutil.copy2(parent_snapshot, work_dir / "simple_pf.py")
+    work_policy = work_dir / "simple_pf.py"
+    if work_policy.is_symlink() or not work_policy.is_file():
+        raise RuntimeError("mutation work policy is not a regular file")
     return work_dir
 
 
@@ -364,43 +749,62 @@ def recover_interrupted_launch(
     receipt_path = directory / "launch.json"
     if not launch_intent.exists():
         return False, None
+    intent_payload = read_json(launch_intent)
+    expected_command_hash = str(intent_payload.get("command_sha256", ""))
+    launch_nonce = str(intent_payload.get("launch_nonce", ""))
+    if SHA256_RE.fullmatch(launch_nonce) is None:
+        raise RuntimeError("interrupted launch intent has an invalid nonce")
     deadline = time.monotonic() + 5.0
     while not receipt_path.exists() and time.monotonic() < deadline:
         time.sleep(0.05)
     if receipt_path.exists():
         receipt = read_json(receipt_path)
-        expected_command_hash = read_json(launch_intent).get("command_sha256")
-        if receipt.get("command_sha256") != expected_command_hash:
+        if (
+            receipt.get("command_sha256") != expected_command_hash
+            or receipt.get("launch_nonce") != launch_nonce
+            or receipt.get("exec_ack_protocol") != EXEC_ACK_PROTOCOL
+        ):
             raise RuntimeError("mutation launch command hash mismatch")
-        if receipt.get("status") == "exec_error":
-            work_policy = work_dir / "simple_pf.py"
-            parent = directory / "parent_simple_pf.py"
-            if not work_policy.is_file() or work_policy.read_bytes() != parent.read_bytes():
-                raise RuntimeError("exec-failed launch unexpectedly changed the work policy")
-            suffix = sha256_file(receipt_path)[:12]
-            receipt_path.replace(directory / f"launch_exec_error_{suffix}.json")
-            process_path = directory / "process.json"
-            if process_path.is_file():
-                process_path.replace(directory / f"process_exec_error_{suffix}.json")
-            return False, None
-        if receipt.get("status") != "launched":
-            raise RuntimeError(f"invalid durable launch receipt status {receipt.get('status')!r}")
-        terminate_recorded_process_group(receipt, work_dir)
-        launched = True
+        status = receipt.get("status")
+        if status in {"exec_confirmed_pending_codex", "codex_started"}:
+            if status == "codex_started":
+                validate_exec_acknowledgement(
+                    receipt,
+                    command_sha256=expected_command_hash,
+                    work_dir=work_dir,
+                    launch_nonce=launch_nonce,
+                )
+            terminate_recorded_process_group(receipt, work_dir)
+        elif status not in {"exec_error", "codex_start_error"}:
+            raise RuntimeError(f"unknown interrupted Codex launch status {status!r}")
+        process_path = directory / "process.json"
+        process_record = read_json(process_path) if process_path.is_file() else None
+        if status == "codex_started" and process_record is not None:
+            validate_process_crosslink(
+                process_record,
+                launch_receipt=receipt,
+                launch_receipt_sha256=sha256_file(receipt_path),
+                command_sha256=expected_command_hash,
+            )
+            return True, process_record
+        archive_failed_attempt(
+            directory,
+            launch_nonce=launch_nonce,
+            reason=f"interrupted attempt never completed a Codex turn (status={status})",
+        )
+        return False, None
     else:
         unreceipted = _find_unreceipted_process_groups(work_dir)
         if unreceipted:
             raise RuntimeError(
                 f"found unreceipted mutation process groups for {work_dir}: {unreceipted}"
             )
-        work_policy = work_dir / "simple_pf.py"
-        parent = directory / "parent_simple_pf.py"
-        if not work_policy.is_file() or work_policy.read_bytes() != parent.read_bytes():
-            raise RuntimeError("mutation work changed without a durable launch receipt")
-        launched = False
-    process_path = directory / "process.json"
-    process_record = read_json(process_path) if process_path.is_file() else None
-    return launched, process_record
+        archive_failed_attempt(
+            directory,
+            launch_nonce=launch_nonce,
+            reason="interrupted attempt produced no durable launch receipt",
+        )
+        return False, None
 
 
 def finalize_mutation(
@@ -429,31 +833,78 @@ def finalize_mutation(
         raise RuntimeError(f"no durable Codex launch evidence for {lane_id}")
     launch_intent = read_json(launch_intent_path)
     launch_receipt = read_json(launch_receipt_path)
-    if launch_intent.get("command_sha256") != launch_receipt.get("command_sha256"):
+    launch_nonce = str(launch_intent.get("launch_nonce", ""))
+    if (
+        launch_intent.get("command_sha256") != launch_receipt.get("command_sha256")
+        or launch_receipt.get("launch_nonce") != launch_nonce
+        or launch_intent.get("exec_ack_protocol") != EXEC_ACK_PROTOCOL
+        or launch_intent.get("required_start_event") != CODEX_START_EVENT
+        or launch_intent.get("required_terminal_event") != CODEX_TERMINAL_EVENT
+    ):
         raise RuntimeError(f"Codex launch command receipt mismatch for {lane_id}")
-    if launch_receipt.get("status") != "launched":
-        raise RuntimeError(f"Codex did not actually launch for {lane_id}")
     work_dir = directory / "work"
+    validate_exec_acknowledgement(
+        launch_receipt,
+        command_sha256=str(launch_intent.get("command_sha256")),
+        work_dir=work_dir,
+        launch_nonce=launch_nonce,
+    )
+    launch_receipt_hash = sha256_file(launch_receipt_path)
+    if process_record is None:
+        raise RuntimeError(f"no completed Codex process evidence for {lane_id}")
+    validate_process_crosslink(
+        process_record,
+        launch_receipt=launch_receipt,
+        launch_receipt_sha256=launch_receipt_hash,
+        command_sha256=str(launch_intent.get("command_sha256")),
+    )
     work_policy = work_dir / "simple_pf.py"
     if not work_policy.is_file():
         work_dir.mkdir(parents=True, exist_ok=True)
         shutil.copy2(parent, work_policy)
-    unexpected_files = sorted(
-        path.relative_to(work_dir).as_posix()
-        for path in work_dir.rglob("*")
-        if path.is_file() and path.relative_to(work_dir).as_posix() != "simple_pf.py"
-    )
+    work_file_records = exact_regular_file_records(work_dir)
+    work_directory_paths = exact_directory_paths(work_dir)
+    if "simple_pf.py" not in work_file_records:
+        raise RuntimeError(f"Codex work evidence has no simple_pf.py for {lane_id}")
+    unexpected_files = sorted(set(work_file_records) - {"simple_pf.py"})
     work_changed = work_policy.read_bytes() != parent.read_bytes()
     work_valid, validation_error = validate_policy(work_policy, lane["species"])
-    returncode = None if process_record is None else process_record.get("returncode")
-    timed_out = bool(process_record and process_record.get("timed_out"))
+    returncode = process_record.get("returncode")
+    timed_out = bool(process_record.get("timed_out"))
+    stdout_path = directory / "codex.stdout"
+    stderr_path = directory / "codex.stderr"
+    last_message_path = directory / "last_message.txt"
+    try:
+        last_message_hash = nonempty_text_sha256(last_message_path)
+    except RuntimeError as exc:
+        raise RuntimeError(f"completed Codex attempt evidence is missing for {lane_id}") from exc
+    if not stdout_path.is_file() or not stderr_path.is_file() or not last_message_path.is_file():
+        raise RuntimeError(f"completed Codex attempt evidence is missing for {lane_id}")
+    lifecycle = validate_codex_lifecycle(stdout_path)
+    for field in (
+        "codex_thread_id",
+        "codex_start_event_sha256",
+        "codex_lifecycle_status",
+        "codex_terminal_event_sha256",
+        "codex_usage",
+        "codex_usage_sha256",
+    ):
+        if process_record.get(field) != lifecycle.get(field):
+            raise RuntimeError(f"Codex process lifecycle evidence drift for {lane_id}: {field}")
+    output_hashes = {
+        "codex_stdout_sha256": sha256_file(stdout_path),
+        "codex_stderr_sha256": sha256_file(stderr_path),
+        "last_message_sha256": last_message_hash,
+    }
+    if any(process_record.get(field) != digest for field, digest in output_hashes.items()):
+        raise RuntimeError(f"Codex process output evidence drift for {lane_id}")
     use_mutation = (
-        process_record is not None
-        and returncode == 0
+        returncode == 0
         and not timed_out
         and work_changed
         and work_valid
         and not unexpected_files
+        and not work_directory_paths
     )
     candidate_source = work_policy if use_mutation else parent
     outcome = "mutated" if use_mutation else "fallback_parent"
@@ -466,16 +917,16 @@ def finalize_mutation(
     else:
         candidate.parent.mkdir(parents=True, exist_ok=True)
         copy_file_atomic(candidate_source, candidate)
-    candidate_files = sorted(
-        path.relative_to(candidate.parent).as_posix()
-        for path in candidate.parent.rglob("*")
-        if path.is_file()
-    )
-    if candidate_files != ["simple_pf.py"]:
+    candidate_files = exact_regular_file_records(candidate.parent)
+    candidate_directories = exact_directory_paths(candidate.parent)
+    if list(candidate_files) != ["simple_pf.py"] or candidate_directories:
         raise RuntimeError(
-            f"candidate directory contains unexpected files for {lane_id}: {candidate_files}"
+            f"candidate directory is not exact for {lane_id}: "
+            f"files={sorted(candidate_files)}, directories={candidate_directories}"
         )
     candidate_hash = sha256_file(candidate)
+    archived_evidence = archived_attempt_evidence(directory)
+    archived_directories = archived_attempt_directory_paths(directory)
     record = {
         "schema_version": SCHEMA_VERSION,
         "lane_id": lane_id,
@@ -488,13 +939,25 @@ def finalize_mutation(
         "prompt_sha256": intent["prompt_sha256"],
         "intent_sha256": sha256_file(directory / "intent.json"),
         "launch_command_sha256": (launch_intent.get("command_sha256")),
+        "launch_nonce": launch_nonce,
         "launch_intent_sha256": sha256_file(launch_intent_path),
-        "launch_receipt_sha256": (sha256_file(launch_receipt_path)),
-        "process_sha256": (
-            sha256_file(directory / "process.json")
-            if (directory / "process.json").is_file()
-            else None
-        ),
+        "launch_receipt_sha256": launch_receipt_hash,
+        "exec_acknowledgement_sha256": launch_receipt_hash,
+        "exec_acknowledgement_status": "codex_started",
+        "exec_ack_protocol": EXEC_ACK_PROTOCOL,
+        "codex_thread_id": process_record["codex_thread_id"],
+        "codex_start_event_sha256": process_record["codex_start_event_sha256"],
+        "codex_lifecycle_status": process_record["codex_lifecycle_status"],
+        "codex_terminal_event_sha256": process_record["codex_terminal_event_sha256"],
+        "codex_usage": process_record["codex_usage"],
+        "codex_usage_sha256": process_record["codex_usage_sha256"],
+        "archived_attempt_evidence": archived_evidence,
+        "archived_attempt_directory_paths": archived_directories,
+        "process_sha256": sha256_file(directory / "process.json"),
+        **output_hashes,
+        "work_file_records": work_file_records,
+        "work_directory_paths": work_directory_paths,
+        "work_policy_sha256": sha256_file(work_policy),
         "candidate_policy_sha256": candidate_hash,
         "codex_package": CODEX_PACKAGE,
         "codex_cli_version": CODEX_CLI_VERSION,
@@ -616,6 +1079,7 @@ async def mutate_one(
         command = [
             *CODEX_COMMAND,
             "exec",
+            "--json",
             "--skip-git-repo-check",
             "--ephemeral",
             "--ignore-user-config",
@@ -640,24 +1104,45 @@ async def mutate_one(
         cancellation: asyncio.CancelledError | None = None
         launch_receipt_path = directory / "launch.json"
         launch_intent_path = directory / "launch_intent.json"
-        launch_intent_payload = {
-            "schema_version": SCHEMA_VERSION,
-            "lane_id": lane_id,
-            "iteration": iteration,
-            "command_sha256": sha256_text("\0".join(command)),
-            "requested_at": now_iso(),
-        }
+        process_path = directory / "process.json"
+        stale_attempt_paths = [
+            path
+            for path in (
+                stdout_path,
+                stderr_path,
+                last_message_path,
+                launch_receipt_path,
+                process_path,
+            )
+            if path.exists() or path.is_symlink()
+        ]
+        if stale_attempt_paths:
+            raise RuntimeError(f"unarchived mutation-attempt residue: {stale_attempt_paths}")
         if launch_intent_path.is_file():
-            existing_launch_intent = read_json(launch_intent_path)
+            launch_intent_payload = read_json(launch_intent_path)
             if (
-                existing_launch_intent.get("schema_version") != SCHEMA_VERSION
-                or existing_launch_intent.get("lane_id") != lane_id
-                or existing_launch_intent.get("iteration") != iteration
-                or existing_launch_intent.get("command_sha256")
-                != launch_intent_payload["command_sha256"]
+                launch_intent_payload.get("schema_version") != SCHEMA_VERSION
+                or launch_intent_payload.get("lane_id") != lane_id
+                or launch_intent_payload.get("iteration") != iteration
+                or launch_intent_payload.get("command_sha256") != sha256_text("\0".join(command))
+                or SHA256_RE.fullmatch(str(launch_intent_payload.get("launch_nonce", ""))) is None
+                or launch_intent_payload.get("exec_ack_protocol") != EXEC_ACK_PROTOCOL
+                or launch_intent_payload.get("required_start_event") != CODEX_START_EVENT
+                or launch_intent_payload.get("required_terminal_event") != CODEX_TERMINAL_EVENT
             ):
                 raise RuntimeError("persisted launch intent drift")
         else:
+            launch_intent_payload = {
+                "schema_version": SCHEMA_VERSION,
+                "lane_id": lane_id,
+                "iteration": iteration,
+                "command_sha256": sha256_text("\0".join(command)),
+                "launch_nonce": secrets.token_hex(32),
+                "exec_ack_protocol": EXEC_ACK_PROTOCOL,
+                "required_start_event": CODEX_START_EVENT,
+                "required_terminal_event": CODEX_TERMINAL_EVENT,
+                "requested_at": now_iso(),
+            }
             write_json(launch_intent_path, launch_intent_payload)
         try:
             with (
@@ -671,25 +1156,30 @@ async def mutate_one(
                     str(launch_receipt_path),
                     "--work-dir",
                     str(work_dir),
+                    "--launch-nonce",
+                    str(launch_intent_payload["launch_nonce"]),
                     "--",
                     *command,
                     stdout=stdout,
                     stderr=stderr,
                     start_new_session=True,
                 )
-                receipt_deadline = asyncio.get_running_loop().time() + 5.0
-                while (
-                    not launch_receipt_path.exists()
-                    and asyncio.get_running_loop().time() < receipt_deadline
-                ):
+                receipt_deadline = asyncio.get_running_loop().time() + 120.0
+                launch_receipt: dict[str, Any] = {}
+                terminal_launch_statuses = {"codex_started", "exec_error", "codex_start_error"}
+                while asyncio.get_running_loop().time() < receipt_deadline:
+                    if launch_receipt_path.is_file():
+                        launch_receipt = read_json(launch_receipt_path)
+                        if launch_receipt.get("status") in terminal_launch_statuses:
+                            break
                     await asyncio.sleep(0.02)
-                if not launch_receipt_path.exists():
-                    raise RuntimeError("durable Codex launch receipt was not created")
-                launch_receipt = read_json(launch_receipt_path)
+                if launch_receipt.get("status") not in terminal_launch_statuses:
+                    raise RuntimeError("Codex emitted no durable startup acknowledgement")
                 if (
                     int(launch_receipt.get("pid", -1)) != process.pid
                     or int(launch_receipt.get("pgid", -1)) != process.pid
                     or launch_receipt.get("work_dir") != str(work_dir.resolve())
+                    or launch_receipt.get("launch_nonce") != launch_intent_payload["launch_nonce"]
                 ):
                     raise RuntimeError("Codex launch receipt identity mismatch")
                 try:
@@ -741,13 +1231,43 @@ async def mutate_one(
                     except ProcessLookupError:
                         pass
                     await process.wait()
+        receipt_for_process: dict[str, Any] = (
+            read_json(launch_receipt_path) if launch_receipt_path.is_file() else {}
+        )
+        lifecycle: dict[str, Any] = {}
+        lifecycle_error: str | None = None
+        try:
+            lifecycle = validate_codex_lifecycle(stdout_path)
+        except Exception as exc:
+            lifecycle_error = f"{type(exc).__name__}: {exc}"
+        stdout_hash = sha256_file(stdout_path) if stdout_path.is_file() else None
+        stderr_hash = sha256_file(stderr_path) if stderr_path.is_file() else None
+        try:
+            last_message_hash = nonempty_text_sha256(last_message_path)
+        except RuntimeError:
+            last_message_hash = None
         process_record = {
             "command": command[:-1] + ["<prompt recorded in prompt.md>"],
             "command_sha256": sha256_text("\0".join(command)),
             "returncode": int(returncode),
             "timed_out": timed_out,
             "process_error": process_error,
-            "pid": None if process is None else process.pid,
+            "lifecycle_error": lifecycle_error,
+            "pid": receipt_for_process.get("pid"),
+            "pgid": receipt_for_process.get("pgid"),
+            "exec_pid": receipt_for_process.get("exec_pid"),
+            "exec_acknowledgement_status": receipt_for_process.get("status"),
+            "exec_ack_protocol": receipt_for_process.get("exec_ack_protocol"),
+            "launch_nonce": receipt_for_process.get("launch_nonce"),
+            "codex_thread_id": lifecycle.get("codex_thread_id"),
+            "codex_start_event_sha256": lifecycle.get("codex_start_event_sha256"),
+            "codex_lifecycle_status": lifecycle.get("codex_lifecycle_status", "invalid"),
+            "codex_terminal_event_sha256": lifecycle.get("codex_terminal_event_sha256"),
+            "codex_usage": lifecycle.get("codex_usage"),
+            "codex_usage_sha256": lifecycle.get("codex_usage_sha256"),
+            "codex_stdout_sha256": stdout_hash,
+            "codex_stderr_sha256": stderr_hash,
+            "last_message_sha256": last_message_hash,
             "launch_receipt_sha256": sha256_file(launch_receipt_path)
             if launch_receipt_path.is_file()
             else None,
@@ -755,22 +1275,50 @@ async def mutate_one(
             "completed_at": now_iso(),
         }
         write_json(directory / "process.json", process_record)
-        if not launch_receipt_path.is_file():
+        failure_reasons: list[str] = []
+        if receipt_for_process.get("status") != "codex_started":
+            failure_reasons.append(
+                f"startup status was {receipt_for_process.get('status', 'missing')!r}"
+            )
+        if returncode != 0:
+            failure_reasons.append(f"wrapper return code was {returncode}")
+        if timed_out:
+            failure_reasons.append("Codex attempt timed out")
+        if lifecycle_error is not None:
+            failure_reasons.append(lifecycle_error)
+        if last_message_hash is None:
+            failure_reasons.append("Codex produced no nonempty last message")
+        if lifecycle and (
+            lifecycle.get("codex_thread_id") != receipt_for_process.get("codex_thread_id")
+            or lifecycle.get("codex_start_event_sha256")
+            != receipt_for_process.get("codex_start_event_sha256")
+        ):
+            failure_reasons.append("Codex startup and terminal lifecycle evidence disagree")
+        if failure_reasons:
+            archive_failed_attempt(
+                directory,
+                launch_nonce=str(launch_intent_payload["launch_nonce"]),
+                reason="; ".join(failure_reasons),
+            )
             if cancellation is not None:
                 raise cancellation
             raise RuntimeError(
-                f"{lane_id}: Codex was not durably launched; rerun this same iteration"
+                f"{lane_id}: Codex proposal did not complete; rerun this same iteration"
             )
-        launch_receipt = read_json(launch_receipt_path)
-        if launch_receipt.get("status") == "exec_error":
-            suffix = sha256_file(launch_receipt_path)[:12]
-            launch_receipt_path.replace(directory / f"launch_exec_error_{suffix}.json")
-            (directory / "process.json").replace(directory / f"process_exec_error_{suffix}.json")
-            raise RuntimeError(
-                f"{lane_id}: Codex exec failed before launch; rerun this same iteration"
-            )
-        if launch_receipt.get("status") != "launched":
-            raise RuntimeError(f"{lane_id}: invalid launch receipt status")
+        launch_receipt = receipt_for_process
+        validate_exec_acknowledgement(
+            launch_receipt,
+            command_sha256=str(launch_intent_payload["command_sha256"]),
+            work_dir=work_dir,
+            launcher_pid=None if process is None else process.pid,
+            launch_nonce=str(launch_intent_payload["launch_nonce"]),
+        )
+        validate_process_crosslink(
+            process_record,
+            launch_receipt=launch_receipt,
+            launch_receipt_sha256=sha256_file(launch_receipt_path),
+            command_sha256=str(launch_intent_payload["command_sha256"]),
+        )
         record = finalize_mutation(
             root=root,
             lane=lane,

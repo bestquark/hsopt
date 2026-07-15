@@ -3,13 +3,29 @@ from __future__ import annotations
 
 import argparse
 import json
+import os
 import pprint
+import secrets
 import shutil
+import stat
 import subprocess
+import sys
+import tempfile
 from pathlib import Path
 from typing import Any
 
-from campaign_common import (
+_PRIVATE_PYCACHE_PREFIX = tempfile.mkdtemp(prefix="hsopt-runner-pycache-")
+_private_pycache_stat = os.stat(_PRIVATE_PYCACHE_PREFIX, follow_symlinks=False)
+if (
+    not stat.S_ISDIR(_private_pycache_stat.st_mode)
+    or _private_pycache_stat.st_uid != os.getuid()
+    or stat.S_IMODE(_private_pycache_stat.st_mode) & 0o077
+):
+    raise RuntimeError("private Python bytecode prefix is not an owner-only real directory")
+sys.pycache_prefix = _PRIVATE_PYCACHE_PREFIX
+os.environ["PYTHONPYCACHEPREFIX"] = _PRIVATE_PYCACHE_PREFIX
+
+from campaign_common import (  # noqa: E402
     CHEMICAL_ACCURACY_HARTREE,
     CODEX_CLI_VERSION,
     CODEX_PACKAGE,
@@ -22,6 +38,7 @@ from campaign_common import (
     SCHEMA_VERSION,
     campaign_paths,
     copy_verified_cache,
+    derive_campaign_id,
     file_record,
     manifest_sha256,
     now_iso,
@@ -29,6 +46,7 @@ from campaign_common import (
     snapshot_files,
     snapshot_tree,
     validate_policy,
+    validate_absolute_posix_path,
     verify_problem_cache,
     write_json,
 )
@@ -278,8 +296,11 @@ def main() -> None:
 
     if args.batch_size <= 0 or args.batch_size > LANE_COUNT:
         parser.error(f"--batch-size must be in [1, {LANE_COUNT}]")
-    if not Path(args.cluster_root).is_absolute() or not Path(args.cluster_python).is_absolute():
-        parser.error("--cluster-root and --cluster-python must be absolute cluster paths")
+    try:
+        validate_absolute_posix_path(args.cluster_root, "--cluster-root")
+        validate_absolute_posix_path(args.cluster_python, "--cluster-python")
+    except ValueError as exc:
+        parser.error(str(exc))
     root = args.campaign_root.resolve()
     if root.exists() and any(root.iterdir()):
         parser.error(f"campaign destination must be empty: {root}")
@@ -318,10 +339,14 @@ def main() -> None:
         template=template,
     )
     created_at = now_iso()
+    preparation_nonce = secrets.token_hex(32)
+    campaign_id = derive_campaign_id(preparation_nonce)
     manifest = {
         "schema_version": SCHEMA_VERSION,
         "experiment": "reactions10_autoresearch",
         "created_at": created_at,
+        "preparation_nonce": preparation_nonce,
+        "campaign_id": campaign_id,
         "reaction_count": REACTION_COUNT,
         "lane_count": LANE_COUNT,
         "proposal_iterations": PROPOSAL_ITERATIONS,
@@ -363,6 +388,7 @@ def main() -> None:
         "schema_version": SCHEMA_VERSION,
         "experiment": manifest["experiment"],
         "manifest_sha256": manifest_sha256(paths["manifest"]),
+        "campaign_id": campaign_id,
         "created_at": created_at,
         "updated_at": created_at,
         "current_collected_iteration": -1,

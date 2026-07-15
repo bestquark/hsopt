@@ -5,28 +5,141 @@ import argparse
 import hashlib
 import json
 import math
+import os
 import re
 import shlex
+import stat
 import subprocess
+import sys
+import tempfile
 import time
 from pathlib import Path
 from typing import Any
 
-from campaign_common import (
+_PRIVATE_PYCACHE_PREFIX = tempfile.mkdtemp(prefix="hsopt-runner-pycache-")
+_private_pycache_stat = os.stat(_PRIVATE_PYCACHE_PREFIX, follow_symlinks=False)
+if (
+    not stat.S_ISDIR(_private_pycache_stat.st_mode)
+    or _private_pycache_stat.st_uid != os.getuid()
+    or stat.S_IMODE(_private_pycache_stat.st_mode) & 0o077
+):
+    raise RuntimeError("private Python bytecode prefix is not an owner-only real directory")
+sys.pycache_prefix = _PRIVATE_PYCACHE_PREFIX
+os.environ["PYTHONPYCACHEPREFIX"] = _PRIVATE_PYCACHE_PREFIX
+
+from campaign_common import (  # noqa: E402
+    SHA256_RE,
     campaign_lock,
     candidate_path,
     expected_lane_ids,
     ensure_campaign_runner_runtime,
+    exact_flat_regular_file_names,
     iteration_dir,
     mutation_dir,
     now_iso,
     read_json,
     require_campaign,
     sha256_file,
+    validate_absolute_posix_path,
     validate_iteration,
     write_json,
     write_state,
 )
+
+
+REMOTE_CLAIM_SCHEMA_VERSION = 1
+REMOTE_CLAIM_NAME = ".hsopt-campaign-claim.json"
+REMOTE_CLAIM_LOCK_NAME = ".hsopt-campaign-claim.lock"
+
+
+def _campaign_identity(manifest: dict[str, Any], state: dict[str, Any]) -> tuple[str, str]:
+    campaign_id = str(manifest.get("campaign_id", ""))
+    manifest_hash = str(state.get("manifest_sha256", ""))
+    if SHA256_RE.fullmatch(campaign_id) is None or SHA256_RE.fullmatch(manifest_hash) is None:
+        raise RuntimeError("campaign ID or manifest hash is not a SHA-256 digest")
+    return campaign_id, manifest_hash
+
+
+def _remote_claim_payload(*, campaign_id: str, manifest_sha256: str) -> str:
+    if SHA256_RE.fullmatch(campaign_id) is None:
+        raise ValueError("campaign_id must be a SHA-256 digest")
+    if SHA256_RE.fullmatch(manifest_sha256) is None:
+        raise ValueError("manifest_sha256 must be a SHA-256 digest")
+    return (
+        json.dumps(
+            {
+                "campaign_id": campaign_id,
+                "manifest_sha256": manifest_sha256,
+                "schema_version": REMOTE_CLAIM_SCHEMA_VERSION,
+            },
+            sort_keys=True,
+            separators=(",", ":"),
+        )
+        + "\n"
+    )
+
+
+def _remote_claim_command(*, cluster_root: str, campaign_id: str, manifest_sha256: str) -> str:
+    """Return a lock-protected, idempotent first-claim command for a remote root."""
+    validate_absolute_posix_path(cluster_root, "cluster_root")
+    payload = _remote_claim_payload(campaign_id=campaign_id, manifest_sha256=manifest_sha256)
+    root = cluster_root.rstrip("/") or "/"
+    claim = f"{root}/{REMOTE_CLAIM_NAME}" if root != "/" else f"/{REMOTE_CLAIM_NAME}"
+    lock = f"{root}/{REMOTE_CLAIM_LOCK_NAME}" if root != "/" else f"/{REMOTE_CLAIM_LOCK_NAME}"
+    return (
+        "set -eu; umask 077; "
+        f"root={shlex.quote(root)}; claim={shlex.quote(claim)}; lock={shlex.quote(lock)}; "
+        'if [ -L "$root" ]; then echo "campaign root is a symlink" >&2; exit 41; fi; '
+        'if [ -e "$root" ] && [ ! -d "$root" ]; then '
+        'echo "campaign root is not a directory" >&2; exit 42; fi; '
+        'mkdir -p "$root"; '
+        'if [ -L "$lock" ] || { [ -e "$lock" ] && [ ! -f "$lock" ]; }; then '
+        'echo "campaign claim lock is unsafe" >&2; exit 47; fi; '
+        'exec 9>"$lock"; flock -x 9; '
+        'if [ -L "$claim" ]; then echo "campaign claim is a symlink" >&2; exit 43; fi; '
+        'tmp="$root/.hsopt-campaign-claim.tmp.$$"; trap \'rm -f "$tmp"\' EXIT HUP INT TERM; '
+        f'if ! (set -C; printf %s {shlex.quote(payload)} >"$tmp"); then '
+        'echo "campaign claim temp path is unsafe" >&2; exit 48; fi; '
+        'if [ -e "$claim" ]; then '
+        'if [ ! -f "$claim" ] || ! cmp -s "$tmp" "$claim"; then '
+        'echo "remote campaign claim mismatch" >&2; exit 44; fi; '
+        "else "
+        'if [ -e "$root/.venv" ] && '
+        '{ [ ! -d "$root/.venv" ] || [ -L "$root/.venv" ]; }; then '
+        'echo "prebuilt .venv is not a real directory" >&2; exit 45; fi; '
+        'stale=$(find "$root" -mindepth 1 -maxdepth 1 '
+        '! -name "$' + "{lock##*/}" + '" ! -name "$' + "{tmp##*/}" + '" '
+        "! -name '.venv' -print -quit); "
+        'if [ -n "$stale" ]; then '
+        'echo "refusing to claim non-empty unclaimed campaign root: $stale" >&2; exit 46; fi; '
+        'mv "$tmp" "$claim"; '
+        "fi; "
+        'cmp -s "$tmp" "$claim" 2>/dev/null || [ ! -e "$tmp" ]'
+    )
+
+
+def claim_remote_campaign(
+    *,
+    sync_host: str,
+    cluster_root: str,
+    campaign_id: str,
+    manifest_sha256: str,
+    attempts: int,
+    timeout_seconds: int,
+) -> None:
+    run_with_retries(
+        [
+            "ssh",
+            sync_host,
+            _remote_claim_command(
+                cluster_root=cluster_root,
+                campaign_id=campaign_id,
+                manifest_sha256=manifest_sha256,
+            ),
+        ],
+        attempts=attempts,
+        timeout_seconds=timeout_seconds,
+    )
 
 
 def run_with_retries(
@@ -64,6 +177,8 @@ def _export_safe(value: str, field: str) -> str:
 
 def _batch_identity(
     *,
+    campaign_id: str,
+    manifest_sha256: str,
     cluster_root: str,
     iteration: int,
     batch_id: str,
@@ -71,15 +186,26 @@ def _batch_identity(
     lane_ids: list[str],
     root: Path,
 ) -> tuple[str, str]:
-    candidate_hashes = [
-        f"{lane_id}:{sha256_file(candidate_path(root, iteration, lane_id))}" for lane_id in lane_ids
-    ]
+    identity = {
+        "campaign_id": campaign_id,
+        "manifest_sha256": manifest_sha256,
+        "cluster_root": cluster_root,
+        "iteration": iteration,
+        "batch_id": batch_id,
+        "attempt": attempt,
+        "candidates": [
+            {
+                "lane_id": lane_id,
+                "policy_sha256": sha256_file(candidate_path(root, iteration, lane_id)),
+            }
+            for lane_id in lane_ids
+        ],
+    }
     digest = hashlib.sha256(
-        "\n".join([cluster_root, str(iteration), batch_id, str(attempt), *candidate_hashes]).encode(
-            "utf-8"
-        )
-    ).hexdigest()[:16]
-    return digest, f"rx_{digest}"
+        b"hsopt-reactions10-submission-v1\0"
+        + json.dumps(identity, sort_keys=True, separators=(",", ":")).encode("utf-8")
+    ).hexdigest()
+    return digest, f"rx_{digest[:32]}"
 
 
 def _write_batch_mirror(root: Path, batch: dict[str, Any]) -> None:
@@ -98,6 +224,10 @@ def _validate_candidates(root: Path, manifest: dict[str, Any], iteration: int) -
         record_path = mutation_dir(root, iteration, lane_id) / "record.json"
         if not candidate.is_file() or not record_path.is_file():
             raise FileNotFoundError(f"immutable candidate/record missing for {lane_id}")
+        if exact_flat_regular_file_names(candidate.parent, "immutable candidate directory") != [
+            "simple_pf.py"
+        ]:
+            raise RuntimeError(f"candidate directory is not exact for {lane_id}")
         record = read_json(record_path)
         if (
             record.get("lane_id") != lane_id
@@ -132,18 +262,36 @@ def validate_hamiltonian_verification(
     for row in rows:
         npz_name = str(row.get("cache_file", ""))
         json_name = str(Path(npz_name).with_suffix(".json"))
+        numeric_fields = (
+            "ground_energy_delta_hartree",
+            "max_spectrum_delta_hartree",
+            "cached_ground_vector_residual",
+            "evaluator_ground_state_outside_sector_norm",
+            "evaluator_ground_state_residual",
+            "evaluator_recomputed_ground_eigenspace_overlap",
+            "evaluator_cached_ground_eigenspace_overlap",
+            "pauli_dense_max_abs_residual_hartree",
+            "pauli_dense_relative_frobenius_residual",
+        )
+        try:
+            metrics = {field: float(row.get(field, float("nan"))) for field in numeric_fields}
+        except (TypeError, ValueError):
+            metrics = {field: float("nan") for field in numeric_fields}
         if (
             npz_name in seen
             or row.get("verified") is not True
             or row.get("cache_sha256") != expected.get(npz_name)
             or row.get("metadata_sha256") != expected.get(json_name)
-            or abs(float(row.get("ground_energy_delta_hartree", float("inf")))) > 1.0e-10
-            or float(row.get("max_spectrum_delta_hartree", float("inf"))) > 1.0e-10
-            or float(row.get("cached_ground_vector_residual", float("inf"))) > 1.0e-8
-            or float(row.get("evaluator_ground_state_outside_sector_norm", float("inf"))) > 1.0e-10
-            or float(row.get("evaluator_ground_state_residual", float("inf"))) > 1.0e-8
-            or float(row.get("evaluator_recomputed_ground_eigenspace_overlap", -1.0)) < 1.0 - 1.0e-8
-            or float(row.get("evaluator_cached_ground_eigenspace_overlap", -1.0)) < 1.0 - 1.0e-8
+            or not all(math.isfinite(value) for value in metrics.values())
+            or abs(metrics["ground_energy_delta_hartree"]) > 1.0e-10
+            or metrics["max_spectrum_delta_hartree"] > 1.0e-10
+            or metrics["cached_ground_vector_residual"] > 1.0e-8
+            or metrics["evaluator_ground_state_outside_sector_norm"] > 1.0e-10
+            or metrics["evaluator_ground_state_residual"] > 1.0e-8
+            or metrics["evaluator_recomputed_ground_eigenspace_overlap"] < 1.0 - 1.0e-8
+            or metrics["evaluator_cached_ground_eigenspace_overlap"] < 1.0 - 1.0e-8
+            or metrics["pauli_dense_max_abs_residual_hartree"] > 1.0e-10
+            or metrics["pauli_dense_relative_frobenius_residual"] > 1.0e-10
         ):
             raise RuntimeError("Hamiltonian verification row/hash mismatch")
         seen.add(npz_name)
@@ -165,6 +313,7 @@ def prepare_batch_attempts(
     execution_spec: dict[str, Any] | None = None,
 ) -> list[dict[str, Any]]:
     cluster_root = str(manifest["execution"]["cluster_root"])
+    campaign_id, manifest_hash = _campaign_identity(manifest, state)
     batch_size = int(manifest["execution"]["batch_size"])
     prefix = f"iter{iteration:04d}_batch"
     batches = [
@@ -178,6 +327,8 @@ def prepare_batch_attempts(
             batch = {
                 "batch_id": batch_id,
                 "iteration": iteration,
+                "campaign_id": campaign_id,
+                "manifest_sha256": manifest_hash,
                 "lane_ids": lane_ids,
                 "state": "prepared",
                 "retry_lane_ids": lane_ids,
@@ -189,6 +340,35 @@ def prepare_batch_attempts(
             state["batches"][batch_id] = batch
             batches.append(batch)
     covered = [lane_id for batch in batches for lane_id in batch["lane_ids"]]
+    for batch in batches:
+        if batch.get("campaign_id") != campaign_id or batch.get("manifest_sha256") != manifest_hash:
+            raise RuntimeError(f"persisted campaign identity drift for {batch['batch_id']}")
+        for attempt_record in batch.get("attempts", []):
+            attempt_number = int(attempt_record.get("attempt", -1))
+            active_lane_ids = list(attempt_record.get("lane_ids", []))
+            if (
+                attempt_record.get("campaign_id") != campaign_id
+                or attempt_record.get("manifest_sha256") != manifest_hash
+                or attempt_number <= 0
+                or not active_lane_ids
+                or not set(active_lane_ids).issubset(set(batch["lane_ids"]))
+            ):
+                raise RuntimeError(f"persisted attempt identity drift for {batch['batch_id']}")
+            expected_key, expected_job_name = _batch_identity(
+                campaign_id=campaign_id,
+                manifest_sha256=manifest_hash,
+                cluster_root=cluster_root,
+                iteration=iteration,
+                batch_id=str(batch["batch_id"]),
+                attempt=attempt_number,
+                lane_ids=active_lane_ids,
+                root=root,
+            )
+            if (
+                attempt_record.get("submission_key") != expected_key
+                or attempt_record.get("job_name") != expected_job_name
+            ):
+                raise RuntimeError(f"persisted submission identity drift for {batch['batch_id']}")
     if covered != [
         lane_id
         for group in _initial_batches(expected_lane_ids(manifest), batch_size)
@@ -212,11 +392,15 @@ def prepare_batch_attempts(
         if attempts and attempts[-1].get("state") == "prepared":
             attempt_record = attempts[-1]
             if (
-                execution_spec is not None
-                and attempt_record.get("execution") != effective_execution
+                attempt_record.get("campaign_id") != campaign_id
+                or attempt_record.get("manifest_sha256") != manifest_hash
+                or (
+                    execution_spec is not None
+                    and attempt_record.get("execution") != effective_execution
+                )
             ):
                 raise RuntimeError(
-                    f"effective execution settings drift for prepared attempt {batch['batch_id']}"
+                    f"campaign identity/execution drift for prepared attempt {batch['batch_id']}"
                 )
         else:
             active_lane_ids = list(batch.get("retry_lane_ids") or batch["lane_ids"])
@@ -224,6 +408,8 @@ def prepare_batch_attempts(
                 raise RuntimeError(f"invalid retry lane set for {batch['batch_id']}")
             attempt_number = len(attempts) + 1
             submission_key, job_name = _batch_identity(
+                campaign_id=campaign_id,
+                manifest_sha256=manifest_hash,
                 cluster_root=cluster_root,
                 iteration=iteration,
                 batch_id=str(batch["batch_id"]),
@@ -244,6 +430,8 @@ def prepare_batch_attempts(
             lane_file.write_text("\n".join(active_lane_ids) + "\n", encoding="utf-8")
             attempt_record = {
                 "attempt": attempt_number,
+                "campaign_id": campaign_id,
+                "manifest_sha256": manifest_hash,
                 "lane_ids": active_lane_ids,
                 "submission_key": submission_key,
                 "job_name": job_name,
@@ -268,6 +456,8 @@ def _remote_submission_command(
     *,
     cluster_root: str,
     cluster_python: str,
+    campaign_id: str,
+    manifest_sha256: str,
     batch: dict[str, Any],
     attempt: dict[str, Any],
     account: str,
@@ -277,10 +467,22 @@ def _remote_submission_command(
     memory: str,
     time_limit: str,
 ) -> str:
+    validate_absolute_posix_path(cluster_root, "cluster_root")
+    validate_absolute_posix_path(cluster_python, "cluster_python")
+    claim_payload = _remote_claim_payload(campaign_id=campaign_id, manifest_sha256=manifest_sha256)
+    if (
+        attempt.get("campaign_id") != campaign_id
+        or attempt.get("manifest_sha256") != manifest_sha256
+        or batch.get("campaign_id") != campaign_id
+        or batch.get("manifest_sha256") != manifest_sha256
+    ):
+        raise RuntimeError("batch/attempt campaign identity drift before submission")
     submission_key = str(attempt["submission_key"])
     job_name = str(attempt["job_name"])
-    receipt = f"{cluster_root.rstrip('/')}/receipts/{submission_key}.jobid"
-    lock = f"{cluster_root.rstrip('/')}/receipts/{submission_key}.lock"
+    receipt_dir = f"{cluster_root.rstrip('/')}/receipts/{campaign_id}"
+    receipt = f"{receipt_dir}/{submission_key}.jobid"
+    lock = f"{receipt_dir}/{submission_key}.lock"
+    claim = f"{cluster_root.rstrip('/')}/{REMOTE_CLAIM_NAME}"
     lane_file = f"{cluster_root.rstrip('/')}/{attempt['lane_ids_path']}"
     export_values = {
         "CAMPAIGN_ROOT": cluster_root,
@@ -312,11 +514,17 @@ def _remote_submission_command(
             shlex.quote(script),
         ]
     )
-    # A cryptographically unique Slurm job name plus a receipt, both protected by
-    # the same remote flock, closes the SSH-disconnect window without resubmitting.
+    # The exact campaign claim is checked on the submit host before receipts or
+    # Slurm state are touched. This also proves the sync and submit hosts share
+    # the same claimed filesystem root.
     return (
         "set -eu; umask 077; "
-        f"mkdir -p {shlex.quote(cluster_root + '/receipts')} {shlex.quote(cluster_root + '/logs')}; "
+        f"root={shlex.quote(cluster_root)}; claim={shlex.quote(claim)}; "
+        'if [ -L "$root" ] || [ ! -d "$root" ] || [ -L "$claim" ] || '
+        '[ ! -f "$claim" ]; then echo "remote campaign claim missing or unsafe" >&2; exit 51; fi; '
+        f'if ! printf %s {shlex.quote(claim_payload)} | cmp -s - "$claim"; then '
+        'echo "remote campaign claim mismatch" >&2; exit 52; fi; '
+        f"mkdir -p {shlex.quote(receipt_dir)} {shlex.quote(cluster_root + '/logs')}; "
         f"exec 9>{shlex.quote(lock)}; flock -x 9; "
         f"receipt={shlex.quote(receipt)}; job_name={shlex.quote(job_name)}; "
         'if [ -s "$receipt" ]; then cat "$receipt"; exit 0; fi; '
@@ -400,6 +608,17 @@ def main() -> None:
         )
         cluster_root = str(manifest["execution"]["cluster_root"])
         cluster_python = str(manifest["execution"]["cluster_python"])
+        validate_absolute_posix_path(cluster_root, "cluster_root")
+        validate_absolute_posix_path(cluster_python, "cluster_python")
+        campaign_id, manifest_hash = _campaign_identity(manifest, state)
+        claim_remote_campaign(
+            sync_host=str(args.sync_host),
+            cluster_root=cluster_root,
+            campaign_id=campaign_id,
+            manifest_sha256=manifest_hash,
+            attempts=args.command_attempts,
+            timeout_seconds=args.sync_timeout_seconds,
+        )
         run_with_retries(
             [
                 "rsync",
@@ -432,6 +651,8 @@ def main() -> None:
             remote = _remote_submission_command(
                 cluster_root=cluster_root,
                 cluster_python=cluster_python,
+                campaign_id=campaign_id,
+                manifest_sha256=manifest_hash,
                 batch=batch,
                 attempt=attempt,
                 account=str(args.account),

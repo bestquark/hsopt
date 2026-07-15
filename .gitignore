@@ -11,8 +11,11 @@ encryptcontent.cache
 
 # External experiment workspaces; normalized paper artifacts belong in experiments/.
 /analysis/
+/analyses/
 /output/
+/outputs/
 /runs/
+/tmp/
 
 # examples/pfs contains definitions/evaluators only, never campaign workspaces.
 /examples/pfs/*/run_*/

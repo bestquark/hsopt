@@ -3,15 +3,30 @@ from __future__ import annotations
 
 import argparse
 import os
+import stat
+import sys
+import tempfile
 import traceback
 from concurrent.futures import ProcessPoolExecutor, as_completed
 from pathlib import Path
 from typing import Any
 
-from campaign_common import (
+_PRIVATE_PYCACHE_PREFIX = tempfile.mkdtemp(prefix="hsopt-runner-pycache-")
+_private_pycache_stat = os.stat(_PRIVATE_PYCACHE_PREFIX, follow_symlinks=False)
+if (
+    not stat.S_ISDIR(_private_pycache_stat.st_mode)
+    or _private_pycache_stat.st_uid != os.getuid()
+    or stat.S_IMODE(_private_pycache_stat.st_mode) & 0o077
+):
+    raise RuntimeError("private Python bytecode prefix is not an owner-only real directory")
+sys.pycache_prefix = _PRIVATE_PYCACHE_PREFIX
+os.environ["PYTHONPYCACHEPREFIX"] = _PRIVATE_PYCACHE_PREFIX
+
+from campaign_common import (  # noqa: E402
     candidate_path,
     evaluate_candidate,
     ensure_campaign_runner_runtime,
+    exact_flat_regular_file_names,
     lane_map,
     mutation_dir,
     now_iso,
@@ -25,19 +40,35 @@ from campaign_common import (
 )
 
 
-def evaluate_one(root_text: str, lane: dict[str, Any], iteration: int) -> dict[str, Any]:
+def evaluate_one(
+    root_text: str,
+    lane: dict[str, Any],
+    iteration: int,
+    campaign_id: str,
+    campaign_manifest_sha256: str,
+) -> dict[str, Any]:
     root = Path(root_text)
     try:
-        return evaluate_candidate(root, lane, iteration)
+        return evaluate_candidate(
+            root,
+            lane,
+            iteration,
+            campaign_id=campaign_id,
+            campaign_manifest_sha256=campaign_manifest_sha256,
+        )
     except Exception as exc:
         candidate = candidate_path(root, iteration, str(lane["lane_id"]))
         return {
+            "campaign_id": campaign_id,
+            "campaign_manifest_sha256": campaign_manifest_sha256,
             "lane_id": lane["lane_id"],
             "reaction_key": lane["reaction_key"],
             "contract": lane["contract"],
             "iteration": int(iteration),
             "status": "error",
             "policy_sha256": sha256_file(candidate) if candidate.is_file() else None,
+            "candidate_relative_path": candidate.relative_to(root.resolve()).as_posix(),
+            "problem_cache_relative_path": "problem_cache",
             "error_type": type(exc).__name__,
             "error": str(exc),
             "traceback": traceback.format_exc(),
@@ -70,7 +101,11 @@ def main() -> None:
     validate_iteration(args.iteration)
 
     root = args.campaign_root.resolve()
-    manifest, _state = require_campaign(root)
+    manifest, state = require_campaign(root)
+    campaign_id = str(manifest["campaign_id"])
+    campaign_manifest_sha256 = str(state["manifest_sha256"])
+    if state.get("campaign_id") != campaign_id:
+        raise RuntimeError("campaign identity drift")
     ensure_campaign_runner_runtime(root, Path(__file__), manifest)
     by_id = lane_map(manifest)
     lane_ids = lane_ids_from_file(args.lane_ids_file)
@@ -84,6 +119,10 @@ def main() -> None:
         record_path = mutation_dir(root, args.iteration, lane_id) / "record.json"
         if not candidate.is_file() or not record_path.is_file():
             raise FileNotFoundError(f"candidate/record missing for {lane_id}")
+        if exact_flat_regular_file_names(candidate.parent, "immutable candidate directory") != [
+            "simple_pf.py"
+        ]:
+            raise RuntimeError(f"candidate directory is not exact for {lane_id}")
         record = read_json(record_path)
         if record.get("candidate_policy_sha256") != sha256_file(candidate):
             raise RuntimeError(f"candidate hash drift for {lane_id}")
@@ -110,6 +149,8 @@ def main() -> None:
                 lane=lane,
                 iteration=args.iteration,
                 candidate_hash=candidate_hash,
+                campaign_id=campaign_id,
+                campaign_manifest_sha256=campaign_manifest_sha256,
             )
             is None
         ):
@@ -119,7 +160,14 @@ def main() -> None:
 
     with ProcessPoolExecutor(max_workers=max(1, min(workers, len(pending) or 1))) as pool:
         futures = {
-            pool.submit(evaluate_one, str(root), lane, args.iteration): lane["lane_id"]
+            pool.submit(
+                evaluate_one,
+                str(root),
+                lane,
+                args.iteration,
+                campaign_id,
+                campaign_manifest_sha256,
+            ): lane["lane_id"]
             for lane in pending
         }
         for future in as_completed(futures):
