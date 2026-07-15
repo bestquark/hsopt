@@ -11,7 +11,7 @@ import stat
 import subprocess
 import sys
 import tempfile
-from pathlib import Path
+from pathlib import Path, PurePosixPath
 from typing import Any
 
 _PRIVATE_PYCACHE_PREFIX = tempfile.mkdtemp(prefix="hsopt-runner-pycache-")
@@ -26,6 +26,7 @@ sys.pycache_prefix = _PRIVATE_PYCACHE_PREFIX
 os.environ["PYTHONPYCACHEPREFIX"] = _PRIVATE_PYCACHE_PREFIX
 
 from campaign_common import (  # noqa: E402
+    SAFE_ID_RE,
     SCHEMA_VERSION,
     campaign_lock,
     campaign_paths,
@@ -44,6 +45,7 @@ from campaign_common import (  # noqa: E402
     result_path,
     result_validation_error,
     sha256_file,
+    validate_absolute_posix_path,
     validate_iteration,
     write_json,
     write_state,
@@ -74,6 +76,85 @@ def rsync_results(root: Path, cluster_root: str, iteration: int, sync_host: str)
         ],
         check=True,
     )
+
+
+_LUSTRE_PORTFOLIO_PREFIX = ("/", "lustre", "fs12", "portfolios", "nvr")
+
+
+def _known_lustre_campaign_root(
+    root: str,
+) -> tuple[str, str, tuple[str, ...]] | None:
+    parts = PurePosixPath(root).parts
+    prefix_length = len(_LUSTRE_PORTFOLIO_PREFIX)
+    if parts[:prefix_length] != _LUSTRE_PORTFOLIO_PREFIX:
+        return None
+    if len(parts) >= prefix_length + 3 and parts[prefix_length] == "users":
+        return "user", parts[prefix_length + 1], parts[prefix_length + 2 :]
+    if (
+        len(parts) >= prefix_length + 5
+        and parts[prefix_length] == "projects"
+        and SAFE_ID_RE.fullmatch(parts[prefix_length + 1]) is not None
+        and parts[prefix_length + 2] == "users"
+    ):
+        return "project", parts[prefix_length + 3], parts[prefix_length + 4 :]
+    return None
+
+
+def _campaign_roots_match(expected_root: str, actual_root: str) -> bool:
+    if expected_root == actual_root:
+        return True
+    expected_alias = _known_lustre_campaign_root(expected_root)
+    actual_alias = _known_lustre_campaign_root(actual_root)
+    if expected_alias is None or actual_alias is None:
+        return False
+    expected_kind, expected_user, expected_tail = expected_alias
+    actual_kind, actual_user, actual_tail = actual_alias
+    return (
+        expected_kind == "project"
+        and actual_kind == "user"
+        and expected_user == actual_user
+        and expected_tail == actual_tail
+    )
+
+
+def _canonical_relative_posix_path(value: str, field: str) -> PurePosixPath:
+    if not isinstance(value, str) or not value:
+        raise ValueError(f"{field} must be a non-empty relative POSIX path")
+    if any(character in value for character in ("\n", "\r", "\x00")):
+        raise ValueError(f"{field} cannot contain newline or NUL")
+    path = PurePosixPath(value)
+    components = value.split("/")
+    if (
+        path.is_absolute()
+        or any(component in {"", ".", ".."} for component in components)
+        or path.as_posix() != value
+    ):
+        raise ValueError(f"{field} must be a canonical relative POSIX path")
+    return path
+
+
+def validate_cluster_result_paths(
+    *,
+    expected_cluster_root: str,
+    cache_root: str,
+    policy_path: str,
+    candidate_relative_path: str,
+) -> None:
+    expected_root = validate_absolute_posix_path(expected_cluster_root, "manifest cluster_root")
+    cache_root = validate_absolute_posix_path(cache_root, "result cache_root")
+    cache_path = PurePosixPath(cache_root)
+    if cache_path.name != "problem_cache":
+        raise ValueError("result cache_root must end in problem_cache")
+    actual_root = validate_absolute_posix_path(cache_path.parent.as_posix(), "result campaign root")
+    if not _campaign_roots_match(expected_root, actual_root):
+        raise ValueError("result campaign root does not match the manifest")
+
+    policy_path = validate_absolute_posix_path(policy_path, "result policy_path")
+    candidate_path = _canonical_relative_posix_path(
+        candidate_relative_path, "result candidate_relative_path"
+    )
+    if policy_path != (PurePosixPath(actual_root) / candidate_path).as_posix():
+        raise ValueError("result policy_path is not under its cache-derived campaign root")
 
 
 def prevalidate_iteration(
@@ -283,22 +364,14 @@ def prevalidate_iteration(
         payload = read_json(result_file)
         execution = manifest.get("execution")
         if isinstance(execution, dict) and execution.get("cluster_root"):
-            cluster_root = Path(str(execution["cluster_root"]))
-            expected_cache_root = str((cluster_root / "problem_cache").resolve())
-            expected_policy_path = str(
-                (
-                    cluster_root
-                    / "iterations"
-                    / f"iter_{iteration:04d}"
-                    / "candidates"
-                    / lane_id
-                    / "simple_pf.py"
-                ).resolve()
-            )
-            if (
-                payload.get("cache_root") != expected_cache_root
-                or payload.get("policy_path") != expected_policy_path
-            ):
+            try:
+                validate_cluster_result_paths(
+                    expected_cluster_root=execution.get("cluster_root"),
+                    cache_root=payload.get("cache_root"),
+                    policy_path=payload.get("policy_path"),
+                    candidate_relative_path=payload.get("candidate_relative_path"),
+                )
+            except ValueError:
                 fatal[lane_id] = (
                     "result was not evaluated from the immutable cluster candidate/cache"
                 )

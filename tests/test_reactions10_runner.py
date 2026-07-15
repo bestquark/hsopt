@@ -1998,6 +1998,11 @@ def test_collector_prevalidation_separates_retryable_output_from_fatal_drift(
     tmp_path: Path,
 ) -> None:
     root = tmp_path / "campaign"
+    expected_cluster_root = (
+        "/lustre/fs12/portfolios/nvr/projects/nvr_qualg_lmbm/users/"
+        "lmantilla/reactions10_paper_20260715"
+    )
+    actual_cluster_root = expected_cluster_root
     lane_ids = [f"lane_{index:02d}" for index in range(CAMPAIGN_COMMON.LANE_COUNT)]
     lanes: list[dict[str, Any]] = []
     state_lanes: dict[str, dict[str, Any]] = {}
@@ -2032,6 +2037,8 @@ def test_collector_prevalidation_separates_retryable_output_from_fatal_drift(
         if lane_id in {missing_lane, lineage_lane}:
             continue
         result = _result_for_lane(lane, iteration=0, digest=digest)
+        result["cache_root"] = f"{actual_cluster_root}/problem_cache"
+        result["policy_path"] = f"{actual_cluster_root}/{result['candidate_relative_path']}"
         lane["seed_result_expectation"] = _seed_expectation(result)
         if lane_id == arithmetic_lane:
             result["triangle_bound_hartree"] = 0.0
@@ -2039,7 +2046,11 @@ def test_collector_prevalidation_separates_retryable_output_from_fatal_drift(
 
     results, candidate_hashes, retryable, fatal = COLLECT_ITERATION.prevalidate_iteration(
         root=root,
-        manifest={"campaign_id": TEST_CAMPAIGN_ID, "lanes": lanes},
+        manifest={
+            "campaign_id": TEST_CAMPAIGN_ID,
+            "execution": {"cluster_root": expected_cluster_root},
+            "lanes": lanes,
+        },
         state={
             "campaign_id": TEST_CAMPAIGN_ID,
             "manifest_sha256": "d" * 64,
@@ -2057,6 +2068,94 @@ def test_collector_prevalidation_separates_retryable_output_from_fatal_drift(
     assert set(fatal) == {arithmetic_lane, lineage_lane}
     assert "arithmetic mismatch" in fatal[arithmetic_lane]
     assert "immutable mutation record disagree" in fatal[lineage_lane]
+
+
+def test_collector_accepts_only_the_known_lustre_campaign_root_alias() -> None:
+    candidate_relative_path = (
+        "iterations/iter_0000/candidates/synthetic__reaction_aware/simple_pf.py"
+    )
+    user_root = "/lustre/fs12/portfolios/nvr/users/lmantilla/reactions10_paper"
+    project_root = (
+        "/lustre/fs12/portfolios/nvr/projects/nvr_qualg_lmbm/users/lmantilla/reactions10_paper"
+    )
+
+    for expected_root, actual_root in (
+        (user_root, user_root),
+        (project_root, project_root),
+        (project_root, user_root),
+        ("/cluster/reactions10", "/cluster/reactions10"),
+    ):
+        COLLECT_ITERATION.validate_cluster_result_paths(
+            expected_cluster_root=expected_root,
+            cache_root=f"{actual_root}/problem_cache",
+            policy_path=f"{actual_root}/{candidate_relative_path}",
+            candidate_relative_path=candidate_relative_path,
+        )
+
+
+def test_collector_rejects_other_cluster_path_rewrites() -> None:
+    candidate_relative_path = (
+        "iterations/iter_0000/candidates/synthetic__reaction_aware/simple_pf.py"
+    )
+    user_root = "/lustre/fs12/portfolios/nvr/users/lmantilla/reactions10_paper"
+    project_root = (
+        "/lustre/fs12/portfolios/nvr/projects/nvr_qualg_lmbm/users/lmantilla/reactions10_paper"
+    )
+    invalid_root_pairs = (
+        (user_root, user_root.replace("/lustre/fs12", "/scratch/fs12")),
+        (user_root, project_root.replace("/lmantilla/", "/another_user/")),
+        (user_root, project_root.replace("reactions10_paper", "another_campaign")),
+        (user_root, project_root.replace("nvr_qualg_lmbm", "not safe")),
+        (user_root, project_root),
+        (user_root, project_root.replace("nvr_qualg_lmbm", "another_safe_project")),
+        (
+            project_root,
+            project_root.replace("nvr_qualg_lmbm", "another_safe_project"),
+        ),
+        (user_root, f"{user_root}/../reactions10_paper"),
+        (user_root, user_root.replace("/fs12/", "/fs12//")),
+        (
+            project_root.replace("nvr_qualg_lmbm", "project_a"),
+            project_root.replace("nvr_qualg_lmbm", "project_b"),
+        ),
+    )
+    for expected_root, actual_root in invalid_root_pairs:
+        with pytest.raises(ValueError):
+            COLLECT_ITERATION.validate_cluster_result_paths(
+                expected_cluster_root=expected_root,
+                cache_root=f"{actual_root}/problem_cache",
+                policy_path=f"{actual_root}/{candidate_relative_path}",
+                candidate_relative_path=candidate_relative_path,
+            )
+
+    with pytest.raises(ValueError):
+        COLLECT_ITERATION.validate_cluster_result_paths(
+            expected_cluster_root=user_root,
+            cache_root=f"{project_root}/problem_cache",
+            policy_path=f"{user_root}/{candidate_relative_path}",
+            candidate_relative_path=candidate_relative_path,
+        )
+    with pytest.raises(ValueError):
+        COLLECT_ITERATION.validate_cluster_result_paths(
+            expected_cluster_root=user_root,
+            cache_root=f"{project_root}/cache",
+            policy_path=f"{project_root}/{candidate_relative_path}",
+            candidate_relative_path=candidate_relative_path,
+        )
+    with pytest.raises(ValueError):
+        COLLECT_ITERATION.validate_cluster_result_paths(
+            expected_cluster_root=user_root,
+            cache_root=f"{project_root}/problem_cache",
+            policy_path=f"{project_root}/iterations//iter_0000/simple_pf.py",
+            candidate_relative_path=candidate_relative_path,
+        )
+    with pytest.raises(ValueError):
+        COLLECT_ITERATION.validate_cluster_result_paths(
+            expected_cluster_root=user_root,
+            cache_root=f"{project_root}/problem_cache",
+            policy_path=f"{project_root}/{candidate_relative_path}",
+            candidate_relative_path=f"iterations/../{candidate_relative_path}",
+        )
 
 
 def test_collector_rejects_iterative_proposal_without_durable_launch_evidence(
