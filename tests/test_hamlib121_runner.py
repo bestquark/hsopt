@@ -1756,6 +1756,32 @@ def test_stationary_slice_cost_is_independent_of_physical_step_count(
     assert result["simulated_trotter_steps"] == 1
 
 
+def test_compiler_preserves_sub_decimal_place_angles_and_epsilons(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    import numpy as np
+
+    class FakeGridSynth:
+        @staticmethod
+        def gridsynth_gates(theta: float, epsilon: float) -> str:
+            assert theta == -2.0e-18
+            assert epsilon == 1.0e-20
+            return "T"
+
+    monkeypatch.setattr(EVALUATE_WORKER, "import_pygridsynth", lambda: FakeGridSynth())
+    monkeypatch.setattr(
+        EVALUATE_WORKER,
+        "pygridsynth_matrix_from_gates",
+        lambda _gate_string: np.eye(2, dtype=np.complex128),
+    )
+    compile_rotation = EVALUATE_WORKER.build_pauli_rotation_compiler(nqubits=1, xp=np)
+    compiled = compile_rotation("Z", 1.0e-18, 1.0e-20)
+    assert compiled["alpha"] == 1.0e-18
+    assert compiled["theta"] == -2.0e-18
+    assert compiled["epsilon"] == 1.0e-20
+    assert compiled["t_gate_count"] == 1
+
+
 def test_policy_loader_rejects_step_dependent_synthesis(tmp_path: Path) -> None:
     policy = tmp_path / "step_dependent.py"
     policy.write_text(

@@ -481,10 +481,10 @@ def build_pauli_rotation_compiler(*, nqubits: int, xp):
 
     @functools.lru_cache(maxsize=None)
     def compile_pauli_rotation(label: str, alpha: float, epsilon: float) -> dict[str, Any]:
-        rounded_alpha = float(round(float(alpha), 15))
-        rounded_epsilon = float(round(float(epsilon), 17))
-        theta = float(round(-2.0 * rounded_alpha, 15))
-        rz = compile_rz(theta, rounded_epsilon)
+        normalized_alpha = float(alpha)
+        normalized_epsilon = float(epsilon)
+        theta = -2.0 * normalized_alpha
+        rz = compile_rz(theta, normalized_epsilon)
         basis_forward, basis_inverse, cnot_pairs, pivot = term_scaffold(label)
 
         def apply_state(state):
@@ -533,11 +533,11 @@ def build_pauli_rotation_compiler(*, nqubits: int, xp):
             return updated
 
         return {
-            "cache_key": f"{label}|{rounded_alpha:.16e}|{rounded_epsilon:.16e}",
+            "cache_key": f"{label}|{normalized_alpha:.17e}|{normalized_epsilon:.17e}",
             "label": label,
-            "alpha": rounded_alpha,
+            "alpha": normalized_alpha,
             "theta": theta,
-            "epsilon": rounded_epsilon,
+            "epsilon": normalized_epsilon,
             "gate_count": int(rz["gate_count"]),
             "t_gate_count": int(rz["t_gate_count"]),
             "operator_error": float(rz["operator_error"]),
