@@ -36,16 +36,16 @@ $HSOPT_DATA_ROOT/
   paper/hamlib121/<family>_YYYYMMDD_<commit>/run_01 ... run_05
   paper/reactions10/<family>_YYYYMMDD_<commit>/
   development/<benchmark>/<campaign-id>/
-  archive/<benchmark>/<campaign-id>/
+  old_experiments/<benchmark>/<campaign-id>/
   scratch/preflight/<campaign-id>/
 ```
 
 Use `paper` only for protocol-locked campaigns, `development` for exploratory
-runs, `scratch/preflight` for disposable checks, and `archive` for inactive or
-superseded campaigns. Once a campaign starts, keep its ID and directory
-contents together. Do not delete histories during cleanup; move the whole
-inactive campaign to `archive` after confirming that no local supervisor or
-scheduler job still references it.
+runs, `scratch/preflight` for disposable checks, and `old_experiments` for
+inactive or superseded campaigns. Once a campaign starts, keep its ID and
+directory contents together. Do not delete histories during cleanup; move the
+whole inactive campaign to `old_experiments` after confirming that no local
+supervisor or scheduler job still references it.
 
 Then inspect lanes and pick the active benchmark:
 
@@ -81,6 +81,16 @@ skill, CLI runtime, benchmark definitions, or external campaign root.
 8. Copy only completion-gated compact exports or a small summary PDF into the
    repository; never commit raw transcripts, caches, databases, environments,
    scheduler logs, or partial runs.
+
+## Cluster Safety
+
+- On `nvpark`, keep Codex in its `workspace-write` sandbox. Never pass `--yolo`
+  or `--dangerously-bypass-approvals-and-sandbox`.
+- Use a durable supervisor with retry backoff. Poll Slurm no more often than
+  every five minutes for paper campaigns, and never run tight `squeue`,
+  `nvidia-smi`, or device-monitoring loops on a login node.
+- Preserve a nonzero mutation exit and its stderr as experiment evidence. Let
+  the bounded retry policy resume that lane; do not silently skip it.
 
 ## Canonical Commands
 

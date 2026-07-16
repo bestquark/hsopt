@@ -17,6 +17,7 @@ encryptcontent.cache
 /runs/
 /tmp/
 /hsopt-data/
+/old_experiments/
 /.hsopt-data/
 /.hsopt-runs/
 /experiments/_runs/

@@ -14,7 +14,7 @@ runnable molecule should be targetable directly by path, for example
 `pfs/h2`.
 
 Keep mutable campaign histories outside the repository checkout under
-`$HSOPT_DATA_ROOT/{paper,development,archive,scratch}`. Paper HamLib-121 runs
+`$HSOPT_DATA_ROOT/{paper,development,old_experiments,scratch}`. Paper HamLib-121 runs
 live below `paper/hamlib121/<campaign-id>/run_01` through `run_05`; reaction
 runs live below `paper/reactions10/<campaign-id>`. The `hsgepa` write commands
 require explicit output and run paths so a live trial does not silently create
