@@ -29,6 +29,15 @@ EXPECTED_INPUT_HASHES = {
 }
 
 
+def test_locked_gpu_environment_includes_the_cuda_runtime_library() -> None:
+    environment = RUNNER_ROOT / "environment"
+    pyproject = (environment / "pyproject.toml").read_text(encoding="utf-8")
+    lockfile = (environment / "uv.lock").read_text(encoding="utf-8")
+
+    assert '"nvidia-cuda-runtime-cu12>=12.9,<13"' in pyproject
+    assert 'name = "nvidia-cuda-runtime-cu12"' in lockfile
+
+
 def test_runner_readme_uses_the_locked_runner_projects_for_every_stage() -> None:
     readme = (RUNNER_ROOT / "README.md").read_text(encoding="utf-8")
 
