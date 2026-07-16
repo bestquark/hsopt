@@ -12,10 +12,15 @@ the 1 kcal/mol conversion and reaction contract remain local to this benchmark.
 
 from __future__ import annotations
 
+import bisect
+import copy
+import hashlib
 import json
 import math
 import os
+import random
 import time
+from collections import Counter
 from dataclasses import asdict, is_dataclass
 from pathlib import Path
 from types import ModuleType
@@ -42,6 +47,13 @@ HARTREE_PER_KCAL_PER_MOL = 1.0 / 627.5094740631
 REACTION_TARGET_HARTREE = HARTREE_PER_KCAL_PER_MOL
 REACTION_TARGET_MHA = 1000.0 * REACTION_TARGET_HARTREE
 SPECTRAL_PEAK_WEIGHT_THRESHOLD = 1.0e-10
+ALLOWED_SCHEDULE_STRATEGIES = frozenset(
+    {"stationary_trotter", "randomized_trotter", "qdrift", "custom"}
+)
+ALLOWED_TERM_ORDER_STRATEGIES = frozenset(
+    {"input", "coefficient_desc", "coefficient_asc", "support_desc", "custom"}
+)
+MAX_EXPLICIT_SCHEDULE_ROTATIONS = 200_000
 
 
 def array_backend() -> tuple[str, Any]:
@@ -388,6 +400,163 @@ def _one_step_rotations(
     raise ValueError(f"formula_order must be 1 or 2, got {formula_order}")
 
 
+def _validate_custom_order(
+    original: Sequence[Mapping[str, object]], ordered: object
+) -> list[dict[str, object]]:
+    if not isinstance(ordered, (list, tuple)):
+        raise ValueError("order_product_formula_terms must return a list or tuple")
+    normalized = [dict(term) for term in ordered if isinstance(term, Mapping)]
+    if len(normalized) != len(ordered) or len(normalized) != len(original):
+        raise ValueError("custom term ordering must return every term dictionary exactly once")
+    def canonical(item: Mapping[str, object]) -> str:
+        return json.dumps(item, sort_keys=True, separators=(",", ":"))
+
+    if Counter(map(canonical, original)) != Counter(map(canonical, normalized)):
+        raise ValueError("custom term ordering may only permute the exact Hamiltonian terms")
+    return normalized
+
+
+def order_product_formula_terms(
+    terms: Sequence[Mapping[str, object]],
+    strategy: str,
+    policy: ModuleType,
+    config: object,
+) -> list[dict[str, object]]:
+    copied = [dict(term) for term in terms]
+    if strategy == "custom":
+        hook = getattr(policy, "order_product_formula_terms", None)
+        if not callable(hook):
+            raise ValueError("custom term ordering requires order_product_formula_terms")
+        return _validate_custom_order(copied, hook(copy.deepcopy(copied), config))
+    if strategy == "input":
+        return copied
+    if strategy == "coefficient_desc":
+        return sorted(copied, key=lambda term: (-abs(float(term["coefficient"])), term["label"]))
+    if strategy == "coefficient_asc":
+        return sorted(copied, key=lambda term: (abs(float(term["coefficient"])), term["label"]))
+    if strategy == "support_desc":
+        return sorted(
+            copied,
+            key=lambda term: (
+                -int(term["support_size"]),
+                -abs(float(term["coefficient"])),
+                term["label"],
+            ),
+        )
+    raise ValueError(f"unsupported term_order_strategy {strategy!r}")
+
+
+def _validate_explicit_schedule(
+    schedule: object, *, term_count: int
+) -> list[dict[str, object]]:
+    if not isinstance(schedule, (list, tuple)) or not schedule:
+        raise ValueError("explicit product-formula schedule must be a nonempty list or tuple")
+    if len(schedule) > MAX_EXPLICIT_SCHEDULE_ROTATIONS:
+        raise ValueError(
+            f"explicit schedule exceeds {MAX_EXPLICIT_SCHEDULE_ROTATIONS} rotations"
+        )
+    normalized: list[dict[str, object]] = []
+    for index, raw in enumerate(schedule):
+        if not isinstance(raw, Mapping) or set(raw) - {"term_index", "alpha", "epsilon"}:
+            raise ValueError(f"schedule item {index} is not term_index/alpha[/epsilon]")
+        term_index = raw.get("term_index")
+        if (
+            not isinstance(term_index, int)
+            or isinstance(term_index, bool)
+            or not 0 <= term_index < term_count
+        ):
+            raise ValueError(f"schedule item {index} has invalid term_index")
+        alpha = float(raw.get("alpha", math.nan))
+        if not math.isfinite(alpha):
+            raise ValueError(f"schedule item {index} has invalid alpha")
+        item: dict[str, object] = {"term_index": term_index, "alpha": alpha}
+        if "epsilon" in raw:
+            epsilon = float(raw["epsilon"])
+            if not math.isfinite(epsilon) or epsilon <= 0.0:
+                raise ValueError(f"schedule item {index} has invalid epsilon")
+            item["epsilon"] = epsilon
+        normalized.append(item)
+    return normalized
+
+
+def build_explicit_product_formula_schedule(
+    *,
+    terms: Sequence[Mapping[str, object]],
+    target_time: float,
+    evaluator_seed: int,
+    strategy: str,
+    policy: ModuleType,
+    config: object,
+) -> list[dict[str, object]]:
+    if strategy not in ALLOWED_SCHEDULE_STRATEGIES - {"stationary_trotter"}:
+        raise ValueError(f"unsupported explicit schedule strategy {strategy!r}")
+    copied = [dict(term) for term in terms]
+    if strategy == "qdrift":
+        samples = int(getattr(config, "qdrift_samples", 0))
+        if not 1 <= samples <= MAX_EXPLICIT_SCHEDULE_ROTATIONS:
+            raise ValueError("qdrift_samples is outside the explicit schedule safety limit")
+        one_norm = sum(abs(float(term["coefficient"])) for term in copied)
+        if not math.isfinite(one_norm) or one_norm <= 0.0:
+            raise ValueError("qDRIFT requires positive finite Hamiltonian one-norm")
+        cumulative: list[float] = []
+        running = 0.0
+        for term in copied:
+            running += abs(float(term["coefficient"])) / one_norm
+            cumulative.append(running)
+        cumulative[-1] = 1.0
+        rng = random.Random(evaluator_seed)
+        alpha = one_norm * target_time / samples
+        return [
+            {
+                "term_index": (term_index := bisect.bisect_right(cumulative, rng.random())),
+                "alpha": math.copysign(alpha, float(copied[term_index]["coefficient"])),
+            }
+            for _ in range(samples)
+        ]
+    if strategy == "randomized_trotter":
+        formula_order = int(getattr(config, "formula_order"))
+        n_steps = int(getattr(config, "n_steps"))
+        per_step = len(copied) if formula_order == 1 else 2 * len(copied) - 1
+        if formula_order not in {1, 2} or n_steps <= 0 or n_steps * per_step > MAX_EXPLICIT_SCHEDULE_ROTATIONS:
+            raise ValueError("randomized Trotter parameters exceed the explicit schedule limit")
+        rng = random.Random(evaluator_seed)
+        step_time = target_time / n_steps
+        schedule: list[dict[str, object]] = []
+        for _ in range(n_steps):
+            indices = list(range(len(copied)))
+            rng.shuffle(indices)
+            if formula_order == 1:
+                factors = [(index, 1.0) for index in indices]
+            else:
+                factors = (
+                    [(index, 0.5) for index in indices[:-1]]
+                    + [(indices[-1], 1.0)]
+                    + [(index, 0.5) for index in reversed(indices[:-1])]
+                )
+            schedule.extend(
+                {
+                    "term_index": index,
+                    "alpha": factor * float(copied[index]["coefficient"]) * step_time,
+                }
+                for index, factor in factors
+            )
+        return schedule
+    hook = getattr(policy, "build_product_formula_schedule", None)
+    if not callable(hook):
+        raise ValueError("custom schedule requires build_product_formula_schedule")
+    first = _validate_explicit_schedule(
+        hook(copy.deepcopy(copied), target_time, evaluator_seed, config),
+        term_count=len(copied),
+    )
+    second = _validate_explicit_schedule(
+        hook(copy.deepcopy(copied), target_time, evaluator_seed, config),
+        term_count=len(copied),
+    )
+    if first != second:
+        raise ValueError("custom product-formula schedule is not deterministic")
+    return first
+
+
 def _single_qubit_paulis() -> dict[str, np.ndarray]:
     return {
         "I": np.eye(2, dtype=np.complex128),
@@ -515,6 +684,50 @@ def _apply_compiled_rotation_to_unitary(
     unitary[:] = updated
 
 
+def _apply_compiled_rotation_to_state(
+    state: Any,
+    *,
+    label: str,
+    single_qubit_unitary: np.ndarray,
+    action_cache: dict[str, tuple[Any, Any]],
+    xp: Any,
+) -> Any:
+    decomposition = {
+        pauli: complex(0.5 * np.trace(matrix.conj().T @ single_qubit_unitary))
+        for pauli, matrix in _PAULIS.items()
+    }
+    updated = decomposition["I"] * state
+    for pivot_pauli in ("X", "Y", "Z"):
+        coefficient = decomposition[pivot_pauli]
+        if abs(coefficient) <= 1.0e-15:
+            continue
+        scaffold_phase, transformed_label = _conjugated_pivot_pauli(label, pivot_pauli)
+        action = action_cache.get(transformed_label)
+        if action is None:
+            destination_host, phase_host = _pauli_left_action(transformed_label)
+            action = (
+                xp.asarray(destination_host, dtype=xp.int64),
+                xp.asarray(phase_host, dtype=xp.complex128),
+            )
+            action_cache[transformed_label] = action
+        destination, pauli_phase = action
+        pauli_state = xp.empty_like(state)
+        pauli_state[destination] = pauli_phase * state
+        updated += coefficient * scaffold_phase * pauli_state
+    return updated
+
+
+def _issue_blocking_execution_fence(backend_name: str) -> bool:
+    if backend_name != "cupynumeric":
+        return False
+    try:
+        from legate.core import get_legate_runtime
+    except ImportError as exc:
+        raise RuntimeError("cuPyNumeric execution requires the Legate runtime") from exc
+    get_legate_runtime().issue_execution_fence(block=True)
+    return True
+
+
 def _config_dict(config: object) -> dict[str, object]:
     if is_dataclass(config):
         payload = asdict(config)
@@ -578,7 +791,14 @@ def _build_compiled_one_step_unitary(
             f"zero_angle_threshold must be finite and nonnegative, got {zero_angle_threshold}"
         )
 
-    pauli_terms = tuple(problem["pauli_terms"])
+    pauli_terms = tuple(
+        order_product_formula_terms(
+            problem["pauli_terms"],
+            str(getattr(config, "term_order_strategy", "input")),
+            policy,
+            config,
+        )
+    )
     step_time = float(problem["target_time"]) / float(n_steps)
     rotations = _one_step_rotations(
         pauli_terms,
@@ -591,7 +811,7 @@ def _build_compiled_one_step_unitary(
         raise ValueError("compiled evaluation requires a PyGridSynth compiler")
 
     _gridsynth_gates, d_omega_unitary_cls = import_pygridsynth_backend()
-    matrix_cache: dict[str, Any] = {}
+    matrix_cache: dict[str, np.ndarray] = {}
     action_cache: dict[str, tuple[Any, Any]] = {}
     dim = 1 << int(problem["n_qubits"])
     unitary = xp.eye(dim, dtype=xp.complex128)
@@ -656,6 +876,7 @@ def _build_compiled_one_step_unitary(
             action_cache=action_cache,
             xp=xp,
         )
+        _issue_blocking_execution_fence(backend_name)
 
         one_step_t_gate_count += int(compiled["t_gate_count"])
         one_step_nonzero += 1
@@ -703,11 +924,143 @@ def _build_compiled_one_step_unitary(
         ),
         "phase_matching": "maximum_ground_state_eigenvector_overlap",
         "stationary_step_policy_verified": True,
+        "schedule_strategy": "stationary_trotter",
+        "term_order_strategy": str(getattr(config, "term_order_strategy", "input")),
         "array_backend": backend_name,
         "unitary_array_type": f"{type(unitary).__module__}.{type(unitary).__name__}",
         "t_count_semantics": (
             "exact_count_of_T_characters_in_selected_PyGridSynth_gate_strings_times_n_steps"
         ),
+    }
+
+
+def _run_compiled_explicit_schedule(
+    problem: Mapping[str, object],
+    policy: ModuleType,
+    config: object,
+    *,
+    evaluator_seed: int,
+    backend_name: str,
+    xp: Any,
+) -> tuple[Any, dict[str, object]]:
+    strategy = str(getattr(config, "schedule_strategy"))
+    term_order_strategy = str(getattr(config, "term_order_strategy", "input"))
+    terms = order_product_formula_terms(
+        problem["pauli_terms"], term_order_strategy, policy, config
+    )
+    if strategy == "qdrift":
+        # Keep the finite seeded qDRIFT realization independent of a policy's
+        # term permutation, which otherwise becomes an indirect seed-selection
+        # channel through the inverse-CDF interval layout.
+        terms = sorted(terms, key=lambda term: str(term["label"]))
+    schedule = build_explicit_product_formula_schedule(
+        terms=terms,
+        target_time=float(problem["target_time"]),
+        evaluator_seed=evaluator_seed,
+        strategy=strategy,
+        policy=policy,
+        config=config,
+    )
+    compiler = problem.get("compile_pauli_rotation")
+    if compiler is None:
+        raise ValueError("compiled evaluation requires a PyGridSynth compiler")
+    _gridsynth_gates, d_omega_unitary_cls = import_pygridsynth_backend()
+    state = xp.asarray(problem["ground_state"], dtype=xp.complex128)
+    state /= xp.linalg.norm(state)
+    matrix_cache: dict[str, Any] = {}
+    action_cache: dict[str, tuple[Any, Any]] = {}
+    epsilon_histogram: dict[str, int] = {}
+    unique_compilations: dict[str, dict[str, object]] = {}
+    t_count = 0
+    nonzero = 0
+    skipped = 0
+    skipped_angle = 0.0
+    skipped_bound = 0.0
+    max_skipped = 0.0
+    fence_count = 0
+    threshold = float(getattr(config, "zero_angle_threshold"))
+    for occurrence, item in enumerate(schedule):
+        term = terms[int(item["term_index"])]
+        alpha = float(item["alpha"])
+        if abs(alpha) <= threshold:
+            skipped += 1
+            skipped_angle += abs(alpha)
+            skipped_bound += 2.0 * abs(math.sin(0.5 * abs(alpha)))
+            max_skipped = max(max_skipped, abs(alpha))
+            continue
+        epsilon = (
+            float(item["epsilon"])
+            if "epsilon" in item
+            else _validated_epsilon(policy, term, alpha, occurrence, config, len(terms))
+        )
+        compiled = compiler(str(term["label"]), alpha, epsilon)
+        gate_string = str(compiled["gate_string"])
+        matrix = matrix_cache.get(gate_string)
+        if matrix is None:
+            matrix = np.asarray(
+                pygridsynth_matrix_from_gates(gate_string, d_omega_unitary_cls),
+                dtype=np.complex128,
+            )
+            matrix_cache[gate_string] = matrix
+        state = _apply_compiled_rotation_to_state(
+            state,
+            label=str(term["label"]),
+            single_qubit_unitary=matrix,
+            action_cache=action_cache,
+            xp=xp,
+        )
+        fence_count += int(_issue_blocking_execution_fence(backend_name))
+        nonzero += 1
+        t_count += int(compiled["t_gate_count"])
+        key = str(compiled["cache_key"])
+        unique_compilations[key] = {
+            "label": str(compiled["label"]),
+            "alpha": float(compiled["alpha"]),
+            "epsilon": float(compiled["epsilon"]),
+            "t_gate_count": int(compiled["t_gate_count"]),
+            "operator_error": float(compiled["operator_error"]),
+        }
+        epsilon_key = f"{epsilon:.3e}"
+        epsilon_histogram[epsilon_key] = epsilon_histogram.get(epsilon_key, 0) + 1
+    schedule_json = json.dumps(schedule, sort_keys=True, separators=(",", ":"))
+    return state, {
+        "method_config": _config_dict(config),
+        "formula_order": int(getattr(config, "formula_order")),
+        "n_steps": int(getattr(config, "n_steps")),
+        "rotations_per_step": 0,
+        "scheduled_rotation_count": len(schedule),
+        "nonzero_rotation_count": nonzero,
+        "skipped_rotation_count": skipped,
+        "one_step_nonzero_rotation_count": 0,
+        "one_step_skipped_rotation_count": 0,
+        "zero_angle_threshold": threshold,
+        "one_step_skipped_absolute_angle_sum": 0.0,
+        "skipped_absolute_angle_sum": skipped_angle,
+        "one_step_skipped_rotation_operator_error_bound": 0.0,
+        "skipped_rotation_operator_error_bound": skipped_bound,
+        "max_skipped_absolute_angle": max_skipped,
+        "one_step_t_gate_count": 0,
+        "t_gate_count": t_count,
+        "unique_compilation_count": len(unique_compilations),
+        "unique_compilations": sorted(
+            unique_compilations.values(),
+            key=lambda item: (str(item["label"]), float(item["epsilon"])),
+        ),
+        "synthesis_epsilon_histogram": dict(sorted(epsilon_histogram.items())),
+        "step_time": None,
+        "full_hilbert_dimension": 1 << int(problem["n_qubits"]),
+        "unitary_construction": "compiled_full_explicit_schedule_applied_to_exact_ground_state",
+        "phase_matching": "exact_ground_state_survival_amplitude",
+        "stationary_step_policy_verified": False,
+        "schedule_strategy": strategy,
+        "term_order_strategy": term_order_strategy,
+        "evaluator_schedule_seed": evaluator_seed,
+        "explicit_schedule_sha256": hashlib.sha256(schedule_json.encode()).hexdigest(),
+        "explicit_schedule_rotation_count": len(schedule),
+        "array_backend": backend_name,
+        "unitary_array_type": f"{type(state).__module__}.{type(state).__name__}",
+        "legate_execution_fence_count": fence_count,
+        "t_count_semantics": "exact_count_of_T_characters_across_the_full_explicit_schedule",
     }
 
 
@@ -717,10 +1070,11 @@ def evaluate_species(
     config: object,
     cache_root: Path,
     *,
+    evaluator_seed: int = 0,
     backend_name: str | None = None,
     xp: Any | None = None,
 ) -> dict[str, object]:
-    """Evaluate one species with compiled full-space one-step diagonalization."""
+    """Evaluate one species using the policy's compiled schedule."""
 
     started = time.perf_counter()
     problem = build_reaction_problem(
@@ -731,29 +1085,61 @@ def evaluate_species(
     )
     if backend_name is None or xp is None:
         backend_name, xp = array_backend()
-    unitary_step, run_metrics = _build_compiled_one_step_unitary(
-        problem,
-        policy,
-        config,
-        backend_name=backend_name,
-        xp=xp,
-    )
-    eigenvalues, eigenvectors = xp.linalg.eig(unitary_step)
     target_state = xp.asarray(problem["ground_state"], dtype=xp.complex128)
     target_state /= xp.linalg.norm(target_state)
-    eigenvector_norms = xp.linalg.norm(eigenvectors, axis=0, keepdims=True)
-    if bool(np.asarray(xp.any(eigenvector_norms <= 0.0))):
-        raise ValueError("compiled one-step unitary produced a zero-norm eigenvector")
-    eigenvectors = eigenvectors / eigenvector_norms
-    overlaps = xp.abs(eigenvectors.conj().T @ target_state) ** 2
-    selected = int(np.asarray(xp.argmax(overlaps)))
-
     identity_shift = float(problem["identity_coefficient"])
     exact_energy = float(problem["ground_state_energy_hartree"])
     target_time = float(problem["target_time"])
     reference_centered_energy = exact_energy - identity_shift
-    step_phase = float(np.asarray(xp.angle(eigenvalues[selected])))
-    total_phase = int(getattr(config, "n_steps")) * step_phase
+    strategy = str(getattr(config, "schedule_strategy", "stationary_trotter"))
+    if strategy == "stationary_trotter":
+        unitary_step, run_metrics = _build_compiled_one_step_unitary(
+            problem,
+            policy,
+            config,
+            backend_name=backend_name,
+            xp=xp,
+        )
+        eigenvalues, eigenvectors = xp.linalg.eig(unitary_step)
+        eigenvector_norms = xp.linalg.norm(eigenvectors, axis=0, keepdims=True)
+        if bool(np.asarray(xp.any(eigenvector_norms <= 0.0))):
+            raise ValueError("compiled one-step unitary produced a zero-norm eigenvector")
+        eigenvectors = eigenvectors / eigenvector_norms
+        overlaps = xp.abs(eigenvectors.conj().T @ target_state) ** 2
+        selected = int(np.asarray(xp.argmax(overlaps)))
+        step_phase = float(np.asarray(xp.angle(eigenvalues[selected])))
+        total_phase = int(getattr(config, "n_steps")) * step_phase
+        estimator_details = {
+            "selected_compiled_unitary_eigen_index": selected,
+            "selected_compiled_unitary_ground_overlap": float(
+                np.asarray(overlaps[selected])
+            ),
+            "selected_compiled_step_eigenphase_radians": step_phase,
+            "selected_compiled_total_eigenphase_radians": total_phase,
+            "max_eigenvalue_modulus_error": float(
+                np.asarray(xp.max(xp.abs(xp.abs(eigenvalues) - 1.0)))
+            ),
+        }
+    else:
+        propagated, run_metrics = _run_compiled_explicit_schedule(
+            problem,
+            policy,
+            config,
+            evaluator_seed=evaluator_seed,
+            backend_name=backend_name,
+            xp=xp,
+        )
+        amplitude = complex(np.asarray(xp.vdot(target_state, propagated)))
+        total_phase = math.atan2(amplitude.imag, amplitude.real)
+        estimator_details = {
+            "selected_compiled_unitary_eigen_index": None,
+            "selected_compiled_unitary_ground_overlap": abs(amplitude) ** 2,
+            "selected_compiled_step_eigenphase_radians": None,
+            "selected_compiled_total_eigenphase_radians": total_phase,
+            "max_eigenvalue_modulus_error": None,
+            "ground_state_survival_amplitude_real": amplitude.real,
+            "ground_state_survival_amplitude_imag": amplitude.imag,
+        }
     centered_estimate = unwrap_energy_near_reference(
         total_phase,
         target_time,
@@ -771,13 +1157,7 @@ def evaluate_species(
         "absolute_energy_error_hartree": abs(signed_error),
         "signed_energy_error_mha": 1000.0 * signed_error,
         "absolute_energy_error_mha": 1000.0 * abs(signed_error),
-        "selected_compiled_unitary_eigen_index": selected,
-        "selected_compiled_unitary_ground_overlap": float(np.asarray(overlaps[selected])),
-        "selected_compiled_step_eigenphase_radians": step_phase,
-        "selected_compiled_total_eigenphase_radians": total_phase,
-        "max_eigenvalue_modulus_error": float(
-            np.asarray(xp.max(xp.abs(xp.abs(eigenvalues) - 1.0)))
-        ),
+        **estimator_details,
         "n_qubits": int(problem["n_qubits"]),
         "cas_label": str(problem["cas_label"]),
         "basis": str(problem["basis"]),
@@ -804,6 +1184,12 @@ def validate_policy_module(policy: ModuleType, species_keys: Sequence[str]) -> N
             raise ValueError(f"{species_key}: formula_order must be 1 or 2")
         if int(getattr(config, "n_steps")) <= 0:
             raise ValueError(f"{species_key}: n_steps must be positive")
+        schedule_strategy = str(getattr(config, "schedule_strategy", "stationary_trotter"))
+        if schedule_strategy not in ALLOWED_SCHEDULE_STRATEGIES:
+            raise ValueError(f"{species_key}: unsupported schedule_strategy")
+        term_order_strategy = str(getattr(config, "term_order_strategy", "input"))
+        if term_order_strategy not in ALLOWED_TERM_ORDER_STRATEGIES:
+            raise ValueError(f"{species_key}: unsupported term_order_strategy")
         threshold = float(getattr(config, "zero_angle_threshold"))
         if not math.isfinite(threshold) or threshold < 0.0:
             raise ValueError(f"{species_key}: zero_angle_threshold must be finite and nonnegative")
@@ -831,7 +1217,12 @@ __all__ = [
     "HARTREE_PER_KCAL_PER_MOL",
     "REACTION_TARGET_HARTREE",
     "REACTION_TARGET_MHA",
+    "ALLOWED_SCHEDULE_STRATEGIES",
+    "ALLOWED_TERM_ORDER_STRATEGIES",
+    "MAX_EXPLICIT_SCHEDULE_ROTATIONS",
+    "build_explicit_product_formula_schedule",
     "build_reaction_problem",
     "evaluate_species",
+    "order_product_formula_terms",
     "validate_policy_module",
 ]

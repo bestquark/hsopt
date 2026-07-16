@@ -325,8 +325,8 @@ def _result_for_lane(lane: dict[str, Any], *, iteration: int, digest: str) -> di
             f"iterations/iter_{iteration:04d}/candidates/{lane['lane_id']}/simple_pf.py"
         ),
         "problem_cache_relative_path": "problem_cache",
-        "evaluation_mode": "full_hilbert_space_compiled_one_step_unitary_diagonalization",
-        "ground_phase_matching": "maximum_ground_state_eigenvector_overlap",
+        "evaluation_mode": "compiled_product_formula_energy_estimation",
+        "ground_phase_matching": "fixed_ground_state_phase_estimator",
         "compilation_backend": "pygridsynth",
         "array_backend": "cupynumeric",
         "gpu_preflight": {
@@ -383,7 +383,11 @@ def _result_for_lane(lane: dict[str, Any], *, iteration: int, digest: str) -> di
                     "formula_order": 1,
                     "n_steps": 1,
                     "zero_angle_threshold": 0.0,
+                    "schedule_strategy": "stationary_trotter",
+                    "term_order_strategy": "input",
                 },
+                "schedule_strategy": "stationary_trotter",
+                "term_order_strategy": "input",
                 "total_pauli_rotation_terms": 1,
                 "rotations_per_step": 1,
                 "scheduled_rotation_count": 1,

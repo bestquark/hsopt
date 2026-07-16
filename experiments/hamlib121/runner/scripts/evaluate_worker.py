@@ -3,6 +3,7 @@ from __future__ import annotations
 
 import argparse
 import functools
+import hashlib
 import json
 import math
 import multiprocessing
@@ -75,7 +76,9 @@ os.environ["PYTHONPYCACHEPREFIX"] = _PRIVATE_PYCACHE_PREFIX
 
 from campaign_common import (  # noqa: E402
     CHEMICAL_ACCURACY_HARTREE,
+    build_explicit_product_formula_schedule,
     config_to_dict,
+    derive_evaluator_schedule_seed,
     ensure_dirs,
     load_json,
     load_policy_module,
@@ -861,10 +864,17 @@ def run_compiled_product_formula(
     nqubits: int,
     electrons: int,
     xp,
+    policy_module: Any | None = None,
+    evaluator_seed: int | None = None,
 ) -> dict[str, Any]:
     n_steps = int(getattr(config, "n_steps"))
     formula_order = int(getattr(config, "formula_order"))
     zero_threshold = float(getattr(config, "zero_angle_threshold", 0.0))
+    schedule_strategy = str(getattr(config, "schedule_strategy", "stationary_trotter"))
+    if schedule_strategy == "qdrift":
+        # The policy may reorder terms, but that permutation must not become an
+        # indirect way to select a favorable finite qDRIFT realization.
+        terms = sorted(terms, key=lambda term: str(term["label"]))
     if n_steps <= 0:
         raise ValueError(f"n_steps must be positive, got {n_steps}")
     if formula_order not in {1, 2}:
@@ -872,21 +882,63 @@ def run_compiled_product_formula(
     if not math.isfinite(zero_threshold) or zero_threshold < 0.0:
         raise ValueError("zero_angle_threshold must be finite and nonnegative")
 
-    schedule = product_formula_step_schedule(
-        terms=terms,
-        formula_order=formula_order,
-        step_time=float(target_time) / float(n_steps),
-    )
-    prepared_schedule: list[tuple[dict[str, Any], float, float | None]] = []
+    if schedule_strategy == "stationary_trotter":
+        term_indices = {id(term): index for index, term in enumerate(terms)}
+        raw_schedule = product_formula_step_schedule(
+            terms=terms,
+            formula_order=formula_order,
+            step_time=float(target_time) / float(n_steps),
+        )
+        schedule = [
+            {
+                "term_index": term_indices[id(term)],
+                "alpha": float(alpha),
+            }
+            for term, alpha in raw_schedule
+        ]
+        physical_multiplicity = n_steps
+        spectral_phase_time = float(target_time) / float(n_steps)
+        simulated_trotter_steps = 1
+    else:
+        if policy_module is None or evaluator_seed is None:
+            raise ValueError("explicit schedules require a policy module and evaluator seed")
+        schedule = build_explicit_product_formula_schedule(
+            terms=terms,
+            target_time=float(target_time),
+            evaluator_seed=evaluator_seed,
+            strategy=schedule_strategy,
+            policy_module=policy_module,
+            config=config,
+        )
+        physical_multiplicity = 1
+        spectral_phase_time = float(target_time)
+        simulated_trotter_steps = n_steps if schedule_strategy == "randomized_trotter" else 1
+
+    prepared_schedule: list[tuple[dict[str, Any], float, float | None, int, int]] = []
     rz_cache_keys: set[tuple[str, str]] = set()
-    for term, alpha in schedule:
+    prepared_schedule_receipt: list[dict[str, Any]] = []
+    for occurrence_index, item in enumerate(schedule):
+        term_index = int(item["term_index"])
+        term = terms[term_index]
+        alpha = float(item["alpha"])
         if abs(alpha) <= zero_threshold:
-            prepared_schedule.append((term, alpha, None))
+            prepared_schedule.append((term, alpha, None, occurrence_index, term_index))
+            prepared_schedule_receipt.append(
+                {"term_index": term_index, "alpha": alpha, "epsilon": None}
+            )
             continue
-        epsilon = float(choose_synthesis_epsilon(term, alpha, 0, config))
+        if "epsilon" in item:
+            epsilon = float(item["epsilon"])
+        else:
+            epsilon = float(
+                choose_synthesis_epsilon(term, alpha, occurrence_index, config)
+            )
         if not math.isfinite(epsilon) or epsilon <= 0.0:
             raise ValueError(f"invalid synthesis epsilon {epsilon} for term {term['label']}")
-        prepared_schedule.append((term, alpha, epsilon))
+        prepared_schedule.append((term, alpha, epsilon, occurrence_index, term_index))
+        prepared_schedule_receipt.append(
+            {"term_index": term_index, "alpha": alpha, "epsilon": epsilon}
+        )
         rz_cache_keys.add((f"{-2.0 * float(alpha):.17e}", f"{epsilon:.17e}"))
     rz_cache, synthesis_metrics = precompile_rz_rotations(rz_cache_keys)
     state = xp.zeros(1 << nqubits, dtype=xp.complex128)
@@ -906,16 +958,22 @@ def run_compiled_product_formula(
     skipped_rotation_count = 0
     numerical_component_omission_bound_per_slice = 0.0
     numerical_component_omission_bound_per_base_unitary = 0.0
+    synthesis_epsilon_sum_per_base_unitary = 0.0
+    omitted_rotation_identity_error_bound_per_base_unitary = 0.0
+    sampled_term_histogram: Counter[str] = Counter()
+    legate_execution_fence_count = 0
     propagation_started = time.perf_counter()
 
-    # Policies are required to be stationary: each of the n_steps repetitions
-    # applies the same compiled slice.  Evaluate that slice once on the A100 and
-    # extract its phase over target_time / n_steps.  Replaying an identical
-    # slice n_steps times is unnecessary for the spectral estimator and made
-    # conservative high-step seeds prohibitively expensive.
-    for term, alpha, epsilon in prepared_schedule:
+    # Stationary Trotter uses one compiled slice and physical_multiplicity=n_steps.
+    # Explicit strategies use physical_multiplicity=1 because every occurrence
+    # is present in prepared_schedule and is propagated on the A100.
+    for term, alpha, epsilon, occurrence_index, _term_index in prepared_schedule:
+        sampled_term_histogram[str(term["label"])] += physical_multiplicity
         if epsilon is None:
-            skipped_rotation_count += n_steps
+            skipped_rotation_count += physical_multiplicity
+            omitted_rotation_identity_error_bound_per_base_unitary += (
+                2.0 * abs(math.sin(float(alpha) / 2.0)) * physical_multiplicity
+            )
             continue
         compiled = compile_rotation(str(term["label"]), float(alpha), epsilon)
         non_identity_component_count = sum(
@@ -929,14 +987,26 @@ def run_compiled_product_formula(
             pauli_workspace=pauli_workspace,
             permutation_workspace=permutation_workspace,
         )
+        if xp.__name__.split(".")[0] in {"cupynumeric", "cunumeric"}:
+            from legate.core import get_legate_runtime
+
+            # cuPyNumeric is deferred. Reusing the bounded state workspaces
+            # without an execution fence can let later rotations overwrite a
+            # store before an earlier task consumes it. A blocking fence keeps
+            # the three/four-buffer propagation both correct and memory bounded.
+            get_legate_runtime().issue_execution_fence(block=True)
+            legate_execution_fence_count += 1
         if updated_state is not state:
             state, next_state = updated_state, state
-        nonzero_rotation_count += n_steps
-        t_gate_count += n_steps * int(compiled["t_gate_count"])
+        nonzero_rotation_count += physical_multiplicity
+        t_gate_count += physical_multiplicity * int(compiled["t_gate_count"])
+        synthesis_epsilon_sum_per_base_unitary += epsilon * physical_multiplicity
         component_omission = float(compiled.get("discarded_component_norm_bound", 0.0))
         numerical_component_omission_bound_per_slice += component_omission
-        numerical_component_omission_bound_per_base_unitary += n_steps * component_omission
-        epsilon_hist[f"{epsilon:.3e}"] += n_steps
+        numerical_component_omission_bound_per_base_unitary += (
+            physical_multiplicity * component_omission
+        )
+        epsilon_hist[f"{epsilon:.3e}"] += physical_multiplicity
         compilation_record = {
             key: compiled[key]
             for key in (
@@ -963,14 +1033,33 @@ def run_compiled_product_formula(
         "state": state,
         "state_array_type": f"{type(state).__module__}.{type(state).__name__}",
         "state_dimension": 1 << nqubits,
-        "propagation_mode": "one_stationary_compiled_trotter_slice",
-        "simulated_trotter_steps": 1,
+        "propagation_mode": (
+            "one_stationary_compiled_trotter_slice"
+            if schedule_strategy == "stationary_trotter"
+            else "full_explicit_compiled_schedule"
+        ),
+        "schedule_strategy": schedule_strategy,
+        "evaluator_schedule_seed": evaluator_seed,
+        "compiled_schedule_sha256": hashlib.sha256(
+            json.dumps(
+                prepared_schedule_receipt,
+                sort_keys=True,
+                separators=(",", ":"),
+                allow_nan=False,
+            ).encode("utf-8")
+        ).hexdigest(),
+        "explicit_schedule_rotation_count": len(schedule),
+        "simulated_trotter_steps": simulated_trotter_steps,
         "physical_trotter_steps": n_steps,
-        "spectral_phase_time": float(target_time) / float(n_steps),
+        "spectral_phase_time": spectral_phase_time,
         "base_unitary_t_gates": t_gate_count,
         "nonzero_rotation_count_per_base_unitary": nonzero_rotation_count,
         "skipped_rotation_count_per_base_unitary": skipped_rotation_count,
-        "scheduled_rotation_count_per_base_unitary": len(schedule) * n_steps,
+        "scheduled_rotation_count_per_base_unitary": len(schedule) * physical_multiplicity,
+        "synthesis_epsilon_sum_per_base_unitary": synthesis_epsilon_sum_per_base_unitary,
+        "omitted_rotation_identity_error_bound_per_base_unitary": (
+            omitted_rotation_identity_error_bound_per_base_unitary
+        ),
         "numerical_component_omission_bound_per_slice": (
             numerical_component_omission_bound_per_slice
         ),
@@ -979,6 +1068,8 @@ def run_compiled_product_formula(
         ),
         "synthesis_epsilon_histogram": dict(sorted(epsilon_hist.items())),
         "unique_compilation_count": len(unique_compilations),
+        "sampled_term_counts": dict(sorted(sampled_term_histogram.items())),
+        "legate_execution_fence_count": legate_execution_fence_count,
         **synthesis_metrics,
         "unique_compilations": sorted(
             unique_compilations.values(), key=lambda item: (item["label"], item["epsilon"])
@@ -1289,35 +1380,13 @@ def evaluate_lane(
         raise RuntimeError(f"{lane['lane_id']}: incomplete A100/Slurm baseline provenance")
     baseline_sha256 = sha256_file(baseline_path)
 
-    (
-        rotations,
-        scheduled,
-        nonzero,
-        eps_sum_per_base,
-        omitted_identity_error_per_base,
-    ) = aggregate_rotations(
-        terms=ordered_terms,
-        config=config,
-        choose_synthesis_epsilon=module.choose_synthesis_epsilon,
-        tau=float(protocol["tau"]),
-    )
     qpe_apps = int(protocol["qpe_unitary_applications"])
     formula_order = int(config_dict["formula_order"])
     n_steps = int(config_dict["n_steps"])
-    pf_error = pf_error_bound_hartree(
-        formula_order=formula_order,
-        n_steps=n_steps,
-        qpe_unitary_applications=qpe_apps,
-        tau=float(protocol["tau"]),
-    )
-    rotation_synthesis_error_per_base = eps_sum_per_base - omitted_identity_error_per_base
-    rotation_synthesis_unitary_error = qpe_apps * rotation_synthesis_error_per_base
-    zero_angle_unitary_error = qpe_apps * omitted_identity_error_per_base
-    zero_angle_error = zero_angle_unitary_error / float(protocol["tau"])
-    synthesis_unitary_error = rotation_synthesis_unitary_error + zero_angle_unitary_error
-    synthesis_error = synthesis_unitary_error / float(protocol["tau"])
-    analytic_total_error = (
-        float(protocol["qpe_grid_spacing_hartree"]) + pf_error + synthesis_error
+    schedule_strategy = str(config_dict.get("schedule_strategy", "stationary_trotter"))
+    evaluator_seed = derive_evaluator_schedule_seed(
+        campaign_id=str(campaign_manifest["campaign_id"]),
+        lane_id=str(lane["lane_id"]),
     )
 
     propagation = run_compiled_product_formula(
@@ -1328,6 +1397,48 @@ def evaluate_lane(
         nqubits=int(lane["nqubits"]),
         electrons=int(lane["electrons"]),
         xp=xp,
+        policy_module=module,
+        evaluator_seed=evaluator_seed,
+    )
+    scheduled = int(propagation["scheduled_rotation_count_per_base_unitary"])
+    nonzero = int(propagation["nonzero_rotation_count_per_base_unitary"])
+    rotation_synthesis_error_per_base = float(
+        propagation["synthesis_epsilon_sum_per_base_unitary"]
+    )
+    omitted_identity_error_per_base = float(
+        propagation["omitted_rotation_identity_error_bound_per_base_unitary"]
+    )
+    rotation_synthesis_unitary_error = qpe_apps * rotation_synthesis_error_per_base
+    zero_angle_unitary_error = qpe_apps * omitted_identity_error_per_base
+    zero_angle_error = zero_angle_unitary_error / float(protocol["tau"])
+    synthesis_unitary_error = rotation_synthesis_unitary_error + zero_angle_unitary_error
+    synthesis_error = synthesis_unitary_error / float(protocol["tau"])
+    qdrift_channel_error_bound_per_base: float | None = None
+    if schedule_strategy in {"stationary_trotter", "randomized_trotter"}:
+        pf_error: float | None = pf_error_bound_hartree(
+            formula_order=formula_order,
+            n_steps=n_steps,
+            qpe_unitary_applications=qpe_apps,
+            tau=float(protocol["tau"]),
+        )
+        pf_error_bound_kind = "conservative_trotter_l1"
+    elif schedule_strategy == "qdrift":
+        samples = int(propagation["explicit_schedule_rotation_count"])
+        nonidentity_one_norm = sum(abs(float(term["coefficient"])) for term in ordered_terms)
+        qdrift_channel_error_bound_per_base = (
+            2.0
+            * (nonidentity_one_norm * float(protocol["tau"])) ** 2
+            / float(samples)
+        )
+        pf_error = qpe_apps * qdrift_channel_error_bound_per_base / float(protocol["tau"])
+        pf_error_bound_kind = "qdrift_average_channel_diamond_bound"
+    else:
+        pf_error = None
+        pf_error_bound_kind = "unavailable_for_custom_schedule"
+    analytic_total_error = (
+        None
+        if pf_error is None
+        else float(protocol["qpe_grid_spacing_hartree"]) + pf_error + synthesis_error
     )
     propagated_state = propagation.pop("state")
     phase_metrics = estimate_reference_peak_energy(
@@ -1380,7 +1491,11 @@ def evaluate_lane(
         **baseline,
         **phase_metrics,
         "objective": "hf_reference_spectral_energy",
-        "spectral_estimator": "lowest_resolved_peak_one_stationary_slice_projection",
+        "spectral_estimator": (
+            "lowest_resolved_peak_one_stationary_slice_projection"
+            if schedule_strategy == "stationary_trotter"
+            else "lowest_resolved_peak_full_explicit_schedule_projection"
+        ),
         "reference_state": "hartree_fock",
         "accuracy_metric_name": "ground_state_energy_error_hartree",
         "accuracy_metric_value": energy_error,
@@ -1397,6 +1512,8 @@ def evaluate_lane(
         "synthesis_unitary_error_bound": synthesis_unitary_error,
         "synthesis_error_bound_hartree": synthesis_error,
         "pf_error_bound_hartree": pf_error,
+        "pf_error_bound_kind": pf_error_bound_kind,
+        "qdrift_channel_error_bound_per_base": qdrift_channel_error_bound_per_base,
         "analytic_total_error_bound_hartree": analytic_total_error,
         "total_t_gates_qpe": total_t,
         "score": score(total_t, energy_error),

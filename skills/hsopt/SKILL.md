@@ -139,12 +139,16 @@ Prefer simple precision policies that are easy to audit:
 - custom deterministic term-order hooks such as
   `order_product_formula_terms(terms, config)` when present or explicitly
   allowed by the benchmark
+- evaluator-seeded randomized Trotter, qDRIFT, or a custom explicit schedule
+  when the benchmark exposes `schedule_strategy`; custom schedule items identify
+  a Hamiltonian `term_index`, an `alpha`, and may supply a per-occurrence `epsilon`
 
 For product-formula lanes, do not default to scalar-only edits of
 `formula_order`, `n_steps`, or `uniform_epsilon`. First check whether
 `choose_synthesis_epsilon(term, alpha, step_index, config)` receives
 Hamiltonian metadata such as Pauli label, coefficient, support size, and
-Pauli-family counts. Use those features to loosen synthesis precision for
+Pauli-family counts. Explicit schedules may use `step_index` for arbitrary
+per-occurrence tolerances. Use those features to loosen synthesis precision for
 low-impact terms and tighten only where the error budget needs it.
 
 Changing product-formula order or the number of PF steps is allowed only when

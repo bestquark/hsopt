@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import ast
+import bisect
 import csv
 import copy
 import hashlib
@@ -9,6 +10,7 @@ import importlib
 import json
 import math
 import os
+import random
 import re
 import shlex
 import shutil
@@ -103,6 +105,14 @@ ALLOWED_TERM_ORDER_STRATEGIES = {
     "alternating_large_small",
     "custom",
 }
+ALLOWED_SCHEDULE_STRATEGIES = {
+    "stationary_trotter",
+    "randomized_trotter",
+    "qdrift",
+    "custom",
+}
+MAX_EXPLICIT_SCHEDULE_ROTATIONS = 200_000
+SCHEDULE_SEED_DOMAIN = b"hsopt-explicit-schedule-v1\0"
 SAFE_POLICY_IMPORTS: dict[str, set[str] | None] = {
     "__future__": {"annotations"},
     "dataclasses": {"asdict", "dataclass", "field", "fields", "replace"},
@@ -1851,6 +1861,8 @@ class ProductFormulaConfig:
     zero_angle_threshold: float = 0.0
     uniform_epsilon: float = {initial["uniform_epsilon"]:.17e}
     term_order_strategy: str = "{initial["term_order_strategy"]}"
+    schedule_strategy: str = "stationary_trotter"
+    qdrift_samples: int = 4096
     initial_baseline_source: str = INITIAL_BASELINE_SOURCE
     initial_chemical_accuracy_hartree: float = INITIAL_CHEMICAL_ACCURACY_HARTREE
     initial_qpe_error_budget_hartree: float = INITIAL_QPE_ERROR_BUDGET_HARTREE
@@ -1897,6 +1909,24 @@ def order_product_formula_terms(
     """
     _ = config
     return list(terms)
+
+
+def build_product_formula_schedule(
+    terms: list[Dict[str, object]],
+    target_time: float,
+    evaluator_seed: int,
+    config: ProductFormulaConfig,
+) -> list[Dict[str, object]]:
+    """Optional hook used when schedule_strategy == "custom".
+
+    Return a deterministic list of rotations. Each item contains term_index and
+    alpha, plus an optional positive epsilon that overrides
+    choose_synthesis_epsilon for that occurrence. Terms may be reordered,
+    repeated, or omitted. Use evaluator_seed for reproducible randomized
+    schedules; never read ambient randomness.
+    """
+    _ = (terms, target_time, evaluator_seed, config)
+    return []
 
 
 def describe_policy() -> Dict[str, object]:
@@ -1981,22 +2011,6 @@ def validate_policy_ast(source: str, *, filename: str) -> ast.Module:
                             "policy range literal exceeds the deterministic work limit"
                         )
 
-    synthesis_functions = [
-        node
-        for node in tree.body
-        if isinstance(node, ast.FunctionDef) and node.name == "choose_synthesis_epsilon"
-    ]
-    if len(synthesis_functions) == 1:
-        synthesis_function = synthesis_functions[0]
-        if any(
-            isinstance(node, ast.Name)
-            and node.id == "step_index"
-            and isinstance(node.ctx, ast.Load)
-            for node in ast.walk(synthesis_function)
-        ):
-            raise ValueError(
-                "choose_synthesis_epsilon must be stationary and cannot read step_index"
-            )
     return tree
 
 
@@ -2364,6 +2378,195 @@ def order_terms(
                 left += 1
         return out
     raise ValueError(f"unsupported term_order_strategy {strategy!r}")
+
+
+def derive_evaluator_schedule_seed(*, campaign_id: str, lane_id: str) -> int:
+    """Derive one evaluator-owned seed that is stable within a replicate lane."""
+    if SHA256_RE.fullmatch(campaign_id) is None:
+        raise ValueError("campaign_id must be a lowercase SHA-256 digest")
+    if not isinstance(lane_id, str) or not lane_id:
+        raise ValueError("lane_id must be nonempty")
+    digest = hashlib.sha256(
+        SCHEDULE_SEED_DOMAIN
+        + campaign_id.encode("ascii")
+        + b"\0"
+        + lane_id.encode("utf-8")
+    ).digest()
+    return int.from_bytes(digest[:8], byteorder="big", signed=False)
+
+
+def _validate_explicit_schedule_item(
+    item: Any,
+    *,
+    index: int,
+    term_count: int,
+) -> dict[str, Any]:
+    if not isinstance(item, dict):
+        raise ValueError(f"schedule item {index} must be a dictionary")
+    unexpected = set(item) - {"term_index", "alpha", "epsilon"}
+    if unexpected or "term_index" not in item or "alpha" not in item:
+        raise ValueError(
+            f"schedule item {index} must contain term_index and alpha, with optional epsilon"
+        )
+    term_index = item["term_index"]
+    if (
+        not isinstance(term_index, int)
+        or isinstance(term_index, bool)
+        or not 0 <= term_index < term_count
+    ):
+        raise ValueError(f"schedule item {index} has invalid term_index {term_index!r}")
+    alpha = float(item["alpha"])
+    if not math.isfinite(alpha):
+        raise ValueError(f"schedule item {index} has non-finite alpha")
+    normalized: dict[str, Any] = {"term_index": term_index, "alpha": alpha}
+    if "epsilon" in item:
+        epsilon = float(item["epsilon"])
+        if not math.isfinite(epsilon) or epsilon <= 0.0:
+            raise ValueError(f"schedule item {index} has invalid epsilon {epsilon!r}")
+        normalized["epsilon"] = epsilon
+    return normalized
+
+
+def validate_explicit_product_formula_schedule(
+    schedule: Any,
+    *,
+    term_count: int,
+) -> list[dict[str, Any]]:
+    if not isinstance(schedule, (list, tuple)):
+        raise ValueError("explicit product-formula schedule must be a list or tuple")
+    if not schedule:
+        raise ValueError("explicit product-formula schedule must not be empty")
+    if len(schedule) > MAX_EXPLICIT_SCHEDULE_ROTATIONS:
+        raise ValueError(
+            "explicit product-formula schedule exceeds the resource-safety limit of "
+            f"{MAX_EXPLICIT_SCHEDULE_ROTATIONS} rotations"
+        )
+    return [
+        _validate_explicit_schedule_item(item, index=index, term_count=term_count)
+        for index, item in enumerate(schedule)
+    ]
+
+
+def build_explicit_product_formula_schedule(
+    *,
+    terms: list[dict[str, Any]],
+    target_time: float,
+    evaluator_seed: int,
+    strategy: str,
+    policy_module: Any,
+    config: Any,
+) -> list[dict[str, Any]]:
+    """Build a reproducible full base-unitary schedule for nonstationary methods."""
+    if strategy not in ALLOWED_SCHEDULE_STRATEGIES - {"stationary_trotter"}:
+        raise ValueError(f"unsupported explicit schedule strategy {strategy!r}")
+    if not math.isfinite(target_time) or target_time <= 0.0:
+        raise ValueError("target_time must be positive and finite")
+    if not isinstance(evaluator_seed, int) or isinstance(evaluator_seed, bool):
+        raise ValueError("evaluator_seed must be an integer")
+    if not terms:
+        raise ValueError("explicit schedules require at least one Hamiltonian term")
+
+    if strategy == "qdrift":
+        samples = int(getattr(config, "qdrift_samples", 0))
+        if not 1 <= samples <= MAX_EXPLICIT_SCHEDULE_ROTATIONS:
+            raise ValueError(
+                f"qdrift_samples must be between 1 and {MAX_EXPLICIT_SCHEDULE_ROTATIONS}"
+            )
+        one_norm = sum(abs(float(term["coefficient"])) for term in terms)
+        if not math.isfinite(one_norm) or one_norm <= 0.0:
+            raise ValueError("qDRIFT requires a positive finite nonidentity one-norm")
+        cumulative: list[float] = []
+        total = 0.0
+        for term in terms:
+            total += abs(float(term["coefficient"])) / one_norm
+            cumulative.append(total)
+        cumulative[-1] = 1.0
+        rng = random.Random(evaluator_seed)
+        alpha_magnitude = one_norm * target_time / float(samples)
+        generated: list[dict[str, Any]] = []
+        for _ in range(samples):
+            draw = rng.random()
+            term_index = bisect.bisect_right(cumulative, draw)
+            coefficient = float(terms[term_index]["coefficient"])
+            generated.append(
+                {
+                    "term_index": term_index,
+                    "alpha": math.copysign(alpha_magnitude, coefficient),
+                }
+            )
+        return generated
+
+    if strategy == "randomized_trotter":
+        formula_order = int(getattr(config, "formula_order"))
+        n_steps = int(getattr(config, "n_steps"))
+        if formula_order not in {1, 2} or n_steps <= 0:
+            raise ValueError("randomized Trotter requires PF1/PF2 and positive n_steps")
+        rotations_per_step = len(terms) if formula_order == 1 else 2 * len(terms) - 1
+        if n_steps * rotations_per_step > MAX_EXPLICIT_SCHEDULE_ROTATIONS:
+            raise ValueError(
+                "randomized Trotter schedule exceeds the explicit resource-safety limit"
+            )
+        step_time = target_time / float(n_steps)
+        rng = random.Random(evaluator_seed)
+        generated = []
+        for _ in range(n_steps):
+            indices = list(range(len(terms)))
+            rng.shuffle(indices)
+            if formula_order == 1:
+                for term_index in indices:
+                    generated.append(
+                        {
+                            "term_index": term_index,
+                            "alpha": float(terms[term_index]["coefficient"]) * step_time,
+                        }
+                    )
+            else:
+                for term_index in indices[:-1]:
+                    generated.append(
+                        {
+                            "term_index": term_index,
+                            "alpha": 0.5
+                            * float(terms[term_index]["coefficient"])
+                            * step_time,
+                        }
+                    )
+                center = indices[-1]
+                generated.append(
+                    {
+                        "term_index": center,
+                        "alpha": float(terms[center]["coefficient"]) * step_time,
+                    }
+                )
+                for term_index in reversed(indices[:-1]):
+                    generated.append(
+                        {
+                            "term_index": term_index,
+                            "alpha": 0.5
+                            * float(terms[term_index]["coefficient"])
+                            * step_time,
+                        }
+                    )
+        return generated
+
+    hook = getattr(policy_module, "build_product_formula_schedule", None)
+    if not callable(hook):
+        raise ValueError(
+            'schedule_strategy="custom" requires '
+            "build_product_formula_schedule(terms, target_time, evaluator_seed, config)"
+        )
+    first = validate_explicit_product_formula_schedule(
+        hook(copy.deepcopy(terms), target_time, evaluator_seed, config),
+        term_count=len(terms),
+    )
+    second = validate_explicit_product_formula_schedule(
+        hook(copy.deepcopy(terms), target_time, evaluator_seed, config),
+        term_count=len(terms),
+    )
+    if json.dumps(first, sort_keys=True, separators=(",", ":")) != json.dumps(
+        second, sort_keys=True, separators=(",", ":")
+    ):
+        raise ValueError("custom product-formula schedule is not deterministic")
+    return first
 
 
 def run_command(

@@ -1,4 +1,4 @@
-"""Minimal stationary synthesis policy for the ten-reaction benchmark.
+"""Minimal synthesis policy for the ten-reaction benchmark.
 
 Autoresearch copies this file into a lane and mutates only the copy.  The
 scientific evaluator and reaction registry stay fixed.
@@ -38,6 +38,9 @@ class ProductFormulaConfig:
     n_steps: int
     zero_angle_threshold: float
     synthesis_error_budget_hartree: float
+    schedule_strategy: str = "stationary_trotter"
+    term_order_strategy: str = "input"
+    qdrift_samples: int = 4096
 
 
 def set_active_species(species: str) -> None:
@@ -69,6 +72,9 @@ def get_method_config() -> ProductFormulaConfig:
             "HSOPT_REACTIONS_SYNTHESIS_ERROR_BUDGET_HARTREE",
             DEFAULT_SYNTHESIS_ERROR_BUDGET_HARTREE,
         ),
+        schedule_strategy="stationary_trotter",
+        term_order_strategy="input",
+        qdrift_samples=_env_int("HSOPT_REACTIONS_QDRIFT_SAMPLES", 4096),
     )
 
 
@@ -86,6 +92,28 @@ def choose_synthesis_epsilon(
     if not math.isfinite(epsilon) or epsilon <= 0.0:
         raise ValueError(f"invalid synthesis epsilon {epsilon}")
     return max(epsilon, 1.0e-15)
+
+
+def order_product_formula_terms(
+    terms: list[dict[str, object]],
+    config: ProductFormulaConfig,
+) -> list[dict[str, object]]:
+    """Custom-order hook; mutate a lane copy to return any exact permutation."""
+
+    _ = config
+    return list(terms)
+
+
+def build_product_formula_schedule(
+    terms: list[dict[str, object]],
+    target_time: float,
+    evaluator_seed: int,
+    config: ProductFormulaConfig,
+) -> list[dict[str, object]]:
+    """Custom-schedule hook used only when ``schedule_strategy == 'custom'``."""
+
+    _ = (terms, target_time, evaluator_seed, config)
+    raise NotImplementedError("define a deterministic custom schedule before selecting 'custom'")
 
 
 def describe_policy() -> Dict[str, object]:

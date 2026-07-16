@@ -26,11 +26,13 @@ sys.pycache_prefix = _PRIVATE_PYCACHE_PREFIX
 os.environ["PYTHONPYCACHEPREFIX"] = _PRIVATE_PYCACHE_PREFIX
 
 from campaign_common import (  # noqa: E402
+    ALLOWED_SCHEDULE_STRATEGIES,
     ALLOWED_TERM_ORDER_STRATEGIES,
     DEFAULT_CODEX_BIN,
     PAPER_MODEL,
     PAPER_REASONING_EFFORT,
     PAPER_CODEX_EXEC_FLAGS,
+    build_explicit_product_formula_schedule,
     db_connect,
     ensure_autoresearch_provenance,
     ensure_dirs,
@@ -168,6 +170,7 @@ def validate_policy(policy_path: Path) -> tuple[bool, str | None]:
         zero_angle_threshold = float(getattr(config, "zero_angle_threshold", 0.0))
         uniform_epsilon = float(getattr(config, "uniform_epsilon"))
         term_order = str(getattr(config, "term_order_strategy"))
+        schedule_strategy = str(getattr(config, "schedule_strategy", "stationary_trotter"))
         if formula_order not in (1, 2):
             return False, f"formula_order must be 1 or 2, got {formula_order}"
         if n_steps <= 0:
@@ -181,6 +184,8 @@ def validate_policy(policy_path: Path) -> tuple[bool, str | None]:
             return False, f"uniform_epsilon must be positive and finite, got {uniform_epsilon}"
         if term_order not in ALLOWED_TERM_ORDER_STRATEGIES:
             return False, f"unsupported term_order_strategy {term_order!r}"
+        if schedule_strategy not in ALLOWED_SCHEDULE_STRATEGIES:
+            return False, f"unsupported schedule_strategy {schedule_strategy!r}"
         sample_terms = [
             {
                 "label": "IXYZ",
@@ -200,6 +205,15 @@ def validate_policy(policy_path: Path) -> tuple[bool, str | None]:
             },
         ]
         _ = order_terms(sample_terms, term_order, module, config)
+        if schedule_strategy != "stationary_trotter":
+            _ = build_explicit_product_formula_schedule(
+                terms=sample_terms,
+                target_time=0.5,
+                evaluator_seed=17,
+                strategy=schedule_strategy,
+                policy_module=module,
+                config=config,
+            )
         sample_term = {
             "label": "X0 Y1 Z2",
             "coefficient": 0.03125,
@@ -281,6 +295,7 @@ def mutation_prompt(
     incumbent = json.dumps(compact_result_for_prompt(incumbent_result), indent=2, sort_keys=True)
     previous = json.dumps(compact_result_for_prompt(previous_attempt), indent=2, sort_keys=True)
     allowed_orders = ", ".join(sorted(ALLOWED_TERM_ORDER_STRATEGIES))
+    allowed_schedules = ", ".join(sorted(ALLOWED_SCHEDULE_STRATEGIES))
     return f"""You are mutating one HamLib product-formula policy for an hsopt-style campaign.
 
 Lane:
@@ -297,14 +312,16 @@ Lane:
 Edit only `simple_pf.py` in the current directory. Make exactly one coherent policy mutation.
 
 Policy API available in `simple_pf.py`:
-- `ProductFormulaConfig` controls PF1/PF2, step count, base epsilon, zero-angle threshold, and named term ordering.
-- `choose_synthesis_epsilon(term, alpha, step_index, config)` is called for each nonzero Pauli rotation. Use this function to allocate lower precision to low-impact Hamiltonian terms and higher precision to terms likely to dominate error.
+- `ProductFormulaConfig` controls schedule family, PF1/PF2, step count, base epsilon, zero-angle threshold, and named term ordering.
+- `choose_synthesis_epsilon(term, alpha, step_index, config)` is called for each nonzero rotation. `step_index` is the explicit schedule occurrence for nonstationary schedules, so tolerances may vary arbitrarily from one occurrence to another.
 - `term` is Hamiltonian-derived metadata with at least `label`, `coefficient`, `support_size`, `x_count`, `y_count`, and `z_count`.
 - `alpha` is the actual per-application PF rotation coefficient after step-time and PF half-step factors; `abs(alpha)` is often a better precision signal than the raw coefficient alone.
 - Optional: define `order_product_formula_terms(terms, config)` and set `term_order_strategy = "custom"` to return the same Hamiltonian terms in a deterministic custom order. This is the hook for grouping or interleaving terms by coefficient bands, Pauli family, support/locality, Z-only vs mixed X/Y/Z structure, or other auditable Hamiltonian metadata. Do not drop, duplicate, or alter terms.
+- Set `schedule_strategy` to `randomized_trotter` for evaluator-seeded independent term permutations at each Trotter step, or `qdrift` for coefficient-weighted sampling with replacement using `qdrift_samples` rotations.
+- For a fully custom algorithm, set `schedule_strategy = "custom"` and define `build_product_formula_schedule(terms, target_time, evaluator_seed, config)`. Return dictionaries containing `term_index`, `alpha`, and optionally a positive `epsilon`. Terms may be reordered, repeated, or omitted; the evaluator seed makes randomized schedules reproducible and is not chosen by the agent.
 
 Evaluation contract:
-- The deterministic evaluator runs one stationary compiled Trotter slice of the proposed product formula on the Hartree-Fock state on one A100 through Legate/cuPyNumeric, then scales its measured spectral phase across the configured repetitions.
+- The evaluator runs the actual compiled schedule on one A100 through Legate/cuPyNumeric. Stationary Trotter retains a compact one-slice fast path; randomized Trotter, qDRIFT, and custom schedules are propagated in full.
 - It estimates the lowest resolved Hartree-Fock spectral peak and compares that measured energy with the exact fixed-electron-sector ground energy.
 - Analytic PF/synthesis bounds are diagnostics only. They do not determine acceptance.
 
@@ -314,12 +331,13 @@ Allowed knobs:
 - `uniform_epsilon` plus structured logic inside `choose_synthesis_epsilon`.
 - `zero_angle_threshold` when it safely removes negligible rotations.
 - `term_order_strategy`: one of {allowed_orders}.
-- Optional helper functions used by `choose_synthesis_epsilon` or `order_product_formula_terms`, if they stay in this file and remain deterministic.
+- `schedule_strategy`: one of {allowed_schedules}.
+- Optional deterministic helper functions used by `choose_synthesis_epsilon`, `order_product_formula_terms`, or `build_product_formula_schedule`.
 
 Hard constraints:
-- Keep `choose_synthesis_epsilon` independent of `step_index`; the policy validator rejects any read of `step_index` so one measured stationary slice exactly represents every repetition.
 - Return strictly positive finite epsilons.
 - Custom ordering must preserve exactly the same Pauli labels and coefficients.
+- Custom schedules may use arbitrary ordering, repetition, omission, rotation angles, and per-occurrence tolerances, but may reference only supplied Hamiltonian term indices and must reproduce byte-for-byte for the same evaluator seed.
 - Do not change the Hamiltonian, QPE parameters, evaluator formulas, chemical-accuracy bound, or pygridsynth behavior.
 - Do not edit lane metadata, evaluator scripts, or files outside this directory.
 - Keep the policy auditable; avoid random search or giant tables.

@@ -24,6 +24,9 @@ class ProductFormulaConfig:
     n_steps: int
     zero_angle_threshold: float
     synthesis_error_budget_hartree: float
+    schedule_strategy: str = "stationary_trotter"
+    term_order_strategy: str = "input"
+    qdrift_samples: int = 4096
 
 
 def set_active_species(species: str) -> None:
@@ -44,6 +47,9 @@ def get_method_config() -> ProductFormulaConfig:
         n_steps=int(policy["n_steps"]),
         zero_angle_threshold=float(policy.get("zero_angle_threshold", 1.0e-15)),
         synthesis_error_budget_hartree=float(policy["synthesis_error_budget_hartree"]),
+        schedule_strategy=str(policy.get("schedule_strategy", "stationary_trotter")),
+        term_order_strategy=str(policy.get("term_order_strategy", "input")),
+        qdrift_samples=int(policy.get("qdrift_samples", 4096)),
     )
 
 
@@ -61,6 +67,28 @@ def choose_synthesis_epsilon(
     if not math.isfinite(epsilon) or epsilon <= 0.0:
         raise ValueError(f"invalid synthesis epsilon {epsilon}")
     return max(epsilon, 1.0e-15)
+
+
+def order_product_formula_terms(
+    terms: list[dict[str, object]],
+    config: ProductFormulaConfig,
+) -> list[dict[str, object]]:
+    """Return any exact permutation when ``term_order_strategy == 'custom'``."""
+
+    _ = config
+    return list(terms)
+
+
+def build_product_formula_schedule(
+    terms: list[dict[str, object]],
+    target_time: float,
+    evaluator_seed: int,
+    config: ProductFormulaConfig,
+) -> list[dict[str, object]]:
+    """Return explicit term_index/alpha[/epsilon] items for a custom method."""
+
+    _ = (terms, target_time, evaluator_seed, config)
+    raise NotImplementedError("define a deterministic schedule before selecting 'custom'")
 
 
 def describe_policy() -> dict[str, Any]:

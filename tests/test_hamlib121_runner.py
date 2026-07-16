@@ -1522,6 +1522,167 @@ def test_custom_order_is_an_exact_permutation_and_cannot_mutate_source_terms() -
     assert detached == original
 
 
+def test_qdrift_and_randomized_trotter_schedules_are_evaluator_seeded() -> None:
+    terms = [
+        {"label": "X", "coefficient": 1.0},
+        {"label": "Z", "coefficient": -3.0},
+    ]
+    qdrift = SimpleNamespace(qdrift_samples=128)
+    first = CAMPAIGN_COMMON.build_explicit_product_formula_schedule(
+        terms=terms,
+        target_time=0.5,
+        evaluator_seed=123,
+        strategy="qdrift",
+        policy_module=object(),
+        config=qdrift,
+    )
+    repeated = CAMPAIGN_COMMON.build_explicit_product_formula_schedule(
+        terms=terms,
+        target_time=0.5,
+        evaluator_seed=123,
+        strategy="qdrift",
+        policy_module=object(),
+        config=qdrift,
+    )
+    other_seed = CAMPAIGN_COMMON.build_explicit_product_formula_schedule(
+        terms=terms,
+        target_time=0.5,
+        evaluator_seed=124,
+        strategy="qdrift",
+        policy_module=object(),
+        config=qdrift,
+    )
+    assert first == repeated
+    assert first != other_seed
+    assert len(first) == 128
+    assert all(abs(item["alpha"]) == pytest.approx(4.0 * 0.5 / 128) for item in first)
+    assert all(
+        math.copysign(1.0, item["alpha"])
+        == math.copysign(1.0, terms[item["term_index"]]["coefficient"])
+        for item in first
+    )
+
+    randomized = CAMPAIGN_COMMON.build_explicit_product_formula_schedule(
+        terms=terms,
+        target_time=0.5,
+        evaluator_seed=9,
+        strategy="randomized_trotter",
+        policy_module=object(),
+        config=SimpleNamespace(formula_order=1, n_steps=5),
+    )
+    assert len(randomized) == 10
+    assert all(
+        sorted(item["term_index"] for item in randomized[offset : offset + 2]) == [0, 1]
+        for offset in range(0, len(randomized), 2)
+    )
+
+
+def test_custom_schedule_allows_arbitrary_occurrences_angles_and_tolerances() -> None:
+    terms = [{"label": "Z", "coefficient": 0.25}]
+
+    class Policy:
+        @staticmethod
+        def build_product_formula_schedule(terms, target_time, evaluator_seed, config):
+            assert len(terms) == 1
+            assert (target_time, evaluator_seed, config) == (0.4, 7, "config")
+            return [
+                {"term_index": 0, "alpha": 0.3, "epsilon": 1.0e-4},
+                {"term_index": 0, "alpha": -0.1},
+                {"term_index": 0, "alpha": 0.2, "epsilon": 3.0e-4},
+            ]
+
+    schedule = CAMPAIGN_COMMON.build_explicit_product_formula_schedule(
+        terms=terms,
+        target_time=0.4,
+        evaluator_seed=7,
+        strategy="custom",
+        policy_module=Policy,
+        config="config",
+    )
+    assert schedule == [
+        {"term_index": 0, "alpha": 0.3, "epsilon": 1.0e-4},
+        {"term_index": 0, "alpha": -0.1},
+        {"term_index": 0, "alpha": 0.2, "epsilon": 3.0e-4},
+    ]
+
+
+def test_full_explicit_schedule_uses_per_occurrence_tolerances(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    import numpy as np
+
+    epsilon_calls: list[int] = []
+
+    class Policy:
+        @staticmethod
+        def build_product_formula_schedule(_terms, _target_time, _seed, _config):
+            return [
+                {"term_index": 0, "alpha": 0.1, "epsilon": 1.0e-4},
+                {"term_index": 0, "alpha": 0.2},
+            ]
+
+    def precompile(keys):
+        return (
+            {key: {"gate_string": "T", "matrix_host": np.eye(2)} for key in keys},
+            {"precompiled_rz_count": len(keys), "pygridsynth_workers": 1, "pygridsynth_wall_seconds": 0.0},
+        )
+
+    def compiler(*, nqubits: int, xp, rz_cache=None):
+        assert (nqubits, xp) == (1, np)
+        assert rz_cache is not None
+
+        def compile_rotation(label: str, alpha: float, epsilon: float):
+            def apply_state(state, *, out=None, **_workspaces):
+                target = np.empty_like(state) if out is None else out
+                target[0] = np.exp(1j * alpha) * state[0]
+                target[1] = np.exp(-1j * alpha) * state[1]
+                return target
+
+            return {
+                "cache_key": f"{label}|{alpha}|{epsilon}",
+                "label": label,
+                "alpha": alpha,
+                "theta": -2.0 * alpha,
+                "epsilon": epsilon,
+                "t_gate_count": 3,
+                "gate_count": 3,
+                "operator_error": 0.0,
+                "active_pauli_components": ["I", "Z"],
+                "discarded_component_norm_bound": 0.0,
+                "apply_state": apply_state,
+            }
+
+        return compile_rotation
+
+    monkeypatch.setattr(EVALUATE_WORKER, "precompile_rz_rotations", precompile)
+    monkeypatch.setattr(EVALUATE_WORKER, "build_pauli_rotation_compiler", compiler)
+    run = EVALUATE_WORKER.run_compiled_product_formula(
+        terms=[{"label": "Z", "coefficient": 0.25}],
+        config=SimpleNamespace(
+            formula_order=1,
+            n_steps=1,
+            zero_angle_threshold=0.0,
+            schedule_strategy="custom",
+        ),
+        choose_synthesis_epsilon=lambda _term, _alpha, index, _config: (
+            epsilon_calls.append(index) or 2.0e-4
+        ),
+        target_time=0.4,
+        nqubits=1,
+        electrons=0,
+        xp=np,
+        policy_module=Policy,
+        evaluator_seed=7,
+    )
+    assert epsilon_calls == [1]
+    assert run["propagation_mode"] == "full_explicit_compiled_schedule"
+    assert run["explicit_schedule_rotation_count"] == 2
+    assert run["scheduled_rotation_count_per_base_unitary"] == 2
+    assert run["base_unitary_t_gates"] == 6
+    assert run["spectral_phase_time"] == pytest.approx(0.4)
+    assert np.angle(run["state"][0]) == pytest.approx(0.3)
+
+
 def test_safe_policy_loader_accepts_the_fixed_policy_and_rejects_host_capabilities(
     prepared_campaign: Path,
     tmp_path: Path,
@@ -2018,7 +2179,7 @@ def test_rz_precompilation_cache_avoids_serial_resynthesis(
     assert compiled["t_gate_count"] == 1
 
 
-def test_policy_loader_rejects_step_dependent_synthesis(tmp_path: Path) -> None:
+def test_policy_loader_accepts_step_dependent_synthesis(tmp_path: Path) -> None:
     policy = tmp_path / "step_dependent.py"
     policy.write_text(
         """
@@ -2027,8 +2188,9 @@ def choose_synthesis_epsilon(term, alpha, step_index, config):
 """.lstrip(),
         encoding="utf-8",
     )
-    with pytest.raises(ValueError, match="stationary"):
-        CAMPAIGN_COMMON.load_policy_module(policy)
+    module = CAMPAIGN_COMMON.load_policy_module(policy)
+    assert module.choose_synthesis_epsilon({}, 0.1, 0, object()) == 1.0e-6
+    assert module.choose_synthesis_epsilon({}, 0.1, 1, object()) == 2.0e-6
 
 
 def test_streaming_progress_helpers_resume_and_number_batches(tmp_path: Path) -> None:

@@ -7,9 +7,12 @@ baseline, and then records exactly 50 Codex proposals per lane.
 
 Codex mutation runs on Omni. Deterministic Slurm jobs each request one A100
 80GB and evaluate five lanes serially through Legate/cuPyNumeric, yielding four
-concurrent GPU batches per iteration. The evaluator constructs and diagonalizes
-the compiled one-step unitary on the allocated A100; NumPy/CPU production
-scoring is rejected.
+concurrent GPU batches per iteration. Stationary Trotter policies use compiled
+one-step diagonalization; evaluator-seeded randomized Trotter, qDRIFT, and
+custom schedules are propagated explicitly from the exact ground state. All
+paths run on the allocated A100 and NumPy/CPU production scoring is rejected.
+Custom ordering may be any exact permutation, and explicit schedule entries may
+set a distinct synthesis tolerance per occurrence.
 
 The 42 Hamiltonian cache files are intentionally external to Git. Preparation
 requires their directory explicitly and verifies every file against

@@ -16,12 +16,14 @@ The acceptance metric is the measured HF-reference spectral ground-energy
 error of the compiled proposed product formula. Analytic product-formula and
 synthesis bounds are retained only as diagnostics.
 
-Policies are stationary across Trotter repetitions. The evaluator therefore
-applies one compiled slice on the A100, measures the selected spectral phase
-over `tau / n_steps`, and scales that phase to the configured base unitary.
-Physical rotation and T counts still include all repetitions. This avoids
-replaying an identical slice tens of thousands of times while evaluating the
-same stationary product formula.
+The default stationary Trotter policy uses a fast path: the evaluator applies
+one compiled slice on the A100, measures its spectral phase over
+`tau / n_steps`, and scales that phase to the configured base unitary while
+retaining physical rotation and T counts for every repetition. Policies may
+instead select evaluator-seeded randomized Trotter, qDRIFT, or a deterministic
+custom explicit schedule. Explicit schedules are propagated in full, may use
+any exact term permutation, and may choose a distinct synthesis epsilon for
+each occurrence.
 
 ## Environment
 

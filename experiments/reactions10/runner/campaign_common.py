@@ -25,6 +25,12 @@ FIRST_EVALUATION_ITERATION = 0
 LAST_EVALUATION_ITERATION = PROPOSAL_ITERATIONS
 EXPECTED_CACHE_FILES = 42
 EXPECTED_CACHE_SPECIES = 21
+ALLOWED_SCHEDULE_STRATEGIES = frozenset(
+    {"stationary_trotter", "randomized_trotter", "qdrift", "custom"}
+)
+ALLOWED_TERM_ORDER_STRATEGIES = frozenset(
+    {"input", "coefficient_desc", "coefficient_asc", "support_desc", "custom"}
+)
 
 HARTREE_PER_KCAL_MOL = 1.0 / 627.5094740631
 CHEMICAL_ACCURACY_HARTREE = HARTREE_PER_KCAL_MOL
@@ -633,6 +639,10 @@ def validate_policy(path: Path, species: Sequence[str]) -> tuple[bool, str | Non
             config_species = str(getattr(config, "species"))
             config_name = str(getattr(config, "name"))
             synthesis_budget = float(getattr(config, "synthesis_error_budget_hartree"))
+            schedule_strategy = str(
+                getattr(config, "schedule_strategy", "stationary_trotter")
+            )
+            term_order_strategy = str(getattr(config, "term_order_strategy", "input"))
             if config_species != species_key or not config_name:
                 raise ValueError(f"{species_key}: config species/name identity mismatch")
             if formula_order not in (1, 2):
@@ -647,6 +657,10 @@ def validate_policy(path: Path, species: Sequence[str]) -> tuple[bool, str | Non
                 raise ValueError(
                     f"{species_key}: synthesis_error_budget_hartree must be finite and positive"
                 )
+            if schedule_strategy not in ALLOWED_SCHEDULE_STRATEGIES:
+                raise ValueError(f"{species_key}: unsupported schedule_strategy")
+            if term_order_strategy not in ALLOWED_TERM_ORDER_STRATEGIES:
+                raise ValueError(f"{species_key}: unsupported term_order_strategy")
             epsilon = float(module.choose_synthesis_epsilon(sample, 1.0e-4, 0, config, 12))
             if not math.isfinite(epsilon) or epsilon <= 0.0:
                 raise ValueError(f"{species_key}: invalid synthesis epsilon {epsilon}")
@@ -715,6 +729,7 @@ def evaluate_candidate(
         cache_root=root.resolve() / "problem_cache",
         iteration=int(iteration),
         lane_id=str(lane["lane_id"]),
+        campaign_id=campaign_id,
     )
     if not isinstance(result, dict):
         raise TypeError("evaluate_policy must return a dict")
@@ -795,8 +810,8 @@ def validate_result(
         "reaction": str(lane["reaction"]),
         "reaction_terms": expected_terms,
         "species_order": expected_species,
-        "evaluation_mode": "full_hilbert_space_compiled_one_step_unitary_diagonalization",
-        "ground_phase_matching": "maximum_ground_state_eigenvector_overlap",
+        "evaluation_mode": "compiled_product_formula_energy_estimation",
+        "ground_phase_matching": "fixed_ground_state_phase_estimator",
         "compilation_backend": "pygridsynth",
         "t_count_aggregation": "sum_each_unique_species_once",
     }
@@ -872,6 +887,17 @@ def validate_result(
             or method_config.get("species") != species
         ):
             raise ValueError(f"{lane_id}: method config drift for {species}")
+        schedule_strategy = str(
+            method_config.get("schedule_strategy", "stationary_trotter")
+        )
+        term_order_strategy = str(method_config.get("term_order_strategy", "input"))
+        if (
+            schedule_strategy not in ALLOWED_SCHEDULE_STRATEGIES
+            or term_order_strategy not in ALLOWED_TERM_ORDER_STRATEGIES
+            or row.get("schedule_strategy") != schedule_strategy
+            or row.get("term_order_strategy") != term_order_strategy
+        ):
+            raise ValueError(f"{lane_id}: schedule/order strategy drift for {species}")
         zero_threshold = _finite_number(
             row.get("zero_angle_threshold"), f"{species}.zero_angle_threshold"
         )
@@ -888,7 +914,9 @@ def validate_result(
             row.get("rotations_per_step"), f"{species}.rotations_per_step"
         )
         expected_rotations_per_step = term_count if formula_order == 1 else 2 * term_count - 1
-        if rotations_per_step != expected_rotations_per_step:
+        if schedule_strategy == "stationary_trotter" and (
+            rotations_per_step != expected_rotations_per_step
+        ):
             raise ValueError(f"{lane_id}: PF rotation-count mismatch for {species}")
         scheduled = _nonnegative_integer(
             row.get("scheduled_rotation_count"), f"{species}.scheduled_rotation_count"
@@ -907,20 +935,37 @@ def validate_result(
             row.get("one_step_skipped_rotation_count"),
             f"{species}.one_step_skipped_rotation_count",
         )
-        if (
-            scheduled != rotations_per_step * n_steps
-            or nonzero + skipped != scheduled
-            or one_nonzero + one_skipped != rotations_per_step
-            or nonzero != one_nonzero * n_steps
-            or skipped != one_skipped * n_steps
+        stationary_counts_valid = (
+            scheduled == rotations_per_step * n_steps
+            and nonzero + skipped == scheduled
+            and one_nonzero + one_skipped == rotations_per_step
+            and nonzero == one_nonzero * n_steps
+            and skipped == one_skipped * n_steps
+        )
+        explicit_counts_valid = (
+            scheduled > 0
+            and nonzero + skipped == scheduled
+            and rotations_per_step == one_nonzero == one_skipped == 0
+            and row.get("explicit_schedule_rotation_count") == scheduled
+            and SHA256_RE.fullmatch(str(row.get("explicit_schedule_sha256", "")))
+            is not None
+            and isinstance(row.get("evaluator_schedule_seed"), int)
+            and not isinstance(row.get("evaluator_schedule_seed"), bool)
+        )
+        if not (
+            stationary_counts_valid
+            if schedule_strategy == "stationary_trotter"
+            else explicit_counts_valid
         ):
             raise ValueError(f"{lane_id}: scheduled/nonzero/skipped count mismatch for {species}")
         one_step_t = _nonnegative_integer(
             row.get("one_step_t_gate_count"), f"{species}.one_step_t_gate_count"
         )
         t_count_raw = _nonnegative_integer(row.get("t_gate_count"), f"{species}.t_gate_count")
-        if t_count_raw != one_step_t * n_steps:
+        if schedule_strategy == "stationary_trotter" and t_count_raw != one_step_t * n_steps:
             raise ValueError(f"{lane_id}: T-count scaling mismatch for {species}")
+        if schedule_strategy != "stationary_trotter" and one_step_t != 0:
+            raise ValueError(f"{lane_id}: explicit schedule has a one-step T count for {species}")
         one_step_skipped_angle = _finite_number(
             row.get("one_step_skipped_absolute_angle_sum"),
             f"{species}.one_step_skipped_absolute_angle_sum",
@@ -936,17 +981,31 @@ def validate_result(
             row.get("skipped_rotation_operator_error_bound"),
             f"{species}.skipped_rotation_operator_error_bound",
         )
-        if not _close(skipped_angle, one_step_skipped_angle * n_steps) or not _close(
-            skip_bound, one_step_skip_bound * n_steps
+        if schedule_strategy == "stationary_trotter" and (
+            not _close(skipped_angle, one_step_skipped_angle * n_steps)
+            or not _close(skip_bound, one_step_skip_bound * n_steps)
         ):
             raise ValueError(f"{lane_id}: skipped-rotation accounting mismatch for {species}")
-        if (
-            row.get("stationary_step_policy_verified") is not True
-            or row.get("unitary_construction")
-            != "compiled_one_step_product_formula_applied_and_diagonalized_in_full_hilbert_space"
-            or row.get("phase_matching") != "maximum_ground_state_eigenvector_overlap"
-            or row.get("t_count_semantics")
-            != "exact_count_of_T_characters_in_selected_PyGridSynth_gate_strings_times_n_steps"
+        stationary_semantics = (
+            row.get("stationary_step_policy_verified") is True
+            and row.get("unitary_construction")
+            == "compiled_one_step_product_formula_applied_and_diagonalized_in_full_hilbert_space"
+            and row.get("phase_matching") == "maximum_ground_state_eigenvector_overlap"
+            and row.get("t_count_semantics")
+            == "exact_count_of_T_characters_in_selected_PyGridSynth_gate_strings_times_n_steps"
+        )
+        explicit_semantics = (
+            row.get("stationary_step_policy_verified") is False
+            and row.get("unitary_construction")
+            == "compiled_full_explicit_schedule_applied_to_exact_ground_state"
+            and row.get("phase_matching") == "exact_ground_state_survival_amplitude"
+            and row.get("t_count_semantics")
+            == "exact_count_of_T_characters_across_the_full_explicit_schedule"
+        )
+        if not (
+            stationary_semantics
+            if schedule_strategy == "stationary_trotter"
+            else explicit_semantics
         ):
             raise ValueError(f"{lane_id}: fixed species evaluator semantics drift for {species}")
         signed_errors[species] = signed

@@ -423,12 +423,12 @@ Lane:
 Edit only `simple_pf.py` in this disposable directory. Make one coherent,
 deterministic policy mutation. Do not create, rename, or delete any other file.
 
-The fixed evaluator sets the active species before calling get_method_config() and
-choose_synthesis_epsilon(). It builds the fixed product-formula circuit, compiles
-single-qubit rotations with PyGridSynth, counts exact T characters, constructs the
-compiled one-step unitary in the full Hilbert space, diagonalizes it, and extracts
-each signed molecular energy error. Both contracts use the same evaluator and
-T-count definition.
+The fixed evaluator sets the active species before calling the policy hooks,
+compiles every selected single-qubit rotation with PyGridSynth, counts exact T
+characters, and extracts each signed molecular energy error. Stationary Trotter
+uses the fast one-step eigenspectrum path. randomized_trotter, qdrift, and custom
+use an evaluator-seeded full explicit schedule on the GPU. Both contracts use the
+same evaluator and T-count definition.
 
 Contract:
 {contract}
@@ -438,8 +438,15 @@ Objective and allowed policy changes:
 - A proposal is retained only if it passes this lane's contract and strictly lowers T count.
 - Use species-specific budgets and Hamiltonian-aware precision logic based on label,
   coefficient, support_size, x_count, y_count, z_count, and abs(alpha).
-- You may change PF1/PF2, n_steps, zero_angle_threshold, or deterministic epsilon logic.
-- Keep choose_synthesis_epsilon independent of step_index.
+- You may change PF1/PF2, n_steps, zero_angle_threshold, ordering, schedule, or
+  deterministic epsilon logic.
+- term_order_strategy="custom" may return any exact permutation through
+  order_product_formula_terms(). schedule_strategy may be stationary_trotter,
+  randomized_trotter, qdrift, or custom. A custom schedule returns a sequence of
+  {{"term_index": int, "alpha": float, optional "epsilon": float}} items.
+- For explicit schedules, choose_synthesis_epsilon may depend on the occurrence
+  step_index, and a schedule item may override epsilon directly. The evaluator
+  owns the recorded random seed; do not create another source of randomness.
 - Return a positive finite epsilon for every nonzero rotation.
 
 Hard constraints:
@@ -447,7 +454,7 @@ Hard constraints:
   chemical accuracy, compiler behavior, evaluator code, or files outside simple_pf.py.
 - Do not run the evaluator, inspect cluster files, install packages, access the network,
   or search outside this disposable directory. Use only the diagnostics below.
-- Keep the policy auditable; do not add random search or large lookup tables.
+- Keep the policy auditable; do not add unseeded randomness or large lookup tables.
 
 Accepted incumbent result:
 ```json

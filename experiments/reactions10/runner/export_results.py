@@ -94,6 +94,12 @@ PAPER_INPUT_HASHES = {
     "problem_cache_checksums": ("cf521d0a98c7b9cb3478ef28349200f4ab98b171a79a915edca6459349f9c22f"),
 }
 CONTRACTS = ("equal_share", "reaction_aware")
+ALLOWED_SCHEDULE_STRATEGIES = frozenset(
+    {"stationary_trotter", "randomized_trotter", "qdrift", "custom"}
+)
+ALLOWED_TERM_ORDER_STRATEGIES = frozenset(
+    {"input", "coefficient_desc", "coefficient_asc", "support_desc", "custom"}
+)
 REACTION_KEYS = (
     "hcn_hnc",
     "hco_hoc_cation",
@@ -1231,8 +1237,8 @@ def validate_result(
     fixed_fields: dict[str, object] = {
         "reaction_terms": expected_terms,
         "species_order": list(lane.species),
-        "evaluation_mode": "full_hilbert_space_compiled_one_step_unitary_diagonalization",
-        "ground_phase_matching": "maximum_ground_state_eigenvector_overlap",
+        "evaluation_mode": "compiled_product_formula_energy_estimation",
+        "ground_phase_matching": "fixed_ground_state_phase_estimator",
         "compilation_backend": "pygridsynth",
         "t_count_aggregation": "sum_each_unique_species_once",
     }
@@ -1316,6 +1322,17 @@ def validate_result(
             or method_config.get("species") != species
         ):
             raise ExportValidationError(f"{species_context}.method_config drifted")
+        schedule_strategy = str(
+            method_config.get("schedule_strategy", "stationary_trotter")
+        )
+        term_order_strategy = str(method_config.get("term_order_strategy", "input"))
+        if (
+            schedule_strategy not in ALLOWED_SCHEDULE_STRATEGIES
+            or term_order_strategy not in ALLOWED_TERM_ORDER_STRATEGIES
+            or item.get("schedule_strategy") != schedule_strategy
+            or item.get("term_order_strategy") != term_order_strategy
+        ):
+            raise ExportValidationError(f"{species_context} schedule/order strategy drifted")
         zero_threshold = require_finite(
             item.get("zero_angle_threshold"), f"{species_context}.zero_angle_threshold"
         )
@@ -1336,7 +1353,9 @@ def validate_result(
             minimum=1,
         )
         expected_rotations_per_step = term_count if formula_order == 1 else 2 * term_count - 1
-        if rotations_per_step != expected_rotations_per_step:
+        if schedule_strategy == "stationary_trotter" and (
+            rotations_per_step != expected_rotations_per_step
+        ):
             raise ExportValidationError(f"{species_context} PF rotation-count mismatch")
         scheduled = require_int(
             item.get("scheduled_rotation_count"),
@@ -1363,12 +1382,27 @@ def validate_result(
             f"{species_context}.one_step_skipped_rotation_count",
             minimum=0,
         )
-        if (
-            scheduled != rotations_per_step * n_steps
-            or nonzero + skipped != scheduled
-            or one_nonzero + one_skipped != rotations_per_step
-            or nonzero != one_nonzero * n_steps
-            or skipped != one_skipped * n_steps
+        stationary_counts_valid = (
+            scheduled == rotations_per_step * n_steps
+            and nonzero + skipped == scheduled
+            and one_nonzero + one_skipped == rotations_per_step
+            and nonzero == one_nonzero * n_steps
+            and skipped == one_skipped * n_steps
+        )
+        explicit_counts_valid = (
+            scheduled > 0
+            and nonzero + skipped == scheduled
+            and rotations_per_step == one_nonzero == one_skipped == 0
+            and item.get("explicit_schedule_rotation_count") == scheduled
+            and SHA256_RE.fullmatch(str(item.get("explicit_schedule_sha256", "")))
+            is not None
+            and isinstance(item.get("evaluator_schedule_seed"), int)
+            and not isinstance(item.get("evaluator_schedule_seed"), bool)
+        )
+        if not (
+            stationary_counts_valid
+            if schedule_strategy == "stationary_trotter"
+            else explicit_counts_valid
         ):
             raise ExportValidationError(f"{species_context} scheduled rotation-count mismatch")
         one_step_t_count = require_int(
@@ -1379,8 +1413,12 @@ def validate_result(
         t_count = require_int(
             item.get("t_gate_count"), f"{species_context}.t_gate_count", minimum=0
         )
-        if t_count != one_step_t_count * n_steps:
+        if schedule_strategy == "stationary_trotter" and (
+            t_count != one_step_t_count * n_steps
+        ):
             raise ExportValidationError(f"{species_context} T-count scaling mismatch")
+        if schedule_strategy != "stationary_trotter" and one_step_t_count != 0:
+            raise ExportValidationError(f"{species_context} explicit one-step T count is nonzero")
         one_step_skipped_angle = require_finite(
             item.get("one_step_skipped_absolute_angle_sum"),
             f"{species_context}.one_step_skipped_absolute_angle_sum",
@@ -1397,33 +1435,52 @@ def validate_result(
             item.get("skipped_rotation_operator_error_bound"),
             f"{species_context}.skipped_rotation_operator_error_bound",
         )
-        require_close(
-            skipped_angle,
-            one_step_skipped_angle * n_steps,
-            f"{species_context} skipped angle accounting",
-        )
-        require_close(
-            skip_bound,
-            one_step_skip_bound * n_steps,
-            f"{species_context} skipped error-bound accounting",
-        )
-        if (
-            require_bool(
+        if schedule_strategy == "stationary_trotter":
+            require_close(
+                skipped_angle,
+                one_step_skipped_angle * n_steps,
+                f"{species_context} skipped angle accounting",
+            )
+            require_close(
+                skip_bound,
+                one_step_skip_bound * n_steps,
+                f"{species_context} skipped error-bound accounting",
+            )
+            if require_bool(
                 item.get("stationary_step_policy_verified"),
                 f"{species_context}.stationary_step_policy_verified",
-            )
-            is not True
-        ):
-            raise ExportValidationError(f"{species_context} lacks stationary-policy attestation")
-        species_fixed = {
-            "unitary_construction": (
-                "compiled_one_step_product_formula_applied_and_diagonalized_in_full_hilbert_space"
-            ),
-            "phase_matching": "maximum_ground_state_eigenvector_overlap",
-            "t_count_semantics": (
-                "exact_count_of_T_characters_in_selected_PyGridSynth_gate_strings_times_n_steps"
-            ),
-        }
+            ) is not True:
+                raise ExportValidationError(
+                    f"{species_context} lacks stationary-policy attestation"
+                )
+            species_fixed = {
+                "unitary_construction": (
+                    "compiled_one_step_product_formula_applied_and_diagonalized_"
+                    "in_full_hilbert_space"
+                ),
+                "phase_matching": "maximum_ground_state_eigenvector_overlap",
+                "t_count_semantics": (
+                    "exact_count_of_T_characters_in_selected_PyGridSynth_"
+                    "gate_strings_times_n_steps"
+                ),
+            }
+        else:
+            if require_bool(
+                item.get("stationary_step_policy_verified"),
+                f"{species_context}.stationary_step_policy_verified",
+            ) is not False:
+                raise ExportValidationError(
+                    f"{species_context} wrongly claims a stationary policy"
+                )
+            species_fixed = {
+                "unitary_construction": (
+                    "compiled_full_explicit_schedule_applied_to_exact_ground_state"
+                ),
+                "phase_matching": "exact_ground_state_survival_amplitude",
+                "t_count_semantics": (
+                    "exact_count_of_T_characters_across_the_full_explicit_schedule"
+                ),
+            }
         for field, expected in species_fixed.items():
             if item.get(field) != expected:
                 raise ExportValidationError(f"{species_context}.{field} changed")

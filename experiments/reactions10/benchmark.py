@@ -12,7 +12,6 @@ from __future__ import annotations
 import hashlib
 import importlib.util
 import math
-import random
 import sys
 import time
 from dataclasses import dataclass
@@ -486,6 +485,7 @@ def evaluate_policy(
     cache_root: Path | str,
     iteration: int,
     lane_id: str,
+    campaign_id: str = "",
 ) -> dict[str, object]:
     """Evaluate one policy and return the stable, JSON-safe lane result."""
 
@@ -521,12 +521,17 @@ def evaluate_policy(
         species_key = molecule_spec.key
         policy.set_active_species(species_key)
         config = policy.get_method_config()
-        random.seed(f"reaction-autoresearch|{lane_id}|{policy_hash}|{species_key}")
+        seed_material = (
+            "reaction-autoresearch-schedule-v1\0"
+            f"{campaign_id}\0{lane_id}\0{species_key}"
+        ).encode()
+        evaluator_seed = int.from_bytes(hashlib.sha256(seed_material).digest()[:8], "big")
         species_results[species_key] = reaction_evaluate.evaluate_species(
             molecule_spec,
             policy,
             config,
             resolved_cache,
+            evaluator_seed=evaluator_seed,
             backend_name=backend_name,
             xp=xp,
         )
@@ -607,8 +612,8 @@ def evaluate_policy(
         "status": "ok",
         "policy_path": str(resolved_policy),
         "policy_sha256": policy_hash,
-        "evaluation_mode": ("full_hilbert_space_compiled_one_step_unitary_diagonalization"),
-        "ground_phase_matching": "maximum_ground_state_eigenvector_overlap",
+        "evaluation_mode": "compiled_product_formula_energy_estimation",
+        "ground_phase_matching": "fixed_ground_state_phase_estimator",
         "compilation_backend": "pygridsynth",
         "array_backend": backend_name,
         "reaction_target_hartree": target,

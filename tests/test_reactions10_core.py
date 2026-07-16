@@ -201,3 +201,55 @@ def test_zero_angle_skip_records_exact_operator_error_bound(
         2 * 2.0 * abs(math.sin(alpha / 2.0))
     )
     assert metrics["unitary_construction"].endswith("in_full_hilbert_space")
+
+
+def test_qdrift_schedule_is_seeded_and_samples_with_replacement() -> None:
+    terms = [
+        {"label": "X", "coefficient": 1.0, "support_size": 1},
+        {"label": "Z", "coefficient": -3.0, "support_size": 1},
+    ]
+    config = SimpleNamespace(qdrift_samples=32)
+    kwargs = {
+        "terms": terms,
+        "target_time": 2.0,
+        "evaluator_seed": 1234,
+        "strategy": "qdrift",
+        "policy": SimpleNamespace(),
+        "config": config,
+    }
+    first = EVALUATOR.build_explicit_product_formula_schedule(**kwargs)
+    second = EVALUATOR.build_explicit_product_formula_schedule(**kwargs)
+
+    assert first == second
+    assert len(first) == 32
+    assert {item["term_index"] for item in first} == {0, 1}
+    assert {abs(float(item["alpha"])) for item in first} == {0.25}
+    assert {math.copysign(1.0, float(item["alpha"])) for item in first} == {-1.0, 1.0}
+
+
+def test_custom_order_and_schedule_allow_arbitrary_per_occurrence_epsilon() -> None:
+    terms = [
+        {"label": "X", "coefficient": 1.0, "support_size": 1},
+        {"label": "Z", "coefficient": 2.0, "support_size": 1},
+    ]
+    policy = SimpleNamespace(
+        order_product_formula_terms=lambda items, _config: list(reversed(items)),
+        build_product_formula_schedule=lambda _terms, _time, _seed, _config: [
+            {"term_index": 0, "alpha": 0.3, "epsilon": 1.0e-4},
+            {"term_index": 0, "alpha": -0.2, "epsilon": 7.0e-7},
+            {"term_index": 1, "alpha": 0.1},
+        ],
+    )
+    config = SimpleNamespace()
+    ordered = EVALUATOR.order_product_formula_terms(terms, "custom", policy, config)
+    schedule = EVALUATOR.build_explicit_product_formula_schedule(
+        terms=ordered,
+        target_time=1.0,
+        evaluator_seed=99,
+        strategy="custom",
+        policy=policy,
+        config=config,
+    )
+
+    assert [term["label"] for term in ordered] == ["Z", "X"]
+    assert [item.get("epsilon") for item in schedule] == [1.0e-4, 7.0e-7, None]
