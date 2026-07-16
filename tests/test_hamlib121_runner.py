@@ -1782,6 +1782,51 @@ def test_compiler_preserves_sub_decimal_place_angles_and_epsilons(
     assert compiled["t_gate_count"] == 1
 
 
+def test_state_gate_kernels_match_reference_at_legate_safe_rank() -> None:
+    import numpy as np
+
+    nqubits = 16
+    rng = np.random.default_rng(17)
+    state = rng.normal(size=1 << nqubits) + 1j * rng.normal(size=1 << nqubits)
+    state = state.astype(np.complex128)
+    gate = np.asarray(
+        [[0.2 + 0.3j, -0.5 + 0.7j], [0.4 - 0.1j, 0.6 + 0.2j]],
+        dtype=np.complex128,
+    )
+
+    for qubit in (0, 7, 15):
+        reference_tensor = state.reshape((2,) * nqubits)
+        moved = np.moveaxis(reference_tensor, qubit, 0)
+        expected = np.moveaxis(np.tensordot(gate, moved, axes=([1], [0])), 0, qubit)
+        actual = EVALUATE_WORKER.apply_single_qubit_gate_to_state(
+            state=state,
+            gate=gate,
+            qubit=qubit,
+            nqubits=nqubits,
+            xp=np,
+        )
+        assert actual == pytest.approx(expected.reshape(-1))
+
+    for control, target in ((1, 14), (14, 1)):
+        reference_tensor = state.reshape((2,) * nqubits)
+        moved = np.moveaxis(reference_tensor, (control, target), (0, 1))
+        expected = moved.copy()
+        expected[1, 0] = moved[1, 1]
+        expected[1, 1] = moved[1, 0]
+        expected = np.moveaxis(expected, (0, 1), (control, target)).reshape(-1)
+        actual = EVALUATE_WORKER.apply_cnot_to_state(
+            state=state,
+            control=control,
+            target=target,
+            nqubits=nqubits,
+            xp=np,
+        )
+        assert actual == pytest.approx(expected)
+
+    worker_source = (SCRIPTS_ROOT / "evaluate_worker.py").read_text(encoding="utf-8")
+    assert "reshape((2,) * nqubits)" not in worker_source
+
+
 def test_policy_loader_rejects_step_dependent_synthesis(tmp_path: Path) -> None:
     policy = tmp_path / "step_dependent.py"
     policy.write_text(

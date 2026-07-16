@@ -415,19 +415,39 @@ def unitary_error_up_to_global_phase(target: np.ndarray, approximate: np.ndarray
 
 
 def apply_single_qubit_gate_to_state(*, state, gate, qubit: int, nqubits: int, xp):
-    tensor = xp.asarray(state, dtype=xp.complex128).reshape((2,) * nqubits)
-    moved = xp.moveaxis(tensor, qubit, 0)
-    updated = xp.tensordot(gate, moved, axes=([1], [0]))
-    return xp.moveaxis(updated, 0, qubit).reshape(-1)
+    if not 0 <= qubit < nqubits:
+        raise ValueError(f"qubit {qubit} is outside a {nqubits}-qubit register")
+    prefix = 1 << qubit
+    suffix = 1 << (nqubits - qubit - 1)
+    tensor = xp.asarray(state, dtype=xp.complex128).reshape(prefix, 2, suffix)
+    updated = tensor.copy()
+    updated[:, 0, :] = gate[0, 0] * tensor[:, 0, :] + gate[0, 1] * tensor[:, 1, :]
+    updated[:, 1, :] = gate[1, 0] * tensor[:, 0, :] + gate[1, 1] * tensor[:, 1, :]
+    return updated.reshape(-1)
 
 
 def apply_cnot_to_state(*, state, control: int, target: int, nqubits: int, xp):
-    tensor = xp.asarray(state, dtype=xp.complex128).reshape((2,) * nqubits)
-    moved = xp.moveaxis(tensor, (control, target), (0, 1))
-    updated = moved.copy()
-    updated[1, 0] = moved[1, 1]
-    updated[1, 1] = moved[1, 0]
-    return xp.moveaxis(updated, (0, 1), (control, target)).reshape(-1)
+    if control == target:
+        raise ValueError("CNOT control and target must be different")
+    if not 0 <= control < nqubits or not 0 <= target < nqubits:
+        raise ValueError(
+            f"CNOT ({control}, {target}) is outside a {nqubits}-qubit register"
+        )
+
+    first = min(control, target)
+    second = max(control, target)
+    prefix = 1 << first
+    middle = 1 << (second - first - 1)
+    suffix = 1 << (nqubits - second - 1)
+    tensor = xp.asarray(state, dtype=xp.complex128).reshape(prefix, 2, middle, 2, suffix)
+    updated = tensor.copy()
+    if control == first:
+        updated[:, 1, :, 0, :] = tensor[:, 1, :, 1, :]
+        updated[:, 1, :, 1, :] = tensor[:, 1, :, 0, :]
+    else:
+        updated[:, 0, :, 1, :] = tensor[:, 1, :, 1, :]
+        updated[:, 1, :, 1, :] = tensor[:, 0, :, 1, :]
+    return updated.reshape(-1)
 
 
 def build_pauli_rotation_compiler(*, nqubits: int, xp):
