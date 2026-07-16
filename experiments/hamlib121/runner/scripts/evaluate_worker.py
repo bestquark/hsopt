@@ -539,6 +539,7 @@ def apply_pauli_to_state_split(
     xp,
     out=None,
     work=None,
+    execution_fence=None,
 ):
     if len(label) != nqubits:
         raise ValueError(f"Pauli label length {len(label)} does not match nqubits={nqubits}")
@@ -580,11 +581,15 @@ def apply_pauli_to_state_split(
             axis=0,
             out=work_tensor,
         )
+        if execution_fence is not None:
+            execution_fence()
         xp.multiply(
             work_tensor,
             xp.asarray(phases, dtype=xp.complex128).reshape(left_size, 1),
             out=work_tensor,
         )
+        if execution_fence is not None:
+            execution_fence()
         permutation, phases = local_pauli_output_map(right_label)
         xp.take(
             work_tensor,
@@ -592,11 +597,15 @@ def apply_pauli_to_state_split(
             axis=1,
             out=out_tensor,
         )
+        if execution_fence is not None:
+            execution_fence()
         xp.multiply(
             out_tensor,
             xp.asarray(phases, dtype=xp.complex128).reshape(1, right_size),
             out=out_tensor,
         )
+        if execution_fence is not None:
+            execution_fence()
     elif left_active:
         permutation, phases = local_pauli_output_map(left_label)
         xp.take(
@@ -605,11 +614,15 @@ def apply_pauli_to_state_split(
             axis=0,
             out=out_tensor,
         )
+        if execution_fence is not None:
+            execution_fence()
         xp.multiply(
             out_tensor,
             xp.asarray(phases, dtype=xp.complex128).reshape(left_size, 1),
             out=out_tensor,
         )
+        if execution_fence is not None:
+            execution_fence()
     elif right_active:
         permutation, phases = local_pauli_output_map(right_label)
         xp.take(
@@ -618,18 +631,28 @@ def apply_pauli_to_state_split(
             axis=1,
             out=out_tensor,
         )
+        if execution_fence is not None:
+            execution_fence()
         xp.multiply(
             out_tensor,
             xp.asarray(phases, dtype=xp.complex128).reshape(1, right_size),
             out=out_tensor,
         )
+        if execution_fence is not None:
+            execution_fence()
     else:
         out_tensor[...] = state_tensor
+        if execution_fence is not None:
+            execution_fence()
     return out_array
 
 
 def build_pauli_rotation_compiler(
-    *, nqubits: int, xp, rz_cache: dict[tuple[str, str], dict[str, Any]] | None = None
+    *,
+    nqubits: int,
+    xp,
+    rz_cache: dict[tuple[str, str], dict[str, Any]] | None = None,
+    execution_fence=None,
 ):
     @functools.lru_cache(maxsize=None)
     def term_scaffold(label: str):
@@ -741,16 +764,25 @@ def build_pauli_rotation_compiler(
                     xp=xp,
                     out=updated,
                     work=permutation_workspace,
+                    execution_fence=execution_fence,
                 )
                 xp.multiply(updated, coefficients[pauli] * image_phase, out=updated)
+                if execution_fence is not None:
+                    execution_fence()
                 identity_workspace = permutation_workspace
                 if identity_workspace is None:
                     identity_workspace = xp.empty_like(state_array)
                 xp.multiply(state_array, coefficients["I"], out=identity_workspace)
+                if execution_fence is not None:
+                    execution_fence()
                 xp.add(updated, identity_workspace, out=updated)
+                if execution_fence is not None:
+                    execution_fence()
                 return updated
 
             xp.multiply(state_array, coefficients["I"], out=updated)
+            if execution_fence is not None:
+                execution_fence()
             if not non_identity_components:
                 return updated
             if pauli_workspace is None:
@@ -764,13 +796,18 @@ def build_pauli_rotation_compiler(
                     xp=xp,
                     out=pauli_workspace,
                     work=permutation_workspace,
+                    execution_fence=execution_fence,
                 )
                 xp.multiply(
                     pauli_workspace,
                     coefficients[pauli] * image_phase,
                     out=pauli_workspace,
                 )
+                if execution_fence is not None:
+                    execution_fence()
                 xp.add(updated, pauli_workspace, out=updated)
+                if execution_fence is not None:
+                    execution_fence()
             return updated
 
         return {
@@ -941,16 +978,28 @@ def run_compiled_product_formula(
         )
         rz_cache_keys.add((f"{-2.0 * float(alpha):.17e}", f"{epsilon:.17e}"))
     rz_cache, synthesis_metrics = precompile_rz_rotations(rz_cache_keys)
+    legate_execution_fence_count = 0
+    is_deferred_backend = xp.__name__.split(".")[0] in {"cupynumeric", "cunumeric"}
+
+    def execution_fence() -> None:
+        nonlocal legate_execution_fence_count
+        if not is_deferred_backend:
+            return
+        from legate.core import get_legate_runtime
+
+        get_legate_runtime().issue_execution_fence(block=True)
+        legate_execution_fence_count += 1
+
     state = xp.zeros(1 << nqubits, dtype=xp.complex128)
     state[hartree_fock_basis_index(nqubits=nqubits, electrons=electrons)] = 1.0 + 0.0j
+    execution_fence()
     next_state = xp.empty_like(state)
     permutation_workspace = xp.empty_like(state)
     pauli_workspace = None
-    compile_rotation = build_pauli_rotation_compiler(
-        nqubits=nqubits,
-        xp=xp,
-        rz_cache=rz_cache,
-    )
+    compiler_kwargs = {"nqubits": nqubits, "xp": xp, "rz_cache": rz_cache}
+    if is_deferred_backend:
+        compiler_kwargs["execution_fence"] = execution_fence
+    compile_rotation = build_pauli_rotation_compiler(**compiler_kwargs)
     epsilon_hist: Counter[str] = Counter()
     unique_compilations: dict[str, dict[str, Any]] = {}
     t_gate_count = 0
@@ -961,7 +1010,6 @@ def run_compiled_product_formula(
     synthesis_epsilon_sum_per_base_unitary = 0.0
     omitted_rotation_identity_error_bound_per_base_unitary = 0.0
     sampled_term_histogram: Counter[str] = Counter()
-    legate_execution_fence_count = 0
     propagation_started = time.perf_counter()
 
     # Stationary Trotter uses one compiled slice and physical_multiplicity=n_steps.
@@ -987,15 +1035,6 @@ def run_compiled_product_formula(
             pauli_workspace=pauli_workspace,
             permutation_workspace=permutation_workspace,
         )
-        if xp.__name__.split(".")[0] in {"cupynumeric", "cunumeric"}:
-            from legate.core import get_legate_runtime
-
-            # cuPyNumeric is deferred. Reusing the bounded state workspaces
-            # without an execution fence can let later rotations overwrite a
-            # store before an earlier task consumes it. A blocking fence keeps
-            # the three/four-buffer propagation both correct and memory bounded.
-            get_legate_runtime().issue_execution_fence(block=True)
-            legate_execution_fence_count += 1
         if updated_state is not state:
             state, next_state = updated_state, state
         nonzero_rotation_count += physical_multiplicity
@@ -1029,6 +1068,7 @@ def run_compiled_product_formula(
     if not math.isfinite(norm) or norm <= 0.0:
         raise RuntimeError(f"invalid propagated-state norm {norm}")
     xp.divide(state, norm, out=state)
+    execution_fence()
     return {
         "state": state,
         "state_array_type": f"{type(state).__module__}.{type(state).__name__}",
