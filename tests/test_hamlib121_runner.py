@@ -1671,8 +1671,12 @@ def test_measured_energy_pipeline_scores_the_propagated_formula(
         def compile_rotation(label: str, alpha: float, epsilon: float):
             assert label == "ZI"
 
-            def apply_state(state):
-                return math.cos(alpha) * state + 1j * math.sin(alpha) * diagonal * state
+            def apply_state(state, *, out=None, **_workspaces):
+                result = math.cos(alpha) * state + 1j * math.sin(alpha) * diagonal * state
+                if out is None:
+                    return result
+                out[...] = result
+                return out
 
             return {
                 "cache_key": f"{label}|{alpha}|{epsilon}",
@@ -1737,7 +1741,7 @@ def test_stationary_slice_cost_is_independent_of_physical_step_count(
                 "t_gate_count": 7,
                 "gate_count": 7,
                 "operator_error": 0.0,
-                "apply_state": lambda state: state,
+                "apply_state": lambda state, **_workspaces: state,
             }
 
         return compile_rotation
@@ -1840,6 +1844,34 @@ def test_state_gate_kernels_match_reference_at_legate_safe_rank() -> None:
 
     worker_source = (SCRIPTS_ROOT / "evaluate_worker.py").read_text(encoding="utf-8")
     assert "reshape((2,) * nqubits)" not in worker_source
+
+
+def test_pauli_kernel_reuses_full_state_workspaces() -> None:
+    import numpy as np
+
+    nqubits = 8
+    rng = np.random.default_rng(19)
+    state = rng.normal(size=1 << nqubits) + 1j * rng.normal(size=1 << nqubits)
+    state = state.astype(np.complex128)
+    label = "XYZIIYZX"
+    out = np.empty_like(state)
+    work = np.empty_like(state)
+
+    inputs = np.arange(1 << nqubits, dtype=np.int64)
+    outputs, phases = EVALUATE_WORKER.apply_pauli_to_indices(inputs, label, nqubits)
+    expected = np.empty_like(state)
+    expected[outputs] = phases * state
+    actual = EVALUATE_WORKER.apply_pauli_to_state_split(
+        state=state,
+        label=label,
+        nqubits=nqubits,
+        xp=np,
+        out=out,
+        work=work,
+    )
+
+    assert actual is out
+    assert actual == pytest.approx(expected)
 
 
 def test_fused_compiled_rotation_matches_the_gate_scaffold(

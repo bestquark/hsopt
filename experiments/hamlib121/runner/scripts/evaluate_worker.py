@@ -528,7 +528,15 @@ def local_pauli_output_map(label: str) -> tuple[np.ndarray, np.ndarray]:
     return sources, phases
 
 
-def apply_pauli_to_state_split(*, state, label: str, nqubits: int, xp):
+def apply_pauli_to_state_split(
+    *,
+    state,
+    label: str,
+    nqubits: int,
+    xp,
+    out=None,
+    work=None,
+):
     if len(label) != nqubits:
         raise ValueError(f"Pauli label length {len(label)} does not match nqubits={nqubits}")
     split = nqubits // 2
@@ -536,17 +544,85 @@ def apply_pauli_to_state_split(*, state, label: str, nqubits: int, xp):
     right_label = label[split:]
     left_size = 1 << split
     right_size = 1 << (nqubits - split)
-    tensor = xp.asarray(state, dtype=xp.complex128).reshape(left_size, right_size)
+    state_array = xp.asarray(state, dtype=xp.complex128)
+    if out is None:
+        out_array = xp.empty_like(state_array)
+    else:
+        out_array = xp.asarray(out, dtype=xp.complex128)
+    if out_array.shape != state_array.shape:
+        raise ValueError("Pauli output workspace shape differs from the state")
+    if out_array is state_array:
+        raise ValueError("Pauli output workspace must not alias the input state")
 
-    if any(pauli != "I" for pauli in left_label):
+    left_active = any(pauli != "I" for pauli in left_label)
+    right_active = any(pauli != "I" for pauli in right_label)
+    state_tensor = state_array.reshape(left_size, right_size)
+    out_tensor = out_array.reshape(left_size, right_size)
+
+    if left_active and right_active:
+        if work is None:
+            work_array = xp.empty_like(state_array)
+        else:
+            work_array = xp.asarray(work, dtype=xp.complex128)
+        if work_array.shape != state_array.shape:
+            raise ValueError("Pauli permutation workspace shape differs from the state")
+        if work_array is state_array or work_array is out_array:
+            raise ValueError("Pauli permutation workspace must not alias input or output")
+        work_tensor = work_array.reshape(left_size, right_size)
+
         permutation, phases = local_pauli_output_map(left_label)
-        tensor = xp.take(tensor, xp.asarray(permutation, dtype=xp.int64), axis=0)
-        tensor = tensor * xp.asarray(phases, dtype=xp.complex128).reshape(left_size, 1)
-    if any(pauli != "I" for pauli in right_label):
+        xp.take(
+            state_tensor,
+            xp.asarray(permutation, dtype=xp.int64),
+            axis=0,
+            out=work_tensor,
+        )
+        xp.multiply(
+            work_tensor,
+            xp.asarray(phases, dtype=xp.complex128).reshape(left_size, 1),
+            out=work_tensor,
+        )
         permutation, phases = local_pauli_output_map(right_label)
-        tensor = xp.take(tensor, xp.asarray(permutation, dtype=xp.int64), axis=1)
-        tensor = tensor * xp.asarray(phases, dtype=xp.complex128).reshape(1, right_size)
-    return tensor.reshape(-1)
+        xp.take(
+            work_tensor,
+            xp.asarray(permutation, dtype=xp.int64),
+            axis=1,
+            out=out_tensor,
+        )
+        xp.multiply(
+            out_tensor,
+            xp.asarray(phases, dtype=xp.complex128).reshape(1, right_size),
+            out=out_tensor,
+        )
+    elif left_active:
+        permutation, phases = local_pauli_output_map(left_label)
+        xp.take(
+            state_tensor,
+            xp.asarray(permutation, dtype=xp.int64),
+            axis=0,
+            out=out_tensor,
+        )
+        xp.multiply(
+            out_tensor,
+            xp.asarray(phases, dtype=xp.complex128).reshape(left_size, 1),
+            out=out_tensor,
+        )
+    elif right_active:
+        permutation, phases = local_pauli_output_map(right_label)
+        xp.take(
+            state_tensor,
+            xp.asarray(permutation, dtype=xp.int64),
+            axis=1,
+            out=out_tensor,
+        )
+        xp.multiply(
+            out_tensor,
+            xp.asarray(phases, dtype=xp.complex128).reshape(1, right_size),
+            out=out_tensor,
+        )
+    else:
+        out_tensor[...] = state_tensor
+    return out_array
 
 
 def build_pauli_rotation_compiler(
@@ -637,21 +713,61 @@ def build_pauli_rotation_compiler(
             )
         )
 
-        def apply_state(state):
+        non_identity_components = [
+            pauli for pauli in active_components if pauli != "I"
+        ]
+
+        def apply_state(
+            state,
+            *,
+            out=None,
+            pauli_workspace=None,
+            permutation_workspace=None,
+        ):
             if rz["gate_count"] == 0:
                 return xp.asarray(state, dtype=xp.complex128)
-            updated = coefficients["I"] * xp.asarray(state, dtype=xp.complex128)
-            for pauli in active_components:
-                if pauli == "I":
-                    continue
+            state_array = xp.asarray(state, dtype=xp.complex128)
+            updated = xp.empty_like(state_array) if out is None else out
+            if len(non_identity_components) == 1:
+                pauli = non_identity_components[0]
                 image_phase, image_label = images[pauli]
-                pauli_state = apply_pauli_to_state_split(
-                    state=state,
+                apply_pauli_to_state_split(
+                    state=state_array,
                     label=image_label,
                     nqubits=nqubits,
                     xp=xp,
+                    out=updated,
+                    work=permutation_workspace,
                 )
-                updated += coefficients[pauli] * image_phase * pauli_state
+                xp.multiply(updated, coefficients[pauli] * image_phase, out=updated)
+                identity_workspace = permutation_workspace
+                if identity_workspace is None:
+                    identity_workspace = xp.empty_like(state_array)
+                xp.multiply(state_array, coefficients["I"], out=identity_workspace)
+                xp.add(updated, identity_workspace, out=updated)
+                return updated
+
+            xp.multiply(state_array, coefficients["I"], out=updated)
+            if not non_identity_components:
+                return updated
+            if pauli_workspace is None:
+                pauli_workspace = xp.empty_like(state_array)
+            for pauli in non_identity_components:
+                image_phase, image_label = images[pauli]
+                apply_pauli_to_state_split(
+                    state=state_array,
+                    label=image_label,
+                    nqubits=nqubits,
+                    xp=xp,
+                    out=pauli_workspace,
+                    work=permutation_workspace,
+                )
+                xp.multiply(
+                    pauli_workspace,
+                    coefficients[pauli] * image_phase,
+                    out=pauli_workspace,
+                )
+                xp.add(updated, pauli_workspace, out=updated)
             return updated
 
         return {
@@ -775,6 +891,9 @@ def run_compiled_product_formula(
     rz_cache, synthesis_metrics = precompile_rz_rotations(rz_cache_keys)
     state = xp.zeros(1 << nqubits, dtype=xp.complex128)
     state[hartree_fock_basis_index(nqubits=nqubits, electrons=electrons)] = 1.0 + 0.0j
+    next_state = xp.empty_like(state)
+    permutation_workspace = xp.empty_like(state)
+    pauli_workspace = None
     compile_rotation = build_pauli_rotation_compiler(
         nqubits=nqubits,
         xp=xp,
@@ -799,7 +918,19 @@ def run_compiled_product_formula(
             skipped_rotation_count += n_steps
             continue
         compiled = compile_rotation(str(term["label"]), float(alpha), epsilon)
-        state = compiled["apply_state"](state)
+        non_identity_component_count = sum(
+            pauli != "I" for pauli in compiled.get("active_pauli_components", [])
+        )
+        if non_identity_component_count > 1 and pauli_workspace is None:
+            pauli_workspace = xp.empty_like(state)
+        updated_state = compiled["apply_state"](
+            state,
+            out=next_state,
+            pauli_workspace=pauli_workspace,
+            permutation_workspace=permutation_workspace,
+        )
+        if updated_state is not state:
+            state, next_state = updated_state, state
         nonzero_rotation_count += n_steps
         t_gate_count += n_steps * int(compiled["t_gate_count"])
         component_omission = float(compiled.get("discarded_component_norm_bound", 0.0))
@@ -827,7 +958,7 @@ def run_compiled_product_formula(
     norm = float(np.asarray(xp.linalg.norm(state)))
     if not math.isfinite(norm) or norm <= 0.0:
         raise RuntimeError(f"invalid propagated-state norm {norm}")
-    state = state / norm
+    xp.divide(state, norm, out=state)
     return {
         "state": state,
         "state_array_type": f"{type(state).__module__}.{type(state).__name__}",
