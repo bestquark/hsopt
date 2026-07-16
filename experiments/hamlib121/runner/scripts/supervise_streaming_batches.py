@@ -45,8 +45,11 @@ from campaign_common import (  # noqa: E402
     mark_eval_batch_collected,
     mark_eval_batch_submitted,
     now_iso,
+    proxy_jump_cli_args,
+    ssh_command,
     validate_campaign_identity,
     validate_evaluation_result_provenance,
+    validate_ssh_host,
     write_json,
 )
 from mutate_iteration import load_lanes, prepare_codex_tools, run_one  # noqa: E402
@@ -87,13 +90,22 @@ def result_path(root: Path, iteration: int, lane_id: str) -> Path:
     return root / "iterations" / f"iter_{iteration:04d}" / "results" / f"{lane_id}.json"
 
 
-def job_is_done(job_id: str, slurm_query_host: str) -> bool:
+def job_is_done(
+    job_id: str,
+    slurm_query_host: str,
+    *,
+    proxy_jump_host: str | None = None,
+) -> bool:
     if re.fullmatch(r"\d+", job_id) is None:
         raise ValueError(f"invalid Slurm job ID {job_id!r}")
     squeue_remote = shlex.join(["squeue", "-h", "-j", job_id, "-o", "%A|%T"])
     try:
         queued = subprocess.run(
-            ["ssh", slurm_query_host, squeue_remote],
+            ssh_command(
+                slurm_query_host,
+                squeue_remote,
+                proxy_jump_host=proxy_jump_host,
+            ),
             text=True,
             capture_output=True,
             check=False,
@@ -118,7 +130,11 @@ def job_is_done(job_id: str, slurm_query_host: str) -> bool:
     sacct_remote = shlex.join(["sacct", "-n", "-X", "-j", job_id, "--format=JobIDRaw,State", "-P"])
     try:
         accounted = subprocess.run(
-            ["ssh", slurm_query_host, sacct_remote],
+            ssh_command(
+                slurm_query_host,
+                sacct_remote,
+                proxy_jump_host=proxy_jump_host,
+            ),
             text=True,
             capture_output=True,
             check=False,
@@ -150,6 +166,7 @@ def rescue_pending(
     query_host: str,
     primary_partition: str,
     fallback_partition: str,
+    proxy_jump_host: str | None = None,
 ) -> None:
     command = [
         sys.executable,
@@ -164,6 +181,7 @@ def rescue_pending(
         primary_partition,
         "--fallback-partition",
         fallback_partition,
+        *proxy_jump_cli_args(proxy_jump_host),
     ]
     for job_id in job_ids:
         command.extend(["--job-id", job_id])
@@ -181,6 +199,7 @@ def submit_batch(
     cpu_partition: str,
     sync_host: str,
     submit_host: str,
+    proxy_jump_host: str | None,
     legate_fbmem: str | None,
     uv_base_dir: str | None,
     uv_cache_dir: str | None,
@@ -205,6 +224,7 @@ def submit_batch(
         sync_host,
         "--submit-host",
         submit_host,
+        *proxy_jump_cli_args(proxy_jump_host),
     ]
     if legate_fbmem:
         command.extend(["--legate-fbmem", legate_fbmem])
@@ -226,6 +246,7 @@ def collect_iteration(
     sync_host: str,
     lane_ids: list[str],
     batch_id: str,
+    proxy_jump_host: str | None,
 ) -> None:
     command = [
         sys.executable,
@@ -238,6 +259,7 @@ def collect_iteration(
         sync_host,
         "--expected-batch-id",
         batch_id,
+        *proxy_jump_cli_args(proxy_jump_host),
     ]
     for lane_id in lane_ids:
         command.extend(["--lane-id", lane_id])
@@ -377,6 +399,7 @@ def ensure_supervisor_provenance(root: Path, args: argparse.Namespace) -> dict[s
         "sync_host": args.sync_host,
         "submit_host": args.submit_host,
         "slurm_query_host": args.slurm_query_host,
+        "proxy_jump_host": args.proxy_jump_host,
         "legate_fbmem": args.legate_fbmem or "70000",
         "uv_base_dir": args.uv_base_dir,
         "uv_cache_dir": args.uv_cache_dir,
@@ -490,6 +513,7 @@ async def supervise(args: argparse.Namespace) -> int:
                 cpu_partition=args.cpu_partition,
                 sync_host=args.sync_host,
                 submit_host=args.submit_host,
+                proxy_jump_host=args.proxy_jump_host,
                 legate_fbmem=args.legate_fbmem,
                 uv_base_dir=args.uv_base_dir,
                 uv_cache_dir=args.uv_cache_dir,
@@ -824,6 +848,7 @@ async def supervise(args: argparse.Namespace) -> int:
                         cpu_partition=args.cpu_partition,
                         sync_host=args.sync_host,
                         submit_host=args.submit_host,
+                        proxy_jump_host=args.proxy_jump_host,
                         legate_fbmem=args.legate_fbmem,
                         uv_base_dir=args.uv_base_dir,
                         uv_cache_dir=args.uv_cache_dir,
@@ -879,7 +904,12 @@ async def supervise(args: argparse.Namespace) -> int:
         done_batch_ids = [
             batch_id
             for batch_id, job in running_jobs.items()
-            if job.job_id is not None and job_is_done(job.job_id, args.slurm_query_host)
+            if job.job_id is not None
+            and job_is_done(
+                job.job_id,
+                args.slurm_query_host,
+                proxy_jump_host=args.proxy_jump_host,
+            )
         ]
         for batch_id in done_batch_ids:
             job = running_jobs[batch_id]
@@ -891,6 +921,7 @@ async def supervise(args: argparse.Namespace) -> int:
                 args.sync_host,
                 job.lane_ids,
                 job.batch_id,
+                args.proxy_jump_host,
             )
             successful_lane_ids: list[str] = []
             retry_lane_ids: list[str] = []
@@ -988,6 +1019,7 @@ async def supervise(args: argparse.Namespace) -> int:
                 query_host=args.slurm_query_host,
                 primary_partition=args.cpu_partition,
                 fallback_partition=args.fallback_partition,
+                proxy_jump_host=args.proxy_jump_host,
             )
             last_rescue = now
 
@@ -1034,6 +1066,10 @@ def main() -> None:
     parser.add_argument("--sync-host", default=os.environ.get("HSOPT_SYNC_HOST"))
     parser.add_argument("--submit-host", default=os.environ.get("HSOPT_SUBMIT_HOST"))
     parser.add_argument("--slurm-query-host", default=os.environ.get("HSOPT_QUERY_HOST"))
+    parser.add_argument(
+        "--proxy-jump-host",
+        help="Optional SSH config alias used as ProxyJump for all cluster hosts.",
+    )
     parser.add_argument("--legate-fbmem")
     parser.add_argument("--uv-base-dir")
     parser.add_argument("--uv-cache-dir")
@@ -1064,6 +1100,17 @@ def main() -> None:
         missing.append("--fallback-partition or HSOPT_FALLBACK_PARTITION")
     if missing:
         parser.error("missing cluster configuration: " + ", ".join(missing))
+    try:
+        args.sync_host = validate_ssh_host(str(args.sync_host), "sync_host")
+        args.submit_host = validate_ssh_host(str(args.submit_host), "submit_host")
+        args.slurm_query_host = validate_ssh_host(str(args.slurm_query_host), "slurm_query_host")
+        args.proxy_jump_host = (
+            validate_ssh_host(str(args.proxy_jump_host), "proxy_jump_host")
+            if args.proxy_jump_host is not None
+            else None
+        )
+    except ValueError as exc:
+        parser.error(str(exc))
     paper_fixed = {
         "--start-iteration": (args.start_iteration, 1),
         "--iterations": (args.iterations, 50),

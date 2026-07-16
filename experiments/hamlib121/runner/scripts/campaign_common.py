@@ -46,6 +46,7 @@ PAPER_CODEX_EXEC_FLAGS = (
 )
 CAMPAIGN_ID_DOMAIN = b"hsopt-hamlib121-campaign-v1\0"
 SHA256_RE = re.compile(r"[0-9a-f]{64}")
+SAFE_SSH_HOST_RE = re.compile(r"[A-Za-z0-9][A-Za-z0-9_.-]*")
 EXPECTED_HAMLIB_ARCHIVES = 83
 CANONICAL_HAMLIB_SOURCE_MANIFEST_BYTES = 72_200
 CANONICAL_HAMLIB_SOURCE_MANIFEST_SHA256 = (
@@ -182,6 +183,44 @@ def validate_absolute_posix_path(value: str, field: str) -> str:
     if any(part in {"", ".", ".."} for part in parts) or path.as_posix() != value:
         raise ValueError(f"{field} must be a canonical absolute POSIX path")
     return value
+
+
+def validate_ssh_host(value: str, field: str) -> str:
+    """Validate an SSH config alias before using it in ssh or rsync argv."""
+    if not isinstance(value, str) or SAFE_SSH_HOST_RE.fullmatch(value) is None:
+        raise ValueError(f"{field} must be a safe SSH host alias")
+    return value
+
+
+def ssh_command(
+    host: str,
+    *remote_args: str,
+    proxy_jump_host: str | None = None,
+) -> list[str]:
+    """Build one option-safe SSH argv, optionally through a single jump alias."""
+    destination = validate_ssh_host(host, "SSH destination")
+    command = ["ssh"]
+    if proxy_jump_host is not None:
+        command.extend(["-J", validate_ssh_host(proxy_jump_host, "SSH proxy jump host")])
+    command.append(destination)
+    command.extend(remote_args)
+    return command
+
+
+def rsync_proxy_jump_args(proxy_jump_host: str | None = None) -> list[str]:
+    """Return rsync remote-shell arguments for the same validated SSH jump."""
+    if proxy_jump_host is None:
+        return []
+    jump = validate_ssh_host(proxy_jump_host, "SSH proxy jump host")
+    return ["-e", f"ssh -J {jump}"]
+
+
+def proxy_jump_cli_args(proxy_jump_host: str | None = None) -> list[str]:
+    """Propagate the optional jump alias to runner child processes."""
+    if proxy_jump_host is None:
+        return []
+    jump = validate_ssh_host(proxy_jump_host, "SSH proxy jump host")
+    return ["--proxy-jump-host", jump]
 
 
 def campaign_paths(root: Path) -> dict[str, Path]:

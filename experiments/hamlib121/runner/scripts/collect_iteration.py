@@ -31,14 +31,16 @@ from campaign_common import (  # noqa: E402
     log_event,
     mark_eval_batch_collected,
     now_iso,
+    rsync_proxy_jump_args,
+    ssh_command,
     validate_absolute_posix_path,
     validate_campaign_identity,
     validate_evaluation_result_provenance,
     validate_result_submission_receipt,
+    validate_ssh_host,
     write_json,
 )
 from render_telemetry import main as render_main  # noqa: E402
-from submit_eval_batch import validate_ssh_host  # noqa: E402
 
 
 SQLITE_INT_MAX = 2**63 - 1
@@ -146,18 +148,34 @@ def decide_candidate(
 
 
 def rsync_from_cluster(
-    cluster_root: str, campaign_root: Path, iteration: int, sync_host: str
+    cluster_root: str,
+    campaign_root: Path,
+    iteration: int,
+    sync_host: str,
+    *,
+    proxy_jump_host: str | None = None,
 ) -> None:
     cluster_root = validate_absolute_posix_path(cluster_root, "cluster_root")
     sync_host = validate_ssh_host(sync_host, "sync_host")
     src = f"{sync_host}:{cluster_root.rstrip('/')}/iterations/iter_{iteration:04d}/results/"
     dst = campaign_root / "iterations" / f"iter_{iteration:04d}" / "results"
     dst.mkdir(parents=True, exist_ok=True)
-    subprocess.run(["rsync", "-ah", "--partial", "--protect-args", src, f"{dst}/"], check=True)
+    subprocess.run(
+        [
+            "rsync",
+            "-ah",
+            "--partial",
+            "--protect-args",
+            *rsync_proxy_jump_args(proxy_jump_host),
+            src,
+            f"{dst}/",
+        ],
+        check=True,
+    )
     baseline_dst = campaign_root / "baselines"
     baseline_dst.mkdir(parents=True, exist_ok=True)
     probe = subprocess.run(
-        ["ssh", sync_host, "bash", "-s"],
+        ssh_command(sync_host, "bash", "-s", proxy_jump_host=proxy_jump_host),
         input=f"test -d {shlex.quote(cluster_root.rstrip('/') + '/baselines')}\n",
         text=True,
         stdout=subprocess.DEVNULL,
@@ -171,6 +189,7 @@ def rsync_from_cluster(
                 "-ah",
                 "--partial",
                 "--protect-args",
+                *rsync_proxy_jump_args(proxy_jump_host),
                 f"{sync_host}:{cluster_root.rstrip('/')}/baselines/",
                 f"{baseline_dst}/",
             ],
@@ -186,6 +205,10 @@ def main() -> None:
     parser.add_argument("--iteration", type=int, required=True)
     parser.add_argument("--cluster-root", default=None)
     parser.add_argument("--sync-host", default=os.environ.get("HSOPT_SYNC_HOST"))
+    parser.add_argument(
+        "--proxy-jump-host",
+        help="Optional SSH config alias used as ProxyJump for the sync host.",
+    )
     parser.add_argument("--skip-rsync", action="store_true")
     parser.add_argument("--lane-id", action="append", default=[])
     parser.add_argument("--lane-ids-file", type=Path)
@@ -213,8 +236,19 @@ def main() -> None:
     cluster_root = args.cluster_root or manifest["cluster_root"]
     if not args.skip_rsync and not args.sync_host:
         parser.error("pass --sync-host or set HSOPT_SYNC_HOST unless using --skip-rsync")
+    proxy_jump_host = (
+        validate_ssh_host(str(args.proxy_jump_host), "proxy_jump_host")
+        if args.proxy_jump_host is not None
+        else None
+    )
     if not args.skip_rsync:
-        rsync_from_cluster(cluster_root, root, args.iteration, args.sync_host)
+        rsync_from_cluster(
+            cluster_root,
+            root,
+            args.iteration,
+            args.sync_host,
+            proxy_jump_host=proxy_jump_host,
+        )
 
     conn = db_connect(root)
     init_db(conn)

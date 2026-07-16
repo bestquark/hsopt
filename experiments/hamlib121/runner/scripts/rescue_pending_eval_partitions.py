@@ -24,8 +24,15 @@ if (
 sys.pycache_prefix = _PRIVATE_PYCACHE_PREFIX
 os.environ["PYTHONPYCACHEPREFIX"] = _PRIVATE_PYCACHE_PREFIX
 
-from campaign_common import db_connect, ensure_dirs, init_db, log_event  # noqa: E402
-from submit_eval_batch import validate_slurm_name, validate_ssh_host  # noqa: E402
+from campaign_common import (  # noqa: E402
+    db_connect,
+    ensure_dirs,
+    init_db,
+    log_event,
+    ssh_command,
+    validate_ssh_host,
+)
+from submit_eval_batch import validate_slurm_name  # noqa: E402
 
 
 STUCK_REASON_MARKERS = (
@@ -44,10 +51,11 @@ def run_remote(
     *,
     query_host: str,
     timeout_seconds: int = REMOTE_TIMEOUT_SECONDS,
+    proxy_jump_host: str | None = None,
 ) -> subprocess.CompletedProcess[str]:
     try:
         return subprocess.run(
-            ["ssh", query_host, command],
+            ssh_command(query_host, command, proxy_jump_host=proxy_jump_host),
             text=True,
             capture_output=True,
             check=False,
@@ -77,6 +85,7 @@ def pending_eval_tasks(
     *,
     query_host: str,
     job_ids: list[str],
+    proxy_jump_host: str | None = None,
 ) -> list[tuple[str, str]]:
     normalized_job_ids: list[str] = []
     for supplied_job_id in job_ids:
@@ -96,6 +105,7 @@ def pending_eval_tasks(
             ["timeout", "20s", "squeue", "-h", "-j", job_selector, "-t", "PD", "-o", "%i|%P|%j|%R"]
         ),
         query_host=query_host,
+        proxy_jump_host=proxy_jump_host,
     )
     if completed.returncode != 0:
         raise RuntimeError(completed.stderr.strip() or completed.stdout.strip())
@@ -125,6 +135,7 @@ def rescue_once(
     job_ids: list[str],
     primary_partition: str,
     query_host: str,
+    proxy_jump_host: str | None = None,
 ) -> list[dict]:
     fallback_partition = validate_slurm_name(fallback_partition, "fallback_partition")
     primary_partition = validate_slurm_name(primary_partition, "primary_partition")
@@ -134,6 +145,7 @@ def rescue_once(
         primary_partition,
         query_host=query_host,
         job_ids=job_ids,
+        proxy_jump_host=proxy_jump_host,
     ):
         completed = run_remote(
             shlex.join(
@@ -147,6 +159,7 @@ def rescue_once(
                 ]
             ),
             query_host=query_host,
+            proxy_jump_host=proxy_jump_host,
         )
         if completed.returncode != 0:
             raise RuntimeError(
@@ -171,6 +184,10 @@ def main() -> None:
     )
     parser.add_argument("--campaign-root", type=Path, default=Path.cwd())
     parser.add_argument("--query-host", default=os.environ.get("HSOPT_QUERY_HOST"))
+    parser.add_argument(
+        "--proxy-jump-host",
+        help="Optional SSH config alias used as ProxyJump for the query host.",
+    )
     parser.add_argument("--primary-partition", default=os.environ.get("HSOPT_CPU_PARTITION"))
     parser.add_argument(
         "--fallback-partition",
@@ -220,6 +237,15 @@ def main() -> None:
         parser.error("missing cluster configuration: " + ", ".join(missing))
     if not args.job_id:
         parser.error("--enable-fallback requires at least one campaign-scoped --job-id")
+    try:
+        args.query_host = validate_ssh_host(str(args.query_host), "query_host")
+        args.proxy_jump_host = (
+            validate_ssh_host(str(args.proxy_jump_host), "proxy_jump_host")
+            if args.proxy_jump_host is not None
+            else None
+        )
+    except ValueError as exc:
+        parser.error(str(exc))
 
     root = args.campaign_root.resolve()
     ensure_dirs(root)
@@ -232,6 +258,7 @@ def main() -> None:
             fallback_partition=args.fallback_partition,
             query_host=args.query_host,
             job_ids=args.job_id,
+            proxy_jump_host=args.proxy_jump_host,
         )
         if rescued:
             print(json.dumps({"rescued": rescued}, sort_keys=True), flush=True)

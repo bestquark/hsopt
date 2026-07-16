@@ -32,10 +32,13 @@ from campaign_common import (  # noqa: E402
     log_event,
     mark_eval_batch_submitted,
     register_eval_batch,
+    rsync_proxy_jump_args,
     sha256_file,
+    ssh_command,
     validate_absolute_posix_path,
     validate_campaign_identity,
     validate_runner_provenance,
+    validate_ssh_host,
     write_json,
 )
 
@@ -43,12 +46,6 @@ from campaign_common import (  # noqa: E402
 REMOTE_CLAIM_NAME = ".hsopt-campaign-claim.json"
 REMOTE_CLAIM_LOCK_NAME = ".hsopt-campaign-claim.lock"
 SAFE_NAME_RE = re.compile(r"[A-Za-z0-9][A-Za-z0-9_.-]*")
-
-
-def validate_ssh_host(value: str, field: str) -> str:
-    if not isinstance(value, str) or SAFE_NAME_RE.fullmatch(value) is None:
-        raise ValueError(f"{field} must be a safe SSH host alias")
-    return value
 
 
 def validate_slurm_name(value: str, field: str) -> str:
@@ -206,6 +203,10 @@ def main() -> None:
     parser.add_argument("--cpu-partition", default=os.environ.get("HSOPT_CPU_PARTITION"))
     parser.add_argument("--sync-host", default=os.environ.get("HSOPT_SYNC_HOST"))
     parser.add_argument("--submit-host", default=os.environ.get("HSOPT_SUBMIT_HOST"))
+    parser.add_argument(
+        "--proxy-jump-host",
+        help="Optional SSH config alias used as ProxyJump for sync and submit hosts.",
+    )
     parser.add_argument("--legate-fbmem", default=None)
     parser.add_argument("--uv-base-dir", default=None)
     parser.add_argument("--uv-cache-dir", default=None)
@@ -392,8 +393,18 @@ def main() -> None:
         parser.error("missing cluster configuration: " + ", ".join(missing_config))
     sync_host = validate_ssh_host(str(args.sync_host), "sync_host")
     submit_host = validate_ssh_host(str(args.submit_host), "submit_host")
+    proxy_jump_host = (
+        validate_ssh_host(str(args.proxy_jump_host), "proxy_jump_host")
+        if args.proxy_jump_host is not None
+        else None
+    )
     account = validate_slurm_name(str(args.account), "account")
     submit_partition = validate_slurm_name(str(submit_partition), "partition")
+    transport_configuration = {
+        "sync_host": sync_host,
+        "submit_host": submit_host,
+        "proxy_jump_host": proxy_jump_host,
+    }
     submission_key, job_name = eval_submission_identity(
         cluster_root=cluster_root,
         iteration=args.iteration,
@@ -422,6 +433,7 @@ def main() -> None:
                     "slurm_script": slurm_script,
                     "submit_host": submit_host,
                     "sync_host": sync_host,
+                    "proxy_jump_host": proxy_jump_host,
                     "campaign_id": campaign_id,
                     "campaign_manifest_sha256": campaign_manifest_sha256,
                     "submission_key": submission_key,
@@ -436,7 +448,7 @@ def main() -> None:
         return
     if args.sync_only:
         run_with_retries(
-            ["ssh", sync_host, "bash", "-s"],
+            ssh_command(sync_host, "bash", "-s", proxy_jump_host=proxy_jump_host),
             attempts=args.command_attempts,
             timeout_seconds=args.submit_timeout_seconds,
             input_text=remote_claim_command(
@@ -451,6 +463,7 @@ def main() -> None:
                 "-ah",
                 "--partial",
                 "--protect-args",
+                *rsync_proxy_jump_args(proxy_jump_host),
                 "--exclude",
                 ".venv/",
                 "--exclude",
@@ -486,6 +499,7 @@ def main() -> None:
         "submission_key": submission_key,
         "job_name": job_name,
         "execution_configuration": execution_configuration,
+        "transport_configuration": transport_configuration,
         "runner_provenance": runner_provenance,
     }
     persist_json_intent(batch_path.parent / "batch_manifest.json", batch_manifest)
@@ -501,7 +515,7 @@ def main() -> None:
     )
 
     run_with_retries(
-        ["ssh", sync_host, "bash", "-s"],
+        ssh_command(sync_host, "bash", "-s", proxy_jump_host=proxy_jump_host),
         attempts=args.command_attempts,
         timeout_seconds=args.submit_timeout_seconds,
         input_text=remote_claim_command(
@@ -517,6 +531,7 @@ def main() -> None:
             "-ah",
             "--partial",
             "--protect-args",
+            *rsync_proxy_jump_args(proxy_jump_host),
             "--exclude",
             ".venv/",
             "--exclude",
@@ -654,7 +669,7 @@ def main() -> None:
         'write_receipt "$job_id"; rm -f "$intent_file"; printf "%s\\n" "$job_id"'
     )
     completed = run_with_retries(
-        ["ssh", submit_host, "bash", "-s"],
+        ssh_command(submit_host, "bash", "-s", proxy_jump_host=proxy_jump_host),
         attempts=args.command_attempts,
         timeout_seconds=args.submit_timeout_seconds,
         input_text=remote,
@@ -689,6 +704,7 @@ def main() -> None:
             "slurm_script": slurm_script,
             "sync_host": sync_host,
             "submit_host": submit_host,
+            "proxy_jump_host": proxy_jump_host,
             "legate_fbmem": effective_legate_fbmem,
             "uv_base_dir": args.uv_base_dir,
             "uv_cache_dir": args.uv_cache_dir,

@@ -74,6 +74,16 @@ uv run --locked python scripts/prepare_campaign.py \
   --hamlib-data-root "$HAMLIB_DATA_ROOT"
 ```
 
+When the campaign workspace is local and those cluster aliases are reachable
+only through one SSH config alias, append `--proxy-jump-host omni` to
+`submit_eval_batch.py`, `collect_iteration.py`, and
+`supervise_streaming_batches.py`. The supervisor propagates the validated alias
+to submission, result collection, `squeue`/`sacct`, and optional partition
+rescue children, and records it in `manifests/supervisor_provenance.json`.
+Use `ssh -J omni` and `rsync -e 'ssh -J omni'` for the manual prebuild and
+archive-preflight commands below. Omitting the flag preserves the direct-host
+route.
+
 Preparation fails unless the exact 72,200-byte canonical 401-row source
 manifest (`SHA256
 ff7f9acce5f5140d65f84ebe33df92276c9058d13a8de4a0ed254b7ad868e489`),

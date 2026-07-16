@@ -218,6 +218,7 @@ def _write_synthetic_export_run(root: Path) -> None:
             "sync_host": "test-sync",
             "submit_host": "test-submit",
             "slurm_query_host": "test-query",
+            "proxy_jump_host": None,
             "legate_fbmem": "70000",
             "uv_base_dir": None,
             "uv_cache_dir": None,
@@ -882,6 +883,173 @@ def test_remote_claim_is_atomic_identity_bound_and_path_safe() -> None:
         SUBMIT_EVAL.validate_ssh_host("-oProxyCommand=bad", "sync_host")
     with pytest.raises(ValueError, match="unsafe for Slurm"):
         SUBMIT_EVAL.slurm_export_safe("70000,BASH_ENV=/tmp/payload", "legate_fbmem")
+
+
+def test_proxy_jump_transport_builders_are_exact_and_option_safe() -> None:
+    assert CAMPAIGN_COMMON.ssh_command("nvlogin", "squeue -h") == [
+        "ssh",
+        "nvlogin",
+        "squeue -h",
+    ]
+    assert CAMPAIGN_COMMON.ssh_command(
+        "nvlogin",
+        "squeue -h",
+        proxy_jump_host="omni",
+    ) == [
+        "ssh",
+        "-J",
+        "omni",
+        "nvlogin",
+        "squeue -h",
+    ]
+    assert CAMPAIGN_COMMON.rsync_proxy_jump_args() == []
+    assert CAMPAIGN_COMMON.rsync_proxy_jump_args("omni") == ["-e", "ssh -J omni"]
+    assert CAMPAIGN_COMMON.proxy_jump_cli_args() == []
+    assert CAMPAIGN_COMMON.proxy_jump_cli_args("omni") == ["--proxy-jump-host", "omni"]
+    for unsafe in ("-oProxyCommand=bad", "omni other", "omni,other", "user@omni", ""):
+        with pytest.raises(ValueError, match="safe SSH host alias"):
+            CAMPAIGN_COMMON.ssh_command("nvlogin", "true", proxy_jump_host=unsafe)
+
+
+def test_collect_and_slurm_queries_use_the_same_proxy_jump(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    collect_calls: list[list[str]] = []
+
+    def fake_collect_run(command: list[str], **_kwargs: object) -> subprocess.CompletedProcess[str]:
+        collect_calls.append(command)
+        return subprocess.CompletedProcess(command, 0, stdout="", stderr="")
+
+    monkeypatch.setattr(COLLECT_ITERATION.subprocess, "run", fake_collect_run)
+    COLLECT_ITERATION.rsync_from_cluster(
+        "/cluster/hamlib121/run_01",
+        tmp_path / "run_01",
+        1,
+        "nvdata",
+        proxy_jump_host="omni",
+    )
+    assert collect_calls[0][:7] == [
+        "rsync",
+        "-ah",
+        "--partial",
+        "--protect-args",
+        "-e",
+        "ssh -J omni",
+        "nvdata:/cluster/hamlib121/run_01/iterations/iter_0001/results/",
+    ]
+    assert collect_calls[1] == ["ssh", "-J", "omni", "nvdata", "bash", "-s"]
+    assert collect_calls[2][4:6] == ["-e", "ssh -J omni"]
+
+    slurm_calls: list[list[str]] = []
+
+    def fake_slurm_run(command: list[str], **_kwargs: object) -> subprocess.CompletedProcess[str]:
+        slurm_calls.append(command)
+        return subprocess.CompletedProcess(command, 0, stdout="123|RUNNING\n", stderr="")
+
+    monkeypatch.setattr(STREAM_SUPERVISOR.subprocess, "run", fake_slurm_run)
+    assert not STREAM_SUPERVISOR.job_is_done("123", "nvlogin", proxy_jump_host="omni")
+    assert slurm_calls == [["ssh", "-J", "omni", "nvlogin", "squeue -h -j 123 -o '%A|%T'"]]
+
+
+def test_supervisor_propagates_proxy_jump_to_every_transport_child(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    child_calls: list[list[str]] = []
+
+    def fake_child_run(command: list[str], *, cwd: Path) -> str:
+        assert cwd == tmp_path
+        child_calls.append(command)
+        return "123456"
+
+    monkeypatch.setattr(STREAM_SUPERVISOR, "run", fake_child_run)
+    STREAM_SUPERVISOR.submit_batch(
+        root=tmp_path,
+        iteration=1,
+        batch_id="iter0001_batch0001",
+        lane_ids=["lane-1"],
+        account="test-account",
+        partition="test-gpu",
+        cpu_partition="test-cpu",
+        sync_host="nvdata",
+        submit_host="nvlogin",
+        proxy_jump_host="omni",
+        legate_fbmem=None,
+        uv_base_dir=None,
+        uv_cache_dir=None,
+        uv_python_install_dir=None,
+    )
+    STREAM_SUPERVISOR.collect_iteration(
+        tmp_path,
+        1,
+        "nvdata",
+        ["lane-1"],
+        "iter0001_batch0001",
+        "omni",
+    )
+    assert all(command[command.index("--proxy-jump-host") + 1] == "omni" for command in child_calls)
+
+    rescue_calls: list[list[str]] = []
+
+    def fake_rescue_run(command: list[str], **_kwargs: object) -> subprocess.CompletedProcess[str]:
+        rescue_calls.append(command)
+        return subprocess.CompletedProcess(command, 0)
+
+    monkeypatch.setattr(STREAM_SUPERVISOR.subprocess, "run", fake_rescue_run)
+    STREAM_SUPERVISOR.rescue_pending(
+        tmp_path,
+        job_ids=["123456"],
+        query_host="nvlogin",
+        primary_partition="test-cpu",
+        fallback_partition="test-fallback",
+        proxy_jump_host="omni",
+    )
+    assert rescue_calls[0][rescue_calls[0].index("--proxy-jump-host") + 1] == "omni"
+
+    remote_calls: list[list[str]] = []
+
+    def fake_remote_run(command: list[str], **_kwargs: object) -> subprocess.CompletedProcess[str]:
+        remote_calls.append(command)
+        return subprocess.CompletedProcess(command, 0, stdout="", stderr="")
+
+    monkeypatch.setattr(RESCUE_PARTITIONS.subprocess, "run", fake_remote_run)
+    RESCUE_PARTITIONS.run_remote("squeue -h", query_host="nvlogin", proxy_jump_host="omni")
+    assert remote_calls == [["ssh", "-J", "omni", "nvlogin", "squeue -h"]]
+
+
+def test_strict_export_rejects_unsafe_proxy_jump_provenance(tmp_path: Path) -> None:
+    root = tmp_path / "unsafe-transport"
+    _write_synthetic_export_run(root)
+    path = root / "manifests" / "supervisor_provenance.json"
+    payload = json.loads(path.read_text(encoding="utf-8"))
+    payload["proxy_jump_host"] = "-oProxyCommand=bad"
+    CAMPAIGN_COMMON.write_json(path, payload)
+    manifest, identity = CAMPAIGN_COMMON.validate_campaign_identity(root)
+    with pytest.raises(RuntimeError, match="unsafe supervisor transport provenance"):
+        EXPORT_REPLICATES.validate_supervisor_provenance(
+            root,
+            manifest=manifest,
+            identity=identity,
+            require_paper_protocol=False,
+        )
+
+
+def test_strict_export_accepts_exact_legacy_direct_transport_provenance(tmp_path: Path) -> None:
+    root = tmp_path / "legacy-direct-transport"
+    _write_synthetic_export_run(root)
+    path = root / "manifests" / "supervisor_provenance.json"
+    payload = json.loads(path.read_text(encoding="utf-8"))
+    payload.pop("proxy_jump_host")
+    CAMPAIGN_COMMON.write_json(path, payload)
+    manifest, identity = CAMPAIGN_COMMON.validate_campaign_identity(root)
+    protocol = EXPORT_REPLICATES.validate_supervisor_provenance(
+        root,
+        manifest=manifest,
+        identity=identity,
+        require_paper_protocol=False,
+    )
+    assert protocol["batch_size"] == 1
 
 
 def test_prepare_campaign_rejects_fixed_protocol_drift(tmp_path: Path) -> None:
@@ -1583,6 +1751,8 @@ def test_initial_baseline_submission_is_durable_before_network_and_identity_boun
             "test-sync",
             "--submit-host",
             "test-submit",
+            "--proxy-jump-host",
+            "omni",
         ],
     )
     SUBMIT_EVAL.main()
@@ -1617,12 +1787,19 @@ def test_initial_baseline_submission_is_durable_before_network_and_identity_boun
     )
     assert len(batch_manifest["policy_sha256s"]) == 121
     assert batch_manifest["execution_configuration"]["execution_mode"] == "gpu_baseline"
+    assert batch_manifest["transport_configuration"] == {
+        "sync_host": "test-sync",
+        "submit_host": "test-submit",
+        "proxy_jump_host": "omni",
+    }
     assert "--protect-args" in calls[1][0]
+    assert calls[0][0] == ["ssh", "-J", "omni", "test-sync", "bash", "-s"]
+    assert calls[1][0][4:6] == ["-e", "ssh -J omni"]
     assert calls[1][0][calls[1][0].index(".venv_cpu/") - 1] == "--exclude"
     assert calls[2][1] is not None
     assert "--export='ALL," not in calls[2][1]
     assert "flock -x 8" in calls[2][1]
-    assert calls[2][0][-2:] == ["bash", "-s"]
+    assert calls[2][0] == ["ssh", "-J", "omni", "test-submit", "bash", "-s"]
 
 
 def test_sync_only_rsync_excludes_both_cluster_environments(

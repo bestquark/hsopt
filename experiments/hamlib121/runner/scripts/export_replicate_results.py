@@ -40,6 +40,7 @@ from campaign_common import (  # noqa: E402
     validate_evaluation_result_provenance,
     validate_result_submission_receipt,
     validate_runner_provenance,
+    validate_ssh_host,
     validate_campaign_identity,
     validate_canonical_hamlib_source_manifest,
     validate_canonical_hamlib_zip_checksum_manifest,
@@ -71,7 +72,7 @@ FORBIDDEN_ABSOLUTE_PATH_PATTERNS = (
 PAPER_RUNS = 5
 PAPER_LANES = 121
 PAPER_ITERATIONS = 50
-SUPERVISOR_PROVENANCE_KEYS = {
+LEGACY_SUPERVISOR_PROVENANCE_KEYS = {
     "schema_version",
     "campaign_id",
     "campaign_manifest_sha256",
@@ -106,6 +107,7 @@ SUPERVISOR_PROVENANCE_KEYS = {
     "uv_cache_dir",
     "uv_python_install_dir",
 }
+SUPERVISOR_PROVENANCE_KEYS = LEGACY_SUPERVISOR_PROVENANCE_KEYS | {"proxy_jump_host"}
 
 
 def validate_paper_autoresearch_provenance(provenance: dict[str, Any]) -> None:
@@ -141,7 +143,10 @@ def validate_supervisor_provenance(
     if path.is_symlink() or not path.is_file():
         raise RuntimeError(f"{root.name}: missing or unsafe supervisor provenance")
     payload = load_json(path)
-    if not isinstance(payload, dict) or set(payload) != SUPERVISOR_PROVENANCE_KEYS:
+    if not isinstance(payload, dict) or set(payload) not in (
+        LEGACY_SUPERVISOR_PROVENANCE_KEYS,
+        SUPERVISOR_PROVENANCE_KEYS,
+    ):
         raise RuntimeError(f"{root.name}: malformed supervisor provenance")
     if (
         payload.get("schema_version") != 1
@@ -151,6 +156,14 @@ def validate_supervisor_provenance(
         or payload.get("python_environments") != [".venv", ".venv_cpu"]
     ):
         raise RuntimeError(f"{root.name}: supervisor identity/runtime provenance drift")
+    try:
+        for field in ("sync_host", "submit_host", "slurm_query_host"):
+            validate_ssh_host(payload.get(field), f"supervisor provenance {field}")
+        proxy_jump_host = payload.get("proxy_jump_host")
+        if proxy_jump_host is not None:
+            validate_ssh_host(proxy_jump_host, "supervisor provenance proxy_jump_host")
+    except ValueError as exc:
+        raise RuntimeError(f"{root.name}: unsafe supervisor transport provenance: {exc}") from exc
     protocol = {
         key: payload[key]
         for key in (
