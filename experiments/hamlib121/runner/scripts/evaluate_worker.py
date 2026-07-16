@@ -450,14 +450,105 @@ def apply_cnot_to_state(*, state, control: int, target: int, nqubits: int, xp):
     return updated.reshape(-1)
 
 
-def build_pauli_rotation_compiler(*, nqubits: int, xp):
-    hadamard = (1.0 / math.sqrt(2.0)) * xp.asarray(
-        [[1.0, 1.0], [1.0, -1.0]], dtype=xp.complex128
-    )
-    s_gate = xp.asarray([[1.0, 0.0], [0.0, 1j]], dtype=xp.complex128)
-    s_dagger = xp.asarray([[1.0, 0.0], [0.0, -1j]], dtype=xp.complex128)
-    named_gates = {"H": hadamard, "S": s_gate, "Sdg": s_dagger}
+_CNOT_PAULI_CONJUGATION = {
+    "II": (1.0, "II"),
+    "IX": (1.0, "IX"),
+    "IY": (1.0, "ZY"),
+    "IZ": (1.0, "ZZ"),
+    "XI": (1.0, "XX"),
+    "XX": (1.0, "XI"),
+    "XY": (1.0, "YZ"),
+    "XZ": (-1.0, "YY"),
+    "YI": (1.0, "YX"),
+    "YX": (1.0, "YI"),
+    "YY": (-1.0, "XZ"),
+    "YZ": (1.0, "XY"),
+    "ZI": (1.0, "ZI"),
+    "ZX": (1.0, "ZX"),
+    "ZY": (1.0, "IY"),
+    "ZZ": (1.0, "IZ"),
+}
 
+
+def conjugated_scaffold_pauli(label: str, central_pauli: str) -> tuple[complex, str]:
+    support = [index for index, pauli in enumerate(label) if pauli != "I"]
+    if not support:
+        raise ValueError("cannot conjugate through an identity Pauli scaffold")
+    if central_pauli not in {"X", "Y", "Z"}:
+        raise ValueError(f"invalid central Pauli {central_pauli!r}")
+    pivot = support[-1]
+    transformed = ["I"] * len(label)
+    transformed[pivot] = central_pauli
+    phase = 1.0 + 0.0j
+
+    for control in support[:-1]:
+        pair_phase, pair = _CNOT_PAULI_CONJUGATION[
+            transformed[control] + transformed[pivot]
+        ]
+        phase *= pair_phase
+        transformed[control], transformed[pivot] = pair
+
+    h_map = {"I": (1.0, "I"), "X": (1.0, "Z"), "Y": (-1.0, "Y"), "Z": (1.0, "X")}
+    sdg_inverse_map = {
+        "I": (1.0, "I"),
+        "X": (1.0, "Y"),
+        "Y": (-1.0, "X"),
+        "Z": (1.0, "Z"),
+    }
+    for qubit, source_pauli in enumerate(label):
+        if source_pauli not in {"X", "Y"}:
+            continue
+        gate_phase, transformed[qubit] = h_map[transformed[qubit]]
+        phase *= gate_phase
+        if source_pauli == "Y":
+            gate_phase, transformed[qubit] = sdg_inverse_map[transformed[qubit]]
+            phase *= gate_phase
+    return phase, "".join(transformed)
+
+
+def local_pauli_output_map(label: str) -> tuple[np.ndarray, np.ndarray]:
+    size = 1 << len(label)
+    outputs = np.arange(size, dtype=np.int64)
+    x_mask = 0
+    for qubit, pauli in enumerate(label):
+        if pauli not in {"I", "X", "Y", "Z"}:
+            raise ValueError(f"invalid Pauli char {pauli!r}")
+        if pauli in {"X", "Y"}:
+            x_mask |= 1 << (len(label) - qubit - 1)
+    sources = outputs ^ x_mask
+    phases = np.ones(size, dtype=np.complex128)
+    for qubit, pauli in enumerate(label):
+        bit = 1 << (len(label) - qubit - 1)
+        occupied = (sources & bit) != 0
+        if pauli == "Y":
+            phases *= np.where(occupied, -1j, 1j)
+        elif pauli == "Z":
+            phases *= np.where(occupied, -1.0, 1.0)
+    return sources, phases
+
+
+def apply_pauli_to_state_split(*, state, label: str, nqubits: int, xp):
+    if len(label) != nqubits:
+        raise ValueError(f"Pauli label length {len(label)} does not match nqubits={nqubits}")
+    split = nqubits // 2
+    left_label = label[:split]
+    right_label = label[split:]
+    left_size = 1 << split
+    right_size = 1 << (nqubits - split)
+    tensor = xp.asarray(state, dtype=xp.complex128).reshape(left_size, right_size)
+
+    if any(pauli != "I" for pauli in left_label):
+        permutation, phases = local_pauli_output_map(left_label)
+        tensor = xp.take(tensor, xp.asarray(permutation, dtype=xp.int64), axis=0)
+        tensor = tensor * xp.asarray(phases, dtype=xp.complex128).reshape(left_size, 1)
+    if any(pauli != "I" for pauli in right_label):
+        permutation, phases = local_pauli_output_map(right_label)
+        tensor = xp.take(tensor, xp.asarray(permutation, dtype=xp.int64), axis=1)
+        tensor = tensor * xp.asarray(phases, dtype=xp.complex128).reshape(1, right_size)
+    return tensor.reshape(-1)
+
+
+def build_pauli_rotation_compiler(*, nqubits: int, xp):
     @functools.lru_cache(maxsize=None)
     def term_scaffold(label: str):
         support = [index for index, pauli in enumerate(label) if pauli != "I"]
@@ -496,7 +587,7 @@ def build_pauli_rotation_compiler(*, nqubits: int, xp):
             "gate_count": len(gate_string),
             "t_gate_count": gate_string.count("T"),
             "operator_error": unitary_error_up_to_global_phase(rz_matrix(theta), approximate),
-            "matrix": xp.asarray(approximate, dtype=xp.complex128),
+            "matrix_host": approximate,
         }
 
     @functools.lru_cache(maxsize=None)
@@ -505,51 +596,51 @@ def build_pauli_rotation_compiler(*, nqubits: int, xp):
         normalized_epsilon = float(epsilon)
         theta = -2.0 * normalized_alpha
         rz = compile_rz(theta, normalized_epsilon)
-        basis_forward, basis_inverse, cnot_pairs, pivot = term_scaffold(label)
+        term_scaffold(label)
+        approximate = np.asarray(rz["matrix_host"], dtype=np.complex128)
+        coefficients = {
+            "I": 0.5 * (approximate[0, 0] + approximate[1, 1]),
+            "X": 0.5 * (approximate[0, 1] + approximate[1, 0]),
+            "Y": (approximate[1, 0] - approximate[0, 1]) / (2.0j),
+            "Z": 0.5 * (approximate[0, 0] - approximate[1, 1]),
+        }
+        component_floor = np.finfo(np.float64).eps * max(
+            abs(coefficient) for coefficient in coefficients.values()
+        )
+        images = {
+            pauli: conjugated_scaffold_pauli(label, pauli) for pauli in ("X", "Y", "Z")
+        }
+        z_phase, z_label = images["Z"]
+        if abs(z_phase - 1.0) > 1.0e-12 or z_label != label:
+            raise RuntimeError(f"Pauli scaffold did not map central Z back to {label}")
+        active_components = [
+            pauli
+            for pauli, coefficient in coefficients.items()
+            if pauli == "I" or abs(coefficient) > component_floor
+        ]
+        discarded_component_norm_bound = float(
+            sum(
+                abs(coefficient)
+                for pauli, coefficient in coefficients.items()
+                if pauli != "I" and pauli not in active_components
+            )
+        )
 
         def apply_state(state):
-            updated = xp.asarray(state, dtype=xp.complex128)
             if rz["gate_count"] == 0:
-                return updated
-            for qubit, gate_name in basis_forward:
-                updated = apply_single_qubit_gate_to_state(
-                    state=updated,
-                    gate=named_gates[gate_name],
-                    qubit=qubit,
+                return xp.asarray(state, dtype=xp.complex128)
+            updated = coefficients["I"] * xp.asarray(state, dtype=xp.complex128)
+            for pauli in active_components:
+                if pauli == "I":
+                    continue
+                image_phase, image_label = images[pauli]
+                pauli_state = apply_pauli_to_state_split(
+                    state=state,
+                    label=image_label,
                     nqubits=nqubits,
                     xp=xp,
                 )
-            for control, target in cnot_pairs:
-                updated = apply_cnot_to_state(
-                    state=updated,
-                    control=control,
-                    target=target,
-                    nqubits=nqubits,
-                    xp=xp,
-                )
-            updated = apply_single_qubit_gate_to_state(
-                state=updated,
-                gate=rz["matrix"],
-                qubit=pivot,
-                nqubits=nqubits,
-                xp=xp,
-            )
-            for control, target in cnot_pairs:
-                updated = apply_cnot_to_state(
-                    state=updated,
-                    control=control,
-                    target=target,
-                    nqubits=nqubits,
-                    xp=xp,
-                )
-            for qubit, gate_name in basis_inverse:
-                updated = apply_single_qubit_gate_to_state(
-                    state=updated,
-                    gate=named_gates[gate_name],
-                    qubit=qubit,
-                    nqubits=nqubits,
-                    xp=xp,
-                )
+                updated += coefficients[pauli] * image_phase * pauli_state
             return updated
 
         return {
@@ -561,6 +652,8 @@ def build_pauli_rotation_compiler(*, nqubits: int, xp):
             "gate_count": int(rz["gate_count"]),
             "t_gate_count": int(rz["t_gate_count"]),
             "operator_error": float(rz["operator_error"]),
+            "active_pauli_components": active_components,
+            "discarded_component_norm_bound": discarded_component_norm_bound,
             "apply_state": apply_state,
         }
 
@@ -622,6 +715,8 @@ def run_compiled_product_formula(
     t_gate_count = 0
     nonzero_rotation_count = 0
     skipped_rotation_count = 0
+    numerical_component_omission_bound_per_slice = 0.0
+    numerical_component_omission_bound_per_base_unitary = 0.0
     propagation_started = time.perf_counter()
 
     # Policies are required to be stationary: each of the n_steps repetitions
@@ -640,8 +735,11 @@ def run_compiled_product_formula(
         state = compiled["apply_state"](state)
         nonzero_rotation_count += n_steps
         t_gate_count += n_steps * int(compiled["t_gate_count"])
+        component_omission = float(compiled.get("discarded_component_norm_bound", 0.0))
+        numerical_component_omission_bound_per_slice += component_omission
+        numerical_component_omission_bound_per_base_unitary += n_steps * component_omission
         epsilon_hist[f"{epsilon:.3e}"] += n_steps
-        unique_compilations[compiled["cache_key"]] = {
+        compilation_record = {
             key: compiled[key]
             for key in (
                 "label",
@@ -653,6 +751,11 @@ def run_compiled_product_formula(
                 "operator_error",
             )
         }
+        compilation_record["active_pauli_components"] = compiled.get(
+            "active_pauli_components", []
+        )
+        compilation_record["discarded_component_norm_bound"] = component_omission
+        unique_compilations[compiled["cache_key"]] = compilation_record
 
     norm = float(np.asarray(xp.linalg.norm(state)))
     if not math.isfinite(norm) or norm <= 0.0:
@@ -670,6 +773,12 @@ def run_compiled_product_formula(
         "nonzero_rotation_count_per_base_unitary": nonzero_rotation_count,
         "skipped_rotation_count_per_base_unitary": skipped_rotation_count,
         "scheduled_rotation_count_per_base_unitary": len(schedule) * n_steps,
+        "numerical_component_omission_bound_per_slice": (
+            numerical_component_omission_bound_per_slice
+        ),
+        "numerical_component_omission_bound_per_base_unitary": (
+            numerical_component_omission_bound_per_base_unitary
+        ),
         "synthesis_epsilon_histogram": dict(sorted(epsilon_hist.items())),
         "unique_compilation_count": len(unique_compilations),
         "unique_compilations": sorted(

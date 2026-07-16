@@ -1823,8 +1823,123 @@ def test_state_gate_kernels_match_reference_at_legate_safe_rank() -> None:
         )
         assert actual == pytest.approx(expected)
 
+    label = "XYZI" * 4
+    inputs = np.arange(1 << nqubits, dtype=np.int64)
+    outputs, phases = EVALUATE_WORKER.apply_pauli_to_indices(inputs, label, nqubits)
+    expected = np.empty_like(state)
+    expected[outputs] = phases * state
+    actual = EVALUATE_WORKER.apply_pauli_to_state_split(
+        state=state,
+        label=label,
+        nqubits=nqubits,
+        xp=np,
+    )
+    assert actual == pytest.approx(expected)
+
     worker_source = (SCRIPTS_ROOT / "evaluate_worker.py").read_text(encoding="utf-8")
     assert "reshape((2,) * nqubits)" not in worker_source
+
+
+def test_fused_compiled_rotation_matches_the_gate_scaffold(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    import numpy as np
+
+    axis = np.asarray([0.3, 0.4, math.sqrt(0.75)], dtype=np.float64)
+    paulis = [
+        np.asarray([[0.0, 1.0], [1.0, 0.0]], dtype=np.complex128),
+        np.asarray([[0.0, -1j], [1j, 0.0]], dtype=np.complex128),
+        np.asarray([[1.0, 0.0], [0.0, -1.0]], dtype=np.complex128),
+    ]
+    approximate = math.cos(0.2) * np.eye(2, dtype=np.complex128)
+    approximate -= 1j * math.sin(0.2) * sum(
+        coefficient * pauli for coefficient, pauli in zip(axis, paulis, strict=True)
+    )
+
+    class FakeGridSynth:
+        @staticmethod
+        def gridsynth_gates(_theta: float, _epsilon: float) -> str:
+            return "T"
+
+    monkeypatch.setattr(EVALUATE_WORKER, "import_pygridsynth", lambda: FakeGridSynth())
+    monkeypatch.setattr(
+        EVALUATE_WORKER,
+        "pygridsynth_matrix_from_gates",
+        lambda _gate_string: approximate,
+    )
+
+    nqubits = 5
+    label = "XYZIY"
+    rng = np.random.default_rng(23)
+    state = rng.normal(size=1 << nqubits) + 1j * rng.normal(size=1 << nqubits)
+    state = state.astype(np.complex128)
+    state /= np.linalg.norm(state)
+    compile_rotation = EVALUATE_WORKER.build_pauli_rotation_compiler(
+        nqubits=nqubits,
+        xp=np,
+    )
+    compiled = compile_rotation(label, 0.2, 1.0e-6)
+    actual = compiled["apply_state"](state)
+
+    h_gate = (1.0 / math.sqrt(2.0)) * np.asarray(
+        [[1.0, 1.0], [1.0, -1.0]], dtype=np.complex128
+    )
+    s_gate = np.asarray([[1.0, 0.0], [0.0, 1j]], dtype=np.complex128)
+    sdg_gate = np.asarray([[1.0, 0.0], [0.0, -1j]], dtype=np.complex128)
+    reference = state
+    support = [index for index, pauli in enumerate(label) if pauli != "I"]
+    pivot = support[-1]
+    for qubit, pauli in enumerate(label):
+        if pauli == "X":
+            reference = EVALUATE_WORKER.apply_single_qubit_gate_to_state(
+                state=reference, gate=h_gate, qubit=qubit, nqubits=nqubits, xp=np
+            )
+        elif pauli == "Y":
+            reference = EVALUATE_WORKER.apply_single_qubit_gate_to_state(
+                state=reference, gate=sdg_gate, qubit=qubit, nqubits=nqubits, xp=np
+            )
+            reference = EVALUATE_WORKER.apply_single_qubit_gate_to_state(
+                state=reference, gate=h_gate, qubit=qubit, nqubits=nqubits, xp=np
+            )
+    for control in support[:-1]:
+        reference = EVALUATE_WORKER.apply_cnot_to_state(
+            state=reference,
+            control=control,
+            target=pivot,
+            nqubits=nqubits,
+            xp=np,
+        )
+    reference = EVALUATE_WORKER.apply_single_qubit_gate_to_state(
+        state=reference,
+        gate=approximate,
+        qubit=pivot,
+        nqubits=nqubits,
+        xp=np,
+    )
+    for control in support[:-1]:
+        reference = EVALUATE_WORKER.apply_cnot_to_state(
+            state=reference,
+            control=control,
+            target=pivot,
+            nqubits=nqubits,
+            xp=np,
+        )
+    for qubit, pauli in enumerate(label):
+        if pauli == "X":
+            reference = EVALUATE_WORKER.apply_single_qubit_gate_to_state(
+                state=reference, gate=h_gate, qubit=qubit, nqubits=nqubits, xp=np
+            )
+        elif pauli == "Y":
+            reference = EVALUATE_WORKER.apply_single_qubit_gate_to_state(
+                state=reference, gate=h_gate, qubit=qubit, nqubits=nqubits, xp=np
+            )
+            reference = EVALUATE_WORKER.apply_single_qubit_gate_to_state(
+                state=reference, gate=s_gate, qubit=qubit, nqubits=nqubits, xp=np
+            )
+
+    assert compiled["active_pauli_components"] == ["I", "X", "Y", "Z"]
+    assert compiled["discarded_component_norm_bound"] == 0.0
+    assert actual == pytest.approx(reference, abs=1.0e-12)
 
 
 def test_policy_loader_rejects_step_dependent_synthesis(tmp_path: Path) -> None:

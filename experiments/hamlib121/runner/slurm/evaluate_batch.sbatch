@@ -122,7 +122,7 @@ echo "legate=$("$LEGATE" --version 2>&1 | head -n 1 || true)"
 "$CAMPAIGN_NVIDIA_SMI" --query-gpu=index,name,memory.total --format=csv,noheader
 echo "lane_count=$(grep -cve '^[[:space:]]*$' "$LANE_IDS_FILE")"
 
-"$CAMPAIGN_NVIDIA_SMI" dmon -s pucm -d 5 -o DT > "logs/gpu_dmon_iter_${ITERATION}_batch_${BATCH_ID}.log" 2>&1 &
+"$CAMPAIGN_NVIDIA_SMI" dmon -s pucm -d 30 -o DT > "logs/gpu_dmon_iter_${ITERATION}_batch_${BATCH_ID}.log" 2>&1 &
 MONITOR_PID=$!
 trap 'kill "$MONITOR_PID" 2>/dev/null || true' EXIT
 
