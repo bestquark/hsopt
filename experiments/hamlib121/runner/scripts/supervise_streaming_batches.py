@@ -46,9 +46,13 @@ from campaign_common import (  # noqa: E402
     mark_eval_batch_submitted,
     now_iso,
     proxy_jump_cli_args,
+    revalidate_rsync_binary,
+    require_existing_rsync_provenance,
+    resolve_rsync_binary,
     ssh_command,
     validate_campaign_identity,
     validate_evaluation_result_provenance,
+    validate_manifests_parent_chain,
     validate_ssh_host,
     write_json,
 )
@@ -200,6 +204,7 @@ def submit_batch(
     sync_host: str,
     submit_host: str,
     proxy_jump_host: str | None,
+    rsync_binary: str,
     legate_fbmem: str | None,
     uv_base_dir: str | None,
     uv_cache_dir: str | None,
@@ -224,6 +229,8 @@ def submit_batch(
         sync_host,
         "--submit-host",
         submit_host,
+        "--rsync-bin",
+        rsync_binary,
         *proxy_jump_cli_args(proxy_jump_host),
     ]
     if legate_fbmem:
@@ -247,6 +254,7 @@ def collect_iteration(
     lane_ids: list[str],
     batch_id: str,
     proxy_jump_host: str | None,
+    rsync_binary: str,
 ) -> None:
     command = [
         sys.executable,
@@ -259,6 +267,8 @@ def collect_iteration(
         sync_host,
         "--expected-batch-id",
         batch_id,
+        "--rsync-bin",
+        rsync_binary,
         *proxy_jump_cli_args(proxy_jump_host),
     ]
     for lane_id in lane_ids:
@@ -400,6 +410,7 @@ def ensure_supervisor_provenance(root: Path, args: argparse.Namespace) -> dict[s
         "submit_host": args.submit_host,
         "slurm_query_host": args.slurm_query_host,
         "proxy_jump_host": args.proxy_jump_host,
+        "rsync": args.rsync_provenance,
         "legate_fbmem": args.legate_fbmem or "70000",
         "uv_base_dir": args.uv_base_dir,
         "uv_cache_dir": args.uv_cache_dir,
@@ -415,7 +426,10 @@ def ensure_supervisor_provenance(root: Path, args: argparse.Namespace) -> dict[s
 
 
 async def supervise(args: argparse.Namespace) -> int:
-    root = args.campaign_root.resolve()
+    root = validate_manifests_parent_chain(args.campaign_root)
+    revalidate_rsync_binary(args.rsync_provenance)
+    require_existing_rsync_provenance(root, args.rsync_provenance)
+    validate_campaign_identity(root)
     ensure_dirs(root)
     supervisor_lock = acquire_supervisor_lock(root)
     conn = db_connect(root)
@@ -514,6 +528,7 @@ async def supervise(args: argparse.Namespace) -> int:
                 sync_host=args.sync_host,
                 submit_host=args.submit_host,
                 proxy_jump_host=args.proxy_jump_host,
+                rsync_binary=args.rsync_bin,
                 legate_fbmem=args.legate_fbmem,
                 uv_base_dir=args.uv_base_dir,
                 uv_cache_dir=args.uv_cache_dir,
@@ -849,6 +864,7 @@ async def supervise(args: argparse.Namespace) -> int:
                         sync_host=args.sync_host,
                         submit_host=args.submit_host,
                         proxy_jump_host=args.proxy_jump_host,
+                        rsync_binary=args.rsync_bin,
                         legate_fbmem=args.legate_fbmem,
                         uv_base_dir=args.uv_base_dir,
                         uv_cache_dir=args.uv_cache_dir,
@@ -922,6 +938,7 @@ async def supervise(args: argparse.Namespace) -> int:
                 job.lane_ids,
                 job.batch_id,
                 args.proxy_jump_host,
+                args.rsync_bin,
             )
             successful_lane_ids: list[str] = []
             retry_lane_ids: list[str] = []
@@ -1070,6 +1087,14 @@ def main() -> None:
         "--proxy-jump-host",
         help="Optional SSH config alias used as ProxyJump for all cluster hosts.",
     )
+    parser.add_argument(
+        "--rsync-bin",
+        default=os.environ.get("HSOPT_RSYNC_BIN"),
+        help=(
+            "Explicit local rsync executable. Defaults to HSOPT_RSYNC_BIN, then discovers "
+            "a compatible rsync >= 3 with --protect-args support."
+        ),
+    )
     parser.add_argument("--legate-fbmem")
     parser.add_argument("--uv-base-dir")
     parser.add_argument("--uv-cache-dir")
@@ -1109,7 +1134,13 @@ def main() -> None:
             if args.proxy_jump_host is not None
             else None
         )
+        args.campaign_root = validate_manifests_parent_chain(args.campaign_root)
+        args.rsync_provenance = resolve_rsync_binary(args.rsync_bin)
+        require_existing_rsync_provenance(args.campaign_root, args.rsync_provenance)
+        args.rsync_bin = str(args.rsync_provenance["binary"])
     except ValueError as exc:
+        parser.error(str(exc))
+    except RuntimeError as exc:
         parser.error(str(exc))
     paper_fixed = {
         "--start-iteration": (args.start_iteration, 1),

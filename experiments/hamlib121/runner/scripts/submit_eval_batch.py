@@ -12,6 +12,7 @@ import sys
 import tempfile
 import time
 from pathlib import Path
+from collections.abc import Callable
 
 _PRIVATE_PYCACHE_PREFIX = tempfile.mkdtemp(prefix="hsopt-hamlib121-pycache-")
 _private_pycache_stat = os.stat(_PRIVATE_PYCACHE_PREFIX, follow_symlinks=False)
@@ -27,16 +28,21 @@ os.environ["PYTHONPYCACHEPREFIX"] = _PRIVATE_PYCACHE_PREFIX
 from campaign_common import (  # noqa: E402
     SHA256_RE,
     db_connect,
+    ensure_rsync_provenance,
     eval_submission_identity,
     init_db,
     log_event,
     mark_eval_batch_submitted,
     register_eval_batch,
+    revalidate_rsync_binary,
+    resolve_rsync_binary,
     rsync_proxy_jump_args,
     sha256_file,
     ssh_command,
     validate_absolute_posix_path,
     validate_campaign_identity,
+    validate_existing_rsync_provenance,
+    validate_manifests_parent_chain,
     validate_runner_provenance,
     validate_ssh_host,
     write_json,
@@ -155,6 +161,50 @@ def persist_json_intent(path: Path, payload: dict[str, object]) -> None:
     write_json(path, payload)
 
 
+def validate_rsync_binding(
+    campaign_root: Path,
+    provenance: dict[str, object],
+) -> bool:
+    """Validate the secondary binding marker used to detect a deleted receipt."""
+    path = campaign_root / "manifests" / "rsync_binding.json"
+    if not path.exists() and not path.is_symlink():
+        return False
+    if path.is_symlink() or not path.is_file():
+        raise RuntimeError(f"campaign rsync binding marker is unsafe: {path}")
+    expected = {"schema_version": 1, "rsync": provenance}
+    try:
+        observed = json.loads(path.read_text(encoding="utf-8"))
+    except (OSError, UnicodeDecodeError, json.JSONDecodeError) as exc:
+        raise RuntimeError("campaign rsync binding marker is unreadable") from exc
+    if observed != expected:
+        raise RuntimeError("campaign rsync binding marker drifted")
+    return True
+
+
+def campaign_has_rsync_or_batch_evidence(campaign_root: Path) -> bool:
+    """Return whether a campaign has evidence that requires an existing receipt."""
+    if (campaign_root / "manifests" / "rsync_binding.json").exists():
+        return True
+    if (campaign_root / "manifests" / "supervisor_provenance.json").exists():
+        return True
+    iterations = campaign_root / "iterations"
+    return any(iterations.glob("iter_*/batches/*")) or any(iterations.glob("iter_*/results/*.json"))
+
+
+def require_or_allow_new_rsync_binding(
+    campaign_root: Path,
+    provenance: dict[str, object],
+) -> bool:
+    """Return receipt presence, rejecting rebinding once activity is durable."""
+    validate_rsync_binding(campaign_root, provenance)
+    present = validate_existing_rsync_provenance(campaign_root, provenance)
+    if not present and campaign_has_rsync_or_batch_evidence(campaign_root):
+        raise RuntimeError(
+            "campaign rsync provenance receipt is missing after transfer or batch activity"
+        )
+    return present
+
+
 def run_with_retries(
     command: list[str],
     *,
@@ -162,6 +212,7 @@ def run_with_retries(
     timeout_seconds: int,
     retry_delay_seconds: float = 2.0,
     input_text: str | None = None,
+    before_attempt: Callable[[], object] | None = None,
 ) -> subprocess.CompletedProcess[str]:
     if attempts < 1:
         raise ValueError("attempts must be positive")
@@ -169,6 +220,8 @@ def run_with_retries(
         raise ValueError("timeout_seconds must be positive")
     failures: list[str] = []
     for attempt in range(1, attempts + 1):
+        if before_attempt is not None:
+            before_attempt()
         try:
             return subprocess.run(
                 command,
@@ -207,6 +260,14 @@ def main() -> None:
         "--proxy-jump-host",
         help="Optional SSH config alias used as ProxyJump for sync and submit hosts.",
     )
+    parser.add_argument(
+        "--rsync-bin",
+        default=os.environ.get("HSOPT_RSYNC_BIN"),
+        help=(
+            "Explicit local rsync executable. Defaults to HSOPT_RSYNC_BIN, then discovers "
+            "a compatible rsync >= 3 with --protect-args support."
+        ),
+    )
     parser.add_argument("--legate-fbmem", default=None)
     parser.add_argument("--uv-base-dir", default=None)
     parser.add_argument("--uv-cache-dir", default=None)
@@ -224,7 +285,10 @@ def main() -> None:
     parser.add_argument(
         "--dry-run",
         action="store_true",
-        help="Validate and print the batch plan without local writes, rsync, SSH, or Slurm.",
+        help=(
+            "Validate and print the batch plan without local writes, file transfer, SSH, "
+            "or Slurm. The local rsync version/parser preflight still runs."
+        ),
     )
     parser.add_argument(
         "--no-submit", dest="sync_only", action="store_true", help=argparse.SUPPRESS
@@ -250,7 +314,7 @@ def main() -> None:
         if value is not None:
             validate_absolute_posix_path(value, field)
 
-    root = args.campaign_root.resolve()
+    root = validate_manifests_parent_chain(args.campaign_root)
     manifest, campaign_identity = validate_campaign_identity(root)
     runner_provenance = validate_runner_provenance(root)
     campaign_id = str(manifest["campaign_id"])
@@ -398,12 +462,19 @@ def main() -> None:
         if args.proxy_jump_host is not None
         else None
     )
+    try:
+        rsync_provenance = resolve_rsync_binary(args.rsync_bin)
+        require_or_allow_new_rsync_binding(root, rsync_provenance)
+    except RuntimeError as exc:
+        parser.error(str(exc))
+    rsync_binary = str(rsync_provenance["binary"])
     account = validate_slurm_name(str(args.account), "account")
     submit_partition = validate_slurm_name(str(submit_partition), "partition")
     transport_configuration = {
         "sync_host": sync_host,
         "submit_host": submit_host,
         "proxy_jump_host": proxy_jump_host,
+        "rsync": rsync_provenance,
     }
     submission_key, job_name = eval_submission_identity(
         cluster_root=cluster_root,
@@ -434,6 +505,7 @@ def main() -> None:
                     "submit_host": submit_host,
                     "sync_host": sync_host,
                     "proxy_jump_host": proxy_jump_host,
+                    "rsync": rsync_provenance,
                     "campaign_id": campaign_id,
                     "campaign_manifest_sha256": campaign_manifest_sha256,
                     "submission_key": submission_key,
@@ -446,6 +518,11 @@ def main() -> None:
             )
         )
         return
+    ensure_rsync_provenance(root, rsync_provenance)
+    persist_json_intent(
+        root / "manifests" / "rsync_binding.json",
+        {"schema_version": 1, "rsync": rsync_provenance},
+    )
     if args.sync_only:
         run_with_retries(
             ssh_command(sync_host, "bash", "-s", proxy_jump_host=proxy_jump_host),
@@ -459,7 +536,7 @@ def main() -> None:
         )
         run_with_retries(
             [
-                "rsync",
+                rsync_binary,
                 "-ah",
                 "--partial",
                 "--protect-args",
@@ -483,6 +560,7 @@ def main() -> None:
             ],
             attempts=args.command_attempts,
             timeout_seconds=args.sync_timeout_seconds,
+            before_attempt=lambda: revalidate_rsync_binary(rsync_provenance),
         )
         print(f"claimed and synced campaign staging root {cluster_root}; no batch intent created")
         return
@@ -527,7 +605,7 @@ def main() -> None:
 
     run_with_retries(
         [
-            "rsync",
+            rsync_binary,
             "-ah",
             "--partial",
             "--protect-args",
@@ -551,6 +629,7 @@ def main() -> None:
         ],
         attempts=args.command_attempts,
         timeout_seconds=args.sync_timeout_seconds,
+        before_attempt=lambda: revalidate_rsync_binary(rsync_provenance),
     )
     cluster_lane_file = f"{cluster_root.rstrip('/')}/{batch_rel.as_posix()}"
     export_parts = [
@@ -705,6 +784,7 @@ def main() -> None:
             "sync_host": sync_host,
             "submit_host": submit_host,
             "proxy_jump_host": proxy_jump_host,
+            "rsync": rsync_provenance,
             "legate_fbmem": effective_legate_fbmem,
             "uv_base_dir": args.uv_base_dir,
             "uv_cache_dir": args.uv_cache_dir,

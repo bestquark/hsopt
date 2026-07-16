@@ -22,8 +22,10 @@ checkout; `CAMPAIGN_ROOT` and `CLUSTER_ROOT` must be outside that checkout:
 ```bash
 SOURCE_RUNNER=/absolute/path/to/hsopt/experiments/reactions10/runner
 SOURCE_ENV="$SOURCE_RUNNER/environment"
-CAMPAIGN_ROOT=/external/reactions10_run
-CLUSTER_ROOT=/cluster/path/reactions10_run
+HSOPT_DATA_ROOT=/absolute/path/to/hsopt-data
+CAMPAIGN_ID=reactions10_paper_YYYYMMDD_COMMIT
+CAMPAIGN_ROOT="$HSOPT_DATA_ROOT/paper/reactions10/$CAMPAIGN_ID"
+CLUSTER_ROOT=/cluster/path/hsopt/paper/reactions10/$CAMPAIGN_ID
 ```
 
 Create the locked Python 3.12 environment from the runner's own project and
@@ -133,7 +135,12 @@ cross-linked through the immutable intent, launch, process, and mutation
 records. Failed npm/npx resolution, startup, timeout, or incomplete turns are
 archived with exact file and directory evidence and retried as the same
 proposal. Recovery terminates the exact work-dir process group before reading
-its files. Canonical lane files are never mutation targets.
+its files. A lane exception is reported with its lane ID and does not cancel
+healthy sibling mutations; rerunning the same iteration skips completed lane
+records and resumes only incomplete attempts. The supervisor streams child
+output directly, so a nonzero exit retains the actual failure record instead
+of collapsing it into an opaque status code. Canonical lane files are never
+mutation targets.
 
 Every production Python entry point redirects bytecode into a fresh private
 owner-only cache prefix before importing campaign code. Immutable source and

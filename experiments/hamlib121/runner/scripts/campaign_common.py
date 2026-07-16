@@ -11,10 +11,12 @@ import math
 import os
 import re
 import shlex
+import shutil
 import sqlite3
 import stat
 import subprocess
 import sys
+import tempfile
 import time
 import types
 import zipfile
@@ -47,6 +49,14 @@ PAPER_CODEX_EXEC_FLAGS = (
 CAMPAIGN_ID_DOMAIN = b"hsopt-hamlib121-campaign-v1\0"
 SHA256_RE = re.compile(r"[0-9a-f]{64}")
 SAFE_SSH_HOST_RE = re.compile(r"[A-Za-z0-9][A-Za-z0-9_.-]*")
+RSYNC_PROVENANCE_KEYS = {
+    "schema_version",
+    "binary",
+    "binary_sha256",
+    "version",
+    "protocol_version",
+    "protect_args_supported",
+}
 EXPECTED_HAMLIB_ARCHIVES = 83
 CANONICAL_HAMLIB_SOURCE_MANIFEST_BYTES = 72_200
 CANONICAL_HAMLIB_SOURCE_MANIFEST_SHA256 = (
@@ -213,6 +223,345 @@ def rsync_proxy_jump_args(proxy_jump_host: str | None = None) -> list[str]:
         return []
     jump = validate_ssh_host(proxy_jump_host, "SSH proxy jump host")
     return ["-e", f"ssh -J {jump}"]
+
+
+def _inspect_rsync_binary(candidate: str) -> dict[str, Any]:
+    """Execute and validate one local rsync candidate with a protected-name copy."""
+    if (
+        not isinstance(candidate, str)
+        or not candidate
+        or any(character in candidate for character in ("\n", "\r", "\0"))
+    ):
+        raise RuntimeError("rsync binary must be one executable name or path")
+    located = shutil.which(candidate)
+    if located is None:
+        raise RuntimeError(f"rsync executable was not found: {candidate!r}")
+    try:
+        binary = Path(located).resolve(strict=True)
+        binary_stat = binary.stat()
+    except OSError as exc:
+        raise RuntimeError(f"could not resolve rsync executable {located!r}: {exc}") from exc
+    if not stat.S_ISREG(binary_stat.st_mode) or not os.access(binary, os.X_OK):
+        raise RuntimeError(f"rsync candidate is not an executable regular file: {binary}")
+    stat_identity_before = (
+        binary_stat.st_dev,
+        binary_stat.st_ino,
+        binary_stat.st_mode,
+        binary_stat.st_size,
+        binary_stat.st_mtime_ns,
+        binary_stat.st_ctime_ns,
+    )
+    binary_sha256_before = sha256_file(binary)
+
+    try:
+        version_run = subprocess.run(
+            [str(binary), "--version"],
+            check=False,
+            text=True,
+            capture_output=True,
+            timeout=10,
+        )
+    except (OSError, subprocess.TimeoutExpired) as exc:
+        raise RuntimeError(f"could not execute rsync version probe for {binary}: {exc}") from exc
+    version_output = "\n".join(
+        part.strip() for part in (version_run.stdout, version_run.stderr) if part.strip()
+    )
+    version_match = re.search(
+        r"\brsync\s+version\s+(\d+)\.(\d+)\.(\d+)\b",
+        version_output,
+        flags=re.IGNORECASE,
+    )
+    protocol_match = re.search(
+        r"\bprotocol version\s+(\d+)\b",
+        version_output,
+        flags=re.IGNORECASE,
+    )
+    if version_run.returncode != 0 or version_match is None or protocol_match is None:
+        raise RuntimeError(
+            f"rsync candidate did not report a parseable version and protocol: {binary}"
+        )
+    version_tuple = tuple(int(part) for part in version_match.groups())
+    version = ".".join(version_match.groups())
+    if version_tuple < (3, 0, 0):
+        raise RuntimeError(f"rsync >= 3.0.0 is required; {binary} reports {version}")
+
+    try:
+        parser_run = subprocess.run(
+            [str(binary), "--protect-args", "--help"],
+            check=False,
+            text=True,
+            stdin=subprocess.DEVNULL,
+            stdout=subprocess.DEVNULL,
+            stderr=subprocess.PIPE,
+            timeout=10,
+        )
+    except (OSError, subprocess.TimeoutExpired) as exc:
+        raise RuntimeError(f"could not execute rsync option probe for {binary}: {exc}") from exc
+    if parser_run.returncode != 0:
+        detail = (parser_run.stderr or "").strip()
+        raise RuntimeError(
+            f"rsync candidate cannot parse --protect-args: {binary}"
+            + (f" ({detail})" if detail else "")
+        )
+
+    smoke_name = "- protected [name] ;$ unicode-é.txt"
+    smoke_payload = b"hsopt-rsync-protected-args-smoke\n"
+    try:
+        with tempfile.TemporaryDirectory(prefix="hsopt-rsync-smoke-") as temporary:
+            smoke_root = Path(temporary)
+            source = smoke_root / "source with spaces"
+            destination = smoke_root / "destination with spaces"
+            source.mkdir(mode=0o700)
+            (source / smoke_name).write_bytes(smoke_payload)
+            smoke_run = subprocess.run(
+                [
+                    str(binary),
+                    "-a",
+                    "--protect-args",
+                    f"{source}/",
+                    f"{destination}/",
+                ],
+                check=False,
+                text=True,
+                stdin=subprocess.DEVNULL,
+                capture_output=True,
+                timeout=10,
+            )
+            copied = destination / smoke_name
+            copied_entries = sorted(path.name for path in destination.iterdir())
+            if (
+                smoke_run.returncode != 0
+                or copied_entries != [smoke_name]
+                or not copied.is_file()
+                or copied.read_bytes() != smoke_payload
+            ):
+                detail = (smoke_run.stderr or smoke_run.stdout or "").strip()
+                raise RuntimeError(
+                    f"rsync protected-filename copy smoke failed: {binary}"
+                    + (f" ({detail})" if detail else "")
+                )
+    except (OSError, subprocess.TimeoutExpired) as exc:
+        raise RuntimeError(
+            f"could not execute rsync protected-filename copy smoke for {binary}: {exc}"
+        ) from exc
+
+    try:
+        binary_stat_after = binary.stat()
+        binary_sha256_after = sha256_file(binary)
+    except OSError as exc:
+        raise RuntimeError(f"could not recheck rsync executable {binary}: {exc}") from exc
+    stat_identity_after = (
+        binary_stat_after.st_dev,
+        binary_stat_after.st_ino,
+        binary_stat_after.st_mode,
+        binary_stat_after.st_size,
+        binary_stat_after.st_mtime_ns,
+        binary_stat_after.st_ctime_ns,
+    )
+    if stat_identity_after != stat_identity_before or binary_sha256_after != binary_sha256_before:
+        raise RuntimeError(f"rsync executable changed during compatibility preflight: {binary}")
+
+    return {
+        "schema_version": 1,
+        "binary": str(binary),
+        "binary_sha256": binary_sha256_before,
+        "version": version,
+        "protocol_version": int(protocol_match.group(1)),
+        "protect_args_supported": True,
+    }
+
+
+def resolve_rsync_binary(requested: str | None = None) -> dict[str, Any]:
+    """Resolve a modern rsync, failing closed when no compatible parser exists."""
+    if requested is not None:
+        candidates = [requested]
+    else:
+        candidates = [
+            candidate
+            for candidate in (
+                shutil.which("rsync"),
+                "/opt/homebrew/bin/rsync",
+                "/usr/local/bin/rsync",
+                "/usr/bin/rsync",
+            )
+            if candidate is not None
+        ]
+    candidates = list(dict.fromkeys(candidates))
+    if not candidates:
+        raise RuntimeError(
+            "no rsync executable was found; install rsync >= 3.0 or pass --rsync-bin"
+        )
+    failures: list[str] = []
+    for candidate in candidates:
+        try:
+            return _inspect_rsync_binary(candidate)
+        except RuntimeError as exc:
+            failures.append(str(exc))
+    source = (
+        f"explicit rsync {requested!r}" if requested is not None else "discovered rsync candidates"
+    )
+    raise RuntimeError(
+        f"{source} failed compatibility preflight; install rsync >= 3.0 with "
+        f"--protect-args support or pass --rsync-bin: {'; '.join(failures)}"
+    )
+
+
+def validate_rsync_provenance(payload: dict[str, Any]) -> dict[str, Any]:
+    """Validate the exact, non-secret local rsync provenance receipt shape."""
+    if not isinstance(payload, dict) or set(payload) != RSYNC_PROVENANCE_KEYS:
+        raise RuntimeError("malformed rsync provenance")
+    binary = payload.get("binary")
+    version = payload.get("version")
+    protocol_version = payload.get("protocol_version")
+    if (
+        payload.get("schema_version") != 1
+        or not isinstance(binary, str)
+        or not Path(binary).is_absolute()
+        or os.path.normpath(binary) != binary
+        or ".." in Path(binary).parts
+        or any(character in binary for character in ("\n", "\r", "\0"))
+        or not isinstance(version, str)
+        or re.fullmatch(r"\d+\.\d+\.\d+", version) is None
+        or tuple(int(part) for part in version.split(".")) < (3, 0, 0)
+        or not isinstance(protocol_version, int)
+        or isinstance(protocol_version, bool)
+        or protocol_version <= 0
+        or SHA256_RE.fullmatch(str(payload.get("binary_sha256", ""))) is None
+        or payload.get("protect_args_supported") is not True
+    ):
+        raise RuntimeError("malformed rsync provenance")
+    return payload
+
+
+def revalidate_rsync_binary(provenance: dict[str, Any]) -> dict[str, Any]:
+    """Re-run the complete local rsync preflight and require byte-identical provenance."""
+    validate_rsync_provenance(provenance)
+    observed = _inspect_rsync_binary(str(provenance["binary"]))
+    if observed != provenance:
+        raise RuntimeError("rsync executable or compatibility provenance changed")
+    return observed
+
+
+def validate_manifests_parent_chain(campaign_root: Path) -> Path:
+    """Return an absolute campaign root after rejecting symlinks through manifests/."""
+    root = Path(os.path.abspath(os.fspath(campaign_root)))
+    manifests = root / "manifests"
+    current = Path(manifests.anchor)
+    chain = [current]
+    for part in manifests.parts[1:]:
+        current = current / part
+        chain.append(current)
+    for component in chain:
+        try:
+            component_stat = os.lstat(component)
+        except FileNotFoundError as exc:
+            raise RuntimeError(f"manifests parent chain is missing: {component}") from exc
+        except OSError as exc:
+            raise RuntimeError(
+                f"could not inspect manifests parent chain: {component}: {exc}"
+            ) from exc
+        if stat.S_ISLNK(component_stat.st_mode):
+            raise RuntimeError(f"manifests parent chain contains a symlink: {component}")
+        if not stat.S_ISDIR(component_stat.st_mode):
+            raise RuntimeError(f"manifests parent chain contains a non-directory: {component}")
+    return root
+
+
+def _read_rsync_receipt(path: Path, expected_stat: os.stat_result) -> dict[str, Any]:
+    flags = os.O_RDONLY
+    if hasattr(os, "O_NOFOLLOW"):
+        flags |= os.O_NOFOLLOW
+    try:
+        descriptor = os.open(path, flags)
+    except OSError as exc:
+        raise RuntimeError(
+            f"could not open rsync provenance receipt safely: {path}: {exc}"
+        ) from exc
+    try:
+        opened_stat = os.fstat(descriptor)
+        if (
+            opened_stat.st_dev != expected_stat.st_dev
+            or opened_stat.st_ino != expected_stat.st_ino
+            or not stat.S_ISREG(opened_stat.st_mode)
+        ):
+            raise RuntimeError(f"rsync provenance receipt changed while opening: {path}")
+        with os.fdopen(descriptor, "r", encoding="utf-8") as handle:
+            descriptor = -1
+            payload = json.load(handle)
+    except (OSError, ValueError, json.JSONDecodeError) as exc:
+        raise RuntimeError(f"could not read rsync provenance receipt: {path}: {exc}") from exc
+    finally:
+        if descriptor >= 0:
+            os.close(descriptor)
+    return validate_rsync_provenance(payload)
+
+
+def validate_existing_rsync_provenance(
+    campaign_root: Path,
+    provenance: dict[str, Any],
+) -> bool:
+    """Read-only validation of an existing campaign rsync receipt."""
+    validate_rsync_provenance(provenance)
+    root = validate_manifests_parent_chain(campaign_root)
+    path = root / "manifests" / "rsync_provenance.json"
+    try:
+        receipt_stat = os.lstat(path)
+    except FileNotFoundError:
+        return False
+    except OSError as exc:
+        raise RuntimeError(f"could not inspect rsync provenance receipt: {path}: {exc}") from exc
+    if stat.S_ISLNK(receipt_stat.st_mode) or not stat.S_ISREG(receipt_stat.st_mode):
+        raise RuntimeError(f"rsync provenance receipt is unsafe: {path}")
+    existing = _read_rsync_receipt(path, receipt_stat)
+    if existing != provenance:
+        raise RuntimeError("campaign rsync executable or version drifted")
+    return True
+
+
+def require_existing_rsync_provenance(
+    campaign_root: Path,
+    provenance: dict[str, Any],
+) -> dict[str, Any]:
+    """Require an already-bound campaign receipt; never recreate a missing one."""
+    if not validate_existing_rsync_provenance(campaign_root, provenance):
+        raise RuntimeError("campaign rsync provenance receipt is missing")
+    return provenance
+
+
+def ensure_rsync_provenance(
+    campaign_root: Path,
+    provenance: dict[str, Any],
+) -> Path:
+    """Persist one immutable local-rsync choice for every campaign transfer."""
+    validate_rsync_provenance(provenance)
+    root = validate_manifests_parent_chain(campaign_root)
+    path = root / "manifests" / "rsync_provenance.json"
+    if validate_existing_rsync_provenance(root, provenance):
+        return path
+    flags = os.O_WRONLY | os.O_CREAT | os.O_EXCL
+    if hasattr(os, "O_NOFOLLOW"):
+        flags |= os.O_NOFOLLOW
+    try:
+        descriptor = os.open(path, flags, 0o600)
+    except FileExistsError:
+        if validate_existing_rsync_provenance(root, provenance):
+            return path
+        raise RuntimeError("rsync provenance receipt appeared with different bytes")
+    except OSError as exc:
+        raise RuntimeError(f"could not create rsync provenance receipt: {path}: {exc}") from exc
+    try:
+        payload = json.dumps(provenance, indent=2, sort_keys=True)
+        with os.fdopen(descriptor, "w", encoding="utf-8") as handle:
+            descriptor = -1
+            handle.write(payload)
+            handle.flush()
+            os.fsync(handle.fileno())
+    finally:
+        if descriptor >= 0:
+            os.close(descriptor)
+    if not validate_existing_rsync_provenance(root, provenance):
+        raise RuntimeError("rsync provenance receipt disappeared after creation")
+    return path
 
 
 def proxy_jump_cli_args(proxy_jump_host: str | None = None) -> list[str]:

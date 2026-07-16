@@ -33,6 +33,29 @@ mkdir -p -m 700 "$CAMPAIGN_ROOT/.codex_npm"
 npx -y @openai/codex@0.144.0 --version
 ```
 
+Local staging and collection require `rsync` 3.x with a working
+`--protect-args` parser. macOS `/usr/bin/rsync` 2.6.9 is not compatible. Install
+a current rsync (for example, Homebrew's rsync), then either put it first on
+`PATH` or bind it explicitly:
+
+```bash
+export HSOPT_RSYNC_BIN="/absolute/path/to/rsync"
+RSYNC_BIN="${HSOPT_RSYNC_BIN:-$(command -v rsync)}"
+"$RSYNC_BIN" --version
+"$RSYNC_BIN" --protect-args --help >/dev/null
+```
+
+`submit_eval_batch.py`, `collect_iteration.py`, and
+`supervise_streaming_batches.py` also accept `--rsync-bin`. If neither the flag
+nor `HSOPT_RSYNC_BIN` is set, they probe `PATH` and common Homebrew locations,
+skip incompatible candidates, and fail before any staging or collection. The
+resolved real path, version, protocol version, and executable SHA-256 are bound
+in `manifests/rsync_provenance.json`; later transfers and supervisor restarts
+must match that receipt. Preflight includes a real local copy of a filename with
+spaces and shell metacharacters under `--protect-args`, verifies the executable
+identity and hash before and after that copy, and repeats the check immediately
+before each runner-managed transfer.
+
 The paper protocol pins the mutation client to `@openai/codex@0.144.0`, the
 configured model identifier to `gpt-5.5`, and reasoning effort to `high`.
 Campaign provenance records the observed CLI version plus runner and lockfile
@@ -52,9 +75,11 @@ Run every command below from inside the copied workspace. In other words,
 Set site-specific values explicitly. Do not encode them in this repository:
 
 ```bash
-REPLICATE_ROOT="/absolute/path/to/external-workspaces"
+HSOPT_DATA_ROOT="/absolute/path/to/hsopt-data"
+CAMPAIGN_ID="hamlib121_paper_YYYYMMDD_COMMIT"
+REPLICATE_ROOT="$HSOPT_DATA_ROOT/paper/hamlib121/$CAMPAIGN_ID"
 CAMPAIGN_ROOT="$REPLICATE_ROOT/run_01"
-CLUSTER_ROOT="/absolute/cluster/path/to/hamlib121/run_01"
+CLUSTER_ROOT="/absolute/cluster/path/to/hsopt/paper/hamlib121/$CAMPAIGN_ID/run_01"
 HAMLIB_DATA_ROOT="/absolute/cluster/path/to/hamlib-electronic-data"
 HAMLIB_ZIP_SHA256="manifests/hamlib_zip_sha256.txt"
 SLURM_ACCOUNT="site-account"
@@ -80,9 +105,9 @@ only through one SSH config alias, append `--proxy-jump-host omni` to
 `supervise_streaming_batches.py`. The supervisor propagates the validated alias
 to submission, result collection, `squeue`/`sacct`, and optional partition
 rescue children, and records it in `manifests/supervisor_provenance.json`.
-Use `ssh -J omni` and `rsync -e 'ssh -J omni'` for the manual prebuild and
-archive-preflight commands below. Omitting the flag preserves the direct-host
-route.
+Use `ssh -J omni` and `"$RSYNC_BIN" -e 'ssh -J omni'` for the manual
+prebuild and archive-preflight commands below. Omitting the flag preserves the
+direct-host route.
 
 Preparation fails unless the exact 72,200-byte canonical 401-row source
 manifest (`SHA256
@@ -134,7 +159,7 @@ ssh "$SYNC_HOST" \
   "cd '$CLUSTER_ROOT' && python3 scripts/verify_hamlib_archives.py \
     --campaign-root '$CLUSTER_ROOT' --hamlib-data-root '$HAMLIB_DATA_ROOT'"
 
-rsync -ah --protect-args \
+"$RSYNC_BIN" -ah --protect-args \
   "$SYNC_HOST:$CLUSTER_ROOT/manifests/hamlib_archive_preflight.json" \
   "$CAMPAIGN_ROOT/manifests/"
 ```

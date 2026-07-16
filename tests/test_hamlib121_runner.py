@@ -8,8 +8,9 @@ import json
 import math
 import os
 import re
-import signal
+import shlex
 import shutil
+import signal
 import sqlite3
 import subprocess
 import sys
@@ -114,6 +115,8 @@ def _write_synthetic_export_run(root: Path) -> None:
     _copy_runner_provenance_sources(root)
     runner_provenance = CAMPAIGN_COMMON.build_runner_provenance(root)
     CAMPAIGN_COMMON.write_json(root / "manifests" / "runner_provenance.json", runner_provenance)
+    rsync_provenance = CAMPAIGN_COMMON.resolve_rsync_binary()
+    CAMPAIGN_COMMON.ensure_rsync_provenance(root, rsync_provenance)
     CAMPAIGN_COMMON.write_json(
         root / "manifests" / "autoresearch_provenance.json",
         {
@@ -219,6 +222,7 @@ def _write_synthetic_export_run(root: Path) -> None:
             "submit_host": "test-submit",
             "slurm_query_host": "test-query",
             "proxy_jump_host": None,
+            "rsync": rsync_provenance,
             "legate_fbmem": "70000",
             "uv_base_dir": None,
             "uv_cache_dir": None,
@@ -911,26 +915,237 @@ def test_proxy_jump_transport_builders_are_exact_and_option_safe() -> None:
             CAMPAIGN_COMMON.ssh_command("nvlogin", "true", proxy_jump_host=unsafe)
 
 
+def test_rsync_resolver_executes_real_version_and_option_parsers() -> None:
+    provenance = CAMPAIGN_COMMON.resolve_rsync_binary()
+    binary = Path(provenance["binary"])
+    version = subprocess.run(
+        [str(binary), "--version"],
+        check=False,
+        text=True,
+        capture_output=True,
+        timeout=10,
+    )
+    option_parser = subprocess.run(
+        [str(binary), "--protect-args", "--help"],
+        check=False,
+        stdin=subprocess.DEVNULL,
+        stdout=subprocess.DEVNULL,
+        stderr=subprocess.PIPE,
+        timeout=10,
+    )
+
+    assert version.returncode == 0
+    assert provenance["version"] in (version.stdout + version.stderr)
+    assert option_parser.returncode == 0
+    assert provenance["binary_sha256"] == _sha256(binary)
+    assert provenance["protect_args_supported"] is True
+
+
+def test_rsync_resolver_detects_binary_change_during_real_copy_smoke(tmp_path: Path) -> None:
+    real_rsync = CAMPAIGN_COMMON.resolve_rsync_binary()["binary"]
+    wrapper = tmp_path / "mutating-rsync"
+    wrapper.write_text(
+        "#!/bin/sh\n"
+        "if [ \"${1:-}\" = '-a' ]; then printf '\\n# changed\\n' >>\"$0\"; fi\n"
+        f'exec {shlex.quote(str(real_rsync))} "$@"\n',
+        encoding="utf-8",
+    )
+    wrapper.chmod(0o700)
+
+    with pytest.raises(RuntimeError, match="changed during compatibility preflight"):
+        CAMPAIGN_COMMON.resolve_rsync_binary(str(wrapper))
+
+
+def test_rsync_resolver_rejects_real_legacy_macos_parser() -> None:
+    legacy = Path("/usr/bin/rsync")
+    if not legacy.is_file():
+        pytest.skip("macOS system rsync is unavailable")
+    parser_probe = subprocess.run(
+        [str(legacy), "--protect-args", "--help"],
+        check=False,
+        stdin=subprocess.DEVNULL,
+        stdout=subprocess.DEVNULL,
+        stderr=subprocess.PIPE,
+        timeout=10,
+    )
+    if parser_probe.returncode == 0:
+        pytest.skip("/usr/bin/rsync is already compatible on this platform")
+
+    with pytest.raises(RuntimeError, match="failed compatibility preflight"):
+        CAMPAIGN_COMMON.resolve_rsync_binary(str(legacy))
+
+
+def test_rsync_discovery_skips_real_legacy_path_candidate(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    legacy = Path("/usr/bin/rsync")
+    homebrew = Path("/opt/homebrew/bin/rsync")
+    if not legacy.is_file() or not homebrew.is_file():
+        pytest.skip("macOS legacy and Homebrew rsync pair is unavailable")
+    legacy_parser = subprocess.run(
+        [str(legacy), "--protect-args", "--help"],
+        check=False,
+        stdin=subprocess.DEVNULL,
+        stdout=subprocess.DEVNULL,
+        stderr=subprocess.PIPE,
+        timeout=10,
+    )
+    if legacy_parser.returncode == 0:
+        pytest.skip("/usr/bin/rsync is already compatible on this platform")
+
+    monkeypatch.setenv("PATH", "/usr/bin")
+    provenance = CAMPAIGN_COMMON.resolve_rsync_binary()
+
+    assert Path(provenance["binary"]) == homebrew.resolve()
+
+
+def test_campaign_rsync_provenance_is_immutable(tmp_path: Path) -> None:
+    (tmp_path / "manifests").mkdir()
+    provenance = CAMPAIGN_COMMON.resolve_rsync_binary()
+    receipt = CAMPAIGN_COMMON.ensure_rsync_provenance(tmp_path, provenance)
+    assert json.loads(receipt.read_text(encoding="utf-8")) == provenance
+
+    drifted = dict(provenance)
+    drifted["binary_sha256"] = "0" * 64
+    CAMPAIGN_COMMON.write_json(receipt, drifted)
+    with pytest.raises(RuntimeError, match="executable or version drifted"):
+        CAMPAIGN_COMMON.ensure_rsync_provenance(tmp_path, provenance)
+
+
+def test_missing_rsync_receipt_cannot_be_recreated_after_campaign_activity(
+    tmp_path: Path,
+) -> None:
+    campaign = tmp_path / "campaign"
+    (campaign / "manifests").mkdir(parents=True)
+    provenance = CAMPAIGN_COMMON.resolve_rsync_binary()
+    receipt = CAMPAIGN_COMMON.ensure_rsync_provenance(campaign, provenance)
+    batch = campaign / "iterations" / "iter_0000" / "batches" / "initial_baseline"
+    batch.mkdir(parents=True)
+    receipt.unlink()
+
+    wrapper = tmp_path / "alternate-rsync"
+    wrapper.write_text(
+        f'#!/bin/sh\nexec {shlex.quote(str(provenance["binary"]))} "$@"\n',
+        encoding="utf-8",
+    )
+    wrapper.chmod(0o700)
+    alternate = CAMPAIGN_COMMON.resolve_rsync_binary(str(wrapper))
+
+    with pytest.raises(RuntimeError, match="receipt is missing after transfer or batch activity"):
+        SUBMIT_EVAL.require_or_allow_new_rsync_binding(campaign, alternate)
+    with pytest.raises(RuntimeError, match="provenance receipt is missing"):
+        CAMPAIGN_COMMON.require_existing_rsync_provenance(campaign, alternate)
+    assert not receipt.exists()
+
+
+def test_rsync_retry_revalidates_immediately_before_every_attempt(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    calls: list[str] = []
+    revalidations: list[int] = []
+
+    def fake_run(command: list[str], **_kwargs: object) -> subprocess.CompletedProcess[str]:
+        calls.append(command[0])
+        if len(calls) == 1:
+            raise subprocess.CalledProcessError(23, command, stderr="transient")
+        return subprocess.CompletedProcess(command, 0, stdout="ok", stderr="")
+
+    monkeypatch.setattr(SUBMIT_EVAL.subprocess, "run", fake_run)
+    completed = SUBMIT_EVAL.run_with_retries(
+        ["rsync", "source", "target"],
+        attempts=2,
+        timeout_seconds=10,
+        retry_delay_seconds=0,
+        before_attempt=lambda: revalidations.append(len(calls)),
+    )
+
+    assert completed.stdout == "ok"
+    assert calls == ["rsync", "rsync"]
+    assert revalidations == [0, 1]
+
+
+def test_rsync_retry_stops_if_binary_changes_between_attempts(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    calls = 0
+    revalidations = 0
+
+    def fake_run(command: list[str], **_kwargs: object) -> subprocess.CompletedProcess[str]:
+        nonlocal calls
+        calls += 1
+        raise subprocess.CalledProcessError(23, command, stderr="transient")
+
+    def revalidate() -> None:
+        nonlocal revalidations
+        revalidations += 1
+        if revalidations == 2:
+            raise RuntimeError("rsync executable changed")
+
+    monkeypatch.setattr(SUBMIT_EVAL.subprocess, "run", fake_run)
+    with pytest.raises(RuntimeError, match="rsync executable changed"):
+        SUBMIT_EVAL.run_with_retries(
+            ["rsync", "source", "target"],
+            attempts=3,
+            timeout_seconds=10,
+            retry_delay_seconds=0,
+            before_attempt=revalidate,
+        )
+
+    assert calls == 1
+    assert revalidations == 2
+
+
+def test_rsync_receipt_rejects_symlinked_manifests_parent(tmp_path: Path) -> None:
+    campaign = tmp_path / "campaign"
+    outside = tmp_path / "outside-manifests"
+    campaign.mkdir()
+    outside.mkdir()
+    (campaign / "manifests").symlink_to(outside, target_is_directory=True)
+    provenance = CAMPAIGN_COMMON.resolve_rsync_binary()
+
+    with pytest.raises(RuntimeError, match="manifests parent chain contains a symlink"):
+        CAMPAIGN_COMMON.validate_existing_rsync_provenance(campaign, provenance)
+
+    real_campaign = tmp_path / "real-campaign"
+    (real_campaign / "manifests").mkdir(parents=True)
+    campaign_alias = tmp_path / "campaign-alias"
+    campaign_alias.symlink_to(real_campaign, target_is_directory=True)
+    with pytest.raises(RuntimeError, match="manifests parent chain contains a symlink"):
+        CAMPAIGN_COMMON.validate_existing_rsync_provenance(campaign_alias, provenance)
+
+
 def test_collect_and_slurm_queries_use_the_same_proxy_jump(
     tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
+    rsync_provenance = CAMPAIGN_COMMON.resolve_rsync_binary()
     collect_calls: list[list[str]] = []
+    revalidation_calls: list[dict[str, object]] = []
 
     def fake_collect_run(command: list[str], **_kwargs: object) -> subprocess.CompletedProcess[str]:
         collect_calls.append(command)
         return subprocess.CompletedProcess(command, 0, stdout="", stderr="")
 
-    monkeypatch.setattr(COLLECT_ITERATION.subprocess, "run", fake_collect_run)
+    monkeypatch.setattr(
+        COLLECT_ITERATION,
+        "subprocess",
+        SimpleNamespace(run=fake_collect_run, DEVNULL=subprocess.DEVNULL),
+    )
+    monkeypatch.setattr(
+        COLLECT_ITERATION,
+        "revalidate_rsync_binary",
+        lambda provenance: revalidation_calls.append(provenance) or provenance,
+    )
     COLLECT_ITERATION.rsync_from_cluster(
         "/cluster/hamlib121/run_01",
         tmp_path / "run_01",
         1,
         "nvdata",
+        rsync_provenance=rsync_provenance,
         proxy_jump_host="omni",
     )
     assert collect_calls[0][:7] == [
-        "rsync",
+        rsync_provenance["binary"],
         "-ah",
         "--partial",
         "--protect-args",
@@ -940,6 +1155,7 @@ def test_collect_and_slurm_queries_use_the_same_proxy_jump(
     ]
     assert collect_calls[1] == ["ssh", "-J", "omni", "nvdata", "bash", "-s"]
     assert collect_calls[2][4:6] == ["-e", "ssh -J omni"]
+    assert revalidation_calls == [rsync_provenance, rsync_provenance]
 
     slurm_calls: list[list[str]] = []
 
@@ -975,6 +1191,7 @@ def test_supervisor_propagates_proxy_jump_to_every_transport_child(
         sync_host="nvdata",
         submit_host="nvlogin",
         proxy_jump_host="omni",
+        rsync_binary="/verified/rsync",
         legate_fbmem=None,
         uv_base_dir=None,
         uv_cache_dir=None,
@@ -987,8 +1204,12 @@ def test_supervisor_propagates_proxy_jump_to_every_transport_child(
         ["lane-1"],
         "iter0001_batch0001",
         "omni",
+        "/verified/rsync",
     )
     assert all(command[command.index("--proxy-jump-host") + 1] == "omni" for command in child_calls)
+    assert all(
+        command[command.index("--rsync-bin") + 1] == "/verified/rsync" for command in child_calls
+    )
 
     rescue_calls: list[list[str]] = []
 
@@ -1035,13 +1256,24 @@ def test_strict_export_rejects_unsafe_proxy_jump_provenance(tmp_path: Path) -> N
         )
 
 
-def test_strict_export_accepts_exact_legacy_direct_transport_provenance(tmp_path: Path) -> None:
+def test_strict_export_accepts_exact_enumerated_legacy_runner(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
     root = tmp_path / "legacy-direct-transport"
     _write_synthetic_export_run(root)
     path = root / "manifests" / "supervisor_provenance.json"
     payload = json.loads(path.read_text(encoding="utf-8"))
     payload.pop("proxy_jump_host")
+    payload.pop("rsync")
     CAMPAIGN_COMMON.write_json(path, payload)
+    (root / "manifests" / "rsync_provenance.json").unlink()
+    legacy_hash = next(iter(EXPORT_REPLICATES.LEGACY_RSYNC_RUNNER_BUNDLE_SHA256S))
+    monkeypatch.setattr(
+        EXPORT_REPLICATES,
+        "validate_runner_provenance",
+        lambda _root: {"runner_bundle_sha256": legacy_hash},
+    )
     manifest, identity = CAMPAIGN_COMMON.validate_campaign_identity(root)
     protocol = EXPORT_REPLICATES.validate_supervisor_provenance(
         root,
@@ -1050,6 +1282,56 @@ def test_strict_export_accepts_exact_legacy_direct_transport_provenance(tmp_path
         require_paper_protocol=False,
     )
     assert protocol["batch_size"] == 1
+
+
+def test_strict_export_rejects_rsync_key_deletion_for_current_runner(tmp_path: Path) -> None:
+    root = tmp_path / "current-runner-downgrade"
+    _write_synthetic_export_run(root)
+    path = root / "manifests" / "supervisor_provenance.json"
+    payload = json.loads(path.read_text(encoding="utf-8"))
+    payload.pop("rsync")
+    CAMPAIGN_COMMON.write_json(path, payload)
+    manifest, identity = CAMPAIGN_COMMON.validate_campaign_identity(root)
+
+    with pytest.raises(RuntimeError, match="current runner requires supervisor rsync provenance"):
+        EXPORT_REPLICATES.validate_supervisor_provenance(
+            root,
+            manifest=manifest,
+            identity=identity,
+            require_paper_protocol=False,
+        )
+
+
+def test_strict_export_binds_supervisor_to_rsync_receipt(tmp_path: Path) -> None:
+    root = tmp_path / "rsync-transport"
+    _write_synthetic_export_run(root)
+    rsync_provenance = CAMPAIGN_COMMON.resolve_rsync_binary()
+    CAMPAIGN_COMMON.ensure_rsync_provenance(root, rsync_provenance)
+    path = root / "manifests" / "supervisor_provenance.json"
+    payload = json.loads(path.read_text(encoding="utf-8"))
+    payload["rsync"] = rsync_provenance
+    CAMPAIGN_COMMON.write_json(path, payload)
+    manifest, identity = CAMPAIGN_COMMON.validate_campaign_identity(root)
+
+    protocol = EXPORT_REPLICATES.validate_supervisor_provenance(
+        root,
+        manifest=manifest,
+        identity=identity,
+        require_paper_protocol=False,
+    )
+    assert protocol["batch_size"] == 1
+
+    receipt = root / "manifests" / "rsync_provenance.json"
+    drifted = dict(rsync_provenance)
+    drifted["binary_sha256"] = "0" * 64
+    CAMPAIGN_COMMON.write_json(receipt, drifted)
+    with pytest.raises(RuntimeError, match="supervisor rsync provenance drift"):
+        EXPORT_REPLICATES.validate_supervisor_provenance(
+            root,
+            manifest=manifest,
+            identity=identity,
+            require_paper_protocol=False,
+        )
 
 
 def test_prepare_campaign_rejects_fixed_protocol_drift(tmp_path: Path) -> None:
@@ -1612,10 +1894,11 @@ def test_eval_batches_persist_submission_and_retry_state(prepared_campaign: Path
     conn.close()
 
 
-def test_submit_dry_run_has_no_writes_or_network_tools(
+def test_submit_dry_run_has_no_writes_or_network_transfer(
     prepared_campaign: Path,
     tmp_path: Path,
 ) -> None:
+    rsync_provenance = CAMPAIGN_COMMON.resolve_rsync_binary()
     manifest = json.loads(
         (prepared_campaign / "manifests" / "campaign_manifest.json").read_text(encoding="utf-8")
     )
@@ -1648,6 +1931,8 @@ def test_submit_dry_run_has_no_writes_or_network_tools(
             "test-sync",
             "--submit-host",
             "test-submit",
+            "--rsync-bin",
+            str(rsync_provenance["binary"]),
             "--dry-run",
         ],
         cwd=RUNNER_ROOT,
@@ -1666,6 +1951,7 @@ def test_submit_dry_run_has_no_writes_or_network_tools(
     assert plan["lane_ids"] == active_lane_ids
     assert plan["execution_mode"] == "gpu_baseline"
     assert plan["slurm_script"] == "slurm/evaluate_batch.sbatch"
+    assert plan["rsync"] == rsync_provenance
     assert _tree_snapshot(prepared_campaign) == before
     assert not (
         prepared_campaign / "iterations" / "iter_0001" / "batches" / "dry-run-batch"
@@ -1694,6 +1980,8 @@ def test_submit_dry_run_has_no_writes_or_network_tools(
             "test-sync",
             "--submit-host",
             "test-submit",
+            "--rsync-bin",
+            str(rsync_provenance["binary"]),
             "--dry-run",
         ],
         cwd=RUNNER_ROOT,
@@ -1706,14 +1994,176 @@ def test_submit_dry_run_has_no_writes_or_network_tools(
     assert not absent_campaign.exists()
 
 
+def test_submit_rejects_legacy_rsync_before_campaign_writes(
+    prepared_campaign: Path,
+) -> None:
+    legacy = Path("/usr/bin/rsync")
+    if not legacy.is_file():
+        pytest.skip("macOS system rsync is unavailable")
+    parser_probe = subprocess.run(
+        [str(legacy), "--protect-args", "--help"],
+        check=False,
+        stdin=subprocess.DEVNULL,
+        stdout=subprocess.DEVNULL,
+        stderr=subprocess.PIPE,
+        timeout=10,
+    )
+    if parser_probe.returncode == 0:
+        pytest.skip("/usr/bin/rsync is already compatible on this platform")
+    before = _tree_snapshot(prepared_campaign)
+
+    completed = subprocess.run(
+        [
+            sys.executable,
+            str(SCRIPTS_ROOT / "submit_eval_batch.py"),
+            "--campaign-root",
+            str(prepared_campaign),
+            "--iteration",
+            "0",
+            "--batch-id",
+            "legacy-rsync",
+            "--all-active",
+            "--compute-baseline",
+            "--policy-snapshot",
+            "initial",
+            "--account",
+            "test-account",
+            "--partition",
+            "test-gpu",
+            "--cpu-partition",
+            "test-cpu",
+            "--sync-host",
+            "test-sync",
+            "--submit-host",
+            "test-submit",
+            "--rsync-bin",
+            str(legacy),
+            "--sync-only",
+        ],
+        cwd=RUNNER_ROOT,
+        env={**os.environ, "PYTHONDONTWRITEBYTECODE": "1"},
+        text=True,
+        capture_output=True,
+        check=False,
+    )
+
+    assert completed.returncode != 0
+    assert "failed compatibility preflight" in completed.stderr
+    assert _tree_snapshot(prepared_campaign) == before
+
+
+def test_collect_rejects_drifted_rsync_receipt_before_ensure_dirs(
+    prepared_campaign: Path,
+) -> None:
+    rsync_provenance = CAMPAIGN_COMMON.resolve_rsync_binary()
+    receipt = CAMPAIGN_COMMON.ensure_rsync_provenance(prepared_campaign, rsync_provenance)
+    drifted = dict(rsync_provenance)
+    drifted["binary_sha256"] = "0" * 64
+    CAMPAIGN_COMMON.write_json(receipt, drifted)
+    logs = prepared_campaign / "logs"
+    shutil.rmtree(logs)
+    before = _tree_snapshot(prepared_campaign)
+
+    completed = subprocess.run(
+        [
+            sys.executable,
+            str(SCRIPTS_ROOT / "collect_iteration.py"),
+            "--campaign-root",
+            str(prepared_campaign),
+            "--iteration",
+            "1",
+            "--sync-host",
+            "test-sync",
+            "--rsync-bin",
+            str(rsync_provenance["binary"]),
+        ],
+        cwd=RUNNER_ROOT,
+        env={**os.environ, "PYTHONDONTWRITEBYTECODE": "1"},
+        text=True,
+        capture_output=True,
+        check=False,
+    )
+
+    assert completed.returncode != 0
+    assert "campaign rsync executable or version drifted" in completed.stderr
+    assert not logs.exists()
+    assert _tree_snapshot(prepared_campaign) == before
+
+
+def test_supervisor_rejects_drifted_rsync_receipt_before_campaign_side_effects(
+    prepared_campaign: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    rsync_provenance = CAMPAIGN_COMMON.resolve_rsync_binary()
+    receipt = CAMPAIGN_COMMON.ensure_rsync_provenance(prepared_campaign, rsync_provenance)
+    drifted = dict(rsync_provenance)
+    drifted["binary_sha256"] = "0" * 64
+    CAMPAIGN_COMMON.write_json(receipt, drifted)
+    before = _tree_snapshot(prepared_campaign)
+
+    def forbidden(*_args: object, **_kwargs: object) -> object:
+        pytest.fail("supervisor reached a campaign write or external side effect")
+
+    monkeypatch.setattr(STREAM_SUPERVISOR, "ensure_dirs", forbidden)
+    monkeypatch.setattr(STREAM_SUPERVISOR, "acquire_supervisor_lock", forbidden)
+    monkeypatch.setattr(STREAM_SUPERVISOR, "db_connect", forbidden)
+    monkeypatch.setattr(STREAM_SUPERVISOR, "ensure_autoresearch_provenance", forbidden)
+
+    with pytest.raises(RuntimeError, match="campaign rsync executable or version drifted"):
+        asyncio.run(
+            STREAM_SUPERVISOR.supervise(
+                SimpleNamespace(
+                    campaign_root=prepared_campaign,
+                    rsync_provenance=rsync_provenance,
+                )
+            )
+        )
+
+    assert _tree_snapshot(prepared_campaign) == before
+
+
+def test_supervisor_does_not_persist_missing_receipt_before_binary_revalidation(
+    prepared_campaign: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    rsync_provenance = CAMPAIGN_COMMON.resolve_rsync_binary()
+    receipt = prepared_campaign / "manifests" / "rsync_provenance.json"
+    assert not receipt.exists()
+    before = _tree_snapshot(prepared_campaign)
+    monkeypatch.setattr(
+        STREAM_SUPERVISOR,
+        "revalidate_rsync_binary",
+        lambda _provenance: (_ for _ in ()).throw(RuntimeError("local rsync revalidation failed")),
+    )
+
+    with pytest.raises(RuntimeError, match="local rsync revalidation failed"):
+        asyncio.run(
+            STREAM_SUPERVISOR.supervise(
+                SimpleNamespace(
+                    campaign_root=prepared_campaign,
+                    rsync_provenance=rsync_provenance,
+                )
+            )
+        )
+
+    assert not receipt.exists()
+    assert _tree_snapshot(prepared_campaign) == before
+
+
 def test_initial_baseline_submission_is_durable_before_network_and_identity_bound(
     prepared_campaign: Path,
     monkeypatch: pytest.MonkeyPatch,
     capsys: pytest.CaptureFixture[str],
 ) -> None:
+    rsync_provenance = CAMPAIGN_COMMON.resolve_rsync_binary()
     calls: list[tuple[list[str], str | None]] = []
+    revalidation_at_call_counts: list[int] = []
 
     def fake_run(command: list[str], **kwargs: object) -> subprocess.CompletedProcess[str]:
+        before_attempt = kwargs.get("before_attempt")
+        if before_attempt is not None:
+            assert callable(before_attempt)
+            before_attempt()
         input_text = kwargs.get("input_text")
         assert input_text is None or isinstance(input_text, str)
         calls.append((command, input_text))
@@ -1726,6 +2176,11 @@ def test_initial_baseline_submission_is_durable_before_network_and_identity_boun
         )
 
     monkeypatch.setattr(SUBMIT_EVAL, "run_with_retries", fake_run)
+    monkeypatch.setattr(
+        SUBMIT_EVAL,
+        "revalidate_rsync_binary",
+        lambda _provenance: revalidation_at_call_counts.append(len(calls)),
+    )
     monkeypatch.setattr(
         sys,
         "argv",
@@ -1753,11 +2208,18 @@ def test_initial_baseline_submission_is_durable_before_network_and_identity_boun
             "test-submit",
             "--proxy-jump-host",
             "omni",
+            "--rsync-bin",
+            str(rsync_provenance["binary"]),
         ],
     )
     SUBMIT_EVAL.main()
     assert capsys.readouterr().out.strip() == "123456"
-    assert [command[0][0] for command in calls] == ["ssh", "rsync", "ssh"]
+    assert revalidation_at_call_counts == [1]
+    assert [command[0][0] for command in calls] == [
+        "ssh",
+        rsync_provenance["binary"],
+        "ssh",
+    ]
     assert calls[0][1] is not None and "hsopt-campaign-claim" in calls[0][1]
 
     with sqlite3.connect(prepared_campaign / "campaign.sqlite") as conn:
@@ -1791,7 +2253,14 @@ def test_initial_baseline_submission_is_durable_before_network_and_identity_boun
         "sync_host": "test-sync",
         "submit_host": "test-submit",
         "proxy_jump_host": "omni",
+        "rsync": rsync_provenance,
     }
+    assert (
+        json.loads(
+            (prepared_campaign / "manifests" / "rsync_provenance.json").read_text(encoding="utf-8")
+        )
+        == rsync_provenance
+    )
     assert "--protect-args" in calls[1][0]
     assert calls[0][0] == ["ssh", "-J", "omni", "test-sync", "bash", "-s"]
     assert calls[1][0][4:6] == ["-e", "ssh -J omni"]
@@ -1806,6 +2275,7 @@ def test_sync_only_rsync_excludes_both_cluster_environments(
     prepared_campaign: Path,
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
+    rsync_provenance = CAMPAIGN_COMMON.resolve_rsync_binary()
     calls: list[tuple[list[str], str | None]] = []
 
     def fake_run(command: list[str], **kwargs: object) -> subprocess.CompletedProcess[str]:
@@ -1840,12 +2310,17 @@ def test_sync_only_rsync_excludes_both_cluster_environments(
             "test-sync",
             "--submit-host",
             "test-submit",
+            "--rsync-bin",
+            str(rsync_provenance["binary"]),
             "--sync-only",
         ],
     )
 
     SUBMIT_EVAL.main()
-    assert [command[0] for command, _input in calls] == ["ssh", "rsync"]
+    assert [command[0] for command, _input in calls] == [
+        "ssh",
+        rsync_provenance["binary"],
+    ]
     rsync_command = calls[1][0]
     assert rsync_command[rsync_command.index(".venv/") - 1] == "--exclude"
     assert rsync_command[rsync_command.index(".venv_cpu/") - 1] == "--exclude"

@@ -31,11 +31,15 @@ from campaign_common import (  # noqa: E402
     log_event,
     mark_eval_batch_collected,
     now_iso,
+    revalidate_rsync_binary,
+    require_existing_rsync_provenance,
+    resolve_rsync_binary,
     rsync_proxy_jump_args,
     ssh_command,
     validate_absolute_posix_path,
     validate_campaign_identity,
     validate_evaluation_result_provenance,
+    validate_manifests_parent_chain,
     validate_result_submission_receipt,
     validate_ssh_host,
     write_json,
@@ -153,16 +157,19 @@ def rsync_from_cluster(
     iteration: int,
     sync_host: str,
     *,
+    rsync_provenance: dict[str, Any],
     proxy_jump_host: str | None = None,
 ) -> None:
     cluster_root = validate_absolute_posix_path(cluster_root, "cluster_root")
     sync_host = validate_ssh_host(sync_host, "sync_host")
+    revalidate_rsync_binary(rsync_provenance)
+    rsync_binary = str(rsync_provenance["binary"])
     src = f"{sync_host}:{cluster_root.rstrip('/')}/iterations/iter_{iteration:04d}/results/"
     dst = campaign_root / "iterations" / f"iter_{iteration:04d}" / "results"
     dst.mkdir(parents=True, exist_ok=True)
     subprocess.run(
         [
-            "rsync",
+            rsync_binary,
             "-ah",
             "--partial",
             "--protect-args",
@@ -173,7 +180,6 @@ def rsync_from_cluster(
         check=True,
     )
     baseline_dst = campaign_root / "baselines"
-    baseline_dst.mkdir(parents=True, exist_ok=True)
     probe = subprocess.run(
         ssh_command(sync_host, "bash", "-s", proxy_jump_host=proxy_jump_host),
         input=f"test -d {shlex.quote(cluster_root.rstrip('/') + '/baselines')}\n",
@@ -183,9 +189,11 @@ def rsync_from_cluster(
         check=False,
     )
     if probe.returncode == 0:
+        revalidate_rsync_binary(rsync_provenance)
+        baseline_dst.mkdir(parents=True, exist_ok=True)
         subprocess.run(
             [
-                "rsync",
+                rsync_binary,
                 "-ah",
                 "--partial",
                 "--protect-args",
@@ -209,6 +217,14 @@ def main() -> None:
         "--proxy-jump-host",
         help="Optional SSH config alias used as ProxyJump for the sync host.",
     )
+    parser.add_argument(
+        "--rsync-bin",
+        default=os.environ.get("HSOPT_RSYNC_BIN"),
+        help=(
+            "Explicit local rsync executable. Defaults to HSOPT_RSYNC_BIN, then discovers "
+            "a compatible rsync >= 3 with --protect-args support."
+        ),
+    )
     parser.add_argument("--skip-rsync", action="store_true")
     parser.add_argument("--lane-id", action="append", default=[])
     parser.add_argument("--lane-ids-file", type=Path)
@@ -229,11 +245,7 @@ def main() -> None:
     )
     args = parser.parse_args()
 
-    root = args.campaign_root.resolve()
-    ensure_dirs(root)
-    manifest, _campaign_identity = validate_campaign_identity(root)
-    lane_by_id = {str(lane["lane_id"]): lane for lane in manifest["lanes"] if lane.get("exact_fit")}
-    cluster_root = args.cluster_root or manifest["cluster_root"]
+    root = validate_manifests_parent_chain(args.campaign_root)
     if not args.skip_rsync and not args.sync_host:
         parser.error("pass --sync-host or set HSOPT_SYNC_HOST unless using --skip-rsync")
     proxy_jump_host = (
@@ -242,11 +254,22 @@ def main() -> None:
         else None
     )
     if not args.skip_rsync:
+        try:
+            rsync_provenance = resolve_rsync_binary(args.rsync_bin)
+            require_existing_rsync_provenance(root, rsync_provenance)
+        except RuntimeError as exc:
+            parser.error(str(exc))
+    manifest, _campaign_identity = validate_campaign_identity(root)
+    lane_by_id = {str(lane["lane_id"]): lane for lane in manifest["lanes"] if lane.get("exact_fit")}
+    cluster_root = args.cluster_root or manifest["cluster_root"]
+    ensure_dirs(root)
+    if not args.skip_rsync:
         rsync_from_cluster(
             cluster_root,
             root,
             args.iteration,
             args.sync_host,
+            rsync_provenance=rsync_provenance,
             proxy_jump_host=proxy_jump_host,
         )
 

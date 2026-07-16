@@ -23,6 +23,32 @@ The older CPU/GPU/QPU constraint framework, GPU-memory experiments, generic
 telemetry APIs, broad protocol examples, and large run artifacts are preserved
 off `main` on branches listed in `BRANCHES.md`.
 
+## Experiment storage
+
+Set one absolute external data root before creating a campaign:
+
+```bash
+export HSOPT_DATA_ROOT=/absolute/path/to/hsopt-data
+```
+
+The standard layout is:
+
+```text
+$HSOPT_DATA_ROOT/
+  paper/hamlib121/hamlib121_paper_YYYYMMDD_<commit>/run_01 ... run_05
+  paper/reactions10/reactions10_paper_YYYYMMDD_<commit>/
+  development/<benchmark>/<campaign-id>/
+  archive/<benchmark>/<campaign-id>/
+  scratch/preflight/<campaign-id>/
+```
+
+Campaign IDs and their contents are immutable once work starts. Move a whole
+inactive campaign between `development`, `paper`, and `archive`; do not scatter
+individual iterations or logs across the home directory. Raw mutation traces,
+scheduler logs, caches, databases, and environments never belong in Git. A
+small validated final export or summary PDF may be copied to the corresponding
+`experiments/*/results/` directory after its completion gate passes.
+
 ## Install the Agent Skills
 
 The agent skills and the benchmark runtime are separate prerequisites.

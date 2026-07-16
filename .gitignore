@@ -16,6 +16,10 @@ encryptcontent.cache
 /outputs/
 /runs/
 /tmp/
+/hsopt-data/
+/.hsopt-data/
+/.hsopt-runs/
+/experiments/_runs/
 
 # examples/pfs contains definitions/evaluators only, never campaign workspaces.
 /examples/pfs/*/run_*/

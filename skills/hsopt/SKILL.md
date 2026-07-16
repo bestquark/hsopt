@@ -1,6 +1,6 @@
 ---
 name: hsopt
-description: Run sequential autoresearch-style T-gate optimization in hsopt. Use this whenever the user asks to reduce T gates, optimize synthesis precision, mutate product-formula precision policies, continue a lane, inspect T-count progress, or run the repo's `/hsopt` workflow.
+description: Run and organize sequential autoresearch-style T-gate optimization in hsopt. Use this whenever the user asks to reduce T gates, optimize synthesis precision, mutate product-formula precision policies, continue a lane, inspect T-count progress, manage HSOpt campaign storage, or run the repo's `/hsopt` workflow.
 ---
 
 # HSOpt
@@ -25,7 +25,29 @@ register this skill with the agent.
 
 ## First Step
 
-Inspect lanes and pick the active benchmark:
+Resolve the run storage before inspecting or mutating a lane. Prefer an
+explicit absolute `HSOPT_DATA_ROOT`; otherwise use the caller's established
+central HSOpt data directory. Never invent a campaign folder in the checkout,
+`examples/pfs/`, the current working directory, or directly in the user's home
+directory.
+
+```text
+$HSOPT_DATA_ROOT/
+  paper/hamlib121/<family>_YYYYMMDD_<commit>/run_01 ... run_05
+  paper/reactions10/<family>_YYYYMMDD_<commit>/
+  development/<benchmark>/<campaign-id>/
+  archive/<benchmark>/<campaign-id>/
+  scratch/preflight/<campaign-id>/
+```
+
+Use `paper` only for protocol-locked campaigns, `development` for exploratory
+runs, `scratch/preflight` for disposable checks, and `archive` for inactive or
+superseded campaigns. Once a campaign starts, keep its ID and directory
+contents together. Do not delete histories during cleanup; move the whole
+inactive campaign to `archive` after confirming that no local supervisor or
+scheduler job still references it.
+
+Then inspect lanes and pick the active benchmark:
 
 ```bash
 uv run hsopt list
@@ -40,6 +62,8 @@ uv run hsopt prompt examples/pfs/h2
 
 The primary runnable family is `examples/pfs/`. The CLI also
 accepts legacy shorthand targets such as `pfs/h2`.
+Read [references/layout.md](references/layout.md) when locating the installed
+skill, CLI runtime, benchmark definitions, or external campaign root.
 
 ## Loop Contract
 
@@ -53,7 +77,10 @@ accepts legacy shorthand targets such as `pfs/h2`.
    ordering/grouping, or PF order/step count when the error budget justifies it.
 5. Run exactly one fixed evaluator command.
 6. Read the JSON result before choosing the next mutation.
-7. Preserve campaign history in the external run directory used by the caller.
+7. Preserve all detailed history in the selected external campaign directory.
+8. Copy only completion-gated compact exports or a small summary PDF into the
+   repository; never commit raw transcripts, caches, databases, environments,
+   scheduler logs, or partial runs.
 
 ## Canonical Commands
 

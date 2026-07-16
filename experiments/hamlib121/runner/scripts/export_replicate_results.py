@@ -38,6 +38,8 @@ from campaign_common import (  # noqa: E402
     load_json,
     parse_hamlib_zip_checksums,
     validate_evaluation_result_provenance,
+    validate_manifests_parent_chain,
+    validate_rsync_provenance,
     validate_result_submission_receipt,
     validate_runner_provenance,
     validate_ssh_host,
@@ -72,6 +74,12 @@ FORBIDDEN_ABSOLUTE_PATH_PATTERNS = (
 PAPER_RUNS = 5
 PAPER_LANES = 121
 PAPER_ITERATIONS = 50
+LEGACY_RSYNC_RUNNER_BUNDLE_SHA256S = frozenset(
+    {
+        # Last runner bundle before local-rsync provenance became mandatory.
+        "5121425c79901417a12884a196a052b75d9ddf5c13075e5c0023080e7af80cf6",
+    }
+)
 LEGACY_SUPERVISOR_PROVENANCE_KEYS = {
     "schema_version",
     "campaign_id",
@@ -107,7 +115,8 @@ LEGACY_SUPERVISOR_PROVENANCE_KEYS = {
     "uv_cache_dir",
     "uv_python_install_dir",
 }
-SUPERVISOR_PROVENANCE_KEYS = LEGACY_SUPERVISOR_PROVENANCE_KEYS | {"proxy_jump_host"}
+PROXY_SUPERVISOR_PROVENANCE_KEYS = LEGACY_SUPERVISOR_PROVENANCE_KEYS | {"proxy_jump_host"}
+SUPERVISOR_PROVENANCE_KEYS = PROXY_SUPERVISOR_PROVENANCE_KEYS | {"rsync"}
 
 
 def validate_paper_autoresearch_provenance(provenance: dict[str, Any]) -> None:
@@ -139,15 +148,24 @@ def validate_supervisor_provenance(
     identity: dict[str, Any],
     require_paper_protocol: bool,
 ) -> dict[str, Any]:
+    root = validate_manifests_parent_chain(root)
     path = root / "manifests" / "supervisor_provenance.json"
     if path.is_symlink() or not path.is_file():
         raise RuntimeError(f"{root.name}: missing or unsafe supervisor provenance")
     payload = load_json(path)
     if not isinstance(payload, dict) or set(payload) not in (
         LEGACY_SUPERVISOR_PROVENANCE_KEYS,
+        PROXY_SUPERVISOR_PROVENANCE_KEYS,
         SUPERVISOR_PROVENANCE_KEYS,
     ):
         raise RuntimeError(f"{root.name}: malformed supervisor provenance")
+    if "rsync" not in payload:
+        runner_bundle_sha256 = validate_runner_provenance(root).get("runner_bundle_sha256")
+        if runner_bundle_sha256 not in LEGACY_RSYNC_RUNNER_BUNDLE_SHA256S:
+            raise RuntimeError(
+                f"{root.name}: current runner requires supervisor rsync provenance; "
+                "legacy schema is allowed only for an enumerated pre-rsync runner bundle"
+            )
     if (
         payload.get("schema_version") != 1
         or payload.get("campaign_id") != manifest["campaign_id"]
@@ -164,6 +182,16 @@ def validate_supervisor_provenance(
             validate_ssh_host(proxy_jump_host, "supervisor provenance proxy_jump_host")
     except ValueError as exc:
         raise RuntimeError(f"{root.name}: unsafe supervisor transport provenance: {exc}") from exc
+    if "rsync" in payload:
+        try:
+            rsync_provenance = validate_rsync_provenance(payload["rsync"])
+        except RuntimeError as exc:
+            raise RuntimeError(f"{root.name}: malformed supervisor rsync provenance") from exc
+        rsync_path = root / "manifests" / "rsync_provenance.json"
+        if rsync_path.is_symlink() or not rsync_path.is_file():
+            raise RuntimeError(f"{root.name}: missing or unsafe rsync provenance receipt")
+        if load_json(rsync_path) != rsync_provenance:
+            raise RuntimeError(f"{root.name}: supervisor rsync provenance drift")
     protocol = {
         key: payload[key]
         for key in (
