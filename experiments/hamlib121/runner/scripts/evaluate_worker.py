@@ -5,6 +5,7 @@ import argparse
 import functools
 import json
 import math
+import multiprocessing
 import os
 import re
 import stat
@@ -548,7 +549,9 @@ def apply_pauli_to_state_split(*, state, label: str, nqubits: int, xp):
     return tensor.reshape(-1)
 
 
-def build_pauli_rotation_compiler(*, nqubits: int, xp):
+def build_pauli_rotation_compiler(
+    *, nqubits: int, xp, rz_cache: dict[tuple[str, str], dict[str, Any]] | None = None
+):
     @functools.lru_cache(maxsize=None)
     def term_scaffold(label: str):
         support = [index for index, pauli in enumerate(label) if pauli != "I"]
@@ -571,7 +574,15 @@ def build_pauli_rotation_compiler(*, nqubits: int, xp):
     def compile_rz(theta: float, epsilon: float) -> dict[str, Any]:
         if not math.isfinite(epsilon) or epsilon <= 0.0:
             raise ValueError(f"synthesis epsilon must be positive and finite, got {epsilon}")
-        if abs(theta) <= epsilon:
+        cache_key = (f"{float(theta):.17e}", f"{float(epsilon):.17e}")
+        if rz_cache is not None:
+            if cache_key not in rz_cache:
+                raise RuntimeError(f"missing precompiled Rz cache entry {cache_key}")
+            gate_string = str(rz_cache[cache_key]["gate_string"])
+            approximate = np.asarray(
+                rz_cache[cache_key]["matrix_host"], dtype=np.complex128
+            )
+        elif abs(theta) <= epsilon:
             gate_string = ""
             approximate = np.eye(2, dtype=np.complex128)
         else:
@@ -660,6 +671,49 @@ def build_pauli_rotation_compiler(*, nqubits: int, xp):
     return compile_pauli_rotation
 
 
+def synthesize_compiled_rz_item(
+    cache_key: tuple[str, str],
+) -> tuple[tuple[str, str], str, np.ndarray]:
+    theta_text, epsilon_text = cache_key
+    theta = float(theta_text)
+    epsilon = float(epsilon_text)
+    if abs(theta) <= epsilon:
+        gate_string = ""
+        approximate = np.eye(2, dtype=np.complex128)
+    else:
+        pygridsynth = import_pygridsynth()
+        with warnings.catch_warnings():
+            warnings.filterwarnings("ignore", message=r"pygridsynth is .*", category=UserWarning)
+            gate_string = pygridsynth.gridsynth_gates(theta, epsilon)
+        approximate = pygridsynth_matrix_from_gates(gate_string)
+    return cache_key, gate_string, approximate
+
+
+def precompile_rz_rotations(
+    cache_keys: set[tuple[str, str]],
+) -> tuple[dict[tuple[str, str], dict[str, Any]], dict[str, Any]]:
+    started = time.perf_counter()
+    keys = sorted(cache_keys)
+    requested_workers = int(os.environ.get("CAMPAIGN_SYNTH_WORKERS", "1"))
+    workers = max(1, min(requested_workers, len(keys) or 1))
+    if workers > 1 and len(keys) >= 512:
+        chunksize = max(1, len(keys) // (workers * 8))
+        context = multiprocessing.get_context("spawn")
+        with ProcessPoolExecutor(max_workers=workers, mp_context=context) as pool:
+            compiled = list(pool.map(synthesize_compiled_rz_item, keys, chunksize=chunksize))
+    else:
+        compiled = [synthesize_compiled_rz_item(key) for key in keys]
+    cache = {
+        key: {"gate_string": gate_string, "matrix_host": matrix}
+        for key, gate_string, matrix in compiled
+    }
+    return cache, {
+        "precompiled_rz_count": len(cache),
+        "pygridsynth_workers": workers,
+        "pygridsynth_wall_seconds": time.perf_counter() - started,
+    }
+
+
 def hartree_fock_basis_index(*, nqubits: int, electrons: int) -> int:
     if electrons < 0 or electrons > nqubits:
         raise ValueError(f"invalid electron count {electrons} for {nqubits} qubits")
@@ -702,13 +756,29 @@ def run_compiled_product_formula(
     if not math.isfinite(zero_threshold) or zero_threshold < 0.0:
         raise ValueError("zero_angle_threshold must be finite and nonnegative")
 
-    state = xp.zeros(1 << nqubits, dtype=xp.complex128)
-    state[hartree_fock_basis_index(nqubits=nqubits, electrons=electrons)] = 1.0 + 0.0j
-    compile_rotation = build_pauli_rotation_compiler(nqubits=nqubits, xp=xp)
     schedule = product_formula_step_schedule(
         terms=terms,
         formula_order=formula_order,
         step_time=float(target_time) / float(n_steps),
+    )
+    prepared_schedule: list[tuple[dict[str, Any], float, float | None]] = []
+    rz_cache_keys: set[tuple[str, str]] = set()
+    for term, alpha in schedule:
+        if abs(alpha) <= zero_threshold:
+            prepared_schedule.append((term, alpha, None))
+            continue
+        epsilon = float(choose_synthesis_epsilon(term, alpha, 0, config))
+        if not math.isfinite(epsilon) or epsilon <= 0.0:
+            raise ValueError(f"invalid synthesis epsilon {epsilon} for term {term['label']}")
+        prepared_schedule.append((term, alpha, epsilon))
+        rz_cache_keys.add((f"{-2.0 * float(alpha):.17e}", f"{epsilon:.17e}"))
+    rz_cache, synthesis_metrics = precompile_rz_rotations(rz_cache_keys)
+    state = xp.zeros(1 << nqubits, dtype=xp.complex128)
+    state[hartree_fock_basis_index(nqubits=nqubits, electrons=electrons)] = 1.0 + 0.0j
+    compile_rotation = build_pauli_rotation_compiler(
+        nqubits=nqubits,
+        xp=xp,
+        rz_cache=rz_cache,
     )
     epsilon_hist: Counter[str] = Counter()
     unique_compilations: dict[str, dict[str, Any]] = {}
@@ -724,13 +794,10 @@ def run_compiled_product_formula(
     # extract its phase over target_time / n_steps.  Replaying an identical
     # slice n_steps times is unnecessary for the spectral estimator and made
     # conservative high-step seeds prohibitively expensive.
-    for term, alpha in schedule:
-        if abs(alpha) <= zero_threshold:
+    for term, alpha, epsilon in prepared_schedule:
+        if epsilon is None:
             skipped_rotation_count += n_steps
             continue
-        epsilon = float(choose_synthesis_epsilon(term, alpha, 0, config))
-        if not math.isfinite(epsilon) or epsilon <= 0.0:
-            raise ValueError(f"invalid synthesis epsilon {epsilon} for term {term['label']}")
         compiled = compile_rotation(str(term["label"]), float(alpha), epsilon)
         state = compiled["apply_state"](state)
         nonzero_rotation_count += n_steps
@@ -781,6 +848,7 @@ def run_compiled_product_formula(
         ),
         "synthesis_epsilon_histogram": dict(sorted(epsilon_hist.items())),
         "unique_compilation_count": len(unique_compilations),
+        **synthesis_metrics,
         "unique_compilations": sorted(
             unique_compilations.values(), key=lambda item: (item["label"], item["epsilon"])
         ),

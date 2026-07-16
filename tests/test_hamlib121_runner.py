@@ -1663,8 +1663,9 @@ def test_measured_energy_pipeline_scores_the_propagated_formula(
         peak_state_path=peak_path,
     )
 
-    def exact_compiler(*, nqubits: int, xp):
+    def exact_compiler(*, nqubits: int, xp, rz_cache=None):
         assert nqubits == 2
+        assert rz_cache is not None
         diagonal = xp.asarray([1.0, 1.0, -1.0, -1.0], dtype=xp.complex128)
 
         def compile_rotation(label: str, alpha: float, epsilon: float):
@@ -1721,8 +1722,9 @@ def test_stationary_slice_cost_is_independent_of_physical_step_count(
 
     calls: list[tuple[str, float, float]] = []
 
-    def compiler(*, nqubits: int, xp):
+    def compiler(*, nqubits: int, xp, rz_cache=None):
         assert nqubits == 1
+        assert rz_cache is not None
 
         def compile_rotation(label: str, alpha: float, epsilon: float):
             calls.append((label, alpha, epsilon))
@@ -1940,6 +1942,48 @@ def test_fused_compiled_rotation_matches_the_gate_scaffold(
     assert compiled["active_pauli_components"] == ["I", "X", "Y", "Z"]
     assert compiled["discarded_component_norm_bound"] == 0.0
     assert actual == pytest.approx(reference, abs=1.0e-12)
+
+
+def test_rz_precompilation_cache_avoids_serial_resynthesis(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    import numpy as np
+
+    calls: list[tuple[float, float]] = []
+
+    class FakeGridSynth:
+        @staticmethod
+        def gridsynth_gates(theta: float, epsilon: float) -> str:
+            calls.append((theta, epsilon))
+            return "T"
+
+    monkeypatch.setenv("CAMPAIGN_SYNTH_WORKERS", "1")
+    monkeypatch.setattr(EVALUATE_WORKER, "import_pygridsynth", lambda: FakeGridSynth())
+    monkeypatch.setattr(
+        EVALUATE_WORKER,
+        "pygridsynth_matrix_from_gates",
+        lambda _gate_string: np.diag(
+            [np.exp(-0.1j), np.exp(0.1j)]
+        ).astype(np.complex128),
+    )
+    keys = {("-2.00000000000000011e-01", "9.99999999999999955e-07")}
+    cache, metrics = EVALUATE_WORKER.precompile_rz_rotations(keys)
+    assert calls == [(-0.2, 1.0e-6)]
+    assert metrics["precompiled_rz_count"] == 1
+    assert metrics["pygridsynth_workers"] == 1
+
+    monkeypatch.setattr(
+        EVALUATE_WORKER,
+        "import_pygridsynth",
+        lambda: (_ for _ in ()).throw(AssertionError("Rz was resynthesized")),
+    )
+    compile_rotation = EVALUATE_WORKER.build_pauli_rotation_compiler(
+        nqubits=1,
+        xp=np,
+        rz_cache=cache,
+    )
+    compiled = compile_rotation("Z", 0.1, 1.0e-6)
+    assert compiled["t_gate_count"] == 1
 
 
 def test_policy_loader_rejects_step_dependent_synthesis(tmp_path: Path) -> None:
