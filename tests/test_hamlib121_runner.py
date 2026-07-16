@@ -3311,6 +3311,11 @@ def test_runner_has_no_personal_roots_and_slurm_scripts_parse() -> None:
         assert "sys.pycache_prefix" in source
         assert 'os.environ["PYTHONPYCACHEPREFIX"]' in source
 
+    prebuild_source = (
+        RUNNER_ROOT / "scripts" / "prebuild_cluster_environments.py"
+    ).read_text(encoding="utf-8")
+    assert 'env.setdefault("UV_CACHE_DIR", str(root / ".cache" / "uv"))' in prebuild_source
+
     bash = shutil.which("bash")
     assert bash is not None
     for script in sorted((RUNNER_ROOT / "slurm").glob("*.sbatch")):

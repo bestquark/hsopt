@@ -152,9 +152,11 @@ uv run --locked python scripts/submit_eval_batch.py \
   --sync-only
 ```
 
-On the sync/login host, prebuild both locked evaluator environments exactly
-once. Slurm jobs never resolve or install dependencies; they require these
-environments and verify their recorded `uv.lock` digest:
+On the sync/login host, prebuild the locked evaluator environment exactly
+once. The prebuild keeps uv's mutable cache under the external campaign root,
+so a small cluster home-directory quota cannot prevent environment creation.
+Slurm jobs never resolve or install dependencies; they require this environment
+and verify its recorded `uv.lock` digest:
 
 ```bash
 ssh "$SYNC_HOST" \

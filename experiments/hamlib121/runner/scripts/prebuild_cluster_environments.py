@@ -36,6 +36,9 @@ def write_receipt(environment_root: Path, name: str, value: str) -> None:
 
 def build(root: Path, environment: str, extras: list[str]) -> None:
     env = os.environ.copy()
+    # Cluster home directories commonly have small quotas.  Keep uv's mutable
+    # build cache with the external campaign instead of relying on ~/.cache.
+    env.setdefault("UV_CACHE_DIR", str(root / ".cache" / "uv"))
     env["UV_PROJECT_ENVIRONMENT"] = environment
     subprocess.run(["uv", "sync", "--locked", *extras], cwd=root, env=env, check=True)
     environment_root = root / environment
