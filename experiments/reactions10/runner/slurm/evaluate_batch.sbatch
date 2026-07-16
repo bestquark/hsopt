@@ -14,8 +14,71 @@ test -f "${LANE_IDS_FILE}"
 test -f "${CAMPAIGN_ROOT}/runner/evaluate_worker.py"
 
 cd "${CAMPAIGN_ROOT}"
-exec "${CAMPAIGN_PYTHON}" runner/evaluate_worker.py \
+export PYTHONUNBUFFERED=1
+export OMP_NUM_THREADS=1
+export OPENBLAS_NUM_THREADS=1
+export MKL_NUM_THREADS=1
+export CAMPAIGN_ARRAY_BACKEND=cupynumeric
+export CAMPAIGN_LEGATE_FBMEM="${CAMPAIGN_LEGATE_FBMEM:-70000}"
+
+VIRTUAL_ENV="$(dirname "$(dirname "$CAMPAIGN_PYTHON")")"
+LEGATE="$(dirname "$CAMPAIGN_PYTHON")/legate"
+test -x "$LEGATE"
+export VIRTUAL_ENV
+SITE_PACKAGES="$("$CAMPAIGN_PYTHON" -c 'import sysconfig; print(sysconfig.get_paths()["purelib"])')"
+export PYTHONPATH="$SITE_PACKAGES"
+NVIDIA_LIB_PATHS="$("$CAMPAIGN_PYTHON" - <<'PY'
+from pathlib import Path
+import site
+
+paths = []
+for site_dir in site.getsitepackages():
+    root = Path(site_dir)
+    paths.extend(str(path) for path in sorted((root / "nvidia").glob("*/lib")) if path.is_dir())
+    paths.extend(
+        str(path)
+        for pattern in ("cutensor*/lib", "libucx*/lib")
+        for path in sorted(root.glob(pattern))
+        if path.is_dir()
+    )
+print(":".join(paths))
+PY
+)"
+if [[ -n "$NVIDIA_LIB_PATHS" ]]; then
+  export LD_LIBRARY_PATH="$NVIDIA_LIB_PATHS${LD_LIBRARY_PATH:+:$LD_LIBRARY_PATH}"
+fi
+
+CAMPAIGN_NVIDIA_SMI=""
+for candidate in /usr/bin/nvidia-smi /usr/local/nvidia/bin/nvidia-smi /usr/local/cuda/bin/nvidia-smi; do
+  if [[ -x "$candidate" ]]; then
+    resolved="$(/usr/bin/readlink -f "$candidate")"
+    read -r owner mode < <(/usr/bin/stat -Lc '%u %a' "$resolved")
+    if [[ "$owner" == "0" ]] && (( (8#$mode & 0022) == 0 )); then
+      CAMPAIGN_NVIDIA_SMI="$resolved"
+      break
+    fi
+  fi
+done
+if [[ -z "$CAMPAIGN_NVIDIA_SMI" ]]; then
+  echo "no trusted NVIDIA system tool found" >&2
+  exit 2
+fi
+export CAMPAIGN_NVIDIA_SMI
+
+echo "host=$(hostname)"
+echo "iteration=$ITERATION batch_id=$BATCH_ID lanes=$(grep -cve '^[[:space:]]*$' "$LANE_IDS_FILE")"
+echo "slurm_job_id=${SLURM_JOB_ID:-} started=$(date -Is)"
+"$CAMPAIGN_NVIDIA_SMI" --query-gpu=index,name,memory.total --format=csv,noheader
+"$CAMPAIGN_NVIDIA_SMI" --query-gpu=timestamp,index,utilization.gpu,utilization.memory,memory.used,power.draw \
+  --format=csv -l 30 > "logs/gpu_reaction_iter_${ITERATION}_${BATCH_ID}.csv" 2>&1 &
+MONITOR_PID=$!
+trap 'kill "$MONITOR_PID" 2>/dev/null || true' EXIT
+
+"$LEGATE" --gpus 1 --fbmem "$CAMPAIGN_LEGATE_FBMEM" --run-mode exec \
+  "$CAMPAIGN_PYTHON" runner/evaluate_worker.py \
   --campaign-root "${CAMPAIGN_ROOT}" \
   --iteration "${ITERATION}" \
   --lane-ids-file "${LANE_IDS_FILE}" \
   --workers "${EVALUATOR_WORKERS}"
+
+echo "finished=$(date -Is)"

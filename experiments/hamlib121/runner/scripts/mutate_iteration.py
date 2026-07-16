@@ -247,8 +247,14 @@ def compact_result_for_prompt(result: dict | None) -> dict:
         "decision_reason",
         "passes_chemical_accuracy_bound",
         "total_t_gates_qpe",
-        "total_error_bound_hartree",
+        "ground_state_energy_hartree",
+        "ground_state_energy_estimate_hartree",
+        "ground_state_energy_error_hartree",
+        "passes_energy_constraint",
         "chemical_accuracy_hartree",
+        "base_unitary_t_gates",
+        "propagation_wall_seconds",
+        "analytic_total_error_bound_hartree",
         "pf_error_bound_hartree",
         "synthesis_error_bound_hartree",
         "zero_angle_error_bound_hartree",
@@ -257,7 +263,7 @@ def compact_result_for_prompt(result: dict | None) -> dict:
         "qpe_unitary_applications",
         "scheduled_rotation_count_per_base_unitary",
         "nonzero_rotation_count_per_base_unitary",
-        "synthesized_unique_angles",
+        "unique_compilation_count",
         "mutation_summary",
     )
     compact = {key: result.get(key) for key in fields if key in result}
@@ -297,8 +303,10 @@ Policy API available in `simple_pf.py`:
 - `alpha` is the actual per-application PF rotation coefficient after step-time and PF half-step factors; `abs(alpha)` is often a better precision signal than the raw coefficient alone.
 - Optional: define `order_product_formula_terms(terms, config)` and set `term_order_strategy = "custom"` to return the same Hamiltonian terms in a deterministic custom order. This is the hook for grouping or interleaving terms by coefficient bands, Pauli family, support/locality, Z-only vs mixed X/Y/Z structure, or other auditable Hamiltonian metadata. Do not drop, duplicate, or alter terms.
 
-Initial-policy convention:
-- The campaign starts from a Reiher-style baseline: chemical accuracy is split evenly between QPE discretization, product-formula truncation, and synthesis error; PF1 and PF2 step counts are sized from conservative Trotter-Suzuki bounds; the lower-T candidate is selected; and uniform epsilon spends the synthesis budget across all scheduled QPE rotations. Treat changes away from that start as deliberate physics/accuracy tradeoffs, not cosmetic scalar edits.
+Evaluation contract:
+- The deterministic evaluator runs one stationary compiled Trotter slice of the proposed product formula on the Hartree-Fock state on one A100 through Legate/cuPyNumeric, then scales its measured spectral phase across the configured repetitions.
+- It estimates the lowest resolved Hartree-Fock spectral peak and compares that measured energy with the exact fixed-electron-sector ground energy.
+- Analytic PF/synthesis bounds are diagnostics only. They do not determine acceptance.
 
 Allowed knobs:
 - `formula_order`: 1 or 2.
@@ -309,7 +317,7 @@ Allowed knobs:
 - Optional helper functions used by `choose_synthesis_epsilon` or `order_product_formula_terms`, if they stay in this file and remain deterministic.
 
 Hard constraints:
-- Keep `choose_synthesis_epsilon` independent of `step_index`; the scaled evaluator aggregates repeated QPE rotations.
+- Keep `choose_synthesis_epsilon` independent of `step_index`; the policy validator rejects any read of `step_index` so one measured stationary slice exactly represents every repetition.
 - Return strictly positive finite epsilons.
 - Custom ordering must preserve exactly the same Pauli labels and coefficients.
 - Do not change the Hamiltonian, QPE parameters, evaluator formulas, chemical-accuracy bound, or pygridsynth behavior.
@@ -319,10 +327,10 @@ Hard constraints:
 - If you run a local syntax check, use `python3`, not `python`.
 
 Objective:
-- Minimize the evaluator score, primarily QPE T gates, while keeping the total QPE + product-formula + synthesis error bound within chemical accuracy when possible.
+- Minimize QPE T gates while keeping the measured ground-state energy error within chemical accuracy.
 - Do not default to scalar-only changes. Prefer Hamiltonian-aware precision policies in `choose_synthesis_epsilon`: coefficient/angle bands, support size, Pauli family, Z-only vs mixed terms, and combinations of these features.
 - Use `n_steps` or `formula_order` when product-formula error is the limiting term; otherwise prefer synthesis precision and term-order changes that reduce compiled T gates.
-- If the immediately previous proposal failed the error bound, identify whether PF error or synthesis error dominated and do not repeat the same failed relaxation.
+- If the immediately previous proposal failed measured chemical accuracy, tighten the product-formula schedule or synthesis precision instead of trusting an analytic bound that happened to pass.
 - Starting from the accepted incumbent, try reducing T gates by loosening epsilons for low-impact rotations, increasing zero-angle filtering only when justified, or changing term order/grouping.
 - Name the policy to reflect the actual idea, not just the scalar values.
 

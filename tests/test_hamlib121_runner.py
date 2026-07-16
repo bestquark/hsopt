@@ -212,10 +212,9 @@ def _write_synthetic_export_run(root: Path) -> None:
             "codex_bin": "npx -y @openai/codex@0.144.0",
             "codex_exec_flags": list(CAMPAIGN_COMMON.PAPER_CODEX_EXEC_FLAGS),
             "npm_cache": ".codex_npm",
-            "python_environments": [".venv", ".venv_cpu"],
+            "python_environments": [".venv"],
             "account": "test-account",
             "gpu_partition": "test-gpu",
-            "cpu_partition": "test-cpu",
             "fallback_enabled": False,
             "fallback_partition": None,
             "sync_host": "test-sync",
@@ -250,14 +249,19 @@ def _write_synthetic_export_run(root: Path) -> None:
         "worker_id": 0,
         "num_workers": 1,
     }
+    peak_state_path = root / "baselines" / f"{lane_id}.peak_state.npy"
+    peak_state_path.parent.mkdir(parents=True, exist_ok=True)
+    peak_state_path.write_bytes(b"synthetic fixed-sector peak state")
     baseline = {
-        "baseline_schema_version": 2,
+        "baseline_schema_version": 3,
         "baseline_status": "computed",
         "baseline_backend": "cupynumeric",
         "baseline_accelerator": "NVIDIA A100",
         "baseline_build_backend": "numpy_host_dense_then_cupynumeric_transfer",
         "baseline_array_type": "cupynumeric.ndarray",
         "ground_state_energy_hartree": -1.0,
+        "selected_peak_state_file": peak_state_path.name,
+        "selected_peak_state_sha256": _sha256(peak_state_path),
         "sector_dim": 6,
         "hamlib_archive": archive_record,
         "initial_policy_sha256": _sha256(initial_policy),
@@ -284,10 +288,10 @@ def _write_synthetic_export_run(root: Path) -> None:
         is_baseline = iteration == 0
         key = str(iteration) * 12
         batch_id = "initial_baseline" if is_baseline else "iter0001_batch0001"
-        mode = "gpu_baseline" if is_baseline else "cpu_policy"
-        backend = "cupynumeric" if is_baseline else "numpy"
+        mode = "gpu_baseline" if is_baseline else "gpu_policy"
+        backend = "cupynumeric"
         snapshot = "initial" if is_baseline else "current"
-        partition = "test-gpu" if is_baseline else "test-cpu"
+        partition = "test-gpu"
         policy = initial_policy if is_baseline else candidate_policy
         worker = {
             "schema_version": 1,
@@ -301,7 +305,7 @@ def _write_synthetic_export_run(root: Path) -> None:
             "slurm_job_id": str(1000 + iteration),
             "slurm_account": "test-account",
             "slurm_partition": partition,
-            "legate_fbmem": "70000" if is_baseline else None,
+            "legate_fbmem": "70000",
             "uv_base_dir": None,
             "uv_cache_dir": None,
             "uv_python_install_dir": None,
@@ -310,17 +314,15 @@ def _write_synthetic_export_run(root: Path) -> None:
             "num_workers": 1,
         }
         submitted = {
-            "schema_version": 1,
+            "schema_version": 2,
             "execution_mode": mode,
             "array_backend": backend,
             "compute_baseline": is_baseline,
             "policy_snapshot": snapshot,
             "account": "test-account",
             "partition": partition,
-            "slurm_script": (
-                "slurm/evaluate_batch.sbatch" if is_baseline else "slurm/evaluate_batch_cpu.sbatch"
-            ),
-            "legate_fbmem": "70000" if is_baseline else None,
+            "slurm_script": "slurm/evaluate_batch.sbatch",
+            "legate_fbmem": "70000",
             "uv_base_dir": None,
             "uv_cache_dir": None,
             "uv_python_install_dir": None,
@@ -359,6 +361,12 @@ def _write_synthetic_export_run(root: Path) -> None:
             "iteration": iteration,
             "status": "ok",
             "passes_chemical_accuracy_bound": True,
+            "passes_energy_constraint": True,
+            "objective": "hf_reference_spectral_energy",
+            "array_backend": "cupynumeric",
+            "accuracy_metric_name": "ground_state_energy_error_hartree",
+            "ground_state_energy_estimate_hartree": -0.9995,
+            "ground_state_energy_error_hartree": 0.0005,
             "total_t_gates_qpe": total_t,
             "total_error_bound_hartree": 0.0005,
             "pf_error_bound_hartree": 0.0002,
@@ -1139,7 +1147,7 @@ def test_collect_and_slurm_queries_use_the_same_proxy_jump(
     COLLECT_ITERATION.rsync_from_cluster(
         "/cluster/hamlib121/run_01",
         tmp_path / "run_01",
-        1,
+        0,
         "nvdata",
         rsync_provenance=rsync_provenance,
         proxy_jump_host="omni",
@@ -1151,7 +1159,7 @@ def test_collect_and_slurm_queries_use_the_same_proxy_jump(
         "--protect-args",
         "-e",
         "ssh -J omni",
-        "nvdata:/cluster/hamlib121/run_01/iterations/iter_0001/results/",
+        "nvdata:/cluster/hamlib121/run_01/iterations/iter_0000/results/",
     ]
     assert collect_calls[1] == ["ssh", "-J", "omni", "nvdata", "bash", "-s"]
     assert collect_calls[2][4:6] == ["-e", "ssh -J omni"]
@@ -1187,7 +1195,6 @@ def test_supervisor_propagates_proxy_jump_to_every_transport_child(
         lane_ids=["lane-1"],
         account="test-account",
         partition="test-gpu",
-        cpu_partition="test-cpu",
         sync_host="nvdata",
         submit_host="nvlogin",
         proxy_jump_host="omni",
@@ -1617,6 +1624,151 @@ def test_omitted_rotations_are_charged_to_the_triangle_inequality_budget() -> No
             )
 
 
+def test_proposal_backend_refuses_numpy(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setenv("CAMPAIGN_ARRAY_BACKEND", "numpy")
+    with pytest.raises(RuntimeError, match="NumPy/CPU proposal scoring is disabled"):
+        EVALUATE_WORKER.import_array_backend()
+
+
+def test_pf2_schedule_is_a_palindromic_strang_step() -> None:
+    terms = [
+        {"label": "XI", "coefficient": 0.2},
+        {"label": "IZ", "coefficient": -0.4},
+        {"label": "YY", "coefficient": 0.8},
+    ]
+    schedule = EVALUATE_WORKER.product_formula_step_schedule(
+        terms=terms,
+        formula_order=2,
+        step_time=0.5,
+    )
+    assert [term["label"] for term, _alpha in schedule] == ["XI", "IZ", "YY", "IZ", "XI"]
+    assert [alpha for _term, alpha in schedule] == pytest.approx([0.05, -0.1, 0.4, -0.1, 0.05])
+
+
+def test_measured_energy_pipeline_scores_the_propagated_formula(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    import numpy as np
+
+    terms = [{"label": "ZI", "coefficient": 0.2}]
+    peak_path = tmp_path / "synthetic.peak_state.npy"
+    baseline = EVALUATE_WORKER.compute_dense_sector_reference(
+        terms=terms,
+        identity=0.0,
+        nqubits=2,
+        electrons=1,
+        backend_name="cupynumeric",
+        xp=np,
+        peak_state_path=peak_path,
+    )
+
+    def exact_compiler(*, nqubits: int, xp):
+        assert nqubits == 2
+        diagonal = xp.asarray([1.0, 1.0, -1.0, -1.0], dtype=xp.complex128)
+
+        def compile_rotation(label: str, alpha: float, epsilon: float):
+            assert label == "ZI"
+
+            def apply_state(state):
+                return math.cos(alpha) * state + 1j * math.sin(alpha) * diagonal * state
+
+            return {
+                "cache_key": f"{label}|{alpha}|{epsilon}",
+                "label": label,
+                "alpha": alpha,
+                "theta": -2.0 * alpha,
+                "epsilon": epsilon,
+                "t_gate_count": 10,
+                "gate_count": 10,
+                "operator_error": 0.0,
+                "apply_state": apply_state,
+            }
+
+        return compile_rotation
+
+    monkeypatch.setattr(EVALUATE_WORKER, "build_pauli_rotation_compiler", exact_compiler)
+    run = EVALUATE_WORKER.run_compiled_product_formula(
+        terms=terms,
+        config=SimpleNamespace(formula_order=1, n_steps=2, zero_angle_threshold=0.0),
+        choose_synthesis_epsilon=lambda *_: 1e-6,
+        target_time=0.3,
+        nqubits=2,
+        electrons=1,
+        xp=np,
+    )
+    phase = EVALUATE_WORKER.estimate_reference_peak_energy(
+        propagated_state=run["state"],
+        baseline=baseline,
+        baseline_dir=tmp_path,
+        identity_shift=0.0,
+        phase_time=0.15,
+        nqubits=2,
+        electrons=1,
+        xp=np,
+    )
+    assert run["base_unitary_t_gates"] == 20
+    assert run["simulated_trotter_steps"] == 1
+    assert run["physical_trotter_steps"] == 2
+    assert run["nonzero_rotation_count_per_base_unitary"] == 2
+    assert phase["ground_state_energy_estimate_hartree"] == pytest.approx(-0.2, abs=1e-12)
+
+
+def test_stationary_slice_cost_is_independent_of_physical_step_count(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    import numpy as np
+
+    calls: list[tuple[str, float, float]] = []
+
+    def compiler(*, nqubits: int, xp):
+        assert nqubits == 1
+
+        def compile_rotation(label: str, alpha: float, epsilon: float):
+            calls.append((label, alpha, epsilon))
+            return {
+                "cache_key": f"{label}|{alpha}|{epsilon}",
+                "label": label,
+                "alpha": alpha,
+                "theta": -2.0 * alpha,
+                "epsilon": epsilon,
+                "t_gate_count": 7,
+                "gate_count": 7,
+                "operator_error": 0.0,
+                "apply_state": lambda state: state,
+            }
+
+        return compile_rotation
+
+    monkeypatch.setattr(EVALUATE_WORKER, "build_pauli_rotation_compiler", compiler)
+    result = EVALUATE_WORKER.run_compiled_product_formula(
+        terms=[{"label": "Z", "coefficient": 0.25}],
+        config=SimpleNamespace(formula_order=1, n_steps=100_000, zero_angle_threshold=0.0),
+        choose_synthesis_epsilon=lambda *_: 1.0e-6,
+        target_time=2.0,
+        nqubits=1,
+        electrons=1,
+        xp=np,
+    )
+    assert len(calls) == 1
+    assert result["base_unitary_t_gates"] == 700_000
+    assert result["scheduled_rotation_count_per_base_unitary"] == 100_000
+    assert result["simulated_trotter_steps"] == 1
+
+
+def test_policy_loader_rejects_step_dependent_synthesis(tmp_path: Path) -> None:
+    policy = tmp_path / "step_dependent.py"
+    policy.write_text(
+        """
+def choose_synthesis_epsilon(term, alpha, step_index, config):
+    return 1e-6 if step_index % 2 == 0 else 2e-6
+""".lstrip(),
+        encoding="utf-8",
+    )
+    with pytest.raises(ValueError, match="stationary"):
+        CAMPAIGN_COMMON.load_policy_module(policy)
+
+
 def test_streaming_progress_helpers_resume_and_number_batches(tmp_path: Path) -> None:
     lanes = [
         {"lane_id": "new", "iteration": None},
@@ -1925,8 +2077,6 @@ def test_submit_dry_run_has_no_writes_or_network_transfer(
             "test-account",
             "--partition",
             "test-gpu",
-            "--cpu-partition",
-            "test-cpu",
             "--sync-host",
             "test-sync",
             "--submit-host",
@@ -1974,8 +2124,6 @@ def test_submit_dry_run_has_no_writes_or_network_transfer(
             "test-account",
             "--partition",
             "test-gpu",
-            "--cpu-partition",
-            "test-cpu",
             "--sync-host",
             "test-sync",
             "--submit-host",
@@ -2030,8 +2178,6 @@ def test_submit_rejects_legacy_rsync_before_campaign_writes(
             "test-account",
             "--partition",
             "test-gpu",
-            "--cpu-partition",
-            "test-cpu",
             "--sync-host",
             "test-sync",
             "--submit-host",
@@ -2200,8 +2346,6 @@ def test_initial_baseline_submission_is_durable_before_network_and_identity_boun
             "test-account",
             "--partition",
             "test-gpu",
-            "--cpu-partition",
-            "test-cpu",
             "--sync-host",
             "test-sync",
             "--submit-host",
@@ -2264,7 +2408,7 @@ def test_initial_baseline_submission_is_durable_before_network_and_identity_boun
     assert "--protect-args" in calls[1][0]
     assert calls[0][0] == ["ssh", "-J", "omni", "test-sync", "bash", "-s"]
     assert calls[1][0][4:6] == ["-e", "ssh -J omni"]
-    assert calls[1][0][calls[1][0].index(".venv_cpu/") - 1] == "--exclude"
+    assert ".venv_cpu/" not in calls[1][0]
     assert calls[2][1] is not None
     assert "--export='ALL," not in calls[2][1]
     assert "flock -x 8" in calls[2][1]
@@ -2304,8 +2448,6 @@ def test_sync_only_rsync_excludes_both_cluster_environments(
             "test-account",
             "--partition",
             "test-gpu",
-            "--cpu-partition",
-            "test-cpu",
             "--sync-host",
             "test-sync",
             "--submit-host",
@@ -2323,7 +2465,7 @@ def test_sync_only_rsync_excludes_both_cluster_environments(
     ]
     rsync_command = calls[1][0]
     assert rsync_command[rsync_command.index(".venv/") - 1] == "--exclude"
-    assert rsync_command[rsync_command.index(".venv_cpu/") - 1] == "--exclude"
+    assert ".venv_cpu/" not in rsync_command
     with sqlite3.connect(prepared_campaign / "campaign.sqlite") as conn:
         assert (
             conn.execute(
@@ -2895,8 +3037,8 @@ def test_runner_has_no_personal_roots_and_slurm_scripts_parse() -> None:
         "prebuild_cluster_environments.py",
         "--batch-size 8",
         "--max-concurrent-mutators 4",
-        "--max-running-eval-jobs 8",
-        "not five full A100",
+        "--max-running-eval-jobs 4",
+        "Every baseline and proposal is evaluated on an NVIDIA A100",
     ):
         assert required in runner_readme
 
@@ -2924,11 +3066,9 @@ def test_runner_has_no_personal_roots_and_slurm_scripts_parse() -> None:
 
 def test_slurm_workers_pin_and_verify_the_locked_python_runtime() -> None:
     gpu_source = (RUNNER_ROOT / "slurm" / "evaluate_batch.sbatch").read_text(encoding="utf-8")
-    cpu_source = (RUNNER_ROOT / "slurm" / "evaluate_batch_cpu.sbatch").read_text(encoding="utf-8")
-    for source in (gpu_source, cpu_source):
-        assert 'export CAMPAIGN_LOCKED_PYTHON="$VIRTUAL_ENV/bin/python"' in source
+    assert 'export CAMPAIGN_LOCKED_PYTHON="$VIRTUAL_ENV/bin/python"' in gpu_source
     assert '--run-mode exec "$CAMPAIGN_LOCKED_PYTHON" scripts/evaluate_worker.py' in gpu_source
-    assert '"$CAMPAIGN_LOCKED_PYTHON" scripts/evaluate_worker.py' in cpu_source
+    assert not (RUNNER_ROOT / "slurm" / "evaluate_batch_cpu.sbatch").exists()
 
     worker_source = (SCRIPTS_ROOT / "evaluate_worker.py").read_text(encoding="utf-8")
     guard_call = 'if os.environ.get("SLURM_JOB_ID") or os.environ.get('
@@ -2938,7 +3078,7 @@ def test_slurm_workers_pin_and_verify_the_locked_python_runtime() -> None:
 def test_locked_python_runtime_guard_rejects_interpreter_drift(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    executable = Path(sys.executable)
+    executable = Path(sys.prefix) / "bin" / "python"
     monkeypatch.setenv("VIRTUAL_ENV", sys.prefix)
     monkeypatch.setenv("CAMPAIGN_LOCKED_PYTHON", str(executable))
     EVALUATE_WORKER.validate_locked_python_runtime()

@@ -5,6 +5,12 @@ reaction-aware synthesis-error contracts. It creates 20 sequential lanes (two
 contracts for each of ten reactions), evaluates iteration 0 as the preserved
 baseline, and then records exactly 50 Codex proposals per lane.
 
+Codex mutation runs on Omni. Deterministic Slurm jobs each request one A100
+80GB and evaluate five lanes serially through Legate/cuPyNumeric, yielding four
+concurrent GPU batches per iteration. The evaluator constructs and diagonalizes
+the compiled one-step unitary on the allocated A100; NumPy/CPU production
+scoring is rejected.
+
 The 42 Hamiltonian cache files are intentionally external to Git. Preparation
 requires their directory explicitly and verifies every file against
 `../inputs/problem_cache.sha256` before copying it into a new campaign. The
@@ -76,7 +82,7 @@ uv run --locked --project "$CAMPAIGN_ENV" python \
   "$CAMPAIGN_RUNNER/submit_iteration.py" \
   --campaign-root "$CAMPAIGN_ROOT" --iteration 0 \
   --sync-host YOUR_SYNC_HOST --submit-host YOUR_SUBMIT_HOST \
-  --account YOUR_SLURM_ACCOUNT --partition YOUR_CPU_PARTITION --sync-only
+  --account YOUR_SLURM_ACCOUNT --partition YOUR_GPU_PARTITION --workers 1 --sync-only
 
 ssh YOUR_SUBMIT_HOST \
   "uv sync --locked --project '$CLUSTER_ROOT/runner/environment'"
@@ -93,7 +99,7 @@ uv run --locked --project "$CAMPAIGN_ENV" python \
   --campaign-root "$CAMPAIGN_ROOT" --iteration 0 \
   --sync-host YOUR_SYNC_HOST --submit-host YOUR_SUBMIT_HOST \
   --proxy-jump-host YOUR_JUMP_HOST \
-  --account YOUR_SLURM_ACCOUNT --partition YOUR_CPU_PARTITION --sync-only
+  --account YOUR_SLURM_ACCOUNT --partition YOUR_GPU_PARTITION --workers 1 --sync-only
 
 ssh -J YOUR_JUMP_HOST YOUR_SUBMIT_HOST \
   "uv sync --locked --project '$CLUSTER_ROOT/runner/environment'"
@@ -103,7 +109,7 @@ uv run --locked --project "$CAMPAIGN_ENV" python \
   --campaign-root "$CAMPAIGN_ROOT" \
   --sync-host YOUR_SYNC_HOST --submit-host YOUR_SUBMIT_HOST \
   --proxy-jump-host YOUR_JUMP_HOST \
-  --account YOUR_SLURM_ACCOUNT --partition YOUR_CPU_PARTITION
+  --account YOUR_SLURM_ACCOUNT --partition YOUR_GPU_PARTITION --evaluator-workers 1
 ```
 
 The proxy-jump alias is recorded in each durable submission attempt. It is
@@ -119,7 +125,8 @@ uv run --locked --project "$CAMPAIGN_ENV" python \
   --sync-host YOUR_SYNC_HOST \
   --submit-host YOUR_SUBMIT_HOST \
   --account YOUR_SLURM_ACCOUNT \
-  --partition YOUR_CPU_PARTITION
+  --partition YOUR_GPU_PARTITION \
+  --evaluator-workers 1
 ```
 
 The supervisor derives its next action from durable campaign state. Mutation

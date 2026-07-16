@@ -117,6 +117,13 @@ LEGACY_SUPERVISOR_PROVENANCE_KEYS = {
 }
 PROXY_SUPERVISOR_PROVENANCE_KEYS = LEGACY_SUPERVISOR_PROVENANCE_KEYS | {"proxy_jump_host"}
 SUPERVISOR_PROVENANCE_KEYS = PROXY_SUPERVISOR_PROVENANCE_KEYS | {"rsync"}
+GPU_LEGACY_SUPERVISOR_PROVENANCE_KEYS = LEGACY_SUPERVISOR_PROVENANCE_KEYS - {
+    "cpu_partition"
+}
+GPU_PROXY_SUPERVISOR_PROVENANCE_KEYS = PROXY_SUPERVISOR_PROVENANCE_KEYS - {
+    "cpu_partition"
+}
+GPU_SUPERVISOR_PROVENANCE_KEYS = SUPERVISOR_PROVENANCE_KEYS - {"cpu_partition"}
 
 
 def validate_paper_autoresearch_provenance(provenance: dict[str, Any]) -> None:
@@ -157,6 +164,9 @@ def validate_supervisor_provenance(
         LEGACY_SUPERVISOR_PROVENANCE_KEYS,
         PROXY_SUPERVISOR_PROVENANCE_KEYS,
         SUPERVISOR_PROVENANCE_KEYS,
+        GPU_LEGACY_SUPERVISOR_PROVENANCE_KEYS,
+        GPU_PROXY_SUPERVISOR_PROVENANCE_KEYS,
+        GPU_SUPERVISOR_PROVENANCE_KEYS,
     ):
         raise RuntimeError(f"{root.name}: malformed supervisor provenance")
     if "rsync" not in payload:
@@ -171,7 +181,7 @@ def validate_supervisor_provenance(
         or payload.get("campaign_id") != manifest["campaign_id"]
         or payload.get("campaign_manifest_sha256") != identity["campaign_manifest_sha256"]
         or payload.get("npm_cache") != ".codex_npm"
-        or payload.get("python_environments") != [".venv", ".venv_cpu"]
+        or payload.get("python_environments") not in ([".venv"], [".venv", ".venv_cpu"])
     ):
         raise RuntimeError(f"{root.name}: supervisor identity/runtime provenance drift")
     try:
@@ -213,14 +223,14 @@ def validate_supervisor_provenance(
             "start_iteration": 1,
             "proposal_iterations": 50,
             "batch_size": 8,
-            "max_running_eval_jobs": 8,
+            "max_running_eval_jobs": 4,
             "max_concurrent_mutators": 4,
             "model": PAPER_MODEL,
             "reasoning_effort": PAPER_REASONING_EFFORT,
             "codex_bin": "npx -y @openai/codex@0.144.0",
             "codex_exec_flags": list(PAPER_CODEX_EXEC_FLAGS),
             "npm_cache": ".codex_npm",
-            "python_environments": [".venv", ".venv_cpu"],
+            "python_environments": [".venv"],
         }
         if protocol != expected:
             raise RuntimeError(f"{root.name}: fixed paper supervisor protocol changed")
@@ -326,7 +336,12 @@ def metric_fields(result: dict[str, Any]) -> dict[str, Any]:
 
     return {
         "total_t_gates_qpe": exact_t_count(result),
-        "total_error_mha": to_mha(result.get("total_error_bound_hartree")),
+        "ground_state_energy_error_mha": to_mha(
+            result.get("ground_state_energy_error_hartree")
+        ),
+        "analytic_total_error_bound_mha": to_mha(
+            result.get("analytic_total_error_bound_hartree")
+        ),
         "pf_error_mha": to_mha(result.get("pf_error_bound_hartree")),
         "synthesis_error_mha": to_mha(result.get("synthesis_error_bound_hartree")),
         "zero_angle_error_mha": to_mha(result.get("zero_angle_error_bound_hartree")),
@@ -400,10 +415,10 @@ def validate_canonical_campaign_manifest(root: Path) -> None:
         "baseline_backend": "cupynumeric",
         "baseline_accelerator": "NVIDIA A100",
         "baseline_replicated_from_run_01": True,
-        "policy_backend": "numpy",
+        "policy_backend": "cupynumeric",
         "streaming_batch_size": 8,
         "max_concurrent_mutators": 4,
-        "max_running_eval_jobs": 8,
+        "max_running_eval_jobs": 4,
         "node_major": 24,
         "codex_cli_version": PAPER_CODEX_CLI_VERSION,
         "model": PAPER_MODEL,

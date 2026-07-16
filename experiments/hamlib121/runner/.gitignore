@@ -1,5 +1,4 @@
 .venv/
-.venv_cpu/
 campaign.sqlite
 campaign.sqlite-shm
 campaign.sqlite-wal

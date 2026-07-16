@@ -116,7 +116,7 @@ def test_reaction_arithmetic_uses_coefficients_but_t_count_uses_unique_species(
     }
     t_counts = {"n2": 10, "h2": 20, "nh3": 30}
 
-    def fake_species(spec, _policy, _config, _cache_root):
+    def fake_species(spec, _policy, _config, _cache_root, **_backend):
         signed = signed_errors[spec.key]
         return {
             "species": spec.key,

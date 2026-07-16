@@ -691,6 +691,8 @@ def evaluate_candidate(
     *,
     campaign_id: str,
     campaign_manifest_sha256: str,
+    gpu_preflight: dict[str, Any],
+    execution_configuration: dict[str, Any],
 ) -> dict[str, Any]:
     lane_id = str(lane["lane_id"])
     policy_path = candidate_path(root, iteration, lane_id)
@@ -721,6 +723,8 @@ def evaluate_candidate(
     result["campaign_manifest_sha256"] = campaign_manifest_sha256
     result["candidate_relative_path"] = relative_to_campaign(root, policy_path)
     result["problem_cache_relative_path"] = "problem_cache"
+    result["gpu_preflight"] = gpu_preflight
+    result["execution_configuration"] = execution_configuration
     result["evaluated_at"] = now_iso()
     validate_result(
         result,
@@ -799,6 +803,28 @@ def validate_result(
     for field, expected in fixed_fields.items():
         if result.get(field) != expected:
             raise ValueError(f"{lane_id}: fixed evaluator field mismatch for {field}")
+    if result.get("array_backend") != "cupynumeric":
+        raise ValueError(f"{lane_id}: reaction evaluation did not use cuPyNumeric")
+    gpu = result.get("gpu_preflight")
+    if (
+        not isinstance(gpu, dict)
+        or gpu.get("accelerator_family") != "NVIDIA A100 80GB"
+        or float(gpu.get("gpu_memory_mib", 0.0)) < 80_000
+        or not str(gpu.get("gpu_uuid", "")).startswith("GPU-")
+        or gpu.get("array_backend_module") not in {"cupynumeric", "cunumeric"}
+    ):
+        raise ValueError(f"{lane_id}: result lacks verified A100/cuPyNumeric evidence")
+    execution = result.get("execution_configuration")
+    if (
+        not isinstance(execution, dict)
+        or execution.get("execution_mode") != "gpu_reaction"
+        or execution.get("array_backend") != "cupynumeric"
+        or not execution.get("batch_id")
+        or not execution.get("slurm_job_id")
+        or not execution.get("slurm_account")
+        or not execution.get("slurm_partition")
+    ):
+        raise ValueError(f"{lane_id}: result lacks complete GPU Slurm provenance")
     if result.get("source_provenance") != {
         "archived_benchmark_sha256": ARCHIVED_REACTION_BENCHMARK_SHA256,
         "archived_evaluator_sha256": ARCHIVED_REACTION_EVALUATOR_SHA256,

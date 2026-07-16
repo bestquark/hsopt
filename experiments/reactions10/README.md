@@ -13,9 +13,9 @@ diagnostic triangle bound is `sum_i |nu_i| |e_i|`. Compiled `T` count sums
 each unique species circuit once; a stoichiometric coefficient greater than one
 reuses the same energy estimate.
 
-The fixed evaluator diagonalizes each compiled one-step product-formula unitary
-in the full Hilbert space, matches its eigenphase to the exact fixed-electron
-ground state by overlap, and measures the signed molecular energy error. This
+The fixed evaluator uses Legate/cuPyNumeric on one A100 to diagonalize each
+compiled one-step product-formula unitary in the full Hilbert space, matches its
+eigenphase to the exact fixed-electron ground state by overlap, and measures the signed molecular energy error. This
 is deliberately separate from the HF-reference spectral-peak evaluator used by
 the standalone molecule lanes.
 

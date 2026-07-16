@@ -291,7 +291,7 @@ def main() -> None:
     )
     parser.add_argument("--cluster-root", required=True)
     parser.add_argument("--cluster-python", required=True)
-    parser.add_argument("--batch-size", type=int, default=10)
+    parser.add_argument("--batch-size", type=int, default=5)
     args = parser.parse_args()
 
     if args.batch_size <= 0 or args.batch_size > LANE_COUNT:

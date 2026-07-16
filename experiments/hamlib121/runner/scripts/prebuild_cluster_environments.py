@@ -61,7 +61,7 @@ def build(root: Path, environment: str, extras: list[str]) -> None:
 
 def main() -> None:
     parser = argparse.ArgumentParser(
-        description="Prebuild the locked GPU and CPU HamLib evaluator environments once."
+        description="Prebuild the locked GPU HamLib evaluator environment once."
     )
     parser.add_argument("--campaign-root", type=Path, default=Path.cwd())
     args = parser.parse_args()
@@ -69,8 +69,7 @@ def main() -> None:
     validate_runner_provenance(root)
     validate_campaign_identity(root)
     build(root, ".venv", ["--extra", "gpu"])
-    build(root, ".venv_cpu", [])
-    print(f"prebuilt locked .venv and .venv_cpu under {root}")
+    print(f"prebuilt locked GPU environment under {root}")
 
 
 if __name__ == "__main__":

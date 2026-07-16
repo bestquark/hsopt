@@ -123,22 +123,35 @@ def main() -> None:
     source_baselines = source / "baselines"
     if source_baselines.is_symlink() or not source_baselines.is_dir():
         raise RuntimeError("source baseline cache directory is missing or unsafe")
+    allowed_baseline_names = {
+        name
+        for lane_id in source_lanes
+        for name in (f"{lane_id}.json", f"{lane_id}.peak_state.npy")
+    }
     unsafe_baseline_entries = [
         path.name
         for path in source_baselines.iterdir()
-        if path.is_symlink() or not path.is_file() or path.suffix != ".json"
+        if path.is_symlink() or not path.is_file() or path.name not in allowed_baseline_names
     ]
     if unsafe_baseline_entries:
         raise RuntimeError(
             f"source baseline cache directory has undeclared entries: {unsafe_baseline_entries}"
         )
     baseline_paths = sorted(source_baselines.glob("*.json"))
+    peak_state_paths = sorted(source_baselines.glob("*.peak_state.npy"))
     if len(baseline_paths) != EXPECTED_LANES or {path.stem for path in baseline_paths} != set(
         source_lanes
     ):
         raise RuntimeError(
             f"source baseline cache closure must contain exactly {EXPECTED_LANES} lane files"
         )
+    if len(peak_state_paths) != EXPECTED_LANES or {
+        path.name.removesuffix(".peak_state.npy") for path in peak_state_paths
+    } != set(source_lanes):
+        raise RuntimeError(
+            f"source peak-state cache closure must contain exactly {EXPECTED_LANES} lane files"
+        )
+    baseline_artifact_paths = [*baseline_paths, *peak_state_paths]
     for source_path in result_paths:
         lane_id = source_path.stem
         result = json.loads(source_path.read_text(encoding="utf-8"))
@@ -175,7 +188,12 @@ def main() -> None:
             raise RuntimeError("target active lane set differs from source campaign")
         target_results = target / "iterations" / "iter_0000" / "results"
         target_baselines = target / "baselines"
-        allowed_names = set(source_lanes)
+        allowed_result_names = {f"{lane_id}.json" for lane_id in source_lanes}
+        allowed_baseline_names = {
+            name
+            for lane_id in source_lanes
+            for name in (f"{lane_id}.json", f"{lane_id}.peak_state.npy")
+        }
         for directory, label in (
             (target_results, "iteration-0 result"),
             (target_baselines, "baseline cache"),
@@ -183,19 +201,21 @@ def main() -> None:
             if directory.exists() and (directory.is_symlink() or not directory.is_dir()):
                 raise RuntimeError(f"target {label} directory is unsafe: {directory}")
             if directory.exists():
+                allowed_names = (
+                    allowed_result_names if directory == target_results else allowed_baseline_names
+                )
                 undeclared = [
                     entry.name
                     for entry in directory.iterdir()
                     if entry.is_symlink()
                     or not entry.is_file()
-                    or entry.suffix != ".json"
-                    or entry.stem not in allowed_names
+                    or entry.name not in allowed_names
                 ]
                 if undeclared:
                     raise RuntimeError(
                         f"target {label} directory has undeclared entries: {undeclared}"
                     )
-        for baseline_path in baseline_paths:
+        for baseline_path in baseline_artifact_paths:
             existing = target_baselines / baseline_path.name
             if existing.exists() and sha256_file(existing) != sha256_file(baseline_path):
                 raise RuntimeError(f"target baseline cache differs from source: {existing}")
@@ -218,7 +238,7 @@ def main() -> None:
         target_baselines = target / "baselines"
         target_results.mkdir(parents=True, exist_ok=True)
         target_baselines.mkdir(parents=True, exist_ok=True)
-        for baseline_path in baseline_paths:
+        for baseline_path in baseline_artifact_paths:
             destination = target_baselines / baseline_path.name
             if destination.exists():
                 continue
@@ -244,9 +264,11 @@ def main() -> None:
                 ),
             )
         target_baseline_paths = sorted(target_baselines.glob("*.json"))
+        target_peak_state_paths = sorted(target_baselines.glob("*.peak_state.npy"))
         target_result_paths = sorted(target_results.glob("*.json"))
         if (
             len(target_baseline_paths) != EXPECTED_LANES
+            or len(target_peak_state_paths) != EXPECTED_LANES
             or len(target_result_paths) != EXPECTED_LANES
         ):
             raise RuntimeError(f"target baseline replication closure is incomplete: {target}")
@@ -257,7 +279,9 @@ def main() -> None:
             "target_campaign_id": target_manifest["campaign_id"],
             "target_manifest_sha256": target_identity["campaign_manifest_sha256"],
             "lanes": EXPECTED_LANES,
-            "baseline_closure_sha256": closure_sha256(target_baseline_paths, root=target),
+            "baseline_closure_sha256": closure_sha256(
+                [*target_baseline_paths, *target_peak_state_paths], root=target
+            ),
             "result_closure_sha256": closure_sha256(target_result_paths, root=target),
         }
         receipt_path = target / "manifests" / "baseline_replication_receipt.json"

@@ -82,7 +82,7 @@ def before_policy_path(root: Path, iteration: int, lane_id: str) -> Path | None:
 
 def mutation_summary(root: Path, iteration: int, lane_id: str) -> str:
     if iteration == 0:
-        return "Reiher-style uniform-precision initializer."
+        return "Measured-energy A100 baseline initializer."
     path = (
         root / "iterations" / f"iter_{iteration:04d}" / "mutations" / lane_id / "last_message.txt"
     )
@@ -112,7 +112,9 @@ def previous_incumbent(conn, lane_id: str, iteration: int) -> dict[str, Any] | N
         "total_t_gates_qpe": None if total_t is None else int(total_t),
         "score": result.get("score"),
         "config": result.get("config", {}),
-        "total_error_bound_hartree": result.get("total_error_bound_hartree"),
+        "ground_state_energy_error_hartree": result.get(
+            "ground_state_energy_error_hartree"
+        ),
         "policy_path": row["policy_path"],
     }
 
@@ -179,6 +181,9 @@ def rsync_from_cluster(
         ],
         check=True,
     )
+    if iteration != 0:
+        return
+
     baseline_dst = campaign_root / "baselines"
     probe = subprocess.run(
         ssh_command(sync_host, "bash", "-s", proxy_jump_host=proxy_jump_host),
@@ -201,7 +206,7 @@ def rsync_from_cluster(
                 f"{sync_host}:{cluster_root.rstrip('/')}/baselines/",
                 f"{baseline_dst}/",
             ],
-            check=False,
+            check=True,
         )
 
 
@@ -404,7 +409,7 @@ def main() -> None:
         result_json = json.dumps(result, sort_keys=True)
         score = result.get("score")
         total_t = sqlite_number(result.get("total_t_gates_qpe"))
-        total_error = result.get("total_error_bound_hartree")
+        total_error = result.get("ground_state_energy_error_hartree")
         conn.execute(
             """
             INSERT OR REPLACE INTO evaluations(

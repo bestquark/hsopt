@@ -5,6 +5,8 @@ description = "Locked runtime for the fixed HSOpt ten-reaction paper campaign"
 requires-python = ">=3.12,<3.13"
 dependencies = [
   "h5py==3.16.0",
+  "legate==25.11.0",
+  "nvidia-cupynumeric==25.11.0",
   "numpy==2.5.1",
   "pygridsynth==1.2.0",
   "scipy==1.18.0",

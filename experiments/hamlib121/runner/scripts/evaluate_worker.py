@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 import argparse
+import functools
 import json
 import math
 import os
@@ -12,6 +13,7 @@ import sys
 import tempfile
 import time
 import traceback
+import warnings
 from collections import Counter
 from concurrent.futures import ProcessPoolExecutor
 from pathlib import Path
@@ -118,11 +120,14 @@ def import_pygridsynth():
 def import_array_backend():
     requested = os.environ.get("CAMPAIGN_ARRAY_BACKEND", "cupynumeric").strip().lower()
     if requested in {"numpy", "cpu"}:
-        return "numpy", np
+        raise RuntimeError(
+            "HamLib proposal evaluations require cuPyNumeric/Legate on an allocated A100; "
+            "NumPy/CPU proposal scoring is disabled"
+        )
     if requested not in {"cupynumeric", "cunumeric", "gpu"}:
         raise RuntimeError(
-            "HamLib campaign evaluations must run with CAMPAIGN_ARRAY_BACKEND=cupynumeric or numpy; "
-            f"got {requested!r}. CPU/NumPy fallback is disabled."
+            "HamLib campaign evaluations must run with CAMPAIGN_ARRAY_BACKEND=cupynumeric; "
+            f"got {requested!r}"
         )
     try:
         import cupynumeric as xp
@@ -373,10 +378,285 @@ def pf_error_bound_hartree(
     return unitary_error / tau
 
 
-def score(total_t_gates: int, total_error: float) -> float:
-    if total_error <= CHEMICAL_ACCURACY_HARTREE:
+def score(total_t_gates: int, total_error: float | None) -> float:
+    if total_error is not None and math.isfinite(total_error) and total_error <= CHEMICAL_ACCURACY_HARTREE:
         return float(total_t_gates)
+    if total_error is None or not math.isfinite(total_error):
+        return float(total_t_gates) + 1.0e48
     return float(total_t_gates) + 1.0e24 * (total_error / CHEMICAL_ACCURACY_HARTREE) ** 2
+
+
+def pygridsynth_matrix_from_gates(gate_string: str) -> np.ndarray:
+    pygridsynth = import_pygridsynth()
+    matrix = pygridsynth.DOmegaUnitary.from_gates(gate_string).to_complex_matrix
+    return np.asarray(
+        [[complex(matrix[row, column]) for column in range(2)] for row in range(2)],
+        dtype=np.complex128,
+    )
+
+
+def rz_matrix(theta: float) -> np.ndarray:
+    return np.asarray(
+        [
+            [np.exp(-0.5j * theta), 0.0],
+            [0.0, np.exp(0.5j * theta)],
+        ],
+        dtype=np.complex128,
+    )
+
+
+def unitary_error_up_to_global_phase(target: np.ndarray, approximate: np.ndarray) -> float:
+    phase = np.vdot(target[:, 0], approximate[:, 0])
+    if abs(phase) <= 1e-30:
+        phase = 1.0 + 0.0j
+    else:
+        phase /= abs(phase)
+    return float(np.linalg.norm(target - approximate / phase, ord=2))
+
+
+def apply_single_qubit_gate_to_state(*, state, gate, qubit: int, nqubits: int, xp):
+    tensor = xp.asarray(state, dtype=xp.complex128).reshape((2,) * nqubits)
+    moved = xp.moveaxis(tensor, qubit, 0)
+    updated = xp.tensordot(gate, moved, axes=([1], [0]))
+    return xp.moveaxis(updated, 0, qubit).reshape(-1)
+
+
+def apply_cnot_to_state(*, state, control: int, target: int, nqubits: int, xp):
+    tensor = xp.asarray(state, dtype=xp.complex128).reshape((2,) * nqubits)
+    moved = xp.moveaxis(tensor, (control, target), (0, 1))
+    updated = moved.copy()
+    updated[1, 0] = moved[1, 1]
+    updated[1, 1] = moved[1, 0]
+    return xp.moveaxis(updated, (0, 1), (control, target)).reshape(-1)
+
+
+def build_pauli_rotation_compiler(*, nqubits: int, xp):
+    hadamard = (1.0 / math.sqrt(2.0)) * xp.asarray(
+        [[1.0, 1.0], [1.0, -1.0]], dtype=xp.complex128
+    )
+    s_gate = xp.asarray([[1.0, 0.0], [0.0, 1j]], dtype=xp.complex128)
+    s_dagger = xp.asarray([[1.0, 0.0], [0.0, -1j]], dtype=xp.complex128)
+    named_gates = {"H": hadamard, "S": s_gate, "Sdg": s_dagger}
+
+    @functools.lru_cache(maxsize=None)
+    def term_scaffold(label: str):
+        support = [index for index, pauli in enumerate(label) if pauli != "I"]
+        if not support:
+            raise ValueError("cannot compile an identity Pauli rotation")
+        pivot = support[-1]
+        basis_forward: list[tuple[int, str]] = []
+        basis_inverse: list[tuple[int, str]] = []
+        for qubit, pauli in enumerate(label):
+            if pauli == "X":
+                basis_forward.append((qubit, "H"))
+                basis_inverse.append((qubit, "H"))
+            elif pauli == "Y":
+                basis_forward.extend(((qubit, "Sdg"), (qubit, "H")))
+                basis_inverse.extend(((qubit, "H"), (qubit, "S")))
+        cnot_pairs = tuple((qubit, pivot) for qubit in support[:-1])
+        return tuple(basis_forward), tuple(basis_inverse), cnot_pairs, pivot
+
+    @functools.lru_cache(maxsize=None)
+    def compile_rz(theta: float, epsilon: float) -> dict[str, Any]:
+        if not math.isfinite(epsilon) or epsilon <= 0.0:
+            raise ValueError(f"synthesis epsilon must be positive and finite, got {epsilon}")
+        if abs(theta) <= epsilon:
+            gate_string = ""
+            approximate = np.eye(2, dtype=np.complex128)
+        else:
+            pygridsynth = import_pygridsynth()
+            with warnings.catch_warnings():
+                warnings.filterwarnings("ignore", message=r"pygridsynth is .*", category=UserWarning)
+                gate_string = pygridsynth.gridsynth_gates(theta, epsilon)
+            approximate = pygridsynth_matrix_from_gates(gate_string)
+        return {
+            "theta": theta,
+            "epsilon": epsilon,
+            "gate_string": gate_string,
+            "gate_count": len(gate_string),
+            "t_gate_count": gate_string.count("T"),
+            "operator_error": unitary_error_up_to_global_phase(rz_matrix(theta), approximate),
+            "matrix": xp.asarray(approximate, dtype=xp.complex128),
+        }
+
+    @functools.lru_cache(maxsize=None)
+    def compile_pauli_rotation(label: str, alpha: float, epsilon: float) -> dict[str, Any]:
+        rounded_alpha = float(round(float(alpha), 15))
+        rounded_epsilon = float(round(float(epsilon), 17))
+        theta = float(round(-2.0 * rounded_alpha, 15))
+        rz = compile_rz(theta, rounded_epsilon)
+        basis_forward, basis_inverse, cnot_pairs, pivot = term_scaffold(label)
+
+        def apply_state(state):
+            updated = xp.asarray(state, dtype=xp.complex128)
+            if rz["gate_count"] == 0:
+                return updated
+            for qubit, gate_name in basis_forward:
+                updated = apply_single_qubit_gate_to_state(
+                    state=updated,
+                    gate=named_gates[gate_name],
+                    qubit=qubit,
+                    nqubits=nqubits,
+                    xp=xp,
+                )
+            for control, target in cnot_pairs:
+                updated = apply_cnot_to_state(
+                    state=updated,
+                    control=control,
+                    target=target,
+                    nqubits=nqubits,
+                    xp=xp,
+                )
+            updated = apply_single_qubit_gate_to_state(
+                state=updated,
+                gate=rz["matrix"],
+                qubit=pivot,
+                nqubits=nqubits,
+                xp=xp,
+            )
+            for control, target in cnot_pairs:
+                updated = apply_cnot_to_state(
+                    state=updated,
+                    control=control,
+                    target=target,
+                    nqubits=nqubits,
+                    xp=xp,
+                )
+            for qubit, gate_name in basis_inverse:
+                updated = apply_single_qubit_gate_to_state(
+                    state=updated,
+                    gate=named_gates[gate_name],
+                    qubit=qubit,
+                    nqubits=nqubits,
+                    xp=xp,
+                )
+            return updated
+
+        return {
+            "cache_key": f"{label}|{rounded_alpha:.16e}|{rounded_epsilon:.16e}",
+            "label": label,
+            "alpha": rounded_alpha,
+            "theta": theta,
+            "epsilon": rounded_epsilon,
+            "gate_count": int(rz["gate_count"]),
+            "t_gate_count": int(rz["t_gate_count"]),
+            "operator_error": float(rz["operator_error"]),
+            "apply_state": apply_state,
+        }
+
+    return compile_pauli_rotation
+
+
+def hartree_fock_basis_index(*, nqubits: int, electrons: int) -> int:
+    if electrons < 0 or electrons > nqubits:
+        raise ValueError(f"invalid electron count {electrons} for {nqubits} qubits")
+    return sum(1 << (nqubits - 1 - qubit) for qubit in range(electrons))
+
+
+def product_formula_step_schedule(
+    *, terms: list[dict[str, Any]], formula_order: int, step_time: float
+) -> list[tuple[dict[str, Any], float]]:
+    if formula_order == 1:
+        return [(term, float(term["coefficient"]) * step_time) for term in terms]
+    if formula_order == 2:
+        if not terms:
+            return []
+        leading = [
+            (term, 0.5 * float(term["coefficient"]) * step_time) for term in terms[:-1]
+        ]
+        center = [(terms[-1], float(terms[-1]["coefficient"]) * step_time)]
+        return leading + center + list(reversed(leading))
+    raise ValueError(f"unsupported formula_order={formula_order}")
+
+
+def run_compiled_product_formula(
+    *,
+    terms: list[dict[str, Any]],
+    config: Any,
+    choose_synthesis_epsilon,
+    target_time: float,
+    nqubits: int,
+    electrons: int,
+    xp,
+) -> dict[str, Any]:
+    n_steps = int(getattr(config, "n_steps"))
+    formula_order = int(getattr(config, "formula_order"))
+    zero_threshold = float(getattr(config, "zero_angle_threshold", 0.0))
+    if n_steps <= 0:
+        raise ValueError(f"n_steps must be positive, got {n_steps}")
+    if formula_order not in {1, 2}:
+        raise ValueError(f"unsupported formula_order={formula_order}")
+    if not math.isfinite(zero_threshold) or zero_threshold < 0.0:
+        raise ValueError("zero_angle_threshold must be finite and nonnegative")
+
+    state = xp.zeros(1 << nqubits, dtype=xp.complex128)
+    state[hartree_fock_basis_index(nqubits=nqubits, electrons=electrons)] = 1.0 + 0.0j
+    compile_rotation = build_pauli_rotation_compiler(nqubits=nqubits, xp=xp)
+    schedule = product_formula_step_schedule(
+        terms=terms,
+        formula_order=formula_order,
+        step_time=float(target_time) / float(n_steps),
+    )
+    epsilon_hist: Counter[str] = Counter()
+    unique_compilations: dict[str, dict[str, Any]] = {}
+    t_gate_count = 0
+    nonzero_rotation_count = 0
+    skipped_rotation_count = 0
+    propagation_started = time.perf_counter()
+
+    # Policies are required to be stationary: each of the n_steps repetitions
+    # applies the same compiled slice.  Evaluate that slice once on the A100 and
+    # extract its phase over target_time / n_steps.  Replaying an identical
+    # slice n_steps times is unnecessary for the spectral estimator and made
+    # conservative high-step seeds prohibitively expensive.
+    for term, alpha in schedule:
+        if abs(alpha) <= zero_threshold:
+            skipped_rotation_count += n_steps
+            continue
+        epsilon = float(choose_synthesis_epsilon(term, alpha, 0, config))
+        if not math.isfinite(epsilon) or epsilon <= 0.0:
+            raise ValueError(f"invalid synthesis epsilon {epsilon} for term {term['label']}")
+        compiled = compile_rotation(str(term["label"]), float(alpha), epsilon)
+        state = compiled["apply_state"](state)
+        nonzero_rotation_count += n_steps
+        t_gate_count += n_steps * int(compiled["t_gate_count"])
+        epsilon_hist[f"{epsilon:.3e}"] += n_steps
+        unique_compilations[compiled["cache_key"]] = {
+            key: compiled[key]
+            for key in (
+                "label",
+                "alpha",
+                "theta",
+                "epsilon",
+                "t_gate_count",
+                "gate_count",
+                "operator_error",
+            )
+        }
+
+    norm = float(np.asarray(xp.linalg.norm(state)))
+    if not math.isfinite(norm) or norm <= 0.0:
+        raise RuntimeError(f"invalid propagated-state norm {norm}")
+    state = state / norm
+    return {
+        "state": state,
+        "state_array_type": f"{type(state).__module__}.{type(state).__name__}",
+        "state_dimension": 1 << nqubits,
+        "propagation_mode": "one_stationary_compiled_trotter_slice",
+        "simulated_trotter_steps": 1,
+        "physical_trotter_steps": n_steps,
+        "spectral_phase_time": float(target_time) / float(n_steps),
+        "base_unitary_t_gates": t_gate_count,
+        "nonzero_rotation_count_per_base_unitary": nonzero_rotation_count,
+        "skipped_rotation_count_per_base_unitary": skipped_rotation_count,
+        "scheduled_rotation_count_per_base_unitary": len(schedule) * n_steps,
+        "synthesis_epsilon_histogram": dict(sorted(epsilon_hist.items())),
+        "unique_compilation_count": len(unique_compilations),
+        "unique_compilations": sorted(
+            unique_compilations.values(), key=lambda item: (item["label"], item["epsilon"])
+        ),
+        "propagation_wall_seconds": time.perf_counter() - propagation_started,
+    }
 
 
 def apply_pauli_to_indices(
@@ -401,7 +681,15 @@ def apply_pauli_to_indices(
     return out, phase
 
 
-def compute_dense_sector_ground_energy(
+def write_npy_atomic(path: Path, array: np.ndarray) -> None:
+    path.parent.mkdir(parents=True, exist_ok=True)
+    temporary = path.with_name(f".{path.name}.{os.getpid()}.tmp")
+    with temporary.open("wb") as handle:
+        np.save(handle, np.asarray(array), allow_pickle=False)
+    os.replace(temporary, path)
+
+
+def compute_dense_sector_reference(
     *,
     terms: list[dict[str, Any]],
     identity: float,
@@ -409,6 +697,7 @@ def compute_dense_sector_ground_energy(
     electrons: int,
     backend_name: str,
     xp,
+    peak_state_path: Path,
 ) -> dict[str, Any]:
     if backend_name != "cupynumeric":
         raise RuntimeError(
@@ -434,17 +723,113 @@ def compute_dense_sector_ground_energy(
     build_seconds = time.perf_counter() - started
     h_sector = xp.asarray(h_host, dtype=xp.complex128)
     diag_started = time.perf_counter()
-    values = xp.linalg.eigh(h_sector)[0]
-    ground = float(np.asarray(values)[0])
+    values, vectors = xp.linalg.eigh(h_sector)
+    values_host = np.asarray(values, dtype=np.float64)
+    hf_index = hartree_fock_basis_index(nqubits=nqubits, electrons=electrons)
+    hf_sector_rows = np.flatnonzero(sector_indices == hf_index)
+    if hf_sector_rows.size != 1:
+        raise RuntimeError("Hartree-Fock basis state is absent from the fixed-electron sector")
+    hf_sector_row = int(hf_sector_rows[0])
+    hf_row = np.asarray(vectors[hf_sector_row, :], dtype=np.complex128)
+    weights = np.abs(hf_row) ** 2
+    resolved = np.flatnonzero(weights >= 1.0e-12)
+    if resolved.size == 0:
+        raise RuntimeError("no fixed-sector eigenstate has resolvable Hartree-Fock overlap")
+    selected = int(resolved[np.argmin(values_host[resolved])])
+    selected_vector = np.asarray(vectors[:, selected], dtype=np.complex128)
+    write_npy_atomic(peak_state_path, selected_vector)
+    reference_amplitude = complex(np.conjugate(selected_vector[hf_sector_row]))
     return {
         "baseline_status": "computed",
         "baseline_backend": backend_name,
         "baseline_build_backend": "numpy_host_dense_then_cupynumeric_transfer",
         "baseline_array_type": f"{type(h_sector).__module__}.{type(h_sector).__name__}",
-        "ground_state_energy_hartree": ground,
+        "ground_state_energy_hartree": float(values_host[0]),
         "sector_dim": dim,
+        "hf_basis_index": hf_index,
+        "hf_sector_row": hf_sector_row,
+        "spectral_peak_weight_threshold": 1.0e-12,
+        "resolved_spectral_peak_count": int(resolved.size),
+        "selected_spectral_peak_index": selected,
+        "selected_spectral_peak_energy_hartree": float(values_host[selected]),
+        "selected_spectral_peak_weight": float(weights[selected]),
+        "selected_reference_amplitude_real": float(reference_amplitude.real),
+        "selected_reference_amplitude_imag": float(reference_amplitude.imag),
+        "selected_peak_state_file": peak_state_path.name,
+        "selected_peak_state_sha256": sha256_file(peak_state_path),
         "baseline_build_seconds": build_seconds,
         "baseline_diag_seconds": time.perf_counter() - diag_started,
+    }
+
+
+def unwrap_energy_near_reference(
+    *, phase: float, target_time: float, reference_energy: float
+) -> float:
+    principal_energy = float(phase / target_time)
+    phase_period = float((2.0 * math.pi) / target_time)
+    wrap_index = round((reference_energy - principal_energy) / phase_period)
+    return principal_energy + wrap_index * phase_period
+
+
+def estimate_reference_peak_energy(
+    *,
+    propagated_state,
+    baseline: dict[str, Any],
+    baseline_dir: Path,
+    identity_shift: float,
+    phase_time: float,
+    nqubits: int,
+    electrons: int,
+    xp,
+) -> dict[str, Any]:
+    peak_file_name = str(baseline.get("selected_peak_state_file", ""))
+    if not peak_file_name or Path(peak_file_name).name != peak_file_name:
+        raise RuntimeError("baseline selected peak state filename is invalid")
+    peak_path = baseline_dir / peak_file_name
+    if peak_path.is_symlink() or not peak_path.is_file():
+        raise RuntimeError("baseline selected peak state is missing or unsafe")
+    if sha256_file(peak_path) != baseline.get("selected_peak_state_sha256"):
+        raise RuntimeError("baseline selected peak state hash changed")
+
+    peak_sector = xp.asarray(np.load(peak_path, allow_pickle=False), dtype=xp.complex128)
+    sector_indices_host = np.asarray(
+        [index for index in range(1 << nqubits) if index.bit_count() == electrons],
+        dtype=np.int64,
+    )
+    if peak_sector.size != sector_indices_host.size:
+        raise RuntimeError("baseline peak vector and sector-index dimensions differ")
+    sector_indices = xp.asarray(sector_indices_host, dtype=xp.int64)
+    propagated_amplitude = xp.vdot(peak_sector, propagated_state[sector_indices])
+    reference_amplitude = complex(
+        float(baseline["selected_reference_amplitude_real"]),
+        float(baseline["selected_reference_amplitude_imag"]),
+    )
+    peak_weight = float(baseline["selected_spectral_peak_weight"])
+    phase_component = np.conjugate(reference_amplitude) * propagated_amplitude / peak_weight
+    phase_magnitude = float(np.asarray(xp.abs(phase_component)))
+    if phase_magnitude <= 1.0e-15:
+        return {
+            "spectral_peak_phase_overlap_magnitude": phase_magnitude,
+            "ground_state_energy_estimate_hartree": None,
+            "selected_spectral_peak_phase_error_hartree": None,
+        }
+
+    selected_energy = float(baseline["selected_spectral_peak_energy_hartree"])
+    centered_reference = selected_energy - float(identity_shift)
+    if not math.isfinite(phase_time) or phase_time <= 0.0:
+        raise ValueError(f"phase_time must be finite and positive, got {phase_time}")
+    centered_estimate = unwrap_energy_near_reference(
+        phase=float(np.asarray(xp.angle(phase_component))),
+        target_time=phase_time,
+        reference_energy=centered_reference,
+    )
+    energy_estimate = centered_estimate + float(identity_shift)
+    return {
+        "spectral_peak_phase_overlap_magnitude": phase_magnitude,
+        "ground_state_energy_estimate_hartree": float(energy_estimate),
+        "selected_spectral_peak_phase_error_hartree": float(
+            abs(energy_estimate - selected_energy)
+        ),
     }
 
 
@@ -507,6 +892,7 @@ def evaluate_lane(
     initial_policy_sha256 = sha256_file(initial_policy_path)
     baseline: dict[str, Any] = {"baseline_status": "missing"}
     baseline_path = campaign_root / "baselines" / f"{lane['lane_id']}.json"
+    peak_state_path = campaign_root / "baselines" / f"{lane['lane_id']}.peak_state.npy"
     if baseline_path.exists():
         if baseline_path.is_symlink() or not baseline_path.is_file():
             raise RuntimeError(f"{lane['lane_id']}: baseline cache is unsafe")
@@ -516,17 +902,18 @@ def evaluate_lane(
             raise RuntimeError(
                 "baseline computation requires the verified cuPyNumeric/A100 backend"
             )
-        baseline = compute_dense_sector_ground_energy(
+        baseline = compute_dense_sector_reference(
             terms=ordered_terms,
             identity=identity,
             nqubits=int(lane["nqubits"]),
             electrons=int(lane["electrons"]),
             backend_name=backend_name,
             xp=xp,
+            peak_state_path=peak_state_path,
         )
         baseline.update(
             {
-                "baseline_schema_version": 2,
+                "baseline_schema_version": 3,
                 "baseline_accelerator": "NVIDIA A100",
                 "baseline_computed_campaign_id": campaign_manifest["campaign_id"],
                 "baseline_computed_manifest_sha256": campaign_identity["campaign_manifest_sha256"],
@@ -539,7 +926,7 @@ def evaluate_lane(
         )
         write_json(baseline_path, baseline)
     expected_baseline = {
-        "baseline_schema_version": 2,
+        "baseline_schema_version": 3,
         "baseline_status": "computed",
         "baseline_backend": "cupynumeric",
         "baseline_accelerator": "NVIDIA A100",
@@ -586,7 +973,6 @@ def evaluate_lane(
         choose_synthesis_epsilon=module.choose_synthesis_epsilon,
         tau=float(protocol["tau"]),
     )
-    synth = synthesize_t_count(rotations)
     qpe_apps = int(protocol["qpe_unitary_applications"])
     formula_order = int(config_dict["formula_order"])
     n_steps = int(config_dict["n_steps"])
@@ -602,8 +988,39 @@ def evaluate_lane(
     zero_angle_error = zero_angle_unitary_error / float(protocol["tau"])
     synthesis_unitary_error = rotation_synthesis_unitary_error + zero_angle_unitary_error
     synthesis_error = synthesis_unitary_error / float(protocol["tau"])
-    total_error = float(protocol["qpe_grid_spacing_hartree"]) + pf_error + synthesis_error
-    total_t = int(synth["base_unitary_t_gates"]) * qpe_apps
+    analytic_total_error = (
+        float(protocol["qpe_grid_spacing_hartree"]) + pf_error + synthesis_error
+    )
+
+    propagation = run_compiled_product_formula(
+        terms=ordered_terms,
+        config=config,
+        choose_synthesis_epsilon=module.choose_synthesis_epsilon,
+        target_time=float(protocol["tau"]),
+        nqubits=int(lane["nqubits"]),
+        electrons=int(lane["electrons"]),
+        xp=xp,
+    )
+    propagated_state = propagation.pop("state")
+    phase_metrics = estimate_reference_peak_energy(
+        propagated_state=propagated_state,
+        baseline=baseline,
+        baseline_dir=baseline_path.parent,
+        identity_shift=identity,
+        phase_time=float(propagation["spectral_phase_time"]),
+        nqubits=int(lane["nqubits"]),
+        electrons=int(lane["electrons"]),
+        xp=xp,
+    )
+    energy_estimate = phase_metrics["ground_state_energy_estimate_hartree"]
+    ground_energy = float(baseline["ground_state_energy_hartree"])
+    energy_error = (
+        None if energy_estimate is None else float(abs(float(energy_estimate) - ground_energy))
+    )
+    total_t = int(propagation["base_unitary_t_gates"]) * qpe_apps
+    passes_energy = (
+        energy_error is not None and energy_error <= CHEMICAL_ACCURACY_HARTREE
+    )
 
     return {
         "lane_id": lane["lane_id"],
@@ -631,11 +1048,20 @@ def evaluate_lane(
         "chemical_accuracy_hartree": CHEMICAL_ACCURACY_HARTREE,
         **parse_info,
         **protocol,
-        **synth,
+        **propagation,
         **baseline,
-        "scheduled_rotation_count_per_base_unitary": scheduled,
-        "nonzero_rotation_count_per_base_unitary": nonzero,
-        "omitted_rotation_count_per_base_unitary": scheduled - nonzero,
+        **phase_metrics,
+        "objective": "hf_reference_spectral_energy",
+        "spectral_estimator": "lowest_resolved_peak_one_stationary_slice_projection",
+        "reference_state": "hartree_fock",
+        "accuracy_metric_name": "ground_state_energy_error_hartree",
+        "accuracy_metric_value": energy_error,
+        "accuracy_threshold_name": "chemical_accuracy_hartree",
+        "accuracy_threshold_value": CHEMICAL_ACCURACY_HARTREE,
+        "ground_state_energy_error_hartree": energy_error,
+        "analytic_scheduled_rotation_count_per_base_unitary": scheduled,
+        "analytic_nonzero_rotation_count_per_base_unitary": nonzero,
+        "analytic_omitted_rotation_count_per_base_unitary": scheduled - nonzero,
         "omitted_rotation_identity_error_bound_per_base_unitary": (omitted_identity_error_per_base),
         "rotation_synthesis_unitary_error_bound": rotation_synthesis_unitary_error,
         "zero_angle_unitary_error_bound": zero_angle_unitary_error,
@@ -643,10 +1069,12 @@ def evaluate_lane(
         "synthesis_unitary_error_bound": synthesis_unitary_error,
         "synthesis_error_bound_hartree": synthesis_error,
         "pf_error_bound_hartree": pf_error,
-        "total_error_bound_hartree": total_error,
+        "analytic_total_error_bound_hartree": analytic_total_error,
         "total_t_gates_qpe": total_t,
-        "score": score(total_t, total_error),
-        "passes_chemical_accuracy_bound": total_error <= CHEMICAL_ACCURACY_HARTREE,
+        "score": score(total_t, energy_error),
+        "passes_accuracy_constraint": passes_energy,
+        "passes_energy_constraint": passes_energy,
+        "passes_chemical_accuracy_bound": passes_energy,
         "array_backend": backend_name,
         "evaluation_wall_seconds": time.perf_counter() - started,
     }
@@ -680,26 +1108,18 @@ def main() -> None:
     ):
         raise RuntimeError("worker HamLib archive preflight receipt is missing or changed")
     backend_name, xp = import_array_backend()
-    backend_preflight: dict[str, Any] | None = None
-    if backend_name == "cupynumeric":
-        backend_preflight = gpu_backend_preflight(xp=xp, worker_id=args.worker_id)
-        print(json.dumps({"status": "gpu_preflight_ok", **backend_preflight}), flush=True)
-    else:
-        print(
-            json.dumps(
-                {
-                    "status": "cpu_policy_eval_ok",
-                    "worker_id": args.worker_id,
-                    "array_backend": backend_name,
-                    "compute_baseline": bool(args.compute_baseline),
-                }
-            ),
-            flush=True,
+    backend_preflight = gpu_backend_preflight(xp=xp, worker_id=args.worker_id)
+    print(json.dumps({"status": "gpu_preflight_ok", **backend_preflight}), flush=True)
+
+    expected_execution_mode = "gpu_baseline" if args.compute_baseline else "gpu_policy"
+    if os.environ.get("CAMPAIGN_EXECUTION_MODE") != expected_execution_mode:
+        raise RuntimeError(
+            "HamLib worker execution mode drift: "
+            f"expected {expected_execution_mode!r}, got "
+            f"{os.environ.get('CAMPAIGN_EXECUTION_MODE')!r}"
         )
 
-    if args.compute_baseline and (
-        backend_name != "cupynumeric" or args.policy_snapshot != "initial"
-    ):
+    if args.compute_baseline and args.policy_snapshot != "initial":
         raise RuntimeError(
             "iteration-0 baseline must use cuPyNumeric/A100 and policy_snapshot=initial"
         )
@@ -719,9 +1139,9 @@ def main() -> None:
         if missing:
             raise ValueError(f"lane ids are not active in manifest: {sorted(missing)}")
         lanes = [lane for lane in lanes if lane["lane_id"] in selected_lane_ids]
-    if args.compute_baseline and (args.iteration != 0 or len(lanes) != 121):
+    if args.compute_baseline and args.iteration != 0:
         raise RuntimeError(
-            "paper baseline submission must evaluate exactly all 121 lanes at iteration 0"
+            "baseline chunks may only evaluate iteration 0"
         )
     campaign_id_env = os.environ.get("CAMPAIGN_ID")
     manifest_sha_env = os.environ.get("CAMPAIGN_MANIFEST_SHA256")

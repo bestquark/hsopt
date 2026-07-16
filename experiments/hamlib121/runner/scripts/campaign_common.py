@@ -85,7 +85,7 @@ RUNNER_SCRIPT_FILES = (
     "supervise_streaming_batches.py",
     "verify_hamlib_archives.py",
 )
-RUNNER_SLURM_FILES = ("evaluate_batch.sbatch", "evaluate_batch_cpu.sbatch")
+RUNNER_SLURM_FILES = ("evaluate_batch.sbatch",)
 TOKEN_RE = re.compile(r"([XYZ])(\d+)")
 ALLOWED_TERM_ORDER_STRATEGIES = {
     "input",
@@ -1375,7 +1375,7 @@ def validate_evaluation_result_provenance(
         if result.get(key) != baseline.get(key):
             raise RuntimeError(f"{lane_id}/iter {iteration}: result/baseline cache {key} drift")
     if (
-        baseline.get("baseline_schema_version") != 2
+        baseline.get("baseline_schema_version") != 3
         or baseline.get("baseline_status") != "computed"
         or baseline.get("baseline_backend") != "cupynumeric"
         or baseline.get("baseline_accelerator") != "NVIDIA A100"
@@ -1399,6 +1399,25 @@ def validate_evaluation_result_provenance(
         )
     ):
         raise RuntimeError(f"{lane_id}/iter {iteration}: baseline is not verified A100 evidence")
+    peak_file_name = str(baseline.get("selected_peak_state_file", ""))
+    peak_path = baseline_path.parent / peak_file_name
+    if (
+        not peak_file_name
+        or Path(peak_file_name).name != peak_file_name
+        or peak_path.is_symlink()
+        or not peak_path.is_file()
+        or sha256_file(peak_path) != baseline.get("selected_peak_state_sha256")
+    ):
+        raise RuntimeError(f"{lane_id}/iter {iteration}: baseline peak-state cache drift")
+    if (
+        result.get("objective") != "hf_reference_spectral_energy"
+        or result.get("array_backend") != "cupynumeric"
+        or result.get("accuracy_metric_name") != "ground_state_energy_error_hartree"
+        or "ground_state_energy_estimate_hartree" not in result
+        or "ground_state_energy_error_hartree" not in result
+    ):
+        raise RuntimeError(f"{lane_id}/iter {iteration}: measured GPU energy contract is missing")
+
     execution = result.get("execution_configuration")
     if not isinstance(execution, dict) or execution.get("schema_version") != 1:
         raise RuntimeError(f"{lane_id}/iter {iteration}: execution configuration is missing")
@@ -1424,7 +1443,7 @@ def validate_evaluation_result_provenance(
     expected_execution = (
         ("gpu_baseline", "cupynumeric", True, "initial")
         if iteration == 0
-        else ("cpu_policy", "numpy", False, "current")
+        else ("gpu_policy", "cupynumeric", False, "current")
     )
     actual_execution = (
         execution.get("execution_mode"),
@@ -1779,7 +1798,7 @@ def policy_template(lane: Lane) -> str:
 Mutators should edit only this file. The evaluator supplies Hamiltonian-derived
 term metadata to choose_synthesis_epsilon: label, coefficient, support_size,
 x_count, y_count, and z_count. Keep choose_synthesis_epsilon independent of
-step_index so the scaled evaluator can aggregate repeated QPE rotations.
+step_index so repeated rotations use one deterministic compiled policy decision.
 
 Standard initial policy:
 - Reiher-style equal split of chemical accuracy into QPE, product-formula, and
@@ -1791,7 +1810,8 @@ Standard initial policy:
 - uniform synthesis epsilon chosen so qpe_apps * sum(epsilon_j) / tau spends
   the synthesis error budget.
 
-This is a conservative standard baseline. The optimizer may improve it by
+These analytic bounds initialize the policy, but acceptance uses the measured
+HF-reference spectral energy from A100 propagation. The optimizer may improve it by
 redistributing synthesis precision, changing term order, or finding a cheaper
 accuracy-passing product-formula schedule.
 """
@@ -1862,7 +1882,7 @@ def choose_synthesis_epsilon(
     step_index: int,
     config: ProductFormulaConfig,
 ) -> float:
-    _ = (term, alpha, step_index)
+    _ = (term, alpha)
     return float(config.uniform_epsilon)
 
 
@@ -1960,6 +1980,23 @@ def validate_policy_ast(source: str, *, filename: str) -> ast.Module:
                         raise ValueError(
                             "policy range literal exceeds the deterministic work limit"
                         )
+
+    synthesis_functions = [
+        node
+        for node in tree.body
+        if isinstance(node, ast.FunctionDef) and node.name == "choose_synthesis_epsilon"
+    ]
+    if len(synthesis_functions) == 1:
+        synthesis_function = synthesis_functions[0]
+        if any(
+            isinstance(node, ast.Name)
+            and node.id == "step_index"
+            and isinstance(node.ctx, ast.Load)
+            for node in ast.walk(synthesis_function)
+        ):
+            raise ValueError(
+                "choose_synthesis_epsilon must be stationary and cannot read step_index"
+            )
     return tree
 
 

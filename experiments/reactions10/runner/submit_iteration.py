@@ -539,6 +539,8 @@ def _remote_submission_command(
             f"--job-name={shlex.quote(job_name)}",
             f"--account={shlex.quote(account)}",
             f"--partition={shlex.quote(partition)}",
+            "--nodes=1",
+            "--gres=gpu:1",
             f"--cpus-per-task={cpus_per_task}",
             f"--mem={shlex.quote(memory)}",
             f"--time={shlex.quote(time_limit)}",
@@ -589,7 +591,7 @@ def main() -> None:
     )
     parser.add_argument("--account")
     parser.add_argument("--partition")
-    parser.add_argument("--workers", type=int, default=2)
+    parser.add_argument("--workers", type=int, default=1)
     parser.add_argument("--cpus-per-task", type=int, default=16)
     parser.add_argument("--memory", default="64G")
     parser.add_argument("--time-limit", default="04:00:00")
@@ -614,6 +616,8 @@ def main() -> None:
         parser.error("required execution provenance: " + ", ".join(missing))
     if min(args.workers, args.cpus_per_task, args.command_attempts) <= 0:
         parser.error("workers, cpus-per-task, and command-attempts must be positive")
+    if args.workers != 1:
+        parser.error("one-A100 reaction jobs require --workers 1")
     try:
         sync_host = validate_ssh_host(str(args.sync_host), "--sync-host")
         submit_host = validate_ssh_host(str(args.submit_host), "--submit-host")

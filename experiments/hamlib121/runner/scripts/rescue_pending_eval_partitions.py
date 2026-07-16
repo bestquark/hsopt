@@ -188,7 +188,7 @@ def main() -> None:
         "--proxy-jump-host",
         help="Optional SSH config alias used as ProxyJump for the query host.",
     )
-    parser.add_argument("--primary-partition", default=os.environ.get("HSOPT_CPU_PARTITION"))
+    parser.add_argument("--primary-partition", default=os.environ.get("HSOPT_GPU_PARTITION"))
     parser.add_argument(
         "--fallback-partition",
         default=os.environ.get("HSOPT_FALLBACK_PARTITION"),
@@ -225,7 +225,7 @@ def main() -> None:
         label
         for label, value in (
             ("--query-host or HSOPT_QUERY_HOST", args.query_host),
-            ("--primary-partition or HSOPT_CPU_PARTITION", args.primary_partition),
+            ("--primary-partition or HSOPT_GPU_PARTITION", args.primary_partition),
             (
                 "--fallback-partition or HSOPT_FALLBACK_PARTITION",
                 args.fallback_partition,

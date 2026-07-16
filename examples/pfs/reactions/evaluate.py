@@ -19,7 +19,7 @@ import time
 from dataclasses import asdict, is_dataclass
 from pathlib import Path
 from types import ModuleType
-from typing import Mapping, Sequence
+from typing import Any, Mapping, Sequence
 
 import numpy as np
 
@@ -42,6 +42,21 @@ HARTREE_PER_KCAL_PER_MOL = 1.0 / 627.5094740631
 REACTION_TARGET_HARTREE = HARTREE_PER_KCAL_PER_MOL
 REACTION_TARGET_MHA = 1000.0 * REACTION_TARGET_HARTREE
 SPECTRAL_PEAK_WEIGHT_THRESHOLD = 1.0e-10
+
+
+def array_backend() -> tuple[str, Any]:
+    requested = os.environ.get("CAMPAIGN_ARRAY_BACKEND", "numpy").strip().lower()
+    if requested in {"numpy", "cpu"}:
+        return "numpy", np
+    if requested not in {"cupynumeric", "cunumeric", "gpu"}:
+        raise ValueError(f"unsupported CAMPAIGN_ARRAY_BACKEND={requested!r}")
+    try:
+        import cupynumeric as xp
+    except Exception as exc:
+        raise RuntimeError(
+            "cuPyNumeric reaction evaluation was requested but could not be imported"
+        ) from exc
+    return "cupynumeric", xp
 
 
 def _cache_paths(spec: MoleculeSpec, cache_root: Path) -> tuple[Path, Path]:
@@ -465,11 +480,12 @@ def _pauli_left_action(label: str) -> tuple[np.ndarray, np.ndarray]:
 
 
 def _apply_compiled_rotation_to_unitary(
-    unitary: np.ndarray,
+    unitary: Any,
     *,
     label: str,
     single_qubit_unitary: np.ndarray,
-    action_cache: dict[str, tuple[np.ndarray, np.ndarray]],
+    action_cache: dict[str, tuple[Any, Any]],
+    xp: Any,
 ) -> None:
     decomposition = {
         pauli: complex(0.5 * np.trace(matrix.conj().T @ single_qubit_unitary))
@@ -486,10 +502,14 @@ def _apply_compiled_rotation_to_unitary(
         )
         action = action_cache.get(transformed_label)
         if action is None:
-            action = _pauli_left_action(transformed_label)
+            destination_host, phase_host = _pauli_left_action(transformed_label)
+            action = (
+                xp.asarray(destination_host, dtype=xp.int64),
+                xp.asarray(phase_host, dtype=xp.complex128),
+            )
             action_cache[transformed_label] = action
         destination, pauli_phase = action
-        pauli_unitary = np.empty_like(unitary)
+        pauli_unitary = xp.empty_like(unitary)
         pauli_unitary[destination, :] = pauli_phase[:, None] * unitary
         updated += coefficient * scaffold_phase * pauli_unitary
     unitary[:] = updated
@@ -540,7 +560,10 @@ def _build_compiled_one_step_unitary(
     problem: Mapping[str, object],
     policy: ModuleType,
     config: object,
-) -> tuple[np.ndarray, dict[str, object]]:
+    *,
+    backend_name: str = "numpy",
+    xp: Any = np,
+) -> tuple[Any, dict[str, object]]:
     """Compile and apply one stationary PF step in the full Hilbert space."""
 
     formula_order = int(getattr(config, "formula_order"))
@@ -568,10 +591,10 @@ def _build_compiled_one_step_unitary(
         raise ValueError("compiled evaluation requires a PyGridSynth compiler")
 
     _gridsynth_gates, d_omega_unitary_cls = import_pygridsynth_backend()
-    matrix_cache: dict[str, np.ndarray] = {}
-    action_cache: dict[str, tuple[np.ndarray, np.ndarray]] = {}
+    matrix_cache: dict[str, Any] = {}
+    action_cache: dict[str, tuple[Any, Any]] = {}
     dim = 1 << int(problem["n_qubits"])
-    unitary = np.eye(dim, dtype=np.complex128)
+    unitary = xp.eye(dim, dtype=xp.complex128)
     one_step_t_gate_count = 0
     one_step_nonzero = 0
     one_step_skipped = 0
@@ -621,9 +644,9 @@ def _build_compiled_one_step_unitary(
         gate_string = str(compiled["gate_string"])
         single_qubit_unitary = matrix_cache.get(gate_string)
         if single_qubit_unitary is None:
-            single_qubit_unitary = np.asarray(
+            single_qubit_unitary = xp.asarray(
                 pygridsynth_matrix_from_gates(gate_string, d_omega_unitary_cls),
-                dtype=np.complex128,
+                dtype=xp.complex128,
             )
             matrix_cache[gate_string] = single_qubit_unitary
         _apply_compiled_rotation_to_unitary(
@@ -631,6 +654,7 @@ def _build_compiled_one_step_unitary(
             label=str(term["label"]),
             single_qubit_unitary=single_qubit_unitary,
             action_cache=action_cache,
+            xp=xp,
         )
 
         one_step_t_gate_count += int(compiled["t_gate_count"])
@@ -679,6 +703,8 @@ def _build_compiled_one_step_unitary(
         ),
         "phase_matching": "maximum_ground_state_eigenvector_overlap",
         "stationary_step_policy_verified": True,
+        "array_backend": backend_name,
+        "unitary_array_type": f"{type(unitary).__module__}.{type(unitary).__name__}",
         "t_count_semantics": (
             "exact_count_of_T_characters_in_selected_PyGridSynth_gate_strings_times_n_steps"
         ),
@@ -690,6 +716,9 @@ def evaluate_species(
     policy: ModuleType,
     config: object,
     cache_root: Path,
+    *,
+    backend_name: str | None = None,
+    xp: Any | None = None,
 ) -> dict[str, object]:
     """Evaluate one species with compiled full-space one-step diagonalization."""
 
@@ -700,26 +729,30 @@ def evaluate_species(
         include_compiler=True,
         rebuild_cache=False,
     )
+    if backend_name is None or xp is None:
+        backend_name, xp = array_backend()
     unitary_step, run_metrics = _build_compiled_one_step_unitary(
         problem,
         policy,
         config,
+        backend_name=backend_name,
+        xp=xp,
     )
-    eigenvalues, eigenvectors = np.linalg.eig(unitary_step)
-    target_state = np.asarray(problem["ground_state"], dtype=np.complex128)
-    target_state /= np.linalg.norm(target_state)
-    eigenvector_norms = np.linalg.norm(eigenvectors, axis=0, keepdims=True)
-    if np.any(eigenvector_norms <= 0.0):
+    eigenvalues, eigenvectors = xp.linalg.eig(unitary_step)
+    target_state = xp.asarray(problem["ground_state"], dtype=xp.complex128)
+    target_state /= xp.linalg.norm(target_state)
+    eigenvector_norms = xp.linalg.norm(eigenvectors, axis=0, keepdims=True)
+    if bool(np.asarray(xp.any(eigenvector_norms <= 0.0))):
         raise ValueError("compiled one-step unitary produced a zero-norm eigenvector")
     eigenvectors = eigenvectors / eigenvector_norms
-    overlaps = np.abs(eigenvectors.conj().T @ target_state) ** 2
-    selected = int(np.argmax(overlaps))
+    overlaps = xp.abs(eigenvectors.conj().T @ target_state) ** 2
+    selected = int(np.asarray(xp.argmax(overlaps)))
 
     identity_shift = float(problem["identity_coefficient"])
     exact_energy = float(problem["ground_state_energy_hartree"])
     target_time = float(problem["target_time"])
     reference_centered_energy = exact_energy - identity_shift
-    step_phase = float(np.angle(eigenvalues[selected]))
+    step_phase = float(np.asarray(xp.angle(eigenvalues[selected])))
     total_phase = int(getattr(config, "n_steps")) * step_phase
     centered_estimate = unwrap_energy_near_reference(
         total_phase,
@@ -739,10 +772,12 @@ def evaluate_species(
         "signed_energy_error_mha": 1000.0 * signed_error,
         "absolute_energy_error_mha": 1000.0 * abs(signed_error),
         "selected_compiled_unitary_eigen_index": selected,
-        "selected_compiled_unitary_ground_overlap": float(overlaps[selected]),
+        "selected_compiled_unitary_ground_overlap": float(np.asarray(overlaps[selected])),
         "selected_compiled_step_eigenphase_radians": step_phase,
         "selected_compiled_total_eigenphase_radians": total_phase,
-        "max_eigenvalue_modulus_error": float(np.max(np.abs(np.abs(eigenvalues) - 1.0))),
+        "max_eigenvalue_modulus_error": float(
+            np.asarray(xp.max(xp.abs(xp.abs(eigenvalues) - 1.0)))
+        ),
         "n_qubits": int(problem["n_qubits"]),
         "cas_label": str(problem["cas_label"]),
         "basis": str(problem["basis"]),

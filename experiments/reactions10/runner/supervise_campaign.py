@@ -183,7 +183,7 @@ def main() -> None:
     parser.add_argument("--partition", required=True)
     parser.add_argument("--max-concurrent-mutators", type=int, default=8)
     parser.add_argument("--mutation-timeout-seconds", type=int, default=1200)
-    parser.add_argument("--evaluator-workers", type=int, default=2)
+    parser.add_argument("--evaluator-workers", type=int, default=1)
     parser.add_argument("--cpus-per-task", type=int, default=16)
     parser.add_argument("--memory", default="64G")
     parser.add_argument("--time-limit", default="04:00:00")
@@ -206,6 +206,8 @@ def main() -> None:
         parser.error("concurrency, timeout, worker, CPU, and polling values must be positive")
     if args.max_evaluation_retries < 0:
         parser.error("--max-evaluation-retries must be nonnegative")
+    if args.evaluator_workers != 1:
+        parser.error("one-A100 reaction jobs require --evaluator-workers 1")
     try:
         sync_host = validate_ssh_host(str(args.sync_host), "--sync-host")
         submit_host = validate_ssh_host(str(args.submit_host), "--submit-host")

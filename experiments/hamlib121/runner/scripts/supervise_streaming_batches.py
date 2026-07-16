@@ -200,7 +200,6 @@ def submit_batch(
     lane_ids: list[str],
     account: str,
     partition: str,
-    cpu_partition: str,
     sync_host: str,
     submit_host: str,
     proxy_jump_host: str | None,
@@ -221,8 +220,6 @@ def submit_batch(
         batch_id,
         "--partition",
         partition,
-        "--cpu-partition",
-        cpu_partition,
         "--account",
         account,
         "--sync-host",
@@ -400,10 +397,9 @@ def ensure_supervisor_provenance(root: Path, args: argparse.Namespace) -> dict[s
         "codex_bin": args.codex_bin,
         "codex_exec_flags": list(PAPER_CODEX_EXEC_FLAGS),
         "npm_cache": ".codex_npm",
-        "python_environments": [".venv", ".venv_cpu"],
+        "python_environments": [".venv"],
         "account": args.account,
         "gpu_partition": args.partition,
-        "cpu_partition": args.cpu_partition,
         "fallback_enabled": bool(args.enable_partition_fallback),
         "fallback_partition": args.fallback_partition,
         "sync_host": args.sync_host,
@@ -524,7 +520,6 @@ async def supervise(args: argparse.Namespace) -> int:
                 lane_ids=record.lane_ids,
                 account=args.account,
                 partition=args.partition,
-                cpu_partition=args.cpu_partition,
                 sync_host=args.sync_host,
                 submit_host=args.submit_host,
                 proxy_jump_host=args.proxy_jump_host,
@@ -652,7 +647,6 @@ async def supervise(args: argparse.Namespace) -> int:
             "max_running_eval_jobs": args.max_running_eval_jobs,
             "resumed_batch_index": batch_index,
             "partition": args.partition,
-            "cpu_partition": args.cpu_partition,
             "account": args.account,
             "sync_host": args.sync_host,
             "submit_host": args.submit_host,
@@ -860,7 +854,6 @@ async def supervise(args: argparse.Namespace) -> int:
                         lane_ids=lane_ids,
                         account=args.account,
                         partition=args.partition,
-                        cpu_partition=args.cpu_partition,
                         sync_host=args.sync_host,
                         submit_host=args.submit_host,
                         proxy_jump_host=args.proxy_jump_host,
@@ -1034,7 +1027,7 @@ async def supervise(args: argparse.Namespace) -> int:
                 root,
                 job_ids=[job.job_id for job in running_jobs.values() if job.job_id is not None],
                 query_host=args.slurm_query_host,
-                primary_partition=args.cpu_partition,
+            primary_partition=args.partition,
                 fallback_partition=args.fallback_partition,
                 proxy_jump_host=args.proxy_jump_host,
             )
@@ -1063,7 +1056,7 @@ def main() -> None:
     parser.add_argument("--start-iteration", type=int, default=1)
     parser.add_argument("--batch-size", type=int, default=8)
     parser.add_argument("--max-batch-wait-seconds", type=int, default=900)
-    parser.add_argument("--max-running-eval-jobs", type=int, default=8)
+    parser.add_argument("--max-running-eval-jobs", type=int, default=4)
     parser.add_argument("--max-eval-retries", type=int, default=3)
     parser.add_argument("--max-mutation-retries", type=int, default=20)
     parser.add_argument("--mutation-retry-base-seconds", type=int, default=60)
@@ -1073,7 +1066,6 @@ def main() -> None:
     parser.add_argument("--rescue-poll-seconds", type=int, default=60)
     parser.add_argument("--account", default=os.environ.get("HSOPT_SLURM_ACCOUNT"))
     parser.add_argument("--partition", default=os.environ.get("HSOPT_GPU_PARTITION"))
-    parser.add_argument("--cpu-partition", default=os.environ.get("HSOPT_CPU_PARTITION"))
     parser.add_argument("--fallback-partition", default=os.environ.get("HSOPT_FALLBACK_PARTITION"))
     parser.add_argument(
         "--enable-partition-fallback",
@@ -1115,7 +1107,6 @@ def main() -> None:
     required = {
         "--account or HSOPT_SLURM_ACCOUNT": args.account,
         "--partition or HSOPT_GPU_PARTITION": args.partition,
-        "--cpu-partition or HSOPT_CPU_PARTITION": args.cpu_partition,
         "--sync-host or HSOPT_SYNC_HOST": args.sync_host,
         "--submit-host or HSOPT_SUBMIT_HOST": args.submit_host,
         "--slurm-query-host or HSOPT_QUERY_HOST": args.slurm_query_host,
@@ -1147,7 +1138,7 @@ def main() -> None:
         "--iterations": (args.iterations, 50),
         "--batch-size": (args.batch_size, 8),
         "--max-concurrent-mutators": (args.max_concurrent_mutators, 4),
-        "--max-running-eval-jobs": (args.max_running_eval_jobs, 8),
+        "--max-running-eval-jobs": (args.max_running_eval_jobs, 4),
         "--model": (args.model, PAPER_MODEL),
         "--reasoning-effort": (args.reasoning_effort, PAPER_REASONING_EFFORT),
         "--codex-bin": (args.codex_bin, DEFAULT_CODEX_BIN),

@@ -5,11 +5,23 @@ autoresearch replicates over the same A100-memory-selected set of 121 HamLib
 Hamiltonians, with 50 proposals per lane. Copy it into external campaign
 workspaces; do not run campaigns inside the Git checkout.
 
-Only the shared iteration-0 dense-sector baseline is computed on one NVIDIA
-A100 with cuPyNumeric. That verified baseline is copied, with provenance, from
-`run_01` into `run_02` through `run_05`. All 30,250 proposal evaluations
-(`5 * 121 * 50`) are CPU/NumPy policy evaluations. This is not five full A100
-runs.
+Every baseline and proposal is evaluated on an NVIDIA A100 through
+Legate/cuPyNumeric. Codex mutation agents run on Omni, then invoke the
+deterministic submitter; Slurm jobs contain no mutation logic. Each job requests
+one A100 and evaluates its HamLib lane subset serially. The streaming supervisor
+allows at most four such jobs at once, so the campaign uses up to four A100s
+without placing concurrent state-vector simulations on one device.
+
+The acceptance metric is the measured HF-reference spectral ground-energy
+error of the compiled proposed product formula. Analytic product-formula and
+synthesis bounds are retained only as diagnostics.
+
+Policies are stationary across Trotter repetitions. The evaluator therefore
+applies one compiled slice on the A100, measures the selected spectral phase
+over `tau / n_steps`, and scales that phase to the configured base unitary.
+Physical rotation and T counts still include all repetitions. This avoids
+replaying an identical slice tens of thousands of times while evaluating the
+same stationary product formula.
 
 ## Environment
 
@@ -84,7 +96,6 @@ HAMLIB_DATA_ROOT="/absolute/cluster/path/to/hamlib-electronic-data"
 HAMLIB_ZIP_SHA256="manifests/hamlib_zip_sha256.txt"
 SLURM_ACCOUNT="site-account"
 GPU_PARTITION="gpu-partition"
-CPU_PARTITION="cpu-partition"
 SYNC_HOST="data-transfer-host"
 SUBMIT_HOST="slurm-submit-host"
 SLURM_QUERY_HOST="slurm-query-host"
@@ -136,7 +147,6 @@ uv run --locked python scripts/submit_eval_batch.py \
   --policy-snapshot initial \
   --account "$SLURM_ACCOUNT" \
   --partition "$GPU_PARTITION" \
-  --cpu-partition "$CPU_PARTITION" \
   --sync-host "$SYNC_HOST" \
   --submit-host "$SUBMIT_HOST" \
   --sync-only
@@ -176,7 +186,6 @@ uv run --locked python scripts/submit_eval_batch.py \
   --policy-snapshot initial \
   --account "$SLURM_ACCOUNT" \
   --partition "$GPU_PARTITION" \
-  --cpu-partition "$CPU_PARTITION" \
   --sync-host "$SYNC_HOST" \
   --submit-host "$SUBMIT_HOST"
 ```
@@ -227,10 +236,9 @@ uv run --locked python scripts/supervise_streaming_batches.py \
   --iterations 50 \
   --batch-size 8 \
   --max-concurrent-mutators 4 \
-  --max-running-eval-jobs 8 \
+  --max-running-eval-jobs 4 \
   --account "$SLURM_ACCOUNT" \
   --partition "$GPU_PARTITION" \
-  --cpu-partition "$CPU_PARTITION" \
   --sync-host "$SYNC_HOST" \
   --submit-host "$SUBMIT_HOST" \
   --slurm-query-host "$SLURM_QUERY_HOST" \
@@ -245,7 +253,7 @@ arguments after an interruption: queued candidates, ambiguous submissions,
 active job IDs, collection, and evaluation retries resume from the campaign
 database without remutating in-flight lanes. Provenance drift fails closed.
 The paper runner rejects any change from 50 iterations, batch size 8, four
-concurrent mutators, eight running evaluator jobs, model `gpt-5.5`, reasoning
+concurrent mutators, four running evaluator jobs, model `gpt-5.5`, reasoning
 `high`, or the pinned Codex command. The complete execution configuration is
 recorded in `manifests/supervisor_provenance.json`.
 
@@ -265,8 +273,8 @@ bytes can defeat local replay checks; the export is not a cryptographic
 signature or a full re-evaluation of every proposal.
 
 Partition fallback is disabled unless `--enable-partition-fallback` is passed
-with an explicit `--fallback-partition`. It applies to pending CPU evaluation
-batches, so choose a compatible alternate partition.
+with an explicit `--fallback-partition`. It applies to pending one-A100
+evaluation batches, so choose a compatible alternate GPU partition.
 Only job IDs persisted by that campaign are eligible for rescue.
 
 ## Export final results

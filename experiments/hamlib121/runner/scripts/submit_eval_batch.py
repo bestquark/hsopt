@@ -113,7 +113,7 @@ def remote_claim_command(*, cluster_root: str, campaign_id: str, manifest_sha256
         'echo "remote campaign claim mismatch" >&2; exit 44; fi; else '
         'stale=$(find "$root" -mindepth 1 -maxdepth 1 '
         f'! -name {shlex.quote(REMOTE_CLAIM_LOCK_NAME)} ! -name "${{tmp##*/}}" '
-        "! -name '.venv' ! -name '.venv_cpu' -print -quit); "
+        "! -name '.venv' -print -quit); "
         'if [ -n "$stale" ]; then echo "refusing to claim non-empty campaign root: $stale" >&2; '
         'exit 45; fi; mv "$tmp" "$claim"; fi'
     )
@@ -253,7 +253,6 @@ def main() -> None:
     parser.add_argument("--hamlib-data-root", default=None)
     parser.add_argument("--account", default=os.environ.get("HSOPT_SLURM_ACCOUNT"))
     parser.add_argument("--partition", default=os.environ.get("HSOPT_GPU_PARTITION"))
-    parser.add_argument("--cpu-partition", default=os.environ.get("HSOPT_CPU_PARTITION"))
     parser.add_argument("--sync-host", default=os.environ.get("HSOPT_SYNC_HOST"))
     parser.add_argument("--submit-host", default=os.environ.get("HSOPT_SUBMIT_HOST"))
     parser.add_argument(
@@ -378,30 +377,24 @@ def main() -> None:
     missing_baselines = [
         lane_id for lane_id in lane_ids if not (root / "baselines" / f"{lane_id}.json").exists()
     ]
-    use_gpu_baseline = bool(args.compute_baseline)
-    slurm_script = (
-        "slurm/evaluate_batch.sbatch" if use_gpu_baseline else "slurm/evaluate_batch_cpu.sbatch"
-    )
-    submit_partition = args.partition if use_gpu_baseline else args.cpu_partition
-    compute_baseline = bool(use_gpu_baseline)
-    execution_mode = "gpu_baseline" if use_gpu_baseline else "cpu_policy"
-    effective_legate_fbmem = args.legate_fbmem or ("70000" if use_gpu_baseline else None)
+    slurm_script = "slurm/evaluate_batch.sbatch"
+    submit_partition = args.partition
+    compute_baseline = bool(args.compute_baseline)
+    execution_mode = "gpu_baseline" if compute_baseline else "gpu_policy"
+    effective_legate_fbmem = args.legate_fbmem or "70000"
     if missing_baselines and not args.compute_baseline:
         raise RuntimeError(
-            f"CPU policy batch is missing {len(missing_baselines)} verified baseline caches; "
-            "establish the exact iteration-0 A100 baseline first"
+            f"GPU policy batch is missing {len(missing_baselines)} verified baseline caches; "
+            "establish the iteration-0 A100 baseline chunks first"
         )
     if args.iteration == 0:
         if (
-            lane_ids != active_lane_ids
-            or len(lane_ids) != 121
-            or not args.compute_baseline
+            not args.compute_baseline
             or args.policy_snapshot != "initial"
-            or not use_gpu_baseline
         ):
             raise RuntimeError(
-                "iteration-0 paper baseline must submit all canonical 121 lanes in manifest "
-                "order with --compute-baseline --policy-snapshot initial on the GPU path"
+                "each iteration-0 baseline chunk must use --compute-baseline "
+                "--policy-snapshot initial on the GPU path"
             )
     elif args.compute_baseline:
         raise RuntimeError("baseline computation is permitted only for the exact iteration-0 batch")
@@ -420,9 +413,9 @@ def main() -> None:
         raise RuntimeError(f"batch policy snapshots are missing or unsafe: {unsafe_policies[:10]}")
     policy_sha256s = [sha256_file(path) for path in policy_paths]
     execution_configuration = {
-        "schema_version": 1,
+        "schema_version": 2,
         "execution_mode": execution_mode,
-        "array_backend": "cupynumeric" if use_gpu_baseline else "numpy",
+        "array_backend": "cupynumeric",
         "compute_baseline": compute_baseline,
         "policy_snapshot": args.policy_snapshot,
         "account": args.account,
@@ -449,8 +442,7 @@ def main() -> None:
     if not args.account:
         missing_config.append("--account or HSOPT_SLURM_ACCOUNT")
     if not submit_partition:
-        selected_flag = "--partition" if use_gpu_baseline else "--cpu-partition"
-        missing_config.append(selected_flag)
+        missing_config.append("--partition or HSOPT_GPU_PARTITION")
     if not args.submit_host:
         missing_config.append("--submit-host or HSOPT_SUBMIT_HOST")
     if missing_config:
@@ -544,8 +536,6 @@ def main() -> None:
                 "--exclude",
                 ".venv/",
                 "--exclude",
-                ".venv_cpu/",
-                "--exclude",
                 ".codex_npm/",
                 "--exclude",
                 ".supervisor.lock",
@@ -612,8 +602,6 @@ def main() -> None:
             *rsync_proxy_jump_args(proxy_jump_host),
             "--exclude",
             ".venv/",
-            "--exclude",
-            ".venv_cpu/",
             "--exclude",
             ".codex_npm/",
             "--exclude",

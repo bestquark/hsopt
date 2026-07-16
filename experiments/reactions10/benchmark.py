@@ -514,6 +514,7 @@ def evaluate_policy(
             f"terms={sorted(term_species)}, species={sorted(species_keys)}"
         )
     reaction_evaluate.validate_policy_module(policy, species_keys)
+    backend_name, xp = reaction_evaluate.array_backend()
 
     species_results: dict[str, dict[str, object]] = {}
     for molecule_spec in candidate.species:
@@ -526,6 +527,8 @@ def evaluate_policy(
             policy,
             config,
             resolved_cache,
+            backend_name=backend_name,
+            xp=xp,
         )
 
     target = reaction_evaluate.REACTION_TARGET_HARTREE
@@ -607,6 +610,7 @@ def evaluate_policy(
         "evaluation_mode": ("full_hilbert_space_compiled_one_step_unitary_diagonalization"),
         "ground_phase_matching": "maximum_ground_state_eigenvector_overlap",
         "compilation_backend": "pygridsynth",
+        "array_backend": backend_name,
         "reaction_target_hartree": target,
         "reaction_target_mha": 1000.0 * target,
         "stoichiometric_abs_coefficient_sum": stoichiometric_abs_sum,
