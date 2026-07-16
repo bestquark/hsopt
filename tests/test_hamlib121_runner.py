@@ -2268,3 +2268,31 @@ def test_runner_has_no_personal_roots_and_slurm_scripts_parse() -> None:
         source = script.read_text(encoding="utf-8")
         assert "uv sync" not in source
         assert ".hsopt-uv-lock-sha256" in source
+
+
+def test_slurm_workers_pin_and_verify_the_locked_python_runtime() -> None:
+    gpu_source = (RUNNER_ROOT / "slurm" / "evaluate_batch.sbatch").read_text(encoding="utf-8")
+    cpu_source = (RUNNER_ROOT / "slurm" / "evaluate_batch_cpu.sbatch").read_text(encoding="utf-8")
+    for source in (gpu_source, cpu_source):
+        assert 'export CAMPAIGN_LOCKED_PYTHON="$VIRTUAL_ENV/bin/python"' in source
+    assert '--run-mode exec "$CAMPAIGN_LOCKED_PYTHON" scripts/evaluate_worker.py' in gpu_source
+    assert '"$CAMPAIGN_LOCKED_PYTHON" scripts/evaluate_worker.py' in cpu_source
+
+    worker_source = (SCRIPTS_ROOT / "evaluate_worker.py").read_text(encoding="utf-8")
+    guard_call = 'if os.environ.get("SLURM_JOB_ID") or os.environ.get('
+    assert worker_source.index(guard_call) < worker_source.index("import numpy as np")
+
+
+def test_locked_python_runtime_guard_rejects_interpreter_drift(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    executable = Path(sys.executable)
+    monkeypatch.setenv("VIRTUAL_ENV", sys.prefix)
+    monkeypatch.setenv("CAMPAIGN_LOCKED_PYTHON", str(executable))
+    EVALUATE_WORKER.validate_locked_python_runtime()
+
+    wrong_runtime = shutil.which("sh")
+    assert wrong_runtime is not None
+    monkeypatch.setattr(EVALUATE_WORKER.sys, "executable", wrong_runtime)
+    with pytest.raises(RuntimeError, match="Python runtime drift"):
+        EVALUATE_WORKER.validate_locked_python_runtime()

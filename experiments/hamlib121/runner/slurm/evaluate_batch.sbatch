@@ -39,6 +39,7 @@ export CAMPAIGN_LEGATE_FBMEM="${CAMPAIGN_LEGATE_FBMEM:-70000}"
 export CAMPAIGN_SYNTH_WORKERS="${CAMPAIGN_SYNTH_WORKERS:-30}"
 
 export VIRTUAL_ENV="$PWD/.venv"
+export CAMPAIGN_LOCKED_PYTHON="$VIRTUAL_ENV/bin/python"
 unset PYTHONHOME PYTHONPATH
 SHA256SUM=/usr/bin/sha256sum
 if [[ ! -x "$SHA256SUM" ]]; then
@@ -126,7 +127,8 @@ MONITOR_PID=$!
 trap 'kill "$MONITOR_PID" 2>/dev/null || true' EXIT
 
 echo "worker=0 num_workers=1 cuda_visible_devices=${CUDA_VISIBLE_DEVICES:-}"
-"$LEGATE" --gpus 1 --fbmem "$CAMPAIGN_LEGATE_FBMEM" scripts/evaluate_worker.py \
+"$LEGATE" --gpus 1 --fbmem "$CAMPAIGN_LEGATE_FBMEM" \
+  --run-mode exec "$CAMPAIGN_LOCKED_PYTHON" scripts/evaluate_worker.py \
   --campaign-root "$CAMPAIGN_ROOT" \
   --iteration "$ITERATION" \
   --worker-id 0 \

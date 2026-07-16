@@ -17,7 +17,47 @@ from concurrent.futures import ProcessPoolExecutor
 from pathlib import Path
 from typing import Any
 
-import numpy as np
+
+def validate_locked_python_runtime() -> None:
+    expected_text = os.environ.get("CAMPAIGN_LOCKED_PYTHON", "")
+    if not expected_text:
+        raise RuntimeError(
+            "CAMPAIGN_LOCKED_PYTHON is required for a Slurm evaluation; "
+            "refusing an unpinned Python runtime"
+        )
+    expected = Path(expected_text)
+    virtual_env_text = os.environ.get("VIRTUAL_ENV", "")
+    if not expected.is_absolute() or not virtual_env_text:
+        raise RuntimeError("locked Python identity must use an absolute executable and VIRTUAL_ENV")
+    virtual_env = Path(virtual_env_text)
+    if expected != virtual_env / "bin" / "python":
+        raise RuntimeError("CAMPAIGN_LOCKED_PYTHON does not belong to VIRTUAL_ENV")
+    try:
+        expected_real = expected.resolve(strict=True)
+        actual_real = Path(sys.executable).resolve(strict=True)
+        expected_prefix = virtual_env.resolve(strict=True)
+        actual_prefix = Path(sys.prefix).resolve(strict=True)
+    except OSError as exc:
+        raise RuntimeError("locked Python identity could not be resolved") from exc
+    if actual_real != expected_real:
+        raise RuntimeError(
+            f"Python runtime drift: expected {expected_real}, launched {actual_real}"
+        )
+    if actual_prefix != expected_prefix:
+        raise RuntimeError(
+            f"Python environment drift: expected prefix {expected_prefix}, got {actual_prefix}"
+        )
+    if sys.version_info[:2] != (3, 12):
+        raise RuntimeError(
+            "HamLib campaign evaluations require the locked Python 3.12 runtime; "
+            f"got {sys.version_info.major}.{sys.version_info.minor}"
+        )
+
+
+if os.environ.get("SLURM_JOB_ID") or os.environ.get("CAMPAIGN_LOCKED_PYTHON"):
+    validate_locked_python_runtime()
+
+import numpy as np  # noqa: E402
 
 _PRIVATE_PYCACHE_PREFIX = tempfile.mkdtemp(prefix="hsopt-hamlib121-pycache-")
 _private_pycache_stat = os.stat(_PRIVATE_PYCACHE_PREFIX, follow_symlinks=False)

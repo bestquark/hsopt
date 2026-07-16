@@ -42,6 +42,7 @@ export CAMPAIGN_HDF5_SUBPROCESS=1
 export CAMPAIGN_SYNTH_WORKERS="${CAMPAIGN_SYNTH_WORKERS:-30}"
 
 export VIRTUAL_ENV="$PWD/.venv_cpu"
+export CAMPAIGN_LOCKED_PYTHON="$VIRTUAL_ENV/bin/python"
 unset PYTHONHOME PYTHONPATH
 SHA256SUM=/usr/bin/sha256sum
 if [[ ! -x "$SHA256SUM" ]]; then
@@ -78,7 +79,7 @@ echo "started=$(date -Is)"
 echo "campaign_array_backend=$CAMPAIGN_ARRAY_BACKEND"
 echo "lane_count=$(grep -cve '^[[:space:]]*$' "$LANE_IDS_FILE")"
 
-"$VIRTUAL_ENV/bin/python" scripts/evaluate_worker.py \
+"$CAMPAIGN_LOCKED_PYTHON" scripts/evaluate_worker.py \
   --campaign-root "$CAMPAIGN_ROOT" \
   --iteration "$ITERATION" \
   --worker-id 0 \
