@@ -39,9 +39,12 @@ from campaign_common import (  # noqa: E402
     now_iso,
     read_json,
     require_campaign,
+    rsync_proxy_jump_args,
     sha256_file,
+    ssh_command,
     validate_absolute_posix_path,
     validate_iteration,
+    validate_ssh_host,
     write_json,
     write_state,
 )
@@ -126,17 +129,18 @@ def claim_remote_campaign(
     manifest_sha256: str,
     attempts: int,
     timeout_seconds: int,
+    proxy_jump_host: str | None = None,
 ) -> None:
     run_with_retries(
-        [
-            "ssh",
+        ssh_command(
             sync_host,
             _remote_claim_command(
                 cluster_root=cluster_root,
                 campaign_id=campaign_id,
                 manifest_sha256=manifest_sha256,
             ),
-        ],
+            proxy_jump_host=proxy_jump_host,
+        ),
         attempts=attempts,
         timeout_seconds=timeout_seconds,
     )
@@ -167,6 +171,36 @@ def run_with_retries(
         if attempt < attempts:
             time.sleep(retry_delay_seconds * attempt)
     raise RuntimeError(f"command failed after {attempts} attempts: {'; '.join(failures)}")
+
+
+def campaign_sync_command(
+    *,
+    root: Path,
+    sync_host: str,
+    cluster_root: str,
+    proxy_jump_host: str | None = None,
+) -> list[str]:
+    """Build the non-deleting campaign upload command for one transport route."""
+    sync_host = validate_ssh_host(sync_host, "sync_host")
+    cluster_root = validate_absolute_posix_path(cluster_root, "cluster_root")
+    return [
+        "rsync",
+        "-ah",
+        "--partial",
+        *rsync_proxy_jump_args(proxy_jump_host),
+        "--exclude",
+        ".locks/",
+        "--exclude",
+        "__pycache__/",
+        "--exclude",
+        ".venv/",
+        "--exclude",
+        "logs/*.out",
+        "--exclude",
+        "logs/*.err",
+        f"{root.resolve()}/",
+        f"{sync_host}:{cluster_root}/",
+    ]
 
 
 def _export_safe(value: str, field: str) -> str:
@@ -549,6 +583,10 @@ def main() -> None:
     parser.add_argument("--iteration", type=int, required=True)
     parser.add_argument("--sync-host")
     parser.add_argument("--submit-host")
+    parser.add_argument(
+        "--proxy-jump-host",
+        help="Optional SSH config alias used as ProxyJump for sync and submit hosts.",
+    )
     parser.add_argument("--account")
     parser.add_argument("--partition")
     parser.add_argument("--workers", type=int, default=2)
@@ -576,6 +614,16 @@ def main() -> None:
         parser.error("required execution provenance: " + ", ".join(missing))
     if min(args.workers, args.cpus_per_task, args.command_attempts) <= 0:
         parser.error("workers, cpus-per-task, and command-attempts must be positive")
+    try:
+        sync_host = validate_ssh_host(str(args.sync_host), "--sync-host")
+        submit_host = validate_ssh_host(str(args.submit_host), "--submit-host")
+        proxy_jump_host = (
+            validate_ssh_host(str(args.proxy_jump_host), "--proxy-jump-host")
+            if args.proxy_jump_host is not None
+            else None
+        )
+    except ValueError as exc:
+        parser.error(str(exc))
 
     root = args.campaign_root.resolve()
     with campaign_lock(root, "orchestration"):
@@ -588,8 +636,8 @@ def main() -> None:
         validate_hamiltonian_verification(root, manifest, state)
         _validate_candidates(root, manifest, args.iteration)
         execution_spec = {
-            "sync_host": str(args.sync_host),
-            "submit_host": str(args.submit_host),
+            "sync_host": sync_host,
+            "submit_host": submit_host,
             "account": str(args.account),
             "partition": str(args.partition),
             "workers": int(args.workers),
@@ -599,6 +647,8 @@ def main() -> None:
             "cluster_root": str(manifest["execution"]["cluster_root"]),
             "cluster_python": str(manifest["execution"]["cluster_python"]),
         }
+        if proxy_jump_host is not None:
+            execution_spec["proxy_jump_host"] = proxy_jump_host
         pending = prepare_batch_attempts(
             root=root,
             manifest=manifest,
@@ -612,31 +662,21 @@ def main() -> None:
         validate_absolute_posix_path(cluster_python, "cluster_python")
         campaign_id, manifest_hash = _campaign_identity(manifest, state)
         claim_remote_campaign(
-            sync_host=str(args.sync_host),
+            sync_host=sync_host,
             cluster_root=cluster_root,
             campaign_id=campaign_id,
             manifest_sha256=manifest_hash,
             attempts=args.command_attempts,
             timeout_seconds=args.sync_timeout_seconds,
+            proxy_jump_host=proxy_jump_host,
         )
         run_with_retries(
-            [
-                "rsync",
-                "-ah",
-                "--partial",
-                "--exclude",
-                ".locks/",
-                "--exclude",
-                "__pycache__/",
-                "--exclude",
-                ".venv/",
-                "--exclude",
-                "logs/*.out",
-                "--exclude",
-                "logs/*.err",
-                f"{root}/",
-                f"{args.sync_host}:{cluster_root}/",
-            ],
+            campaign_sync_command(
+                root=root,
+                sync_host=sync_host,
+                cluster_root=cluster_root,
+                proxy_jump_host=proxy_jump_host,
+            ),
             attempts=args.command_attempts,
             timeout_seconds=args.sync_timeout_seconds,
         )
@@ -663,7 +703,11 @@ def main() -> None:
                 time_limit=args.time_limit,
             )
             completed = run_with_retries(
-                ["ssh", str(args.submit_host), remote],
+                ssh_command(
+                    submit_host,
+                    remote,
+                    proxy_jump_host=proxy_jump_host,
+                ),
                 attempts=args.command_attempts,
                 timeout_seconds=args.submit_timeout_seconds,
             )

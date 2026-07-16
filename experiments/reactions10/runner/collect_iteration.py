@@ -44,9 +44,11 @@ from campaign_common import (  # noqa: E402
     require_campaign,
     result_path,
     result_validation_error,
+    rsync_proxy_jump_args,
     sha256_file,
     validate_absolute_posix_path,
     validate_iteration,
+    validate_ssh_host,
     write_json,
     write_state,
 )
@@ -63,7 +65,15 @@ from mutate_iteration import (  # noqa: E402
 )
 
 
-def rsync_results(root: Path, cluster_root: str, iteration: int, sync_host: str) -> None:
+def rsync_results(
+    root: Path,
+    cluster_root: str,
+    iteration: int,
+    sync_host: str,
+    *,
+    proxy_jump_host: str | None = None,
+) -> None:
+    sync_host = validate_ssh_host(sync_host, "sync_host")
     destination = iteration_dir(root, iteration) / "results"
     destination.mkdir(parents=True, exist_ok=True)
     subprocess.run(
@@ -71,6 +81,7 @@ def rsync_results(root: Path, cluster_root: str, iteration: int, sync_host: str)
             "rsync",
             "-ah",
             "--partial",
+            *rsync_proxy_jump_args(proxy_jump_host),
             f"{sync_host}:{cluster_root.rstrip('/')}/iterations/iter_{iteration:04d}/results/",
             f"{destination}/",
         ],
@@ -644,11 +655,28 @@ def main() -> None:
     parser.add_argument("--campaign-root", type=Path, required=True)
     parser.add_argument("--iteration", type=int, required=True)
     parser.add_argument("--sync-host")
+    parser.add_argument(
+        "--proxy-jump-host",
+        help="Optional SSH config alias used as ProxyJump for the sync host.",
+    )
     parser.add_argument("--skip-rsync", action="store_true")
     args = parser.parse_args()
     validate_iteration(args.iteration)
     if not args.skip_rsync and not args.sync_host:
         parser.error("--sync-host is required unless --skip-rsync is used")
+    try:
+        sync_host = (
+            validate_ssh_host(str(args.sync_host), "--sync-host")
+            if args.sync_host is not None
+            else None
+        )
+        proxy_jump_host = (
+            validate_ssh_host(str(args.proxy_jump_host), "--proxy-jump-host")
+            if args.proxy_jump_host is not None
+            else None
+        )
+    except ValueError as exc:
+        parser.error(str(exc))
 
     root = args.campaign_root.resolve()
     with campaign_lock(root, "orchestration"):
@@ -678,7 +706,8 @@ def main() -> None:
                 root,
                 str(manifest["execution"]["cluster_root"]),
                 args.iteration,
-                str(args.sync_host),
+                str(sync_host),
+                proxy_jump_host=proxy_jump_host,
             )
         validate_batch_partition(state, manifest, args.iteration)
         results, candidate_hashes, retryable, fatal = prevalidate_iteration(

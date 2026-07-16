@@ -59,6 +59,7 @@ ARCHIVED_REACTION_EVALUATOR_SHA256 = (
 FAILURE_SCORE_BASE = 1.0e15
 RUNTIME_SNAPSHOT_DIRS = frozenset({".venv", ".pytest_cache", ".ruff_cache"})
 SUBMISSION_ID_DOMAIN = b"hsopt-reactions10-submission-v1\0"
+SAFE_SSH_HOST_RE = re.compile(r"[A-Za-z0-9][A-Za-z0-9_.-]*")
 HAMILTONIAN_THRESHOLDS = {
     "hermiticity_error": 1.0e-12,
     "pauli_dense_max_abs_residual_hartree": 1.0e-10,
@@ -2616,7 +2617,11 @@ def validate_batch_structure(
                 "cluster_root",
                 "cluster_python",
             }
-            if set(execution) != expected_execution_fields:
+            execution_fields = set(execution)
+            if execution_fields not in (
+                expected_execution_fields,
+                expected_execution_fields | {"proxy_jump_host"},
+            ):
                 raise ExportValidationError(f"{attempt_context}.execution has unexpected schema")
             for field in (
                 "sync_host",
@@ -2626,7 +2631,23 @@ def validate_batch_structure(
                 "memory",
                 "time_limit",
             ):
-                require_string(execution.get(field), f"{attempt_context}.execution.{field}")
+                value = require_string(execution.get(field), f"{attempt_context}.execution.{field}")
+                if (
+                    field in {"sync_host", "submit_host"}
+                    and SAFE_SSH_HOST_RE.fullmatch(value) is None
+                ):
+                    raise ExportValidationError(
+                        f"{attempt_context}.execution.{field} is not a safe SSH alias"
+                    )
+            if "proxy_jump_host" in execution:
+                proxy_jump_host = require_string(
+                    execution.get("proxy_jump_host"),
+                    f"{attempt_context}.execution.proxy_jump_host",
+                )
+                if SAFE_SSH_HOST_RE.fullmatch(proxy_jump_host) is None:
+                    raise ExportValidationError(
+                        f"{attempt_context}.execution.proxy_jump_host is not a safe SSH alias"
+                    )
             if (
                 require_int(
                     execution.get("workers"), f"{attempt_context}.execution.workers", minimum=1

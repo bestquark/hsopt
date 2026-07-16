@@ -80,6 +80,34 @@ ssh YOUR_SUBMIT_HOST \
   "uv sync --locked --project '$CLUSTER_ROOT/runner/environment'"
 ```
 
+If orchestration runs on a workstation where the sync and submit hosts are
+reachable only through one SSH config alias, pass that route explicitly to
+both runner commands and use the same route for the one-time environment
+setup. For example:
+
+```bash
+uv run --locked --project "$CAMPAIGN_ENV" python \
+  "$CAMPAIGN_RUNNER/submit_iteration.py" \
+  --campaign-root "$CAMPAIGN_ROOT" --iteration 0 \
+  --sync-host YOUR_SYNC_HOST --submit-host YOUR_SUBMIT_HOST \
+  --proxy-jump-host YOUR_JUMP_HOST \
+  --account YOUR_SLURM_ACCOUNT --partition YOUR_CPU_PARTITION --sync-only
+
+ssh -J YOUR_JUMP_HOST YOUR_SUBMIT_HOST \
+  "uv sync --locked --project '$CLUSTER_ROOT/runner/environment'"
+
+uv run --locked --project "$CAMPAIGN_ENV" python \
+  "$CAMPAIGN_RUNNER/supervise_campaign.py" \
+  --campaign-root "$CAMPAIGN_ROOT" \
+  --sync-host YOUR_SYNC_HOST --submit-host YOUR_SUBMIT_HOST \
+  --proxy-jump-host YOUR_JUMP_HOST \
+  --account YOUR_SLURM_ACCOUNT --partition YOUR_CPU_PARTITION
+```
+
+The proxy-jump alias is recorded in each durable submission attempt. It is
+transport provenance rather than a scientific campaign input, so preparation
+and the immutable manifest remain host-independent.
+
 Then run the restart-safe supervisor:
 
 ```bash

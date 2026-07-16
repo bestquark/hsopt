@@ -62,6 +62,12 @@ def test_supervisor_shell_quotes_slurm_format_for_csh_login_shell(monkeypatch) -
     assert supervisor.query_slurm_states("nvlogin", ["123"], 30) == {"123": "RUNNING"}
     assert commands == [["ssh", "nvlogin", "squeue -h -j 123 -o '%A|%T'"]]
 
+    commands.clear()
+    assert supervisor.query_slurm_states("nvlogin", ["123"], 30, proxy_jump_host="omni") == {
+        "123": "RUNNING"
+    }
+    assert commands == [["ssh", "-J", "omni", "nvlogin", "squeue -h -j 123 -o '%A|%T'"]]
+
 
 def _load_module(stem: str, *, campaign_common: ModuleType | None = None) -> ModuleType:
     path = RUNNER_ROOT / f"{stem}.py"
@@ -104,6 +110,86 @@ finally:
     else:
         sys.modules["mutate_iteration"] = _PREVIOUS_MUTATE_ITERATION
 EXPORT_RESULTS = _load_module("export_results")
+
+
+def test_proxy_jump_transport_builders_are_exact_and_option_safe() -> None:
+    assert CAMPAIGN_COMMON.ssh_command("nvlogin", "squeue -h") == [
+        "ssh",
+        "nvlogin",
+        "squeue -h",
+    ]
+    assert CAMPAIGN_COMMON.ssh_command("nvlogin", "squeue -h", proxy_jump_host="omni") == [
+        "ssh",
+        "-J",
+        "omni",
+        "nvlogin",
+        "squeue -h",
+    ]
+    assert CAMPAIGN_COMMON.rsync_proxy_jump_args() == []
+    assert CAMPAIGN_COMMON.rsync_proxy_jump_args("omni") == ["-e", "ssh -J omni"]
+    assert CAMPAIGN_COMMON.proxy_jump_cli_args() == []
+    assert CAMPAIGN_COMMON.proxy_jump_cli_args("omni") == ["--proxy-jump-host", "omni"]
+    for unsafe in ("-oProxyCommand=bad", "omni other", "omni,other", "user@omni", ""):
+        with pytest.raises(ValueError, match="safe SSH host alias"):
+            CAMPAIGN_COMMON.ssh_command("nvlogin", "true", proxy_jump_host=unsafe)
+
+
+def test_remote_claim_and_result_sync_use_the_same_proxy_jump(tmp_path: Path, monkeypatch) -> None:
+    claim_calls: list[tuple[list[str], dict[str, Any]]] = []
+
+    def fake_retry(command: list[str], **kwargs):
+        claim_calls.append((command, kwargs))
+        return subprocess.CompletedProcess(command, 0, stdout="", stderr="")
+
+    monkeypatch.setattr(SUBMIT_ITERATION, "run_with_retries", fake_retry)
+    SUBMIT_ITERATION.claim_remote_campaign(
+        sync_host="nvdata",
+        cluster_root="/cluster/reactions10",
+        campaign_id="a" * 64,
+        manifest_sha256="b" * 64,
+        attempts=3,
+        timeout_seconds=60,
+        proxy_jump_host="omni",
+    )
+    assert claim_calls[0][0][:4] == ["ssh", "-J", "omni", "nvdata"]
+
+    upload = SUBMIT_ITERATION.campaign_sync_command(
+        root=tmp_path / "campaign",
+        sync_host="nvdata",
+        cluster_root="/cluster/reactions10",
+        proxy_jump_host="omni",
+    )
+    assert upload[:5] == ["rsync", "-ah", "--partial", "-e", "ssh -J omni"]
+    assert upload[-2:] == [
+        f"{tmp_path}/campaign/",
+        "nvdata:/cluster/reactions10/",
+    ]
+
+    rsync_calls: list[list[str]] = []
+
+    def fake_run(command, **_kwargs):
+        rsync_calls.append(command)
+        return subprocess.CompletedProcess(command, 0)
+
+    monkeypatch.setattr(COLLECT_ITERATION.subprocess, "run", fake_run)
+    COLLECT_ITERATION.rsync_results(
+        tmp_path / "campaign",
+        "/cluster/reactions10",
+        0,
+        "nvdata",
+        proxy_jump_host="omni",
+    )
+    assert rsync_calls == [
+        [
+            "rsync",
+            "-ah",
+            "--partial",
+            "-e",
+            "ssh -J omni",
+            "nvdata:/cluster/reactions10/iterations/iter_0000/results/",
+            f"{tmp_path}/campaign/iterations/iter_0000/results/",
+        ]
+    ]
 
 
 def _sha256(path: Path) -> str:
@@ -1901,8 +1987,9 @@ def test_exporter_rejects_identity_free_noncollected_or_incomplete_batches(
         candidate.write_text(f"# immutable {lane_id}\n", encoding="utf-8")
 
     execution_spec = {
-        "sync_host": "omni",
-        "submit_host": "omni-submit",
+        "sync_host": "nvdata",
+        "submit_host": "nvlogin",
+        "proxy_jump_host": "omni",
         "account": "research",
         "partition": "batch",
         "workers": 2,
@@ -1962,6 +2049,16 @@ def test_exporter_rejects_identity_free_noncollected_or_incomplete_batches(
     first_batch_id = sorted(state["batches"])[0]
     first_batch = state["batches"][first_batch_id]
     original_first = copy.deepcopy(first_batch)
+    first_batch["attempts"][-1]["execution"]["proxy_jump_host"] = "-oProxyCommand=bad"
+    CAMPAIGN_COMMON.write_json(
+        iteration_root / "batches" / first_batch_id / "batch.json",
+        first_batch,
+    )
+    with pytest.raises(EXPORT_RESULTS.ExportValidationError, match="safe SSH alias"):
+        EXPORT_RESULTS.validate_batch_structure(iteration_root, **validation_kwargs)
+
+    state["batches"][first_batch_id] = copy.deepcopy(original_first)
+    first_batch = state["batches"][first_batch_id]
     first_batch.pop("campaign_id")
     CAMPAIGN_COMMON.write_json(
         iteration_root / "batches" / first_batch_id / "batch.json",

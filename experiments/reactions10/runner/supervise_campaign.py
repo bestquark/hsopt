@@ -28,8 +28,11 @@ from campaign_common import (  # noqa: E402
     campaign_lock,
     ensure_campaign_runner_runtime,
     open_collect_transactions,
+    proxy_jump_cli_args,
     read_json,
     require_campaign,
+    ssh_command,
+    validate_ssh_host,
 )
 
 
@@ -70,11 +73,17 @@ def latest_submitted_jobs(state: dict[str, Any], iteration: int) -> dict[str, st
     return jobs
 
 
-def query_slurm_states(host: str, job_ids: list[str], timeout_seconds: int) -> dict[str, str]:
+def query_slurm_states(
+    host: str,
+    job_ids: list[str],
+    timeout_seconds: int,
+    *,
+    proxy_jump_host: str | None = None,
+) -> dict[str, str]:
     joined = ",".join(job_ids)
     squeue_remote = shlex.join(["squeue", "-h", "-j", joined, "-o", "%A|%T"])
     squeue = subprocess.run(
-        ["ssh", host, squeue_remote],
+        ssh_command(host, squeue_remote, proxy_jump_host=proxy_jump_host),
         check=False,
         text=True,
         capture_output=True,
@@ -101,7 +110,7 @@ def query_slurm_states(host: str, job_ids: list[str], timeout_seconds: int) -> d
             ]
         )
         sacct = subprocess.run(
-            ["ssh", host, sacct_remote],
+            ssh_command(host, sacct_remote, proxy_jump_host=proxy_jump_host),
             check=False,
             text=True,
             capture_output=True,
@@ -125,10 +134,20 @@ def query_slurm_states(host: str, job_ids: list[str], timeout_seconds: int) -> d
 
 
 def wait_for_terminal_jobs(
-    *, host: str, jobs: dict[str, str], poll_seconds: int, timeout_seconds: int
+    *,
+    host: str,
+    jobs: dict[str, str],
+    poll_seconds: int,
+    timeout_seconds: int,
+    proxy_jump_host: str | None = None,
 ) -> dict[str, str]:
     while True:
-        states = query_slurm_states(host, sorted(jobs), timeout_seconds)
+        states = query_slurm_states(
+            host,
+            sorted(jobs),
+            timeout_seconds,
+            proxy_jump_host=proxy_jump_host,
+        )
         print(json.dumps({jobs[job_id]: state for job_id, state in states.items()}, sort_keys=True))
         if all(state in TERMINAL_STATES for state in states.values()):
             return states
@@ -156,6 +175,10 @@ def main() -> None:
     parser.add_argument("--campaign-root", type=Path, required=True)
     parser.add_argument("--sync-host", required=True)
     parser.add_argument("--submit-host", required=True)
+    parser.add_argument(
+        "--proxy-jump-host",
+        help="Optional SSH config alias used as ProxyJump for sync and submit hosts.",
+    )
     parser.add_argument("--account", required=True)
     parser.add_argument("--partition", required=True)
     parser.add_argument("--max-concurrent-mutators", type=int, default=8)
@@ -183,6 +206,16 @@ def main() -> None:
         parser.error("concurrency, timeout, worker, CPU, and polling values must be positive")
     if args.max_evaluation_retries < 0:
         parser.error("--max-evaluation-retries must be nonnegative")
+    try:
+        sync_host = validate_ssh_host(str(args.sync_host), "--sync-host")
+        submit_host = validate_ssh_host(str(args.submit_host), "--submit-host")
+        proxy_jump_host = (
+            validate_ssh_host(str(args.proxy_jump_host), "--proxy-jump-host")
+            if args.proxy_jump_host is not None
+            else None
+        )
+    except ValueError as exc:
+        parser.error(str(exc))
 
     root = args.campaign_root.resolve()
     runner = Path(__file__).resolve().parent
@@ -206,7 +239,8 @@ def main() -> None:
                         "--iteration",
                         str(transaction["iteration"]),
                         "--skip-rsync",
-                    ],
+                    ]
+                    + proxy_jump_cli_args(proxy_jump_host),
                     root,
                 )
                 continue
@@ -267,9 +301,9 @@ def main() -> None:
                         "--iteration",
                         str(iteration),
                         "--sync-host",
-                        args.sync_host,
+                        sync_host,
                         "--submit-host",
-                        args.submit_host,
+                        submit_host,
                         "--account",
                         args.account,
                         "--partition",
@@ -282,7 +316,8 @@ def main() -> None:
                         args.memory,
                         "--time-limit",
                         args.time_limit,
-                    ],
+                    ]
+                    + proxy_jump_cli_args(proxy_jump_host),
                     root,
                 )
 
@@ -291,10 +326,11 @@ def main() -> None:
             if not jobs:
                 raise RuntimeError(f"iteration {iteration} has no submitted evaluation jobs")
             wait_for_terminal_jobs(
-                host=args.submit_host,
+                host=submit_host,
                 jobs=jobs,
                 poll_seconds=args.poll_seconds,
                 timeout_seconds=args.ssh_timeout_seconds,
+                proxy_jump_host=proxy_jump_host,
             )
             collect_code = run_child(
                 [
@@ -305,8 +341,9 @@ def main() -> None:
                     "--iteration",
                     str(iteration),
                     "--sync-host",
-                    args.sync_host,
-                ],
+                    sync_host,
+                ]
+                + proxy_jump_cli_args(proxy_jump_host),
                 root,
                 allowed_codes={0, 2},
             )

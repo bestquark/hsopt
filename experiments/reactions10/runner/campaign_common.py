@@ -43,6 +43,7 @@ ARCHIVED_REACTION_EVALUATOR_SHA256 = (
 )
 
 SAFE_ID_RE = re.compile(r"[A-Za-z0-9_.-]+")
+SAFE_SSH_HOST_RE = re.compile(r"[A-Za-z0-9][A-Za-z0-9_.-]*")
 SHA256_RE = re.compile(r"[0-9a-f]{64}")
 CAMPAIGN_ID_DOMAIN = b"hsopt-reactions10-campaign-v1\0"
 # Python bytecode is executable input, not disposable runtime state.  Every
@@ -75,6 +76,44 @@ def validate_absolute_posix_path(value: str, field: str, *, allow_root: bool = F
     if not allow_root and path == PurePosixPath("/"):
         raise ValueError(f"{field} cannot be the filesystem root")
     return value
+
+
+def validate_ssh_host(value: str, field: str) -> str:
+    """Validate an SSH config alias before using it in ssh or rsync argv."""
+    if not isinstance(value, str) or SAFE_SSH_HOST_RE.fullmatch(value) is None:
+        raise ValueError(f"{field} must be a safe SSH host alias")
+    return value
+
+
+def ssh_command(
+    host: str,
+    remote_command: str,
+    *,
+    proxy_jump_host: str | None = None,
+) -> list[str]:
+    """Build one option-safe SSH argv, optionally through a single jump alias."""
+    destination = validate_ssh_host(host, "SSH destination")
+    command = ["ssh"]
+    if proxy_jump_host is not None:
+        command.extend(["-J", validate_ssh_host(proxy_jump_host, "SSH proxy jump host")])
+    command.extend([destination, remote_command])
+    return command
+
+
+def rsync_proxy_jump_args(proxy_jump_host: str | None = None) -> list[str]:
+    """Return rsync remote-shell arguments for the same validated SSH jump."""
+    if proxy_jump_host is None:
+        return []
+    jump = validate_ssh_host(proxy_jump_host, "SSH proxy jump host")
+    return ["-e", f"ssh -J {jump}"]
+
+
+def proxy_jump_cli_args(proxy_jump_host: str | None = None) -> list[str]:
+    """Propagate the optional jump alias to runner child processes."""
+    if proxy_jump_host is None:
+        return []
+    jump = validate_ssh_host(proxy_jump_host, "SSH proxy jump host")
+    return ["--proxy-jump-host", jump]
 
 
 def now_iso() -> str:
