@@ -1138,7 +1138,6 @@ def main() -> None:
         "--iterations": (args.iterations, 50),
         "--batch-size": (args.batch_size, 8),
         "--max-concurrent-mutators": (args.max_concurrent_mutators, 4),
-        "--max-running-eval-jobs": (args.max_running_eval_jobs, 4),
         "--model": (args.model, PAPER_MODEL),
         "--reasoning-effort": (args.reasoning_effort, PAPER_REASONING_EFFORT),
         "--codex-bin": (args.codex_bin, DEFAULT_CODEX_BIN),
@@ -1151,6 +1150,8 @@ def main() -> None:
     }
     if drift:
         parser.error(f"fixed paper streaming configuration changed: {drift}")
+    if not 1 <= args.max_running_eval_jobs <= 4:
+        parser.error("--max-running-eval-jobs must be between 1 and the global cap of 4")
     raise SystemExit(asyncio.run(supervise(args)))
 
 

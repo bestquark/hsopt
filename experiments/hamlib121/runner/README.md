@@ -8,9 +8,10 @@ workspaces; do not run campaigns inside the Git checkout.
 Every baseline and proposal is evaluated on an NVIDIA A100 through
 Legate/cuPyNumeric. Codex mutation agents run on Omni, then invoke the
 deterministic submitter; Slurm jobs contain no mutation logic. Each job requests
-one A100 and evaluates its HamLib lane subset serially. The streaming supervisor
-allows at most four such jobs at once, so the campaign uses up to four A100s
-without placing concurrent state-vector simulations on one device.
+one A100 and evaluates its HamLib lane subset serially. Each streaming
+supervisor accepts a per-replicate limit from one through four; orchestration
+must keep the sum across simultaneous HamLib and reaction supervisors at or
+below four. No job places concurrent state-vector simulations on one device.
 
 The acceptance metric is the measured HF-reference spectral ground-energy
 error of the compiled proposed product formula. Analytic product-formula and
@@ -257,9 +258,12 @@ arguments after an interruption: queued candidates, ambiguous submissions,
 active job IDs, collection, and evaluation retries resume from the campaign
 database without remutating in-flight lanes. Provenance drift fails closed.
 The paper runner rejects any change from 50 iterations, batch size 8, four
-concurrent mutators, four running evaluator jobs, model `gpt-5.5`, reasoning
-`high`, or the pinned Codex command. The complete execution configuration is
-recorded in `manifests/supervisor_provenance.json`.
+concurrent mutators, one-to-four running evaluator jobs, model `gpt-5.5`,
+reasoning `high`, or the pinned Codex command. When campaigns run together,
+their evaluator-job limits must sum to at most four; the standard layout is
+three HamLib supervisors at one job each plus the reaction campaign's single
+20-lane batch. The complete execution configuration is recorded in
+`manifests/supervisor_provenance.json`.
 
 Each Codex proposal runs in a fresh disposable directory containing only
 `simple_pf.py`, under `workspace-write` with user configuration and repository

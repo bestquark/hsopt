@@ -563,6 +563,38 @@ def apply_pauli_to_state_split(
     state_tensor = state_array.reshape(left_size, right_size)
     out_tensor = out_array.reshape(left_size, right_size)
 
+    if execution_fence is not None:
+        # cuPyNumeric's deferred ``out=``/in-place path produced a reproducible
+        # but wrong spectral phase even with fences around every write.  Use
+        # allocation-returning expressions on that backend, materializing each
+        # one before dropping its predecessor so peak storage stays bounded.
+        tensor = state_tensor
+        if left_active:
+            permutation, phases = local_pauli_output_map(left_label)
+            tensor = xp.take(
+                tensor,
+                xp.asarray(permutation, dtype=xp.int64),
+                axis=0,
+            )
+            execution_fence()
+            tensor = tensor * xp.asarray(phases, dtype=xp.complex128).reshape(
+                left_size, 1
+            )
+            execution_fence()
+        if right_active:
+            permutation, phases = local_pauli_output_map(right_label)
+            tensor = xp.take(
+                tensor,
+                xp.asarray(permutation, dtype=xp.int64),
+                axis=1,
+            )
+            execution_fence()
+            tensor = tensor * xp.asarray(phases, dtype=xp.complex128).reshape(
+                1, right_size
+            )
+            execution_fence()
+        return tensor.reshape(-1)
+
     if left_active and right_active:
         if work is None:
             work_array = xp.empty_like(state_array)
@@ -753,6 +785,23 @@ def build_pauli_rotation_compiler(
             if rz["gate_count"] == 0:
                 return xp.asarray(state, dtype=xp.complex128)
             state_array = xp.asarray(state, dtype=xp.complex128)
+            if execution_fence is not None:
+                updated = coefficients["I"] * state_array
+                execution_fence()
+                for pauli in non_identity_components:
+                    image_phase, image_label = images[pauli]
+                    pauli_state = apply_pauli_to_state_split(
+                        state=state_array,
+                        label=image_label,
+                        nqubits=nqubits,
+                        xp=xp,
+                        execution_fence=execution_fence,
+                    )
+                    scaled_pauli = coefficients[pauli] * image_phase * pauli_state
+                    execution_fence()
+                    updated = updated + scaled_pauli
+                    execution_fence()
+                return updated
             updated = xp.empty_like(state_array) if out is None else out
             if len(non_identity_components) == 1:
                 pauli = non_identity_components[0]
@@ -993,8 +1042,8 @@ def run_compiled_product_formula(
     state = xp.zeros(1 << nqubits, dtype=xp.complex128)
     state[hartree_fock_basis_index(nqubits=nqubits, electrons=electrons)] = 1.0 + 0.0j
     execution_fence()
-    next_state = xp.empty_like(state)
-    permutation_workspace = xp.empty_like(state)
+    next_state = None if is_deferred_backend else xp.empty_like(state)
+    permutation_workspace = None if is_deferred_backend else xp.empty_like(state)
     pauli_workspace = None
     compiler_kwargs = {"nqubits": nqubits, "xp": xp, "rz_cache": rz_cache}
     if is_deferred_backend:
@@ -1027,7 +1076,11 @@ def run_compiled_product_formula(
         non_identity_component_count = sum(
             pauli != "I" for pauli in compiled.get("active_pauli_components", [])
         )
-        if non_identity_component_count > 1 and pauli_workspace is None:
+        if (
+            not is_deferred_backend
+            and non_identity_component_count > 1
+            and pauli_workspace is None
+        ):
             pauli_workspace = xp.empty_like(state)
         updated_state = compiled["apply_state"](
             state,
@@ -1035,7 +1088,9 @@ def run_compiled_product_formula(
             pauli_workspace=pauli_workspace,
             permutation_workspace=permutation_workspace,
         )
-        if updated_state is not state:
+        if is_deferred_backend:
+            state = updated_state
+        elif updated_state is not state:
             state, next_state = updated_state, state
         nonzero_rotation_count += physical_multiplicity
         t_gate_count += physical_multiplicity * int(compiled["t_gate_count"])
@@ -1067,8 +1122,11 @@ def run_compiled_product_formula(
     norm = float(np.asarray(xp.linalg.norm(state)))
     if not math.isfinite(norm) or norm <= 0.0:
         raise RuntimeError(f"invalid propagated-state norm {norm}")
-    xp.divide(state, norm, out=state)
-    execution_fence()
+    if is_deferred_backend:
+        state = state / norm
+        execution_fence()
+    else:
+        xp.divide(state, norm, out=state)
     return {
         "state": state,
         "state_array_type": f"{type(state).__module__}.{type(state).__name__}",
