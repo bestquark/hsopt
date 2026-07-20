@@ -5,9 +5,11 @@ reaction-aware synthesis-error contracts. It creates 20 sequential lanes (two
 contracts for each of ten reactions), evaluates iteration 0 as the preserved
 baseline, and then records exactly 50 Codex proposals per lane.
 
-Codex mutation runs on Omni. Deterministic Slurm jobs each request one A100
-80GB and evaluate five lanes serially through Legate/cuPyNumeric, yielding four
-concurrent GPU batches per iteration. Stationary Trotter policies use compiled
+Codex mutation runs on Omni. By default, each deterministic Slurm job requests
+one A100 80GB and evaluates all 20 lanes serially through Legate/cuPyNumeric,
+leaving three of the global four evaluation-job slots available to HamLib.
+`--batch-size` remains available for deliberately different orchestration.
+Stationary Trotter policies use compiled
 one-step diagonalization; evaluator-seeded randomized Trotter, qDRIFT, and
 custom schedules are propagated explicitly from the exact ground state. All
 paths run on the allocated A100 and NumPy/CPU production scoring is rejected.
@@ -88,7 +90,8 @@ uv run --locked --project "$CAMPAIGN_ENV" python \
   --account YOUR_SLURM_ACCOUNT --partition YOUR_GPU_PARTITION --workers 1 --sync-only
 
 ssh YOUR_SUBMIT_HOST \
-  "uv sync --locked --project '$CLUSTER_ROOT/runner/environment'"
+  "python3 '$CLUSTER_ROOT/runner/prebuild_cluster_environment.py' \
+    --campaign-root '$CLUSTER_ROOT'"
 ```
 
 If orchestration runs on a workstation where the sync and submit hosts are
@@ -105,7 +108,8 @@ uv run --locked --project "$CAMPAIGN_ENV" python \
   --account YOUR_SLURM_ACCOUNT --partition YOUR_GPU_PARTITION --workers 1 --sync-only
 
 ssh -J YOUR_JUMP_HOST YOUR_SUBMIT_HOST \
-  "uv sync --locked --project '$CLUSTER_ROOT/runner/environment'"
+  "python3 '$CLUSTER_ROOT/runner/prebuild_cluster_environment.py' \
+    --campaign-root '$CLUSTER_ROOT'"
 
 uv run --locked --project "$CAMPAIGN_ENV" python \
   "$CAMPAIGN_RUNNER/supervise_campaign.py" \

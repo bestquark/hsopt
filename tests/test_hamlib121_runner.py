@@ -2035,6 +2035,47 @@ def test_pauli_kernel_reuses_full_state_workspaces() -> None:
     assert actual == pytest.approx(expected)
 
 
+def test_deferred_pauli_kernel_does_not_allocate_unused_output_workspace() -> None:
+    import numpy as np
+
+    class TrackingArrayModule:
+        __name__ = "cupynumeric"
+        complex128 = np.complex128
+        int64 = np.int64
+
+        def __init__(self) -> None:
+            self.empty_like_calls = 0
+
+        def asarray(self, *args, **kwargs):
+            return np.asarray(*args, **kwargs)
+
+        def take(self, *args, **kwargs):
+            return np.take(*args, **kwargs)
+
+        def empty_like(self, *args, **kwargs):
+            self.empty_like_calls += 1
+            return np.empty_like(*args, **kwargs)
+
+    xp = TrackingArrayModule()
+    state = np.arange(256, dtype=np.complex128)
+    label = "XYZIIYZX"
+    inputs = np.arange(state.size, dtype=np.int64)
+    outputs, phases = EVALUATE_WORKER.apply_pauli_to_indices(inputs, label, 8)
+    expected = np.empty_like(state)
+    expected[outputs] = phases * state
+
+    actual = EVALUATE_WORKER.apply_pauli_to_state_split(
+        state=state,
+        label=label,
+        nqubits=8,
+        xp=xp,
+        execution_fence=lambda: None,
+    )
+
+    assert actual == pytest.approx(expected)
+    assert xp.empty_like_calls == 0
+
+
 def test_fused_compiled_rotation_matches_the_gate_scaffold(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
@@ -3019,6 +3060,47 @@ def test_collector_cannot_close_a_batch_with_a_missing_lane_result(tmp_path: Pat
     assert completed.returncode != 0
     assert "result closure is incomplete or ambiguous" in completed.stderr
     assert "0001_missing_lane" in completed.stderr
+    with sqlite3.connect(root / "campaign.sqlite") as conn:
+        state, collected_at = conn.execute(
+            "SELECT state, collected_at FROM eval_batches WHERE batch_id='iter0001_batch0001'"
+        ).fetchone()
+    assert (state, collected_at) == ("submitted", None)
+
+
+def test_supervisor_collection_leaves_missing_lane_for_retry(tmp_path: Path) -> None:
+    root = tmp_path / "missing-supervisor-result"
+    _write_synthetic_export_run(root)
+    with sqlite3.connect(root / "campaign.sqlite") as conn:
+        conn.execute(
+            "UPDATE eval_batches SET lane_ids_json=?, state='submitted', collected_at=NULL "
+            "WHERE batch_id='iter0001_batch0001'",
+            (json.dumps(["0000_test_lane", "0001_missing_lane"]),),
+        )
+        conn.commit()
+
+    completed = subprocess.run(
+        [
+            sys.executable,
+            str(SCRIPTS_ROOT / "collect_iteration.py"),
+            "--campaign-root",
+            str(root),
+            "--iteration",
+            "1",
+            "--cluster-root",
+            "/cluster/synthetic",
+            "--expected-batch-id",
+            "iter0001_batch0001",
+            "--skip-rsync",
+        ],
+        cwd=RUNNER_ROOT,
+        env={**os.environ, "PYTHONDONTWRITEBYTECODE": "1"},
+        text=True,
+        capture_output=True,
+        check=False,
+    )
+
+    assert completed.returncode == 0, completed.stderr
+    assert "ok=1" in completed.stdout
     with sqlite3.connect(root / "campaign.sqlite") as conn:
         state, collected_at = conn.execute(
             "SELECT state, collected_at FROM eval_batches WHERE batch_id='iter0001_batch0001'"

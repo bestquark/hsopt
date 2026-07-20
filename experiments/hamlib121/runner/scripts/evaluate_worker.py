@@ -549,25 +549,17 @@ def apply_pauli_to_state_split(
     left_size = 1 << split
     right_size = 1 << (nqubits - split)
     state_array = xp.asarray(state, dtype=xp.complex128)
-    if out is None:
-        out_array = xp.empty_like(state_array)
-    else:
-        out_array = xp.asarray(out, dtype=xp.complex128)
-    if out_array.shape != state_array.shape:
-        raise ValueError("Pauli output workspace shape differs from the state")
-    if out_array is state_array:
-        raise ValueError("Pauli output workspace must not alias the input state")
-
     left_active = any(pauli != "I" for pauli in left_label)
     right_active = any(pauli != "I" for pauli in right_label)
     state_tensor = state_array.reshape(left_size, right_size)
-    out_tensor = out_array.reshape(left_size, right_size)
 
     if execution_fence is not None:
         # cuPyNumeric's deferred ``out=``/in-place path produced a reproducible
         # but wrong spectral phase even with fences around every write.  Use
         # allocation-returning expressions on that backend, materializing each
         # one before dropping its predecessor so peak storage stays bounded.
+        # Do not preallocate the eager output workspace here: at 30 qubits that
+        # unused complex128 store alone consumes 16 GiB of the A100.
         tensor = state_tensor
         if left_active:
             permutation, phases = local_pauli_output_map(left_label)
@@ -594,6 +586,16 @@ def apply_pauli_to_state_split(
             )
             execution_fence()
         return tensor.reshape(-1)
+
+    if out is None:
+        out_array = xp.empty_like(state_array)
+    else:
+        out_array = xp.asarray(out, dtype=xp.complex128)
+    if out_array.shape != state_array.shape:
+        raise ValueError("Pauli output workspace shape differs from the state")
+    if out_array is state_array:
+        raise ValueError("Pauli output workspace must not alias the input state")
+    out_tensor = out_array.reshape(left_size, right_size)
 
     if left_active and right_active:
         if work is None:

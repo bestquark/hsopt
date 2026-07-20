@@ -14,6 +14,8 @@ test -f "${LANE_IDS_FILE}"
 test -f "${CAMPAIGN_ROOT}/runner/evaluate_worker.py"
 
 cd "${CAMPAIGN_ROOT}"
+ITERATION_PADDED="$(printf '%04d' "$ITERATION")"
+mkdir -p "logs" "iterations/iter_${ITERATION_PADDED}/results"
 export PYTHONUNBUFFERED=1
 export OMP_NUM_THREADS=1
 export OPENBLAS_NUM_THREADS=1
@@ -24,6 +26,19 @@ export CAMPAIGN_LEGATE_FBMEM="${CAMPAIGN_LEGATE_FBMEM:-70000}"
 VIRTUAL_ENV="$(dirname "$(dirname "$CAMPAIGN_PYTHON")")"
 LEGATE="$(dirname "$CAMPAIGN_PYTHON")/legate"
 test -x "$LEGATE"
+SHA256SUM=/usr/bin/sha256sum
+test -x "$SHA256SUM"
+EXPECTED_LOCK_SHA256="$($SHA256SUM "${CAMPAIGN_ROOT}/runner/environment/uv.lock")"
+EXPECTED_LOCK_SHA256="${EXPECTED_LOCK_SHA256%% *}"
+EXPECTED_MANIFEST_SHA256="$($SHA256SUM "${CAMPAIGN_ROOT}/manifest.json")"
+EXPECTED_MANIFEST_SHA256="${EXPECTED_MANIFEST_SHA256%% *}"
+if [[ ! -f "${VIRTUAL_ENV}/.hsopt-uv-lock-sha256" \
+      || ! -f "${VIRTUAL_ENV}/.hsopt-manifest-sha256" \
+      || "$(<"${VIRTUAL_ENV}/.hsopt-uv-lock-sha256")" != "$EXPECTED_LOCK_SHA256" \
+      || "$(<"${VIRTUAL_ENV}/.hsopt-manifest-sha256")" != "$EXPECTED_MANIFEST_SHA256" ]]; then
+  echo "missing/stale prebuilt reaction GPU environment; run prebuild_cluster_environment.py" >&2
+  exit 2
+fi
 export VIRTUAL_ENV
 SITE_PACKAGES="$("$CAMPAIGN_PYTHON" -c 'import sysconfig; print(sysconfig.get_paths()["purelib"])')"
 export PYTHONPATH="$SITE_PACKAGES"

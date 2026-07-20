@@ -38,6 +38,26 @@ def test_locked_gpu_environment_includes_the_cuda_runtime_library() -> None:
     assert 'name = "nvidia-cuda-runtime-cu12"' in lockfile
 
 
+def test_locked_gpu_environment_uses_numpy1_compatible_scipy() -> None:
+    environment = RUNNER_ROOT / "environment"
+    pyproject = (environment / "pyproject.toml").read_text(encoding="utf-8")
+
+    assert '"numpy==1.26.4"' in pyproject
+    assert '"scipy==1.17.1"' in pyproject
+
+
+def test_failed_benchmark_import_does_not_poison_module_cache(tmp_path: Path) -> None:
+    benchmark = tmp_path / "source" / "repo" / "experiments" / "reactions10" / "benchmark.py"
+    benchmark.parent.mkdir(parents=True)
+    benchmark.write_text("raise RuntimeError('benchmark import boom')\n", encoding="utf-8")
+    module_name = f"reaction_benchmark_{CAMPAIGN_COMMON.sha256_file(benchmark)[:16]}"
+
+    for _ in range(2):
+        with pytest.raises(RuntimeError, match="benchmark import boom"):
+            CAMPAIGN_COMMON.load_benchmark(tmp_path)
+        assert module_name not in sys.modules
+
+
 def test_runner_readme_uses_the_locked_runner_projects_for_every_stage() -> None:
     readme = (RUNNER_ROOT / "README.md").read_text(encoding="utf-8")
 
@@ -46,7 +66,7 @@ def test_runner_readme_uses_the_locked_runner_projects_for_every_stage() -> None
         'uv run --locked --project "$SOURCE_ENV" python "$SOURCE_RUNNER/prepare_campaign.py"'
         in readme
     )
-    assert "uv sync --locked --project '$CLUSTER_ROOT/runner/environment'" in readme
+    assert "prebuild_cluster_environment.py" in readme
     for script_name in (
         "verify_hamiltonians.py",
         "submit_iteration.py",
@@ -56,6 +76,45 @@ def test_runner_readme_uses_the_locked_runner_projects_for_every_stage() -> None
         assert 'uv run --locked --project "$CAMPAIGN_ENV" python' in readme
         assert f'"$CAMPAIGN_RUNNER/{script_name}"' in readme
     assert "python /external/reactions10_run/runner/" not in readme
+
+
+def test_reaction_cluster_prebuild_keeps_uv_cache_outside_runner_snapshot() -> None:
+    source = (RUNNER_ROOT / "prebuild_cluster_environment.py").read_text(encoding="utf-8")
+    slurm = (RUNNER_ROOT / "slurm" / "evaluate_batch.sbatch").read_text(encoding="utf-8")
+
+    assert 'env.setdefault("UV_CACHE_DIR", str(runtime / "uv-cache"))' in source
+    assert 'env.setdefault("UV_PYTHON_INSTALL_DIR", str(runtime / "uv-python"))' in source
+    assert "runner/environment/.uv-cache" not in source
+    assert ".hsopt-uv-lock-sha256" in slurm
+    assert ".hsopt-manifest-sha256" in slurm
+    assert 'mkdir -p "logs" "iterations/iter_${ITERATION_PADDED}/results"' in slurm
+
+
+def test_missing_remote_reaction_results_are_retryable(monkeypatch, tmp_path: Path) -> None:
+    commands: list[list[str]] = []
+
+    def fake_run(command, **_kwargs):
+        commands.append(command)
+        return subprocess.CompletedProcess(command, 1)
+
+    monkeypatch.setattr(COLLECT_ITERATION.subprocess, "run", fake_run)
+    COLLECT_ITERATION.rsync_results(
+        tmp_path,
+        "/cluster/reactions10",
+        7,
+        "nvpark",
+        proxy_jump_host="omni",
+    )
+
+    assert commands == [
+        [
+            "ssh",
+            "-J",
+            "omni",
+            "nvpark",
+            "test -d /cluster/reactions10/iterations/iter_0007/results",
+        ]
+    ]
 
 
 def test_supervisor_shell_quotes_slurm_format_for_csh_login_shell(monkeypatch) -> None:
@@ -189,6 +248,13 @@ def test_remote_claim_and_result_sync_use_the_same_proxy_jump(tmp_path: Path, mo
         proxy_jump_host="omni",
     )
     assert rsync_calls == [
+        [
+            "ssh",
+            "-J",
+            "omni",
+            "nvdata",
+            "test -d /cluster/reactions10/iterations/iter_0000/results",
+        ],
         [
             "rsync",
             "-ah",

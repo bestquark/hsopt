@@ -7,6 +7,7 @@ import hashlib
 import json
 import math
 import os
+import shlex
 import stat
 import subprocess
 import sys
@@ -45,6 +46,7 @@ from campaign_common import (  # noqa: E402
     result_path,
     result_validation_error,
     rsync_proxy_jump_args,
+    ssh_command,
     sha256_file,
     validate_absolute_posix_path,
     validate_iteration,
@@ -76,13 +78,33 @@ def rsync_results(
     sync_host = validate_ssh_host(sync_host, "sync_host")
     destination = iteration_dir(root, iteration) / "results"
     destination.mkdir(parents=True, exist_ok=True)
+    remote_results = (
+        f"{cluster_root.rstrip('/')}/iterations/iter_{iteration:04d}/results"
+    )
+    probe = subprocess.run(
+        ssh_command(
+            sync_host,
+            f"test -d {shlex.quote(remote_results)}",
+            proxy_jump_host=proxy_jump_host,
+        ),
+        check=False,
+    )
+    if probe.returncode == 1:
+        # A launcher/preflight failure can happen before the Slurm script creates
+        # any lane result.  Treat that as an empty result set so the supervisor's
+        # existing retry_ready transaction can resubmit the same candidates.
+        return
+    if probe.returncode != 0:
+        raise RuntimeError(
+            f"could not inspect remote reaction result directory: {remote_results}"
+        )
     subprocess.run(
         [
             "rsync",
             "-ah",
             "--partial",
             *rsync_proxy_jump_args(proxy_jump_host),
-            f"{sync_host}:{cluster_root.rstrip('/')}/iterations/iter_{iteration:04d}/results/",
+            f"{sync_host}:{remote_results}/",
             f"{destination}/",
         ],
         check=True,

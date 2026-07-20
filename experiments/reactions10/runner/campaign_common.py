@@ -692,7 +692,14 @@ def load_benchmark(root: Path):
         raise ImportError(f"could not load reaction benchmark {script}")
     module = importlib.util.module_from_spec(spec)
     sys.modules[module_name] = module
-    spec.loader.exec_module(module)
+    try:
+        spec.loader.exec_module(module)
+    except BaseException:
+        # Never cache a partially initialized benchmark.  Otherwise one missing
+        # runtime dependency in the first lane is misreported as a different
+        # API error by every later lane in the same serial A100 worker.
+        sys.modules.pop(module_name, None)
+        raise
     if not callable(getattr(module, "evaluate_policy", None)):
         raise AttributeError("reaction benchmark must expose evaluate_policy(...)")
     return module

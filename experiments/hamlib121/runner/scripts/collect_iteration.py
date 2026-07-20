@@ -335,11 +335,13 @@ def main() -> None:
     if expected_batch is not None:
         actual_result_ids = {path.stem for path in result_paths}
         expected_result_ids = set(expected_batch["lane_ids"])
-        if actual_result_ids != expected_result_ids:
+        extra_result_ids = actual_result_ids - expected_result_ids
+        missing_result_ids = expected_result_ids - actual_result_ids
+        if extra_result_ids or (args.batch_id is not None and missing_result_ids):
             raise RuntimeError(
                 f"batch {expected_batch_id}: result closure is incomplete or ambiguous: "
-                f"missing={sorted(expected_result_ids - actual_result_ids)}, "
-                f"extra={sorted(actual_result_ids - expected_result_ids)}"
+                f"missing={sorted(missing_result_ids)}, "
+                f"extra={sorted(extra_result_ids)}"
             )
 
     ok_count = 0
