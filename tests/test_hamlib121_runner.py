@@ -2137,6 +2137,53 @@ def test_fused_compiled_rotation_matches_the_gate_scaffold(
     assert actual == pytest.approx(reference, abs=1.0e-12)
 
 
+def test_legate_projection_discards_only_synthesis_scale_components(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    import numpy as np
+
+    epsilon = 1.0e-6
+    approximate = np.asarray(
+        [
+            [0.8 - 0.6j, 0.25e-6 - 0.5e-6j],
+            [-0.25e-6 - 0.5e-6j, 0.8 + 0.6j],
+        ],
+        dtype=np.complex128,
+    )
+
+    class FakeGridSynth:
+        @staticmethod
+        def gridsynth_gates(_theta: float, _epsilon: float) -> str:
+            return "T"
+
+    monkeypatch.setattr(EVALUATE_WORKER, "import_pygridsynth", lambda: FakeGridSynth())
+    monkeypatch.setattr(
+        EVALUATE_WORKER,
+        "pygridsynth_matrix_from_gates",
+        lambda _gate_string: approximate,
+    )
+    fences = 0
+
+    def fence() -> None:
+        nonlocal fences
+        fences += 1
+
+    compiler = EVALUATE_WORKER.build_pauli_rotation_compiler(
+        nqubits=1,
+        xp=np,
+        execution_fence=fence,
+    )
+    compiled = compiler("Z", 0.1, epsilon)
+    state = np.asarray([0.3 + 0.4j, -0.2 + 0.5j], dtype=np.complex128)
+    actual = compiled["apply_state"](state)
+    projected = np.diag(np.diag(approximate)) @ state
+
+    assert compiled["active_pauli_components"] == ["I", "Z"]
+    assert compiled["discarded_component_norm_bound"] == pytest.approx(0.75e-6)
+    assert actual == pytest.approx(projected)
+    assert fences > 0
+
+
 def test_rz_precompilation_cache_avoids_serial_resynthesis(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
@@ -3497,11 +3544,22 @@ def test_slurm_workers_pin_and_verify_the_locked_python_runtime() -> None:
     gpu_source = (RUNNER_ROOT / "slurm" / "evaluate_batch.sbatch").read_text(encoding="utf-8")
     assert 'export CAMPAIGN_LOCKED_PYTHON="$VIRTUAL_ENV/bin/python"' in gpu_source
     assert '--run-mode exec "$CAMPAIGN_LOCKED_PYTHON" scripts/evaluate_worker.py' in gpu_source
+    assert 'done < "$LANE_IDS_FILE"' in gpu_source
+    assert '--lane-id "$lane_id"' in gpu_source
     assert not (RUNNER_ROOT / "slurm" / "evaluate_batch_cpu.sbatch").exists()
 
     worker_source = (SCRIPTS_ROOT / "evaluate_worker.py").read_text(encoding="utf-8")
     guard_call = 'if os.environ.get("SLURM_JOB_ID") or os.environ.get('
     assert worker_source.index(guard_call) < worker_source.index("import numpy as np")
+
+
+def test_reaction_cupynumeric_runtime_uses_the_compatible_numpy_line() -> None:
+    environment = REPO_ROOT / "experiments" / "reactions10" / "runner" / "environment"
+    pyproject = (environment / "pyproject.toml").read_text(encoding="utf-8")
+    lockfile = (environment / "uv.lock").read_text(encoding="utf-8")
+
+    assert '"numpy==1.26.4"' in pyproject
+    assert 'name = "numpy", specifier = "==1.26.4"' in lockfile
 
 
 def test_locked_python_runtime_guard_rejects_interpreter_drift(

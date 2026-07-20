@@ -127,16 +127,34 @@ MONITOR_PID=$!
 trap 'kill "$MONITOR_PID" 2>/dev/null || true' EXIT
 
 echo "worker=0 num_workers=1 cuda_visible_devices=${CUDA_VISIBLE_DEVICES:-}"
-"$LEGATE" --gpus 1 --fbmem "$CAMPAIGN_LEGATE_FBMEM" \
-  --run-mode exec "$CAMPAIGN_LOCKED_PYTHON" scripts/evaluate_worker.py \
-  --campaign-root "$CAMPAIGN_ROOT" \
-  --iteration "$ITERATION" \
-  --worker-id 0 \
-  --num-workers 1 \
-  --data-root "$HAMLIB_DATA_ROOT" \
-  --lane-ids-file "$LANE_IDS_FILE" \
-  --policy-snapshot "$POLICY_SNAPSHOT" \
-  "${BASELINE_FLAG[@]}" \
-  > "logs/eval_iter_${ITERATION}_batch_${BATCH_ID}.out" \
-  2> "logs/eval_iter_${ITERATION}_batch_${BATCH_ID}.err"
+EVAL_OUT="logs/eval_iter_${ITERATION}_batch_${BATCH_ID}.out"
+EVAL_ERR="logs/eval_iter_${ITERATION}_batch_${BATCH_ID}.err"
+: > "$EVAL_OUT"
+: > "$EVAL_ERR"
+failed_lanes=()
+while IFS= read -r lane_id || [[ -n "$lane_id" ]]; do
+  [[ -z "$lane_id" || "$lane_id" =~ ^[[:space:]]*# ]] && continue
+  echo "lane_start=$lane_id started=$(date -Is)" >> "$EVAL_OUT"
+  if "$LEGATE" --gpus 1 --fbmem "$CAMPAIGN_LEGATE_FBMEM" \
+    --run-mode exec "$CAMPAIGN_LOCKED_PYTHON" scripts/evaluate_worker.py \
+    --campaign-root "$CAMPAIGN_ROOT" \
+    --iteration "$ITERATION" \
+    --worker-id 0 \
+    --num-workers 1 \
+    --data-root "$HAMLIB_DATA_ROOT" \
+    --lane-id "$lane_id" \
+    --policy-snapshot "$POLICY_SNAPSHOT" \
+    "${BASELINE_FLAG[@]}" \
+    >> "$EVAL_OUT" 2>> "$EVAL_ERR"; then
+    echo "lane_finished=$lane_id finished=$(date -Is)" >> "$EVAL_OUT"
+  else
+    status=$?
+    echo "lane_failed=$lane_id exit_code=$status finished=$(date -Is)" >> "$EVAL_ERR"
+    failed_lanes+=("$lane_id:$status")
+  fi
+done < "$LANE_IDS_FILE"
+if (( ${#failed_lanes[@]} )); then
+  echo "failed_lanes=${failed_lanes[*]}" >&2
+  exit 1
+fi
 echo "finished=$(date -Is)"

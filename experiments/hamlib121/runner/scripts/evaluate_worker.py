@@ -749,8 +749,10 @@ def build_pauli_rotation_compiler(
             "Y": (approximate[1, 0] - approximate[0, 1]) / (2.0j),
             "Z": 0.5 * (approximate[0, 0] - approximate[1, 1]),
         }
-        component_floor = np.finfo(np.float64).eps * max(
-            abs(coefficient) for coefficient in coefficients.values()
+        component_floor = max(
+            normalized_epsilon,
+            np.finfo(np.float64).eps
+            * max(abs(coefficient) for coefficient in coefficients.values()),
         )
         images = {
             pauli: conjugated_scaffold_pauli(label, pauli) for pauli in ("X", "Y", "Z")
@@ -786,21 +788,28 @@ def build_pauli_rotation_compiler(
                 return xp.asarray(state, dtype=xp.complex128)
             state_array = xp.asarray(state, dtype=xp.complex128)
             if execution_fence is not None:
-                updated = coefficients["I"] * state_array
-                execution_fence()
-                for pauli in non_identity_components:
-                    image_phase, image_label = images[pauli]
-                    pauli_state = apply_pauli_to_state_split(
-                        state=state_array,
-                        label=image_label,
-                        nqubits=nqubits,
-                        xp=xp,
-                        execution_fence=execution_fence,
+                if len(non_identity_components) > 1:
+                    raise RuntimeError(
+                        "compiled Rz projection retained more than one non-identity "
+                        "Pauli component; refusing an unbounded Legate state allocation"
                     )
-                    scaled_pauli = coefficients[pauli] * image_phase * pauli_state
+                if not non_identity_components:
+                    updated = coefficients["I"] * state_array
                     execution_fence()
-                    updated = updated + scaled_pauli
-                    execution_fence()
+                    return updated
+                pauli = non_identity_components[0]
+                image_phase, image_label = images[pauli]
+                pauli_state = apply_pauli_to_state_split(
+                    state=state_array,
+                    label=image_label,
+                    nqubits=nqubits,
+                    xp=xp,
+                    execution_fence=execution_fence,
+                )
+                pauli_state = coefficients[pauli] * image_phase * pauli_state
+                execution_fence()
+                updated = coefficients["I"] * state_array + pauli_state
+                execution_fence()
                 return updated
             updated = xp.empty_like(state_array) if out is None else out
             if len(non_identity_components) == 1:
@@ -1503,10 +1512,15 @@ def evaluate_lane(
     rotation_synthesis_error_per_base = float(
         propagation["synthesis_epsilon_sum_per_base_unitary"]
     )
+    component_omission_error_per_base = float(
+        propagation["numerical_component_omission_bound_per_base_unitary"]
+    )
     omitted_identity_error_per_base = float(
         propagation["omitted_rotation_identity_error_bound_per_base_unitary"]
     )
-    rotation_synthesis_unitary_error = qpe_apps * rotation_synthesis_error_per_base
+    rotation_synthesis_unitary_error = qpe_apps * (
+        rotation_synthesis_error_per_base + component_omission_error_per_base
+    )
     zero_angle_unitary_error = qpe_apps * omitted_identity_error_per_base
     zero_angle_error = zero_angle_unitary_error / float(protocol["tau"])
     synthesis_unitary_error = rotation_synthesis_unitary_error + zero_angle_unitary_error
@@ -1605,6 +1619,9 @@ def evaluate_lane(
         "analytic_omitted_rotation_count_per_base_unitary": scheduled - nonzero,
         "omitted_rotation_identity_error_bound_per_base_unitary": (omitted_identity_error_per_base),
         "rotation_synthesis_unitary_error_bound": rotation_synthesis_unitary_error,
+        "compiled_component_omission_unitary_error_bound": (
+            qpe_apps * component_omission_error_per_base
+        ),
         "zero_angle_unitary_error_bound": zero_angle_unitary_error,
         "zero_angle_error_bound_hartree": zero_angle_error,
         "synthesis_unitary_error_bound": synthesis_unitary_error,
@@ -1632,7 +1649,9 @@ def main() -> None:
     parser.add_argument("--worker-id", type=int, required=True)
     parser.add_argument("--num-workers", type=int, required=True)
     parser.add_argument("--data-root", type=Path, required=True)
-    parser.add_argument("--lane-ids-file", type=Path)
+    lane_selection = parser.add_mutually_exclusive_group()
+    lane_selection.add_argument("--lane-id")
+    lane_selection.add_argument("--lane-ids-file", type=Path)
     parser.add_argument("--compute-baseline", action="store_true")
     parser.add_argument("--policy-snapshot", choices=("current", "initial"), default="current")
     args = parser.parse_args()
@@ -1666,7 +1685,9 @@ def main() -> None:
         raise RuntimeError(
             "iteration-0 baseline must use cuPyNumeric/A100 and policy_snapshot=initial"
         )
-    selected_lane_ids = read_lane_ids(args.lane_ids_file)
+    selected_lane_ids = (
+        {args.lane_id} if args.lane_id is not None else read_lane_ids(args.lane_ids_file)
+    )
     lanes = sorted(
         [lane for lane in manifest["lanes"] if lane["exact_fit"]],
         key=lambda item: (
@@ -1726,11 +1747,17 @@ def main() -> None:
             if batch_manifest.get(key) != value
         }
         batch_lane_ids = batch_manifest.get("lane_ids")
+        selected_batch_lane_ids = {lane["lane_id"] for lane in lanes}
+        batch_lane_closure_is_valid = isinstance(batch_lane_ids, list) and (
+            set(batch_lane_ids).issuperset(selected_batch_lane_ids)
+            if args.lane_id is not None
+            else set(batch_lane_ids) == selected_batch_lane_ids
+        )
         if (
             drift
             or not isinstance(batch_lane_ids, list)
             or len(batch_lane_ids) != len(set(batch_lane_ids))
-            or set(batch_lane_ids) != {lane["lane_id"] for lane in lanes}
+            or not batch_lane_closure_is_valid
         ):
             raise RuntimeError(f"batch manifest identity/lane drift: {drift}")
         policy_hashes = batch_manifest.get("policy_sha256s")

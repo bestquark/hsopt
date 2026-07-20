@@ -8,9 +8,8 @@ dependencies = [
   "legate==25.11.0",
   "nvidia-cuda-runtime-cu12>=12.9,<13",
   "nvidia-cupynumeric==25.11.0",
-  "numpy==2.5.1",
+  "numpy==1.26.4",
   "pygridsynth==1.2.0",
-  "scipy==1.18.0",
 ]
 
 [tool.uv]
