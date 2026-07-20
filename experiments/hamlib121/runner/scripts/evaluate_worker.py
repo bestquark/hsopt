@@ -3,6 +3,7 @@ from __future__ import annotations
 
 import argparse
 import functools
+import gc
 import hashlib
 import json
 import math
@@ -563,28 +564,44 @@ def apply_pauli_to_state_split(
         tensor = state_tensor
         if left_active:
             permutation, phases = local_pauli_output_map(left_label)
-            tensor = xp.take(
+            replacement = xp.take(
                 tensor,
                 xp.asarray(permutation, dtype=xp.int64),
                 axis=0,
             )
             execution_fence()
-            tensor = tensor * xp.asarray(phases, dtype=xp.complex128).reshape(
+            previous = tensor
+            tensor = replacement
+            del replacement, previous
+            gc.collect()
+            replacement = tensor * xp.asarray(phases, dtype=xp.complex128).reshape(
                 left_size, 1
             )
             execution_fence()
+            previous = tensor
+            tensor = replacement
+            del replacement, previous
+            gc.collect()
         if right_active:
             permutation, phases = local_pauli_output_map(right_label)
-            tensor = xp.take(
+            replacement = xp.take(
                 tensor,
                 xp.asarray(permutation, dtype=xp.int64),
                 axis=1,
             )
             execution_fence()
-            tensor = tensor * xp.asarray(phases, dtype=xp.complex128).reshape(
+            previous = tensor
+            tensor = replacement
+            del replacement, previous
+            gc.collect()
+            replacement = tensor * xp.asarray(phases, dtype=xp.complex128).reshape(
                 1, right_size
             )
             execution_fence()
+            previous = tensor
+            tensor = replacement
+            del replacement, previous
+            gc.collect()
         return tensor.reshape(-1)
 
     if out is None:
@@ -808,10 +825,18 @@ def build_pauli_rotation_compiler(
                     xp=xp,
                     execution_fence=execution_fence,
                 )
-                pauli_state = coefficients[pauli] * image_phase * pauli_state
+                replacement = coefficients[pauli] * image_phase * pauli_state
                 execution_fence()
-                updated = coefficients["I"] * state_array + pauli_state
+                previous = pauli_state
+                pauli_state = replacement
+                del replacement, previous
+                gc.collect()
+                identity_state = coefficients["I"] * state_array
                 execution_fence()
+                updated = identity_state + pauli_state
+                execution_fence()
+                del identity_state, pauli_state
+                gc.collect()
                 return updated
             updated = xp.empty_like(state_array) if out is None else out
             if len(non_identity_components) == 1:

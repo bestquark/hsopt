@@ -2075,6 +2075,10 @@ def test_deferred_pauli_kernel_does_not_allocate_unused_output_workspace() -> No
     assert actual == pytest.approx(expected)
     assert xp.empty_like_calls == 0
 
+    source = (SCRIPTS_ROOT / "evaluate_worker.py").read_text(encoding="utf-8")
+    assert "del replacement, previous" in source
+    assert "gc.collect()" in source
+
 
 def test_fused_compiled_rotation_matches_the_gate_scaffold(
     monkeypatch: pytest.MonkeyPatch,
