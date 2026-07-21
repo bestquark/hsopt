@@ -118,8 +118,10 @@ When the campaign workspace is local and those cluster aliases are reachable
 only through one SSH config alias, append `--proxy-jump-host omni` to
 `submit_eval_batch.py`, `collect_iteration.py`, and
 `supervise_streaming_batches.py`. The supervisor propagates the validated alias
-to submission, result collection, `squeue`/`sacct`, and optional partition
-rescue children, and records it in `manifests/supervisor_provenance.json`.
+to submission and result collection, and records it in
+`manifests/supervisor_provenance.json`. Evaluation submission blocks in
+`sbatch --wait`; the active campaign path never polls `squeue`, `sacct`, or the
+GPU.
 Use `ssh -J omni` and `"$RSYNC_BIN" -e 'ssh -J omni'` for the manual
 prebuild and archive-preflight commands below. Omitting the flag preserves the
 direct-host route.
