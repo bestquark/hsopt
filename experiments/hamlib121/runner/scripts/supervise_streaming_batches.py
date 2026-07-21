@@ -290,7 +290,6 @@ def ensure_supervisor_provenance(root: Path, args: argparse.Namespace) -> dict[s
         "fallback_partition": args.fallback_partition,
         "sync_host": args.sync_host,
         "submit_host": args.submit_host,
-        "slurm_query_host": args.slurm_query_host,
         "proxy_jump_host": args.proxy_jump_host,
         "rsync": args.rsync_provenance,
         "legate_fbmem": args.legate_fbmem or "70000",
@@ -536,7 +535,6 @@ async def supervise(args: argparse.Namespace) -> int:
             "account": args.account,
             "sync_host": args.sync_host,
             "submit_host": args.submit_host,
-            "slurm_query_host": args.slurm_query_host,
             "legate_fbmem": args.legate_fbmem,
             "uv_base_dir": args.uv_base_dir,
             "uv_cache_dir": args.uv_cache_dir,
@@ -963,7 +961,6 @@ def main() -> None:
     )
     parser.add_argument("--sync-host", default=os.environ.get("HSOPT_SYNC_HOST"))
     parser.add_argument("--submit-host", default=os.environ.get("HSOPT_SUBMIT_HOST"))
-    parser.add_argument("--slurm-query-host", default=os.environ.get("HSOPT_QUERY_HOST"))
     parser.add_argument(
         "--proxy-jump-host",
         help="Optional SSH config alias used as ProxyJump for all cluster hosts.",
@@ -998,7 +995,6 @@ def main() -> None:
         "--partition or HSOPT_GPU_PARTITION": args.partition,
         "--sync-host or HSOPT_SYNC_HOST": args.sync_host,
         "--submit-host or HSOPT_SUBMIT_HOST": args.submit_host,
-        "--slurm-query-host or HSOPT_QUERY_HOST": args.slurm_query_host,
     }
     missing = [label for label, value in required.items() if not value]
     if args.enable_partition_fallback and not args.fallback_partition:
@@ -1008,7 +1004,6 @@ def main() -> None:
     try:
         args.sync_host = validate_ssh_host(str(args.sync_host), "sync_host")
         args.submit_host = validate_ssh_host(str(args.submit_host), "submit_host")
-        args.slurm_query_host = validate_ssh_host(str(args.slurm_query_host), "slurm_query_host")
         args.proxy_jump_host = (
             validate_ssh_host(str(args.proxy_jump_host), "proxy_jump_host")
             if args.proxy_jump_host is not None

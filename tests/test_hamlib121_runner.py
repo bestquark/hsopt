@@ -1171,6 +1171,7 @@ def test_collect_uses_proxy_jump_and_supervisor_has_no_scheduler_polling(
         encoding="utf-8"
     )
     assert "squeue" not in source and "sacct" not in source
+    assert "--slurm-query-host" not in source
     assert not hasattr(STREAM_SUPERVISOR, "job_is_done")
 
 
@@ -1289,6 +1290,7 @@ def test_strict_export_binds_supervisor_to_rsync_receipt(tmp_path: Path) -> None
     CAMPAIGN_COMMON.ensure_rsync_provenance(root, rsync_provenance)
     path = root / "manifests" / "supervisor_provenance.json"
     payload = json.loads(path.read_text(encoding="utf-8"))
+    payload.pop("slurm_query_host")
     payload["rsync"] = rsync_provenance
     CAMPAIGN_COMMON.write_json(path, payload)
     manifest, identity = CAMPAIGN_COMMON.validate_campaign_identity(root)

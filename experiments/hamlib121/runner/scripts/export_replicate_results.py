@@ -121,6 +121,20 @@ SUPERVISOR_PROVENANCE_KEYS = PROXY_SUPERVISOR_PROVENANCE_KEYS | {"rsync"}
 GPU_LEGACY_SUPERVISOR_PROVENANCE_KEYS = LEGACY_SUPERVISOR_PROVENANCE_KEYS - {"cpu_partition"}
 GPU_PROXY_SUPERVISOR_PROVENANCE_KEYS = PROXY_SUPERVISOR_PROVENANCE_KEYS - {"cpu_partition"}
 GPU_SUPERVISOR_PROVENANCE_KEYS = SUPERVISOR_PROVENANCE_KEYS - {"cpu_partition"}
+EVENT_DRIVEN_LEGACY_SUPERVISOR_PROVENANCE_KEYS = LEGACY_SUPERVISOR_PROVENANCE_KEYS - {
+    "slurm_query_host"
+}
+EVENT_DRIVEN_PROXY_SUPERVISOR_PROVENANCE_KEYS = PROXY_SUPERVISOR_PROVENANCE_KEYS - {
+    "slurm_query_host"
+}
+EVENT_DRIVEN_SUPERVISOR_PROVENANCE_KEYS = SUPERVISOR_PROVENANCE_KEYS - {"slurm_query_host"}
+EVENT_DRIVEN_GPU_LEGACY_SUPERVISOR_PROVENANCE_KEYS = GPU_LEGACY_SUPERVISOR_PROVENANCE_KEYS - {
+    "slurm_query_host"
+}
+EVENT_DRIVEN_GPU_PROXY_SUPERVISOR_PROVENANCE_KEYS = GPU_PROXY_SUPERVISOR_PROVENANCE_KEYS - {
+    "slurm_query_host"
+}
+EVENT_DRIVEN_GPU_SUPERVISOR_PROVENANCE_KEYS = GPU_SUPERVISOR_PROVENANCE_KEYS - {"slurm_query_host"}
 
 
 def validate_paper_autoresearch_provenance(provenance: dict[str, Any]) -> None:
@@ -167,6 +181,12 @@ def validate_supervisor_provenance(
         GPU_LEGACY_SUPERVISOR_PROVENANCE_KEYS,
         GPU_PROXY_SUPERVISOR_PROVENANCE_KEYS,
         GPU_SUPERVISOR_PROVENANCE_KEYS,
+        EVENT_DRIVEN_LEGACY_SUPERVISOR_PROVENANCE_KEYS,
+        EVENT_DRIVEN_PROXY_SUPERVISOR_PROVENANCE_KEYS,
+        EVENT_DRIVEN_SUPERVISOR_PROVENANCE_KEYS,
+        EVENT_DRIVEN_GPU_LEGACY_SUPERVISOR_PROVENANCE_KEYS,
+        EVENT_DRIVEN_GPU_PROXY_SUPERVISOR_PROVENANCE_KEYS,
+        EVENT_DRIVEN_GPU_SUPERVISOR_PROVENANCE_KEYS,
     ):
         raise RuntimeError(f"{root.name}: malformed supervisor provenance")
     if "rsync" not in payload:
@@ -185,8 +205,13 @@ def validate_supervisor_provenance(
     ):
         raise RuntimeError(f"{root.name}: supervisor identity/runtime provenance drift")
     try:
-        for field in ("sync_host", "submit_host", "slurm_query_host"):
+        for field in ("sync_host", "submit_host"):
             validate_ssh_host(payload.get(field), f"supervisor provenance {field}")
+        if "slurm_query_host" in payload:
+            validate_ssh_host(
+                payload.get("slurm_query_host"),
+                "supervisor provenance slurm_query_host",
+            )
         proxy_jump_host = payload.get("proxy_jump_host")
         if proxy_jump_host is not None:
             validate_ssh_host(proxy_jump_host, "supervisor provenance proxy_jump_host")
