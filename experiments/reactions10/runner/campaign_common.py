@@ -432,6 +432,8 @@ def require_campaign(
         or manifest.get("chemical_accuracy_hartree") != CHEMICAL_ACCURACY_HARTREE
         or manifest.get("autoresearch_provenance")
         != {
+            "mutation_agent": "opencode",
+            "api_provider": "nvidia",
             "codex_package": CODEX_PACKAGE,
             "codex_cli_version": CODEX_CLI_VERSION,
             "model": PAPER_MODEL,

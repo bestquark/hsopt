@@ -1349,6 +1349,8 @@ def test_preparer_shape_is_accepted_by_runner_and_strict_exporter(tmp_path: Path
         "evaluation_iterations": list(range(CAMPAIGN_COMMON.PROPOSAL_ITERATIONS + 1)),
         "chemical_accuracy_hartree": TARGET_HARTREE,
         "autoresearch_provenance": {
+            "mutation_agent": "opencode",
+            "api_provider": "nvidia",
             "codex_package": CAMPAIGN_COMMON.CODEX_PACKAGE,
             "codex_cli_version": CAMPAIGN_COMMON.CODEX_CLI_VERSION,
             "model": CAMPAIGN_COMMON.PAPER_MODEL,
