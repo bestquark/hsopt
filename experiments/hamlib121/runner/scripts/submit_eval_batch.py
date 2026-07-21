@@ -274,7 +274,7 @@ def main() -> None:
     parser.add_argument("--compute-baseline", action="store_true")
     parser.add_argument("--policy-snapshot", choices=("current", "initial"), default="current")
     parser.add_argument("--sync-timeout-seconds", type=int, default=300)
-    parser.add_argument("--submit-timeout-seconds", type=int, default=60)
+    parser.add_argument("--submit-timeout-seconds", type=int, default=18000)
     parser.add_argument("--command-attempts", type=int, default=5)
     parser.add_argument(
         "--sync-only",
@@ -388,10 +388,7 @@ def main() -> None:
             "establish the iteration-0 A100 baseline chunks first"
         )
     if args.iteration == 0:
-        if (
-            not args.compute_baseline
-            or args.policy_snapshot != "initial"
-        ):
+        if not args.compute_baseline or args.policy_snapshot != "initial":
             raise RuntimeError(
                 "each iteration-0 baseline chunk must use --compute-baseline "
                 "--policy-snapshot initial on the GPU path"
@@ -706,34 +703,17 @@ def main() -> None:
         'else intent=$(<"$intent_file"); '
         'if [ "$intent" != "$campaign_id|$manifest_sha|$submission_key|$job_name" ]; then '
         'echo "pre-submit intent identity is invalid" >&2; exit 60; fi; fi; '
-        'SQUEUE=$(command -v squeue) || { echo "squeue is unavailable" >&2; exit 61; }; '
-        'SACCT=$(command -v sacct) || { echo "sacct is unavailable" >&2; exit 61; }; '
         'SBATCH=$(command -v sbatch) || { echo "sbatch is unavailable" >&2; exit 61; }; '
-        'if ! queue_rows=$("$SQUEUE" -h -u "$USER" -n "$job_name" -o "%A|%j"); then '
-        'echo "squeue reconciliation failed" >&2; exit 62; fi; '
-        'if ! account_rows=$("$SACCT" -n -X -u "$USER" --name "$job_name" '
-        "--starttime 2000-01-01 --format=JobIDRaw,JobName%128 --parsable2); then "
-        'echo "sacct reconciliation failed" >&2; exit 63; fi; '
-        "declare -A ids=(); "
-        'while IFS="|" read -r jid jname rest; do '
-        'if [[ "$jid" =~ ^[0-9]+$ ]] && [ "$jname" = "$job_name" ]; then ids["$jid"]=1; fi; '
-        'done <<<"$queue_rows"; '
-        'while IFS="|" read -r jid jname rest; do '
-        'if [[ "$jid" =~ ^[0-9]+$ ]] && [ "$jname" = "$job_name" ]; then ids["$jid"]=1; fi; '
-        'done <<<"$account_rows"; '
-        'if [ "${#ids[@]}" -gt 1 ]; then '
-        'echo "multiple Slurm jobs match one durable submission intent" >&2; exit 64; fi; '
-        'if [ "${#ids[@]}" -eq 1 ]; then for existing in "${!ids[@]}"; do :; done; '
-        'write_receipt "$existing"; rm -f "$intent_file"; printf "%s\\n" "$existing"; exit 0; fi; '
         'if [ "$created_intent" -ne 1 ]; then '
         'echo "ambiguous prior submission has no Slurm receipt; refusing to resubmit" >&2; exit 65; fi; '
-        f'submitted=$("$SBATCH" --parsable --job-name="$job_name" --account={shell_quote(account)} '
+        f'set +e; submitted=$("$SBATCH" --wait --parsable --job-name="$job_name" --account={shell_quote(account)} '
         f"--partition={shell_quote(submit_partition)} "
-        f"--export={shell_quote(export_vars)} {shell_quote(slurm_script)}); "
+        f"--export={shell_quote(export_vars)} {shell_quote(slurm_script)}); wait_status=$?; set -e; "
         'job_id="${submitted%%;*}"; '
         'if ! [[ "$job_id" =~ ^[0-9]+$ ]]; then '
         'echo "sbatch returned an invalid job ID: $submitted" >&2; exit 66; fi; '
-        'write_receipt "$job_id"; rm -f "$intent_file"; printf "%s\\n" "$job_id"'
+        'write_receipt "$job_id"; printf "%s\\n" "$wait_status" >"$job_file.exitcode"; '
+        'rm -f "$intent_file"; printf "%s\\n" "$job_id"'
     )
     completed = run_with_retries(
         ssh_command(submit_host, "bash", "-s", proxy_jump_host=proxy_jump_host),

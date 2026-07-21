@@ -111,7 +111,7 @@ uv sync --extra gepa
 ```
 
 For optional cuPyNumeric execution of the PFS evaluators on a Legate-capable
-cluster:
+local NVIDIA GPU or cluster:
 
 ```bash
 uv sync --extra cupynumeric
@@ -157,6 +157,43 @@ Render the prompt for an agent run:
 
 ```bash
 uv run hsopt prompt examples/pfs/h2 --evaluator energy
+```
+
+Run the evaluator locally on CPU, or on one local NVIDIA GPU through
+Legate/cuPyNumeric:
+
+```bash
+uv run hsopt evaluate examples/pfs/h2 --transport local --backend numpy
+uv run hsopt evaluate examples/pfs/h2 --transport local --backend cupynumeric
+```
+
+Create one isolated proposal with Codex or OpenCode. Mutation histories are
+required to live outside the checkout:
+
+```bash
+uv run hsopt mutate examples/pfs/h2 --agent codex \
+  --run-dir "$HSOPT_DATA_ROOT/development/pfs/codex-001"
+
+NVIDIA_API_KEY=... uv run hsopt mutate examples/pfs/h2 --agent opencode \
+  --run-dir "$HSOPT_DATA_ROOT/development/pfs/nemotron-001"
+```
+
+OpenCode is pinned to `opencode-ai@1.4.11`; its default model is
+`nvidia/nvidia/nemotron-3-super-v3` through NVIDIA's OpenAI-compatible API.
+The key is read only from `NVIDIA_API_KEY`, and the agent is denied every tool
+except read/edit access to the isolated `simple_pf.py`.
+
+For a shared cluster checkout, `--transport slurm` submits the same evaluator
+as one blocking `sbatch --wait` job with one GPU and no scheduler polling. Use
+`--print-only` to inspect the exact SSH, Slurm, and Legate handoff before
+running it:
+
+```bash
+uv run hsopt evaluate examples/pfs/h2 --transport slurm --print-only \
+  --submit-host nvlogin --remote-repo-root /shared/hsopt \
+  --account ACCOUNT --partition PARTITION \
+  --remote-python /shared/hsopt/.venv/bin/python \
+  --remote-legate /shared/hsopt/.venv/bin/legate
 ```
 
 Seed a GEPA prompt-optimization run:

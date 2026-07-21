@@ -30,6 +30,7 @@ sys.pycache_prefix = _PRIVATE_PYCACHE_PREFIX
 os.environ["PYTHONPYCACHEPREFIX"] = _PRIVATE_PYCACHE_PREFIX
 
 from campaign_common import (  # noqa: E402
+    DEFAULT_CODEX_BIN,
     PAPER_CODEX_CLI_VERSION,
     PAPER_CODEX_EXEC_FLAGS,
     PAPER_MODEL,
@@ -117,17 +118,16 @@ LEGACY_SUPERVISOR_PROVENANCE_KEYS = {
 }
 PROXY_SUPERVISOR_PROVENANCE_KEYS = LEGACY_SUPERVISOR_PROVENANCE_KEYS | {"proxy_jump_host"}
 SUPERVISOR_PROVENANCE_KEYS = PROXY_SUPERVISOR_PROVENANCE_KEYS | {"rsync"}
-GPU_LEGACY_SUPERVISOR_PROVENANCE_KEYS = LEGACY_SUPERVISOR_PROVENANCE_KEYS - {
-    "cpu_partition"
-}
-GPU_PROXY_SUPERVISOR_PROVENANCE_KEYS = PROXY_SUPERVISOR_PROVENANCE_KEYS - {
-    "cpu_partition"
-}
+GPU_LEGACY_SUPERVISOR_PROVENANCE_KEYS = LEGACY_SUPERVISOR_PROVENANCE_KEYS - {"cpu_partition"}
+GPU_PROXY_SUPERVISOR_PROVENANCE_KEYS = PROXY_SUPERVISOR_PROVENANCE_KEYS - {"cpu_partition"}
 GPU_SUPERVISOR_PROVENANCE_KEYS = SUPERVISOR_PROVENANCE_KEYS - {"cpu_partition"}
 
 
 def validate_paper_autoresearch_provenance(provenance: dict[str, Any]) -> None:
     expected = {
+        "mutation_agent": "opencode",
+        "mutation_package": "opencode-ai@1.4.11",
+        "api_provider": "nvidia",
         "model": PAPER_MODEL,
         "reasoning_effort": PAPER_REASONING_EFFORT,
         "codex_cli_version": PAPER_CODEX_CLI_VERSION,
@@ -227,7 +227,7 @@ def validate_supervisor_provenance(
             "max_concurrent_mutators": 4,
             "model": PAPER_MODEL,
             "reasoning_effort": PAPER_REASONING_EFFORT,
-            "codex_bin": "npx -y @openai/codex@0.144.0",
+            "codex_bin": DEFAULT_CODEX_BIN,
             "codex_exec_flags": list(PAPER_CODEX_EXEC_FLAGS),
             "npm_cache": ".codex_npm",
             "python_environments": [".venv"],
@@ -336,12 +336,8 @@ def metric_fields(result: dict[str, Any]) -> dict[str, Any]:
 
     return {
         "total_t_gates_qpe": exact_t_count(result),
-        "ground_state_energy_error_mha": to_mha(
-            result.get("ground_state_energy_error_hartree")
-        ),
-        "analytic_total_error_bound_mha": to_mha(
-            result.get("analytic_total_error_bound_hartree")
-        ),
+        "ground_state_energy_error_mha": to_mha(result.get("ground_state_energy_error_hartree")),
+        "analytic_total_error_bound_mha": to_mha(result.get("analytic_total_error_bound_hartree")),
         "pf_error_mha": to_mha(result.get("pf_error_bound_hartree")),
         "synthesis_error_mha": to_mha(result.get("synthesis_error_bound_hartree")),
         "zero_angle_error_mha": to_mha(result.get("zero_angle_error_bound_hartree")),
@@ -420,6 +416,8 @@ def validate_canonical_campaign_manifest(root: Path) -> None:
         "max_concurrent_mutators": 4,
         "max_running_eval_jobs": 4,
         "node_major": 24,
+        "mutation_agent": "opencode",
+        "mutation_package": "opencode-ai@1.4.11",
         "codex_cli_version": PAPER_CODEX_CLI_VERSION,
         "model": PAPER_MODEL,
         "reasoning_effort": PAPER_REASONING_EFFORT,
@@ -725,6 +723,9 @@ def main() -> None:
         autoresearch_provenance = load_json(autoresearch_path)
         expected_provenance_keys = {
             "schema_version",
+            "mutation_agent",
+            "mutation_package",
+            "api_provider",
             "model",
             "reasoning_effort",
             "codex_cli_version",

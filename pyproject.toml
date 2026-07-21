@@ -5,11 +5,11 @@ description = "Agent-driven T-gate optimization for Hamiltonian simulation"
 readme = "README.md"
 requires-python = ">=3.12"
 dependencies = [
-  "numpy>=2.3.3",
+  "numpy>=1.26.4,<2",
   "openfermion>=1.7.1",
   "pygridsynth>=1.1.0,<2",
   "pyscf>=2.5.0",
-  "scipy>=1.13",
+  "scipy>=1.17.1,<1.18",
 ]
 
 [project.scripts]

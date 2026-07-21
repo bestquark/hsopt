@@ -121,9 +121,12 @@ def _write_synthetic_export_run(root: Path) -> None:
         root / "manifests" / "autoresearch_provenance.json",
         {
             "schema_version": 1,
-            "model": "gpt-5.5",
-            "reasoning_effort": "high",
-            "codex_cli_version": "0.144.0",
+            "mutation_agent": "opencode",
+            "mutation_package": "opencode-ai@1.4.11",
+            "api_provider": "nvidia",
+            "model": CAMPAIGN_COMMON.PAPER_MODEL,
+            "reasoning_effort": CAMPAIGN_COMMON.PAPER_REASONING_EFFORT,
+            "codex_cli_version": CAMPAIGN_COMMON.PAPER_CODEX_CLI_VERSION,
             "node_version": "24.11.1",
             "npm_cache": ".codex_npm",
             "codex_exec_flags": list(CAMPAIGN_COMMON.PAPER_CODEX_EXEC_FLAGS),
@@ -630,10 +633,9 @@ def test_runner_and_agent_provenance_are_pinned_and_immutable(
     tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    assert "@openai/codex@0.144.0" in CAMPAIGN_COMMON.DEFAULT_CODEX_BIN
+    assert "opencode_codex_compat.py" in CAMPAIGN_COMMON.DEFAULT_CODEX_BIN
     assert "@latest" not in CAMPAIGN_COMMON.DEFAULT_CODEX_BIN
-    assert CAMPAIGN_COMMON.parse_codex_cli_version("codex-cli 0.144.4") == "0.144.4"
-    assert CAMPAIGN_COMMON.parse_codex_cli_version("OpenAI Codex v0.144.0") == "0.144.0"
+    assert CAMPAIGN_COMMON.parse_codex_cli_version("opencode 1.4.11") == "1.4.11"
     with pytest.raises(RuntimeError, match="could not parse"):
         CAMPAIGN_COMMON.parse_codex_cli_version("unknown build")
 
@@ -665,21 +667,21 @@ def test_runner_and_agent_provenance_are_pinned_and_immutable(
     monkeypatch.setattr(
         CAMPAIGN_COMMON,
         "probe_codex_cli_version",
-        lambda *_args, **_kwargs: "0.144.0",
+        lambda *_args, **_kwargs: "1.4.11",
     )
     monkeypatch.setattr(CAMPAIGN_COMMON, "probe_node_version", lambda: "24.11.1")
     recorded = CAMPAIGN_COMMON.ensure_autoresearch_provenance(
         campaign_root=campaign,
-        model="gpt-5.5",
-        reasoning_effort="high",
+        model=CAMPAIGN_COMMON.PAPER_MODEL,
+        reasoning_effort=CAMPAIGN_COMMON.PAPER_REASONING_EFFORT,
         codex_bin=CAMPAIGN_COMMON.DEFAULT_CODEX_BIN,
     )
     assert recorded["npm_cache"] == ".codex_npm"
     assert (
         CAMPAIGN_COMMON.ensure_autoresearch_provenance(
             campaign_root=campaign,
-            model="gpt-5.5",
-            reasoning_effort="high",
+            model=CAMPAIGN_COMMON.PAPER_MODEL,
+            reasoning_effort=CAMPAIGN_COMMON.PAPER_REASONING_EFFORT,
             codex_bin=CAMPAIGN_COMMON.DEFAULT_CODEX_BIN,
         )
         == recorded
@@ -688,7 +690,7 @@ def test_runner_and_agent_provenance_are_pinned_and_immutable(
         CAMPAIGN_COMMON.ensure_autoresearch_provenance(
             campaign_root=campaign,
             model="different-model",
-            reasoning_effort="high",
+            reasoning_effort=CAMPAIGN_COMMON.PAPER_REASONING_EFFORT,
             codex_bin=CAMPAIGN_COMMON.DEFAULT_CODEX_BIN,
         )
 
@@ -699,8 +701,8 @@ def test_runner_and_agent_provenance_are_pinned_and_immutable(
     with pytest.raises(RuntimeError, match="refusing to backfill"):
         CAMPAIGN_COMMON.ensure_autoresearch_provenance(
             campaign_root=campaign,
-            model="gpt-5.5",
-            reasoning_effort="high",
+            model=CAMPAIGN_COMMON.PAPER_MODEL,
+            reasoning_effort=CAMPAIGN_COMMON.PAPER_REASONING_EFFORT,
             codex_bin=CAMPAIGN_COMMON.DEFAULT_CODEX_BIN,
         )
 
@@ -1122,7 +1124,7 @@ def test_rsync_receipt_rejects_symlinked_manifests_parent(tmp_path: Path) -> Non
         CAMPAIGN_COMMON.validate_existing_rsync_provenance(campaign_alias, provenance)
 
 
-def test_collect_and_slurm_queries_use_the_same_proxy_jump(
+def test_collect_uses_proxy_jump_and_supervisor_has_no_scheduler_polling(
     tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
@@ -1165,15 +1167,11 @@ def test_collect_and_slurm_queries_use_the_same_proxy_jump(
     assert collect_calls[2][4:6] == ["-e", "ssh -J omni"]
     assert revalidation_calls == [rsync_provenance, rsync_provenance]
 
-    slurm_calls: list[list[str]] = []
-
-    def fake_slurm_run(command: list[str], **_kwargs: object) -> subprocess.CompletedProcess[str]:
-        slurm_calls.append(command)
-        return subprocess.CompletedProcess(command, 0, stdout="123|RUNNING\n", stderr="")
-
-    monkeypatch.setattr(STREAM_SUPERVISOR.subprocess, "run", fake_slurm_run)
-    assert not STREAM_SUPERVISOR.job_is_done("123", "nvlogin", proxy_jump_host="omni")
-    assert slurm_calls == [["ssh", "-J", "omni", "nvlogin", "squeue -h -j 123 -o '%A|%T'"]]
+    source = (RUNNER_ROOT / "scripts" / "supervise_streaming_batches.py").read_text(
+        encoding="utf-8"
+    )
+    assert "squeue" not in source and "sacct" not in source
+    assert not hasattr(STREAM_SUPERVISOR, "job_is_done")
 
 
 def test_supervisor_propagates_proxy_jump_to_every_transport_child(
@@ -1218,32 +1216,7 @@ def test_supervisor_propagates_proxy_jump_to_every_transport_child(
         command[command.index("--rsync-bin") + 1] == "/verified/rsync" for command in child_calls
     )
 
-    rescue_calls: list[list[str]] = []
-
-    def fake_rescue_run(command: list[str], **_kwargs: object) -> subprocess.CompletedProcess[str]:
-        rescue_calls.append(command)
-        return subprocess.CompletedProcess(command, 0)
-
-    monkeypatch.setattr(STREAM_SUPERVISOR.subprocess, "run", fake_rescue_run)
-    STREAM_SUPERVISOR.rescue_pending(
-        tmp_path,
-        job_ids=["123456"],
-        query_host="nvlogin",
-        primary_partition="test-cpu",
-        fallback_partition="test-fallback",
-        proxy_jump_host="omni",
-    )
-    assert rescue_calls[0][rescue_calls[0].index("--proxy-jump-host") + 1] == "omni"
-
-    remote_calls: list[list[str]] = []
-
-    def fake_remote_run(command: list[str], **_kwargs: object) -> subprocess.CompletedProcess[str]:
-        remote_calls.append(command)
-        return subprocess.CompletedProcess(command, 0, stdout="", stderr="")
-
-    monkeypatch.setattr(RESCUE_PARTITIONS.subprocess, "run", fake_remote_run)
-    RESCUE_PARTITIONS.run_remote("squeue -h", query_host="nvlogin", proxy_jump_host="omni")
-    assert remote_calls == [["ssh", "-J", "omni", "nvlogin", "squeue -h"]]
+    assert not hasattr(STREAM_SUPERVISOR, "rescue_pending")
 
 
 def test_strict_export_rejects_unsafe_proxy_jump_provenance(tmp_path: Path) -> None:
@@ -1624,7 +1597,11 @@ def test_full_explicit_schedule_uses_per_occurrence_tolerances(
     def precompile(keys):
         return (
             {key: {"gate_string": "T", "matrix_host": np.eye(2)} for key in keys},
-            {"precompiled_rz_count": len(keys), "pygridsynth_workers": 1, "pygridsynth_wall_seconds": 0.0},
+            {
+                "precompiled_rz_count": len(keys),
+                "pygridsynth_workers": 1,
+                "pygridsynth_wall_seconds": 0.0,
+            },
         )
 
     def compiler(*, nqubits: int, xp, rz_cache=None):
@@ -2092,8 +2069,10 @@ def test_fused_compiled_rotation_matches_the_gate_scaffold(
         np.asarray([[1.0, 0.0], [0.0, -1.0]], dtype=np.complex128),
     ]
     approximate = math.cos(0.2) * np.eye(2, dtype=np.complex128)
-    approximate -= 1j * math.sin(0.2) * sum(
-        coefficient * pauli for coefficient, pauli in zip(axis, paulis, strict=True)
+    approximate -= (
+        1j
+        * math.sin(0.2)
+        * sum(coefficient * pauli for coefficient, pauli in zip(axis, paulis, strict=True))
     )
 
     class FakeGridSynth:
@@ -2121,9 +2100,7 @@ def test_fused_compiled_rotation_matches_the_gate_scaffold(
     compiled = compile_rotation(label, 0.2, 1.0e-6)
     actual = compiled["apply_state"](state)
 
-    h_gate = (1.0 / math.sqrt(2.0)) * np.asarray(
-        [[1.0, 1.0], [1.0, -1.0]], dtype=np.complex128
-    )
+    h_gate = (1.0 / math.sqrt(2.0)) * np.asarray([[1.0, 1.0], [1.0, -1.0]], dtype=np.complex128)
     s_gate = np.asarray([[1.0, 0.0], [0.0, 1j]], dtype=np.complex128)
     sdg_gate = np.asarray([[1.0, 0.0], [0.0, -1j]], dtype=np.complex128)
     reference = state
@@ -2247,9 +2224,7 @@ def test_rz_precompilation_cache_avoids_serial_resynthesis(
     monkeypatch.setattr(
         EVALUATE_WORKER,
         "pygridsynth_matrix_from_gates",
-        lambda _gate_string: np.diag(
-            [np.exp(-0.1j), np.exp(0.1j)]
-        ).astype(np.complex128),
+        lambda _gate_string: np.diag([np.exp(-0.1j), np.exp(0.1j)]).astype(np.complex128),
     )
     keys = {("-2.00000000000000011e-01", "9.99999999999999955e-07")}
     cache, metrics = EVALUATE_WORKER.precompile_rz_rotations(keys)
@@ -3257,6 +3232,9 @@ def test_exporter_requires_the_canonical_hamlib121_lane_set() -> None:
 
 def test_complete_paper_export_requires_the_fixed_agent_configuration() -> None:
     correct = {
+        "mutation_agent": "opencode",
+        "mutation_package": "opencode-ai@1.4.11",
+        "api_provider": "nvidia",
         "model": CAMPAIGN_COMMON.PAPER_MODEL,
         "reasoning_effort": CAMPAIGN_COMMON.PAPER_REASONING_EFFORT,
         "codex_cli_version": CAMPAIGN_COMMON.PAPER_CODEX_CLI_VERSION,
@@ -3334,9 +3312,9 @@ def test_strict_exporter_validates_and_normalizes_a_complete_fixture(
     assert "replicate_root" not in summary
 
     provenance = json.loads((output / "provenance.json").read_text(encoding="utf-8"))
-    assert provenance["model"] == "gpt-5.5"
-    assert provenance["reasoning_effort"] == "high"
-    assert provenance["codex_cli_version"] == "0.144.0"
+    assert provenance["model"] == CAMPAIGN_COMMON.PAPER_MODEL
+    assert provenance["reasoning_effort"] == CAMPAIGN_COMMON.PAPER_REASONING_EFFORT
+    assert provenance["codex_cli_version"] == CAMPAIGN_COMMON.PAPER_CODEX_CLI_VERSION
     assert provenance["node_version"] == "24.11.1"
     assert provenance["replicate_runs_verified"] == 1
     assert provenance["supervisor_protocol"]["batch_size"] == 1
@@ -3606,9 +3584,9 @@ def test_runner_has_no_personal_roots_and_slurm_scripts_parse() -> None:
         assert "sys.pycache_prefix" in source
         assert 'os.environ["PYTHONPYCACHEPREFIX"]' in source
 
-    prebuild_source = (
-        RUNNER_ROOT / "scripts" / "prebuild_cluster_environments.py"
-    ).read_text(encoding="utf-8")
+    prebuild_source = (RUNNER_ROOT / "scripts" / "prebuild_cluster_environments.py").read_text(
+        encoding="utf-8"
+    )
     assert 'env.setdefault("UV_CACHE_DIR", str(root / ".cache" / "uv"))' in prebuild_source
 
     bash = shutil.which("bash")

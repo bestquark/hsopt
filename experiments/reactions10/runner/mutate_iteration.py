@@ -966,12 +966,14 @@ def finalize_mutation(
         "work_directory_paths": work_directory_paths,
         "work_policy_sha256": sha256_file(work_policy),
         "candidate_policy_sha256": candidate_hash,
+        "mutation_agent": "opencode",
+        "api_provider": "nvidia",
         "codex_package": CODEX_PACKAGE,
         "codex_cli_version": CODEX_CLI_VERSION,
         "codex_version_output": codex_version_output,
         "model": PAPER_MODEL,
         "reasoning_effort": PAPER_REASONING_EFFORT,
-        "sandbox": "workspace-write",
+        "sandbox": "opencode_deny_all_except_simple_pf_read_edit",
         "ephemeral": True,
         "ignored_user_config": True,
         "ignored_rules": True,
@@ -1044,6 +1046,8 @@ async def mutate_one(
                 "parent_policy_path": relative_to_campaign(root, parent_path),
                 "parent_policy_sha256": parent_hash,
                 "prompt_sha256": sha256_text(prompt_text),
+                "mutation_agent": "opencode",
+                "api_provider": "nvidia",
                 "codex_package": CODEX_PACKAGE,
                 "codex_cli_version": CODEX_CLI_VERSION,
                 "model": PAPER_MODEL,
@@ -1112,6 +1116,8 @@ async def mutate_one(
         launch_receipt_path = directory / "launch.json"
         launch_intent_path = directory / "launch_intent.json"
         process_path = directory / "process.json"
+        mutation_environment = os.environ.copy()
+        mutation_environment["HSOPT_MUTATION_STATE_DIR"] = str(root / ".opencode_state")
         stale_attempt_paths = [
             path
             for path in (
@@ -1169,6 +1175,7 @@ async def mutate_one(
                     *command,
                     stdout=stdout,
                     stderr=stderr,
+                    env=mutation_environment,
                     start_new_session=True,
                 )
                 receipt_deadline = asyncio.get_running_loop().time() + 120.0

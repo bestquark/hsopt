@@ -7,7 +7,6 @@ import fcntl
 import json
 import os
 import re
-import shlex
 import shutil
 import subprocess
 import sys
@@ -49,7 +48,6 @@ from campaign_common import (  # noqa: E402
     revalidate_rsync_binary,
     require_existing_rsync_provenance,
     resolve_rsync_binary,
-    ssh_command,
     validate_campaign_identity,
     validate_evaluation_result_provenance,
     validate_manifests_parent_chain,
@@ -57,20 +55,6 @@ from campaign_common import (  # noqa: E402
     write_json,
 )
 from mutate_iteration import load_lanes, prepare_codex_tools, run_one  # noqa: E402
-
-
-TERMINAL_JOB_STATES = {
-    "BOOT_FAIL",
-    "CANCELLED",
-    "COMPLETED",
-    "DEADLINE",
-    "FAILED",
-    "NODE_FAIL",
-    "OUT_OF_MEMORY",
-    "PREEMPTED",
-    "REVOKED",
-    "TIMEOUT",
-}
 
 
 @dataclass
@@ -92,104 +76,6 @@ def run(command: list[str], *, cwd: Path) -> str:
 
 def result_path(root: Path, iteration: int, lane_id: str) -> Path:
     return root / "iterations" / f"iter_{iteration:04d}" / "results" / f"{lane_id}.json"
-
-
-def job_is_done(
-    job_id: str,
-    slurm_query_host: str,
-    *,
-    proxy_jump_host: str | None = None,
-) -> bool:
-    if re.fullmatch(r"\d+", job_id) is None:
-        raise ValueError(f"invalid Slurm job ID {job_id!r}")
-    squeue_remote = shlex.join(["squeue", "-h", "-j", job_id, "-o", "%A|%T"])
-    try:
-        queued = subprocess.run(
-            ssh_command(
-                slurm_query_host,
-                squeue_remote,
-                proxy_jump_host=proxy_jump_host,
-            ),
-            text=True,
-            capture_output=True,
-            check=False,
-            timeout=30,
-        )
-    except subprocess.TimeoutExpired:
-        print(f"squeue timed out for job {job_id}", flush=True)
-        return False
-    if queued.returncode != 0:
-        raise RuntimeError(
-            f"squeue failed for job {job_id}: {queued.stderr.strip() or queued.stdout.strip()}"
-        )
-
-    queued_states = []
-    for line in queued.stdout.splitlines():
-        fields = line.strip().split("|", 1)
-        if len(fields) == 2 and fields[0].strip() == job_id:
-            queued_states.append(fields[1].strip().split("+", 1)[0].upper())
-    if queued_states:
-        return all(state in TERMINAL_JOB_STATES for state in queued_states)
-
-    sacct_remote = shlex.join(["sacct", "-n", "-X", "-j", job_id, "--format=JobIDRaw,State", "-P"])
-    try:
-        accounted = subprocess.run(
-            ssh_command(
-                slurm_query_host,
-                sacct_remote,
-                proxy_jump_host=proxy_jump_host,
-            ),
-            text=True,
-            capture_output=True,
-            check=False,
-            timeout=30,
-        )
-    except subprocess.TimeoutExpired:
-        print(f"sacct timed out for job {job_id}", flush=True)
-        return False
-    if accounted.returncode != 0:
-        raise RuntimeError(
-            f"sacct failed for job {job_id}: {accounted.stderr.strip() or accounted.stdout.strip()}"
-        )
-    states = []
-    for line in accounted.stdout.splitlines():
-        fields = line.strip().split("|", 1)
-        if len(fields) == 2 and fields[0].strip() == job_id:
-            states.append(fields[1].strip().split("+", 1)[0].upper())
-    if not states:
-        raise RuntimeError(
-            f"Slurm returned no state for job {job_id}; refusing to assume completion"
-        )
-    return all(state in TERMINAL_JOB_STATES for state in states)
-
-
-def rescue_pending(
-    root: Path,
-    *,
-    job_ids: list[str],
-    query_host: str,
-    primary_partition: str,
-    fallback_partition: str,
-    proxy_jump_host: str | None = None,
-) -> None:
-    command = [
-        sys.executable,
-        "scripts/rescue_pending_eval_partitions.py",
-        "--campaign-root",
-        str(root),
-        "--once",
-        "--enable-fallback",
-        "--query-host",
-        query_host,
-        "--primary-partition",
-        primary_partition,
-        "--fallback-partition",
-        fallback_partition,
-        *proxy_jump_cli_args(proxy_jump_host),
-    ]
-    for job_id in job_ids:
-        command.extend(["--job-id", job_id])
-    subprocess.run(command, cwd=root, check=False)
 
 
 def submit_batch(
@@ -477,12 +363,12 @@ async def supervise(args: argparse.Namespace) -> int:
     ready: dict[int, deque[str]] = defaultdict(deque)
     first_ready_at: dict[int, float] = {}
     running_jobs: dict[str, EvalJob] = {}
+    submitting_jobs: dict[asyncio.Task[EvalJob], tuple[str, int, list[str]]] = {}
     mutation_retries: dict[tuple[str, int], int] = defaultdict(int)
     mutation_retry_after: dict[str, float] = {}
     mutation_pause_until = 0.0
     consecutive_mutation_failures = 0
     batch_index = highest_existing_batch_index(root, conn)
-    last_rescue = 0.0
 
     open_batch_lane_ids: set[str] = set()
     open_records = load_open_eval_batches(conn)
@@ -829,7 +715,7 @@ async def supervise(args: argparse.Namespace) -> int:
         nonlocal batch_index
         for iteration in sorted(list(ready)):
             queue = ready[iteration]
-            while queue and len(running_jobs) < args.max_running_eval_jobs:
+            while queue and len(running_jobs) + len(submitting_jobs) < args.max_running_eval_jobs:
                 timed_out = (
                     time.monotonic() - first_ready_at.get(iteration, time.monotonic())
                     >= args.max_batch_wait_seconds
@@ -845,8 +731,8 @@ async def supervise(args: argparse.Namespace) -> int:
                 batch_id = f"iter{iteration:04d}_batch{batch_index:04d}"
                 for lane_id in lane_ids:
                     lane_state[lane_id] = "submitting"
-                try:
-                    job = await asyncio.to_thread(
+                task = asyncio.create_task(
+                    asyncio.to_thread(
                         submit_batch,
                         root=root,
                         iteration=iteration,
@@ -863,42 +749,13 @@ async def supervise(args: argparse.Namespace) -> int:
                         uv_cache_dir=args.uv_cache_dir,
                         uv_python_install_dir=args.uv_python_install_dir,
                     )
-                except BaseException as exc:
-                    message = f"{type(exc).__name__}: {exc}"
-                    log_event(
-                        conn,
-                        kind="batch-submit-error",
-                        iteration=iteration,
-                        message=f"submission failed for {len(lane_ids)} lanes: {message}",
-                        payload={"lane_ids": lane_ids, "error": message},
-                    )
-                    print(
-                        json.dumps(
-                            {
-                                "event": "batch_submit_failed",
-                                "iteration": iteration,
-                                "lane_count": len(lane_ids),
-                                "error": message,
-                            },
-                            sort_keys=True,
-                        ),
-                        flush=True,
-                    )
-                    raise RuntimeError(
-                        f"submission of durable batch {batch_id} is ambiguous; restart the "
-                        "supervisor to reconcile the same batch ID"
-                    ) from exc
-                assert job.job_id is not None
-                mark_eval_batch_submitted(conn, batch_id=batch_id, job_id=job.job_id)
-                running_jobs[batch_id] = job
-                for lane_id in lane_ids:
-                    lane_state[lane_id] = "evaluating"
+                )
+                submitting_jobs[task] = (batch_id, iteration, lane_ids)
                 print(
                     json.dumps(
                         {
-                            "event": "batch_submitted",
-                            "job_id": job.job_id,
-                            "batch_id": job.batch_id,
+                            "event": "batch_wait_started",
+                            "batch_id": batch_id,
                             "iteration": iteration,
                             "lane_count": len(lane_ids),
                         },
@@ -909,17 +766,58 @@ async def supervise(args: argparse.Namespace) -> int:
             if not queue:
                 ready.pop(iteration, None)
 
-    async def collect_finished_jobs() -> None:
-        done_batch_ids = [
-            batch_id
-            for batch_id, job in running_jobs.items()
-            if job.job_id is not None
-            and job_is_done(
-                job.job_id,
-                args.slurm_query_host,
-                proxy_jump_host=args.proxy_jump_host,
+    async def drain_finished_submissions() -> None:
+        done = [task for task in submitting_jobs if task.done()]
+        for task in done:
+            batch_id, iteration, lane_ids = submitting_jobs.pop(task)
+            try:
+                job = task.result()
+            except BaseException as exc:
+                message = f"{type(exc).__name__}: {exc}"
+                log_event(
+                    conn,
+                    kind="batch-submit-error",
+                    iteration=iteration,
+                    message=f"submission failed for {len(lane_ids)} lanes: {message}",
+                    payload={"lane_ids": lane_ids, "error": message},
+                )
+                print(
+                    json.dumps(
+                        {
+                            "event": "batch_submit_failed",
+                            "iteration": iteration,
+                            "lane_count": len(lane_ids),
+                            "error": message,
+                        },
+                        sort_keys=True,
+                    ),
+                    flush=True,
+                )
+                raise RuntimeError(
+                    f"blocking submission of durable batch {batch_id} failed; "
+                    "inspect its durable submission intent before restart"
+                ) from exc
+            assert job.job_id is not None
+            mark_eval_batch_submitted(conn, batch_id=batch_id, job_id=job.job_id)
+            running_jobs[batch_id] = job
+            for lane_id in lane_ids:
+                lane_state[lane_id] = "evaluating"
+            print(
+                json.dumps(
+                    {
+                        "event": "batch_wait_completed",
+                        "job_id": job.job_id,
+                        "batch_id": job.batch_id,
+                        "iteration": iteration,
+                        "lane_count": len(lane_ids),
+                    },
+                    sort_keys=True,
+                ),
+                flush=True,
             )
-        ]
+
+    async def collect_finished_jobs() -> None:
+        done_batch_ids = list(running_jobs)
         for batch_id in done_batch_ids:
             job = running_jobs[batch_id]
             assert job.job_id is not None
@@ -1015,26 +913,17 @@ async def supervise(args: argparse.Namespace) -> int:
         schedule_mutations()
         await drain_finished_mutations()
         await dispatch_ready_batches()
+        await drain_finished_submissions()
         await collect_finished_jobs()
-        now = time.monotonic()
-        if (
-            args.enable_partition_fallback
-            and running_jobs
-            and now - last_rescue >= args.rescue_poll_seconds
-        ):
-            await asyncio.to_thread(
-                rescue_pending,
-                root,
-                job_ids=[job.job_id for job in running_jobs.values() if job.job_id is not None],
-                query_host=args.slurm_query_host,
-            primary_partition=args.partition,
-                fallback_partition=args.fallback_partition,
-                proxy_jump_host=args.proxy_jump_host,
-            )
-            last_rescue = now
 
         remaining = [state for state in lane_state.values() if state != "done"]
-        if not remaining and not active_mutations and not ready and not running_jobs:
+        if (
+            not remaining
+            and not active_mutations
+            and not ready
+            and not submitting_jobs
+            and not running_jobs
+        ):
             break
         await asyncio.sleep(args.poll_seconds)
 

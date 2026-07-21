@@ -117,24 +117,13 @@ def test_missing_remote_reaction_results_are_retryable(monkeypatch, tmp_path: Pa
     ]
 
 
-def test_supervisor_shell_quotes_slurm_format_for_csh_login_shell(monkeypatch) -> None:
+def test_supervisor_uses_blocking_submission_without_scheduler_queries() -> None:
     supervisor = _load_module("supervise_campaign")
-    commands: list[list[str]] = []
-
-    def fake_run(command, **_kwargs):
-        commands.append(command)
-        return subprocess.CompletedProcess(command, 0, stdout="123|RUNNING\n", stderr="")
-
-    monkeypatch.setattr(supervisor.subprocess, "run", fake_run)
-
-    assert supervisor.query_slurm_states("nvlogin", ["123"], 30) == {"123": "RUNNING"}
-    assert commands == [["ssh", "nvlogin", "squeue -h -j 123 -o '%A|%T'"]]
-
-    commands.clear()
-    assert supervisor.query_slurm_states("nvlogin", ["123"], 30, proxy_jump_host="omni") == {
-        "123": "RUNNING"
-    }
-    assert commands == [["ssh", "-J", "omni", "nvlogin", "squeue -h -j 123 -o '%A|%T'"]]
+    source = (RUNNER_ROOT / "supervise_campaign.py").read_text(encoding="utf-8")
+    submit_source = (RUNNER_ROOT / "submit_iteration.py").read_text(encoding="utf-8")
+    assert not hasattr(supervisor, "query_slurm_states")
+    assert "squeue" not in source and "sacct" not in source
+    assert '"--wait"' in submit_source
 
 
 def _load_module(stem: str, *, campaign_common: ModuleType | None = None) -> ModuleType:
@@ -263,7 +252,7 @@ def test_remote_claim_and_result_sync_use_the_same_proxy_jump(tmp_path: Path, mo
             "ssh -J omni",
             "nvdata:/cluster/reactions10/iterations/iter_0000/results/",
             f"{tmp_path}/campaign/iterations/iter_0000/results/",
-        ]
+        ],
     ]
 
 
@@ -565,6 +554,8 @@ def _export_mutation_fixture(
             "parent_policy_path": parent_policy.relative_to(campaign_root).as_posix(),
             "parent_policy_sha256": parent_hash,
             "prompt_sha256": prompt_hash,
+            "mutation_agent": "opencode",
+            "api_provider": "nvidia",
             "codex_package": CAMPAIGN_COMMON.CODEX_PACKAGE,
             "codex_cli_version": CAMPAIGN_COMMON.CODEX_CLI_VERSION,
             "model": CAMPAIGN_COMMON.PAPER_MODEL,
@@ -597,9 +588,8 @@ def _export_mutation_fixture(
         json.dumps(usage, sort_keys=True, separators=(",", ":"))
     )
     sanitized_command = [
-        "npx",
-        "-y",
-        CAMPAIGN_COMMON.CODEX_PACKAGE,
+        sys.executable,
+        str(campaign_root / "runner" / "opencode_codex_compat.py"),
         "exec",
         "--json",
         "--skip-git-repo-check",
@@ -728,12 +718,14 @@ def _export_mutation_fixture(
         },
         "work_directory_paths": [],
         "work_policy_sha256": _sha256(work_policy),
+        "mutation_agent": "opencode",
+        "api_provider": "nvidia",
         "codex_package": CAMPAIGN_COMMON.CODEX_PACKAGE,
         "codex_cli_version": CAMPAIGN_COMMON.CODEX_CLI_VERSION,
-        "codex_version_output": "codex-cli 0.144.0",
+        "codex_version_output": "opencode 1.4.11",
         "model": CAMPAIGN_COMMON.PAPER_MODEL,
         "reasoning_effort": CAMPAIGN_COMMON.PAPER_REASONING_EFFORT,
-        "sandbox": "workspace-write",
+        "sandbox": "opencode_deny_all_except_simple_pf_read_edit",
         "ephemeral": True,
         "ignored_user_config": True,
         "ignored_rules": True,
@@ -768,11 +760,11 @@ def _export_mutation_fixture(
 
 def test_fixed_inputs_and_autoresearch_provenance_are_exactly_pinned() -> None:
     assert PREPARE_CAMPAIGN.EXPECTED_INPUT_HASHES == EXPECTED_INPUT_HASHES
-    assert CAMPAIGN_COMMON.CODEX_PACKAGE == "@openai/codex@0.144.0"
-    assert CAMPAIGN_COMMON.CODEX_CLI_VERSION == "0.144.0"
-    assert CAMPAIGN_COMMON.CODEX_COMMAND == ("npx", "-y", "@openai/codex@0.144.0")
-    assert CAMPAIGN_COMMON.PAPER_MODEL == "gpt-5.5"
-    assert CAMPAIGN_COMMON.PAPER_REASONING_EFFORT == "high"
+    assert CAMPAIGN_COMMON.CODEX_PACKAGE == "opencode-ai@1.4.11"
+    assert CAMPAIGN_COMMON.CODEX_CLI_VERSION == "1.4.11"
+    assert CAMPAIGN_COMMON.CODEX_COMMAND[-1].endswith("opencode_codex_compat.py")
+    assert CAMPAIGN_COMMON.PAPER_MODEL == "nvidia/nvidia/nemotron-3-super-v3"
+    assert CAMPAIGN_COMMON.PAPER_REASONING_EFFORT == "not_applicable"
     assert EXPORT_RESULTS.PAPER_CODEX_PACKAGE == CAMPAIGN_COMMON.CODEX_PACKAGE
     assert EXPORT_RESULTS.PAPER_CODEX_CLI_VERSION == CAMPAIGN_COMMON.CODEX_CLI_VERSION
     assert EXPORT_RESULTS.PAPER_MODEL == CAMPAIGN_COMMON.PAPER_MODEL
@@ -788,6 +780,8 @@ def test_fixed_inputs_and_autoresearch_provenance_are_exactly_pinned() -> None:
         "preparation_nonce": TEST_PREPARATION_NONCE,
         "campaign_id": TEST_CAMPAIGN_ID,
         "autoresearch_provenance": {
+            "mutation_agent": "opencode",
+            "api_provider": "nvidia",
             "codex_package": CAMPAIGN_COMMON.CODEX_PACKAGE,
             "codex_cli_version": CAMPAIGN_COMMON.CODEX_CLI_VERSION,
             "model": CAMPAIGN_COMMON.PAPER_MODEL,
@@ -804,10 +798,12 @@ def test_fixed_inputs_and_autoresearch_provenance_are_exactly_pinned() -> None:
         "campaign_id": TEST_CAMPAIGN_ID,
         "repository_branch": "codex/test",
         "repository_commit": "a" * 40,
-        "codex_cli_version": "0.144.0",
-        "codex_package": "@openai/codex@0.144.0",
-        "model": "gpt-5.5",
-        "reasoning_effort": "high",
+        "mutation_agent": "opencode",
+        "api_provider": "nvidia",
+        "codex_cli_version": "1.4.11",
+        "codex_package": "opencode-ai@1.4.11",
+        "model": "nvidia/nvidia/nemotron-3-super-v3",
+        "reasoning_effort": "not_applicable",
         "declared_runner_input_source_hashes": {},
     }
     provenance["autoresearch_provenance"]["model"] = "drifted-model"

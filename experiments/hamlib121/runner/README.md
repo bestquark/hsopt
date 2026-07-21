@@ -6,7 +6,7 @@ Hamiltonians, with 50 proposals per lane. Copy it into external campaign
 workspaces; do not run campaigns inside the Git checkout.
 
 Every baseline and proposal is evaluated on an NVIDIA A100 through
-Legate/cuPyNumeric. Codex mutation agents run on Omni, then invoke the
+Legate/cuPyNumeric. OpenCode/Nemotron mutation agents run on Omni, then invoke the
 deterministic submitter; Slurm jobs contain no mutation logic. Each job requests
 one A100 and evaluates its HamLib lane subset serially. Each streaming
 supervisor accepts a per-replicate limit from one through four; orchestration
@@ -38,14 +38,15 @@ uv sync --locked
 
 Mutation launch requires a preinstalled Node.js 24.x runtime. Put its `bin`
 directory first on `PATH`; the runner records the exact Node version, requires
-major version 24, pins Codex to `@openai/codex@0.144.0`, and forces npm to the
-campaign-local `.codex_npm` cache:
+major version 24, pins OpenCode to `opencode-ai@1.4.11`, and forces npm to the
+campaign-local cache. Load `NVIDIA_API_KEY` from an owner-readable environment
+file; never write it into this workspace or its logs:
 
 ```bash
 export PATH="/absolute/path/to/node-v24/bin:$PATH"
 node --version  # must be v24.x
 mkdir -p -m 700 "$CAMPAIGN_ROOT/.codex_npm"
-npx -y @openai/codex@0.144.0 --version
+npx -y opencode-ai@1.4.11 --version
 ```
 
 Local staging and collection require `rsync` 3.x with a working
@@ -71,8 +72,9 @@ spaces and shell metacharacters under `--protect-args`, verifies the executable
 identity and hash before and after that copy, and repeats the check immediately
 before each runner-managed transfer.
 
-The paper protocol pins the mutation client to `@openai/codex@0.144.0`, the
-configured model identifier to `gpt-5.5`, and reasoning effort to `high`.
+The paper protocol pins the mutation client to `opencode-ai@1.4.11` and the
+configured model identifier to `nvidia/nvidia/nemotron-3-super-v3` through
+NVIDIA's OpenAI-compatible API.
 Campaign provenance records the observed CLI version plus runner and lockfile
 hashes. The model identifier is configuration provenance; it is not a claim
 that the hosted backend is an immutable dated snapshot.
@@ -101,7 +103,6 @@ SLURM_ACCOUNT="site-account"
 GPU_PARTITION="gpu-partition"
 SYNC_HOST="data-transfer-host"
 SUBMIT_HOST="slurm-submit-host"
-SLURM_QUERY_HOST="slurm-query-host"
 
 cd "$CAMPAIGN_ROOT"
 
@@ -246,10 +247,7 @@ uv run --locked python scripts/supervise_streaming_batches.py \
   --partition "$GPU_PARTITION" \
   --sync-host "$SYNC_HOST" \
   --submit-host "$SUBMIT_HOST" \
-  --slurm-query-host "$SLURM_QUERY_HOST" \
-  --model gpt-5.5 \
-  --reasoning-effort high \
-  --codex-bin "npx -y @openai/codex@0.144.0"
+  --model nvidia/nvidia/nemotron-3-super-v3
 ```
 
 The supervisor holds a single-process campaign lock and persists every
@@ -258,16 +256,17 @@ arguments after an interruption: queued candidates, ambiguous submissions,
 active job IDs, collection, and evaluation retries resume from the campaign
 database without remutating in-flight lanes. Provenance drift fails closed.
 The paper runner rejects any change from 50 iterations, batch size 8, four
-concurrent mutators, one-to-four running evaluator jobs, model `gpt-5.5`,
-reasoning `high`, or the pinned Codex command. When campaigns run together,
+concurrent mutators, one-to-four running evaluator jobs, the pinned Nemotron
+model, or the pinned OpenCode command. When campaigns run together,
 their evaluator-job limits must sum to at most four; the standard layout is
 three HamLib supervisors at one job each plus the reaction campaign's single
 20-lane batch. The complete execution configuration is recorded in
 `manifests/supervisor_provenance.json`.
 
-Each Codex proposal runs in a fresh disposable directory containing only
-`simple_pf.py`, under `workspace-write` with user configuration and repository
-rules disabled. The runner requires a complete JSON lifecycle, terminates the
+Each OpenCode proposal runs in a fresh disposable directory containing only
+`simple_pf.py`, with every capability denied except read/edit access to that
+file. The runner preserves raw OpenCode JSON events inside its compatibility
+envelope, requires a complete lifecycle, terminates the
 whole proposal process group, rejects any extra workspace entry, validates the
 candidate with the restricted policy loader, and only then atomically promotes
 its bytes into the lane. The policy loader permits deterministic math and the
@@ -280,10 +279,9 @@ rewrites mutually consistent SQLite rows, result JSON, or installed environment
 bytes can defeat local replay checks; the export is not a cryptographic
 signature or a full re-evaluation of every proposal.
 
-Partition fallback is disabled unless `--enable-partition-fallback` is passed
-with an explicit `--fallback-partition`. It applies to pending one-A100
-evaluation batches, so choose a compatible alternate GPU partition.
-Only job IDs persisted by that campaign are eligible for rescue.
+Evaluation submission uses blocking `sbatch --wait` calls. Up to four such
+calls may be active, one per A100 job; the supervisor performs no `squeue`,
+`sacct`, or device-monitoring loop.
 
 ## Export final results
 
@@ -303,7 +301,7 @@ uv run --locked python scripts/export_replicate_results.py \
 invoke the strict exporter automatically. Both paths produce the same
 checksummed `FINAL_EXPORT_COMPLETE` marker. Promote only an export whose
 `summary.json` has `complete: true` into the repository `results/` directory.
-The strict gate also requires identical model, reasoning, Codex CLI, runner,
+The strict gate also requires identical model, OpenCode CLI, runner,
 and lockfile provenance across all five runs and emits it as `provenance.json`.
 `--diagnostic-shape` exists only for external test fixtures and can never
 produce a complete paper artifact.

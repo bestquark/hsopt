@@ -84,10 +84,6 @@ echo "host=$(hostname)"
 echo "iteration=$ITERATION batch_id=$BATCH_ID lanes=$(grep -cve '^[[:space:]]*$' "$LANE_IDS_FILE")"
 echo "slurm_job_id=${SLURM_JOB_ID:-} started=$(date -Is)"
 "$CAMPAIGN_NVIDIA_SMI" --query-gpu=index,name,memory.total --format=csv,noheader
-"$CAMPAIGN_NVIDIA_SMI" --query-gpu=timestamp,index,utilization.gpu,utilization.memory,memory.used,power.draw \
-  --format=csv -l 30 > "logs/gpu_reaction_iter_${ITERATION}_${BATCH_ID}.csv" 2>&1 &
-MONITOR_PID=$!
-trap 'kill "$MONITOR_PID" 2>/dev/null || true' EXIT
 
 "$LEGATE" --gpus 1 --fbmem "$CAMPAIGN_LEGATE_FBMEM" --run-mode exec \
   "$CAMPAIGN_PYTHON" runner/evaluate_worker.py \

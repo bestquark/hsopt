@@ -5,6 +5,8 @@ Current organization:
 - `skills/hsopt/`: instructions for sequential code-mutation T-gate optimization.
 - `skills/hsgepa/`: instructions for GEPA prompt optimization.
 - `src/hsopt/tgate_opt/`: shared CLI/runtime used by both skills.
+- `src/hsopt/tgate_opt/mutation_agents.py`: Codex/OpenCode mutation adapters.
+- `src/hsopt/tgate_opt/execution.py`: local/Slurm evaluator transports.
 - `examples/pfs/<molecule>/`: primary runnable PF1 molecule folders.
 - caller-supplied external `HSOPT_DATA_ROOT`: all campaign workspaces and logs.
 

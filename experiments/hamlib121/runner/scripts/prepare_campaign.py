@@ -221,9 +221,11 @@ def main() -> None:
         "max_concurrent_mutators": 4,
         "max_running_eval_jobs": 4,
         "node_major": 24,
-        "codex_cli_version": "0.144.0",
-        "model": "gpt-5.5",
-        "reasoning_effort": "high",
+        "mutation_agent": "opencode",
+        "mutation_package": "opencode-ai@1.4.11",
+        "codex_cli_version": "1.4.11",
+        "model": "nvidia/nvidia/nemotron-3-super-v3",
+        "reasoning_effort": "not_applicable",
     }
     fixed_manifest_fields = {
         "source_csv": str(source_copy),

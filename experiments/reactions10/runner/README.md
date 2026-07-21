@@ -3,9 +3,9 @@
 This runner executes the fixed paper comparison between equal-share and
 reaction-aware synthesis-error contracts. It creates 20 sequential lanes (two
 contracts for each of ten reactions), evaluates iteration 0 as the preserved
-baseline, and then records exactly 50 Codex proposals per lane.
+baseline, and then records exactly 50 OpenCode/Nemotron proposals per lane.
 
-Codex mutation runs on Omni. By default, each deterministic Slurm job requests
+Mutation runs on Omni. By default, each deterministic Slurm job requests
 one A100 80GB and evaluates all 20 lanes serially through Legate/cuPyNumeric,
 leaving three of the global four evaluation-job slots available to HamLib.
 `--batch-size` remains available for deliberately different orchestration.
@@ -23,9 +23,10 @@ destination must be empty and outside the repository. Preparation also refuses
 a dirty checkout or detached HEAD, snapshots the benchmark, evaluator, inputs,
 runner, lockfile, and hashes, and pins autoresearch to:
 
-- `@openai/codex@0.144.0`
-- model `gpt-5.5`
-- reasoning effort `high`
+- `opencode-ai@1.4.11`
+- model `nvidia/nvidia/nemotron-3-super-v3`
+- NVIDIA's OpenAI-compatible API, with `NVIDIA_API_KEY` loaded only from a
+  protected environment file
 
 Set the absolute paths once. `SOURCE_RUNNER` is the runner in a clean HSOpt
 checkout; `CAMPAIGN_ROOT` and `CLUSTER_ROOT` must be outside that checkout:
@@ -137,13 +138,14 @@ uv run --locked --project "$CAMPAIGN_ENV" python \
 ```
 
 The supervisor derives its next action from durable campaign state. Mutation
-agents edit only disposable iteration work directories under a
-`workspace-write` sandbox. Codex runs with `exec --json`. A close-on-exec
-handshake records the low-level wrapper exec, but that alone never consumes a
-proposal: the launcher must also observe Codex's own `thread.started` event,
-and the completed process evidence must contain the same thread plus exactly
-one later `turn.completed` event, nonnegative usage, return code zero, and a
-nonempty final message. The launch nonce, lifecycle-event hashes, output-file
+agents edit only disposable iteration work directories. OpenCode denies every
+capability except read/edit access to `simple_pf.py`; no auto-approval flag is
+used. Its raw JSON events are preserved inside a small compatibility envelope
+used by the existing durable receipt checks. A close-on-exec handshake records
+the low-level wrapper exec, but that alone never consumes a proposal: the
+launcher also requires one OpenCode session, a completed edit tool call, a
+completed step, nonnegative usage, return code zero, and a nonempty final
+message. The launch nonce, lifecycle-event hashes, output-file
 hashes, PID/process group, distinct exec PID, command, and work directory are
 cross-linked through the immutable intent, launch, process, and mutation
 records. Failed npm/npx resolution, startup, timeout, or incomplete turns are
@@ -174,8 +176,9 @@ cluster root for that campaign ID and manifest hash; the submit host verifies
 the exact same claim before touching receipts or Slurm. A different campaign
 cannot reuse that root, while retries from the same campaign are idempotent.
 Submission keys, Slurm job names, and receipt paths include the campaign
-identity. `squeue`/`sacct` reconciliation prevents a disconnected SSH session
-from creating an orphan duplicate. Missing or evaluator-error results enter
+identity. Submission blocks in `sbatch --wait`, so the supervisor sleeps until
+the one-A100 job terminates and performs no scheduler polling. Missing or
+evaluator-error results enter
 `retry_ready` without remutating. Present `status=ok` results with identity,
 hash, provenance, or arithmetic drift are fatal.
 

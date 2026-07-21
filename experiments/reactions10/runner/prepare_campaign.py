@@ -360,6 +360,8 @@ def main() -> None:
             "reaction_aware": "|sum_i nu_i e_i| <= 1 kcal/mol",
         },
         "autoresearch_provenance": {
+            "mutation_agent": "opencode",
+            "api_provider": "nvidia",
             "codex_package": CODEX_PACKAGE,
             "codex_cli_version": CODEX_CLI_VERSION,
             "model": PAPER_MODEL,

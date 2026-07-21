@@ -535,6 +535,7 @@ def _remote_submission_command(
     sbatch = " ".join(
         [
             "sbatch",
+            "--wait",
             "--parsable",
             f"--job-name={shlex.quote(job_name)}",
             f"--account={shlex.quote(account)}",
@@ -564,15 +565,11 @@ def _remote_submission_command(
         f"exec 9>{shlex.quote(lock)}; flock -x 9; "
         f"receipt={shlex.quote(receipt)}; job_name={shlex.quote(job_name)}; "
         'if [ -s "$receipt" ]; then cat "$receipt"; exit 0; fi; '
-        "existing=$(squeue -h -n \"$job_name\" -o '%A|%j' 2>/dev/null | "
-        "awk -F'|' -v n=\"$job_name\" '$2==n {print $1; exit}'); "
-        'if [ -z "$existing" ]; then '
-        'existing=$(sacct -n -X --name "$job_name" --format=JobIDRaw,JobName -P 2>/dev/null | '
-        "awk -F'|' -v n=\"$job_name\" '$2==n && $1 ~ /^[0-9]+$/ {print $1; exit}'); fi; "
-        'if [ -z "$existing" ]; then '
-        f"existing=$({sbatch} | cut -d';' -f1); fi; "
+        f"set +e; submitted=$({sbatch}); wait_status=$?; set -e; "
+        "existing=$(printf '%s\\n' \"$submitted\" | tail -n 1 | cut -d';' -f1); "
         "case \"$existing\" in ''|*[!0-9]*) echo 'invalid Slurm job id' >&2; exit 3;; esac; "
         'tmp="$receipt.tmp.$$"; printf \'%s\\n\' "$existing" >"$tmp"; mv "$tmp" "$receipt"; '
+        'printf \'%s\\n\' "$wait_status" >"$receipt.exitcode"; '
         'cat "$receipt"'
     )
 
@@ -598,7 +595,7 @@ def main() -> None:
     parser.add_argument("--sync-only", action="store_true")
     parser.add_argument("--command-attempts", type=int, default=3)
     parser.add_argument("--sync-timeout-seconds", type=int, default=600)
-    parser.add_argument("--submit-timeout-seconds", type=int, default=120)
+    parser.add_argument("--submit-timeout-seconds", type=int, default=18000)
     args = parser.parse_args()
     validate_iteration(args.iteration)
     if not args.sync_host:

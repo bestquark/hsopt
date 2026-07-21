@@ -436,6 +436,7 @@ async def run_one(
         env = os.environ.copy()
         env["npm_config_cache"] = str(root / ".codex_npm")
         env["npm_config_update_notifier"] = "false"
+        env["HSOPT_MUTATION_STATE_DIR"] = str(root / ".opencode_state")
         env["PATH"] = f"{tools_dir}:{env.get('PATH', '')}"
         for output_path in (stdout_path, stderr_path, last_message):
             if output_path.is_symlink() or (output_path.exists() and not output_path.is_file()):

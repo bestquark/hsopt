@@ -11,7 +11,7 @@ continues one scored step at a time.
 
 Invocation note:
 - In Codex, use this skill as `$hsopt` or through `/skills`.
-- Some clients may expose it as `/hsopt`.
+- OpenCode and other skill-aware clients may expose it as `/hsopt`.
 - The repo CLI is `uv run hsopt ...`.
 
 ## Prerequisites
@@ -82,13 +82,26 @@ skill, CLI runtime, benchmark definitions, or external campaign root.
    repository; never commit raw transcripts, caches, databases, environments,
    scheduler logs, or partial runs.
 
-## Cluster Safety
+## Agent and Evaluator Choices
 
-- On `nvpark`, keep Codex in its `workspace-write` sandbox. Never pass `--yolo`
-  or `--dangerously-bypass-approvals-and-sandbox`.
-- Use a durable supervisor with retry backoff. Poll Slurm no more often than
-  every five minutes for paper campaigns, and never run tight `squeue`,
-  `nvidia-smi`, or device-monitoring loops on a login node.
+- Mutation and evaluation are independent choices. Use `--agent codex` or
+  `--agent opencode`; use `--transport local` or `--transport slurm` for the
+  evaluator.
+- OpenCode defaults to pinned `opencode-ai@1.4.11` with
+  `nvidia/nvidia/nemotron-3-super-v3`. Supply `NVIDIA_API_KEY` only through the
+  process environment or a protected environment file. Never put it in a
+  prompt, command line, campaign manifest, log, or repository file.
+- Every mutation runs in an isolated directory containing only `simple_pf.py`.
+  OpenCode uses deny-all permissions with only read/edit access to that file.
+  Never pass `--auto`, `--yolo`, or any permission-bypass flag.
+- Local evaluation uses NumPy by default when Legate is unavailable. Select
+  cuPyNumeric explicitly on a local NVIDIA GPU with `--backend cupynumeric`.
+- Slurm evaluation submits the same deterministic evaluator with
+  `sbatch --wait`, one GPU per job, and no `squeue`/`sacct` polling. A durable
+  supervisor may keep up to the campaign's declared job cap blocked in those
+  wait calls and resume mutation only after each call returns.
+- Never start recurring `nvidia-smi`, scheduler, or device-monitoring loops on
+  a login node. A single GPU identity query inside the allocated job is enough.
 - Preserve a nonzero mutation exit and its stderr as experiment evidence. Let
   the bounded retry policy resume that lane; do not silently skip it.
 
@@ -104,7 +117,26 @@ uv run hsopt evaluate examples/pfs/h2 --evaluator fidelity --epsilon 1e-3 --prin
 Score one mutation directly:
 
 ```bash
-uv run hsopt evaluate examples/pfs/h2 --evaluator energy
+uv run hsopt evaluate examples/pfs/h2 --evaluator energy --transport local --backend numpy
+uv run hsopt evaluate examples/pfs/h2 --evaluator energy \
+  --transport local --backend cupynumeric
+```
+
+Create one OpenCode/Nemotron proposal with external history:
+
+```bash
+NVIDIA_API_KEY=... uv run hsopt mutate examples/pfs/h2 \
+  --agent opencode --run-dir "$HSOPT_DATA_ROOT/development/pfs/h2-proposal-001"
+```
+
+Print a one-A100 Slurm handoff without submitting it:
+
+```bash
+uv run hsopt evaluate examples/pfs/h2 --transport slurm --print-only \
+  --submit-host nvlogin --remote-repo-root /shared/hsopt \
+  --account ACCOUNT --partition PARTITION \
+  --remote-python /shared/hsopt/.venv/bin/python \
+  --remote-legate /shared/hsopt/.venv/bin/legate
 ```
 
 ## Optimization Target

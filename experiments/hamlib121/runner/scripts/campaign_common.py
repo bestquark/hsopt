@@ -34,10 +34,14 @@ HARTREE_PER_KCAL_MOL = 1.0 / 627.5094740631
 CHEMICAL_ACCURACY_HARTREE = HARTREE_PER_KCAL_MOL
 DEFAULT_CLUSTER_ROOT = os.environ.get("HSOPT_HAMLIB_CLUSTER_ROOT")
 DEFAULT_HAMLIB_DATA_ROOT = os.environ.get("HSOPT_HAMLIB_DATA_ROOT")
-DEFAULT_CODEX_BIN = "npx -y @openai/codex@0.144.0"
-PAPER_MODEL = "gpt-5.5"
-PAPER_REASONING_EFFORT = "high"
-PAPER_CODEX_CLI_VERSION = "0.144.0"
+DEFAULT_CODEX_BIN = shlex.join(
+    [sys.executable, str(Path(__file__).resolve().parent / "opencode_codex_compat.py")]
+)
+PAPER_MUTATION_AGENT = "opencode"
+PAPER_MUTATION_PACKAGE = "opencode-ai@1.4.11"
+PAPER_MODEL = "nvidia/nvidia/nemotron-3-super-v3"
+PAPER_REASONING_EFFORT = "not_applicable"
+PAPER_CODEX_CLI_VERSION = "1.4.11"
 PAPER_CODEX_EXEC_FLAGS = (
     "exec",
     "--sandbox",
@@ -78,6 +82,7 @@ RUNNER_SCRIPT_FILES = (
     "export_replicate_results.py",
     "finalize_replicates_when_complete.py",
     "mutate_iteration.py",
+    "opencode_codex_compat.py",
     "prepare_campaign.py",
     "prebuild_cluster_environments.py",
     "render_telemetry.py",
@@ -1619,7 +1624,8 @@ def validate_runner_provenance(campaign_root: Path) -> dict[str, Any]:
 
 def parse_codex_cli_version(output: str) -> str:
     match = re.search(
-        r"(?:codex-cli\s+|OpenAI\s+Codex\s+v)(\d+\.\d+\.\d+(?:[-+][A-Za-z0-9._-]+)?)",
+        r"(?:codex-cli\s+|OpenAI\s+Codex\s+v|opencode\s+)"
+        r"(\d+\.\d+\.\d+(?:[-+][A-Za-z0-9._-]+)?)",
         output,
     )
     if match is None:
@@ -1716,6 +1722,9 @@ def ensure_autoresearch_provenance(
     node_version = probe_node_version()
     expected = {
         "schema_version": 1,
+        "mutation_agent": PAPER_MUTATION_AGENT,
+        "mutation_package": PAPER_MUTATION_PACKAGE,
+        "api_provider": "nvidia",
         "model": model,
         "reasoning_effort": reasoning_effort,
         "codex_cli_version": codex_cli_version,
@@ -2387,10 +2396,7 @@ def derive_evaluator_schedule_seed(*, campaign_id: str, lane_id: str) -> int:
     if not isinstance(lane_id, str) or not lane_id:
         raise ValueError("lane_id must be nonempty")
     digest = hashlib.sha256(
-        SCHEDULE_SEED_DOMAIN
-        + campaign_id.encode("ascii")
-        + b"\0"
-        + lane_id.encode("utf-8")
+        SCHEDULE_SEED_DOMAIN + campaign_id.encode("ascii") + b"\0" + lane_id.encode("utf-8")
     ).digest()
     return int.from_bytes(digest[:8], byteorder="big", signed=False)
 
@@ -2525,9 +2531,7 @@ def build_explicit_product_formula_schedule(
                     generated.append(
                         {
                             "term_index": term_index,
-                            "alpha": 0.5
-                            * float(terms[term_index]["coefficient"])
-                            * step_time,
+                            "alpha": 0.5 * float(terms[term_index]["coefficient"]) * step_time,
                         }
                     )
                 center = indices[-1]
@@ -2541,9 +2545,7 @@ def build_explicit_product_formula_schedule(
                     generated.append(
                         {
                             "term_index": term_index,
-                            "alpha": 0.5
-                            * float(terms[term_index]["coefficient"])
-                            * step_time,
+                            "alpha": 0.5 * float(terms[term_index]["coefficient"]) * step_time,
                         }
                     )
         return generated

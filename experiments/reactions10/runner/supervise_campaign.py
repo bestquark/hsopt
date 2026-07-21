@@ -2,16 +2,12 @@
 from __future__ import annotations
 
 import argparse
-import json
 import os
-import shlex
 import stat
 import subprocess
 import sys
 import tempfile
-import time
 from pathlib import Path
-from typing import Any
 
 _PRIVATE_PYCACHE_PREFIX = tempfile.mkdtemp(prefix="hsopt-runner-pycache-")
 _private_pycache_stat = os.stat(_PRIVATE_PYCACHE_PREFIX, follow_symlinks=False)
@@ -31,23 +27,8 @@ from campaign_common import (  # noqa: E402
     proxy_jump_cli_args,
     read_json,
     require_campaign,
-    ssh_command,
     validate_ssh_host,
 )
-
-
-TERMINAL_STATES = {
-    "BOOT_FAIL",
-    "CANCELLED",
-    "COMPLETED",
-    "DEADLINE",
-    "FAILED",
-    "NODE_FAIL",
-    "OUT_OF_MEMORY",
-    "PREEMPTED",
-    "REVOKED",
-    "TIMEOUT",
-}
 
 
 def run_child(command: list[str], cwd: Path, *, allowed_codes: set[int] = {0}) -> int:
@@ -56,116 +37,6 @@ def run_child(command: list[str], cwd: Path, *, allowed_codes: set[int] = {0}) -
     if completed.returncode not in allowed_codes:
         raise RuntimeError(f"campaign child exited {completed.returncode}: {' '.join(command)}")
     return completed.returncode
-
-
-def latest_submitted_jobs(state: dict[str, Any], iteration: int) -> dict[str, str]:
-    jobs: dict[str, str] = {}
-    for batch in state["batches"].values():
-        if int(batch.get("iteration", -1)) != iteration or batch.get("state") != "submitted":
-            continue
-        attempts = batch.get("attempts", [])
-        if not attempts or attempts[-1].get("state") != "submitted":
-            raise RuntimeError(f"submitted batch {batch.get('batch_id')} lacks a submitted attempt")
-        job_id = str(attempts[-1].get("job_id", ""))
-        if not job_id.isdigit():
-            raise RuntimeError(f"invalid persisted Slurm job ID {job_id!r}")
-        jobs[job_id] = str(batch["batch_id"])
-    return jobs
-
-
-def query_slurm_states(
-    host: str,
-    job_ids: list[str],
-    timeout_seconds: int,
-    *,
-    proxy_jump_host: str | None = None,
-) -> dict[str, str]:
-    joined = ",".join(job_ids)
-    squeue_remote = shlex.join(["squeue", "-h", "-j", joined, "-o", "%A|%T"])
-    squeue = subprocess.run(
-        ssh_command(host, squeue_remote, proxy_jump_host=proxy_jump_host),
-        check=False,
-        text=True,
-        capture_output=True,
-        timeout=timeout_seconds,
-    )
-    if squeue.returncode != 0:
-        raise RuntimeError(f"Slurm squeue query failed: {squeue.stderr.strip()}")
-    states: dict[str, str] = {}
-    for line in squeue.stdout.splitlines():
-        fields = line.strip().split("|", 1)
-        if len(fields) == 2 and fields[0] in job_ids:
-            states[fields[0]] = fields[1].split("+", 1)[0].strip().upper()
-    absent = [job_id for job_id in job_ids if job_id not in states]
-    if absent:
-        sacct_remote = shlex.join(
-            [
-                "sacct",
-                "-n",
-                "-X",
-                "-j",
-                ",".join(absent),
-                "--format=JobIDRaw,State",
-                "-P",
-            ]
-        )
-        sacct = subprocess.run(
-            ssh_command(host, sacct_remote, proxy_jump_host=proxy_jump_host),
-            check=False,
-            text=True,
-            capture_output=True,
-            timeout=timeout_seconds,
-        )
-        if sacct.returncode != 0:
-            raise RuntimeError(f"Slurm sacct query failed: {sacct.stderr.strip()}")
-        for line in sacct.stdout.splitlines():
-            fields = line.strip().split("|", 1)
-            if len(fields) != 2:
-                continue
-            job_id = fields[0].strip()
-            if job_id in absent:
-                states[job_id] = fields[1].split("+", 1)[0].strip().upper()
-    missing = [job_id for job_id in job_ids if not states.get(job_id)]
-    if missing:
-        raise RuntimeError(
-            f"Slurm returned no state for jobs {missing}; refusing to assume completion"
-        )
-    return states
-
-
-def wait_for_terminal_jobs(
-    *,
-    host: str,
-    jobs: dict[str, str],
-    poll_seconds: int,
-    timeout_seconds: int,
-    proxy_jump_host: str | None = None,
-) -> dict[str, str]:
-    while True:
-        states = query_slurm_states(
-            host,
-            sorted(jobs),
-            timeout_seconds,
-            proxy_jump_host=proxy_jump_host,
-        )
-        print(json.dumps({jobs[job_id]: state for job_id, state in states.items()}, sort_keys=True))
-        if all(state in TERMINAL_STATES for state in states.values()):
-            return states
-        unknown = sorted(
-            set(states.values())
-            - TERMINAL_STATES
-            - {
-                "CONFIGURING",
-                "COMPLETING",
-                "PENDING",
-                "RUNNING",
-                "RESIZING",
-                "SUSPENDED",
-            }
-        )
-        if unknown:
-            raise RuntimeError(f"unrecognized Slurm states: {unknown}")
-        time.sleep(poll_seconds)
 
 
 def main() -> None:
@@ -187,8 +58,7 @@ def main() -> None:
     parser.add_argument("--cpus-per-task", type=int, default=16)
     parser.add_argument("--memory", default="64G")
     parser.add_argument("--time-limit", default="04:00:00")
-    parser.add_argument("--poll-seconds", type=int, default=60)
-    parser.add_argument("--ssh-timeout-seconds", type=int, default=120)
+    parser.add_argument("--evaluation-wait-timeout-seconds", type=int, default=18000)
     parser.add_argument("--max-evaluation-retries", type=int, default=3)
     parser.add_argument("--unbounded-evaluation-retries", action="store_true")
     args = parser.parse_args()
@@ -198,8 +68,7 @@ def main() -> None:
             args.mutation_timeout_seconds,
             args.evaluator_workers,
             args.cpus_per_task,
-            args.poll_seconds,
-            args.ssh_timeout_seconds,
+            args.evaluation_wait_timeout_seconds,
         )
         <= 0
     ):
@@ -318,22 +187,13 @@ def main() -> None:
                         args.memory,
                         "--time-limit",
                         args.time_limit,
+                        "--submit-timeout-seconds",
+                        str(args.evaluation_wait_timeout_seconds),
                     ]
                     + proxy_jump_cli_args(proxy_jump_host),
                     root,
                 )
 
-            _manifest, state = require_campaign(root)
-            jobs = latest_submitted_jobs(state, iteration)
-            if not jobs:
-                raise RuntimeError(f"iteration {iteration} has no submitted evaluation jobs")
-            wait_for_terminal_jobs(
-                host=submit_host,
-                jobs=jobs,
-                poll_seconds=args.poll_seconds,
-                timeout_seconds=args.ssh_timeout_seconds,
-                proxy_jump_host=proxy_jump_host,
-            )
             collect_code = run_child(
                 [
                     sys.executable,

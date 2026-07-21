@@ -44,10 +44,10 @@ PAPER_REACTION_COUNT = 10
 PAPER_CANDIDATE_COUNT = len(PAPER_EVALUATION_ITERATIONS) * PAPER_LANE_COUNT
 PAPER_MUTATION_COUNT = PAPER_PROPOSAL_ITERATIONS * PAPER_LANE_COUNT
 PAPER_TARGET_HARTREE = 1.0 / 627.5094740631
-PAPER_MODEL = "gpt-5.5"
-PAPER_REASONING_EFFORT = "high"
-PAPER_CODEX_CLI_VERSION = "0.144.0"
-PAPER_CODEX_PACKAGE = "@openai/codex@0.144.0"
+PAPER_MODEL = "nvidia/nvidia/nemotron-3-super-v3"
+PAPER_REASONING_EFFORT = "not_applicable"
+PAPER_CODEX_CLI_VERSION = "1.4.11"
+PAPER_CODEX_PACKAGE = "opencode-ai@1.4.11"
 CAMPAIGN_ID_DOMAIN = b"hsopt-reactions10-campaign-v1\0"
 EXEC_ACK_PROTOCOL = "codex_jsonl_lifecycle_v1"
 ARCHIVED_REACTION_BENCHMARK_SHA256 = (
@@ -1117,6 +1117,10 @@ def validate_declared_campaign_files(campaign_root: Path, manifest: Mapping[str,
 
 def validate_provenance(manifest: Mapping[str, Any]) -> dict[str, Any]:
     campaign_id = validate_campaign_identity(manifest)
+    mutation_agent = _collect_setting(
+        manifest, ("mutation_agent",), "opencode", "mutation_agent"
+    )
+    api_provider = _collect_setting(manifest, ("api_provider",), "nvidia", "api_provider")
     model = _collect_setting(manifest, ("model", "codex_model"), PAPER_MODEL, "model")
     reasoning = _collect_setting(
         manifest,
@@ -1153,6 +1157,8 @@ def validate_provenance(manifest: Mapping[str, Any]) -> dict[str, Any]:
         "campaign_id": campaign_id,
         "repository_branch": branch,
         "repository_commit": commit,
+        "mutation_agent": mutation_agent,
+        "api_provider": api_provider,
         "codex_cli_version": cli,
         "codex_package": package,
         "model": model,
@@ -1322,9 +1328,7 @@ def validate_result(
             or method_config.get("species") != species
         ):
             raise ExportValidationError(f"{species_context}.method_config drifted")
-        schedule_strategy = str(
-            method_config.get("schedule_strategy", "stationary_trotter")
-        )
+        schedule_strategy = str(method_config.get("schedule_strategy", "stationary_trotter"))
         term_order_strategy = str(method_config.get("term_order_strategy", "input"))
         if (
             schedule_strategy not in ALLOWED_SCHEDULE_STRATEGIES
@@ -1394,8 +1398,7 @@ def validate_result(
             and nonzero + skipped == scheduled
             and rotations_per_step == one_nonzero == one_skipped == 0
             and item.get("explicit_schedule_rotation_count") == scheduled
-            and SHA256_RE.fullmatch(str(item.get("explicit_schedule_sha256", "")))
-            is not None
+            and SHA256_RE.fullmatch(str(item.get("explicit_schedule_sha256", ""))) is not None
             and isinstance(item.get("evaluator_schedule_seed"), int)
             and not isinstance(item.get("evaluator_schedule_seed"), bool)
         )
@@ -1413,9 +1416,7 @@ def validate_result(
         t_count = require_int(
             item.get("t_gate_count"), f"{species_context}.t_gate_count", minimum=0
         )
-        if schedule_strategy == "stationary_trotter" and (
-            t_count != one_step_t_count * n_steps
-        ):
+        if schedule_strategy == "stationary_trotter" and (t_count != one_step_t_count * n_steps):
             raise ExportValidationError(f"{species_context} T-count scaling mismatch")
         if schedule_strategy != "stationary_trotter" and one_step_t_count != 0:
             raise ExportValidationError(f"{species_context} explicit one-step T count is nonzero")
@@ -1446,10 +1447,13 @@ def validate_result(
                 one_step_skip_bound * n_steps,
                 f"{species_context} skipped error-bound accounting",
             )
-            if require_bool(
-                item.get("stationary_step_policy_verified"),
-                f"{species_context}.stationary_step_policy_verified",
-            ) is not True:
+            if (
+                require_bool(
+                    item.get("stationary_step_policy_verified"),
+                    f"{species_context}.stationary_step_policy_verified",
+                )
+                is not True
+            ):
                 raise ExportValidationError(
                     f"{species_context} lacks stationary-policy attestation"
                 )
@@ -1460,18 +1464,18 @@ def validate_result(
                 ),
                 "phase_matching": "maximum_ground_state_eigenvector_overlap",
                 "t_count_semantics": (
-                    "exact_count_of_T_characters_in_selected_PyGridSynth_"
-                    "gate_strings_times_n_steps"
+                    "exact_count_of_T_characters_in_selected_PyGridSynth_gate_strings_times_n_steps"
                 ),
             }
         else:
-            if require_bool(
-                item.get("stationary_step_policy_verified"),
-                f"{species_context}.stationary_step_policy_verified",
-            ) is not False:
-                raise ExportValidationError(
-                    f"{species_context} wrongly claims a stationary policy"
+            if (
+                require_bool(
+                    item.get("stationary_step_policy_verified"),
+                    f"{species_context}.stationary_step_policy_verified",
                 )
+                is not False
+            ):
+                raise ExportValidationError(f"{species_context} wrongly claims a stationary policy")
             species_fixed = {
                 "unitary_construction": (
                     "compiled_full_explicit_schedule_applied_to_exact_ground_state"
@@ -1787,6 +1791,8 @@ def validate_mutation_record(
         "work_directory_paths",
         "work_policy_sha256",
         "candidate_policy_sha256",
+        "mutation_agent",
+        "api_provider",
         "codex_package",
         "codex_cli_version",
         "codex_version_output",
@@ -1839,11 +1845,13 @@ def validate_mutation_record(
         "parent_iteration": expected_parent_iteration,
         "parent_policy_sha256": expected_parent_sha256,
         "candidate_policy_sha256": candidate_sha256,
+        "mutation_agent": "opencode",
+        "api_provider": "nvidia",
         "codex_package": PAPER_CODEX_PACKAGE,
         "codex_cli_version": PAPER_CODEX_CLI_VERSION,
         "model": PAPER_MODEL,
         "reasoning_effort": PAPER_REASONING_EFFORT,
-        "sandbox": "workspace-write",
+        "sandbox": "opencode_deny_all_except_simple_pf_read_edit",
         "ephemeral": True,
         "ignored_user_config": True,
         "ignored_rules": True,
@@ -1920,6 +1928,8 @@ def validate_mutation_record(
         "parent_policy_path": expected_parent_relative,
         "parent_policy_sha256": expected_parent_sha256,
         "prompt_sha256": prompt_sha256,
+        "mutation_agent": "opencode",
+        "api_provider": "nvidia",
         "codex_package": PAPER_CODEX_PACKAGE,
         "codex_cli_version": PAPER_CODEX_CLI_VERSION,
         "model": PAPER_MODEL,
@@ -2061,9 +2071,8 @@ def validate_mutation_record(
     command_raw = require_list(process.get("command"), f"{context} process.command")
     last_message_text = str(work_dir.parent / "last_message.txt")
     expected_command = [
-        "npx",
-        "-y",
-        PAPER_CODEX_PACKAGE,
+        sys.executable,
+        str(campaign_root / "runner" / "opencode_codex_compat.py"),
         "exec",
         "--json",
         "--skip-git-repo-check",

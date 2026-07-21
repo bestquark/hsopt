@@ -36,11 +36,15 @@ HARTREE_PER_KCAL_MOL = 1.0 / 627.5094740631
 CHEMICAL_ACCURACY_HARTREE = HARTREE_PER_KCAL_MOL
 FAILURE_SCORE_BASE = 1.0e15
 
-CODEX_PACKAGE = "@openai/codex@0.144.0"
-CODEX_CLI_VERSION = "0.144.0"
-CODEX_COMMAND = ("npx", "-y", CODEX_PACKAGE)
-PAPER_MODEL = "gpt-5.5"
-PAPER_REASONING_EFFORT = "high"
+MUTATION_AGENT = "opencode"
+CODEX_PACKAGE = "opencode-ai@1.4.11"
+CODEX_CLI_VERSION = "1.4.11"
+CODEX_COMMAND = (
+    sys.executable,
+    str(Path(__file__).resolve().parent / "opencode_codex_compat.py"),
+)
+PAPER_MODEL = "nvidia/nvidia/nemotron-3-super-v3"
+PAPER_REASONING_EFFORT = "not_applicable"
 ARCHIVED_REACTION_BENCHMARK_SHA256 = (
     "09b713ebd784614ec774c73c22c0228b084d82bd9a3ea176589caf06918d965e"
 )
@@ -639,9 +643,7 @@ def validate_policy(path: Path, species: Sequence[str]) -> tuple[bool, str | Non
             config_species = str(getattr(config, "species"))
             config_name = str(getattr(config, "name"))
             synthesis_budget = float(getattr(config, "synthesis_error_budget_hartree"))
-            schedule_strategy = str(
-                getattr(config, "schedule_strategy", "stationary_trotter")
-            )
+            schedule_strategy = str(getattr(config, "schedule_strategy", "stationary_trotter"))
             term_order_strategy = str(getattr(config, "term_order_strategy", "input"))
             if config_species != species_key or not config_name:
                 raise ValueError(f"{species_key}: config species/name identity mismatch")
@@ -894,9 +896,7 @@ def validate_result(
             or method_config.get("species") != species
         ):
             raise ValueError(f"{lane_id}: method config drift for {species}")
-        schedule_strategy = str(
-            method_config.get("schedule_strategy", "stationary_trotter")
-        )
+        schedule_strategy = str(method_config.get("schedule_strategy", "stationary_trotter"))
         term_order_strategy = str(method_config.get("term_order_strategy", "input"))
         if (
             schedule_strategy not in ALLOWED_SCHEDULE_STRATEGIES
@@ -954,8 +954,7 @@ def validate_result(
             and nonzero + skipped == scheduled
             and rotations_per_step == one_nonzero == one_skipped == 0
             and row.get("explicit_schedule_rotation_count") == scheduled
-            and SHA256_RE.fullmatch(str(row.get("explicit_schedule_sha256", "")))
-            is not None
+            and SHA256_RE.fullmatch(str(row.get("explicit_schedule_sha256", ""))) is not None
             and isinstance(row.get("evaluator_schedule_seed"), int)
             and not isinstance(row.get("evaluator_schedule_seed"), bool)
         )
