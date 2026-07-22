@@ -25,5 +25,10 @@ identical model/reasoning/Codex CLI/runner/lockfile provenance.
 - `runner/` is copied into external workspaces to launch or resume campaigns.
 - `results/` accepts only portable output from a successful strict final export.
 
+Once all five runs pass that export gate, `hsopt-reports --family hamlib121`
+creates one `results/final/hamiltonians/<lane_id>/` folder per Hamiltonian.
+Each folder contains `extended_log.pdf` (all 250 proposals across five runs)
+and `summary.pdf` (initial/final incumbent pairs and exact-energy errors).
+
 The incomplete July checkpoint remains in external archival storage for audit
 and recovery. It is not a final result and must not be copied into `results/`.

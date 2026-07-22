@@ -16,8 +16,22 @@ following:
 - portable output with no machine-specific absolute paths.
 
 Accepted artifacts are compact normalized CSV/JSON summaries, selected policy
-snapshots, `provenance.json`, a checksummed `FINAL_EXPORT_COMPLETE` marker, and
-`SHA256SUMS`.
+snapshots, `provenance.json`, a checksummed `FINAL_EXPORT_COMPLETE` marker,
+`SHA256SUMS`, and the final report tree:
+
+```text
+final/
+  hamiltonians/<lane_id>/
+    extended_log.pdf
+    summary.pdf
+  report_manifest.json
+  SHA256SUMS
+```
+
+The report renderer requires 30,250 normalized mutation rows, 605 run/lane
+summaries, contiguous iterations, and valid export checksums before it writes
+anything. The extended PDF includes the validated, whitespace-normalized
+mutation summary and decision--not raw prompts or agent transcripts.
 Diagnostic-shape and incomplete exports are always marked incomplete and must
 stay external. Do not add campaign SQLite files, WAL/SHM files, mutation
 workspaces, raw scheduler logs, telemetry, agent transcripts, caches, or virtual
