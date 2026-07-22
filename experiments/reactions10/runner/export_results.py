@@ -153,6 +153,8 @@ class Candidate:
     passes_reaction_constraint: bool
     passes_contract: bool
     accepted: bool = False
+    decision_reason: str = ""
+    mutation_summary: str = ""
 
 
 @dataclass(frozen=True)
@@ -1117,9 +1119,7 @@ def validate_declared_campaign_files(campaign_root: Path, manifest: Mapping[str,
 
 def validate_provenance(manifest: Mapping[str, Any]) -> dict[str, Any]:
     campaign_id = validate_campaign_identity(manifest)
-    mutation_agent = _collect_setting(
-        manifest, ("mutation_agent",), "opencode", "mutation_agent"
-    )
+    mutation_agent = _collect_setting(manifest, ("mutation_agent",), "opencode", "mutation_agent")
     api_provider = _collect_setting(manifest, ("api_provider",), "nvidia", "api_provider")
     model = _collect_setting(manifest, ("model", "codex_model"), PAPER_MODEL, "model")
     reasoning = _collect_setting(
@@ -3683,6 +3683,15 @@ def load_and_replay(
                 expected_accept=expected_accept,
             )
             candidate.accepted = expected_accept
+            candidate.decision_reason = str(decisions_by_lane[lane_id]["decision_reason"])
+            if iteration == 0:
+                candidate.mutation_summary = "Preserved baseline product formula."
+            else:
+                summary = (mutation_dir / lane_id / "last_message.txt").read_text(encoding="utf-8")
+                for source in {str(campaign_root), str(campaign_root.resolve())}:
+                    summary = summary.replace(source, "<campaign>")
+                summary = "".join(character if character >= " " else " " for character in summary)
+                candidate.mutation_summary = " ".join(summary.split())[:1000]
             if expected_accept:
                 incumbents[lane_id] = candidate
             candidates.append(candidate)
@@ -3776,11 +3785,20 @@ def compact_species(candidate: Candidate) -> dict[str, Any]:
             "absolute_energy_error_hartree": candidate.result["species"][species][
                 "absolute_energy_error_hartree"
             ],
+            "exact_energy_hartree": candidate.result["species"][species]["exact_energy_hartree"],
+            "formula_order": candidate.result["species"][species]["formula_order"],
             "method_config": candidate.result["species"][species].get("method_config"),
+            "n_steps": candidate.result["species"][species]["n_steps"],
+            "pf_energy_estimate_hartree": candidate.result["species"][species][
+                "pf_energy_estimate_hartree"
+            ],
+            "schedule_strategy": candidate.result["species"][species]["schedule_strategy"],
             "signed_energy_error_hartree": candidate.result["species"][species][
                 "signed_energy_error_hartree"
             ],
             "t_gate_count": candidate.result["species"][species]["t_gate_count"],
+            "term_order_strategy": candidate.result["species"][species]["term_order_strategy"],
+            "zero_angle_threshold": candidate.result["species"][species]["zero_angle_threshold"],
         }
         for species in candidate.lane.species
     }
@@ -3813,7 +3831,10 @@ def write_candidate_log(path: Path, candidates: Iterable[Candidate]) -> None:
         "iteration",
         "policy_sha256",
         "total_t_gate_count",
+        "exact_reaction_energy_hartree",
+        "pf_reaction_energy_hartree",
         "signed_reaction_error_hartree",
+        "absolute_reaction_error_hartree",
         "triangle_bound_hartree",
         "equal_share_error_limit_hartree",
         "max_species_absolute_error_hartree",
@@ -3821,6 +3842,9 @@ def write_candidate_log(path: Path, candidates: Iterable[Candidate]) -> None:
         "passes_reaction_constraint",
         "passes_contract",
         "accepted",
+        "decision_reason",
+        "mutation_summary",
+        "species_json",
     ]
     path.parent.mkdir(parents=True, exist_ok=True)
     with path.open("w", encoding="utf-8", newline="") as handle:
@@ -3835,7 +3859,16 @@ def write_candidate_log(path: Path, candidates: Iterable[Candidate]) -> None:
                     "iteration": candidate.iteration,
                     "policy_sha256": candidate.policy_sha256,
                     "total_t_gate_count": candidate.total_t_gate_count,
+                    "exact_reaction_energy_hartree": repr(
+                        candidate.result["exact_reaction_energy_hartree"]
+                    ),
+                    "pf_reaction_energy_hartree": repr(
+                        candidate.result["pf_reaction_energy_hartree"]
+                    ),
                     "signed_reaction_error_hartree": repr(candidate.signed_reaction_error_hartree),
+                    "absolute_reaction_error_hartree": repr(
+                        candidate.absolute_reaction_error_hartree
+                    ),
                     "triangle_bound_hartree": repr(candidate.triangle_bound_hartree),
                     "equal_share_error_limit_hartree": repr(
                         candidate.equal_share_error_limit_hartree
@@ -3849,6 +3882,11 @@ def write_candidate_log(path: Path, candidates: Iterable[Candidate]) -> None:
                     "passes_reaction_constraint": str(candidate.passes_reaction_constraint).lower(),
                     "passes_contract": str(candidate.passes_contract).lower(),
                     "accepted": str(candidate.accepted).lower(),
+                    "decision_reason": candidate.decision_reason,
+                    "mutation_summary": candidate.mutation_summary,
+                    "species_json": json.dumps(
+                        compact_species(candidate), sort_keys=True, separators=(",", ":")
+                    ),
                 }
             )
 

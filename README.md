@@ -49,6 +49,30 @@ scheduler logs, caches, databases, and environments never belong in Git. A
 small validated final export or summary PDF may be copied to the corresponding
 `experiments/*/results/` directory after its completion gate passes.
 
+## Final paper reports
+
+The strict exporters retain normalized product-formula settings, exact and
+estimated energies, accept/reject decisions, and a bounded mutation summary.
+After an exporter writes `FINAL_EXPORT_COMPLETE` and `SHA256SUMS`, build the
+two reports for every scientific instance with:
+
+```bash
+uv run hsopt-reports --family hamlib121 \
+  --export-dir /external/final/hamlib121-export \
+  --output-dir experiments/hamlib121/results/final
+
+uv run hsopt-reports --family reactions10 \
+  --export-dir /external/final/reactions10-export \
+  --output-dir experiments/reactions10/results/final
+```
+
+The renderer verifies the complete checksum set and expected iteration shape,
+compiles in a temporary directory, and atomically publishes exactly two PDFs
+per Hamiltonian or reaction. It never reads a live database or raw transcript.
+The extended PDF records every mutation and evaluator outcome; the summary PDF
+compares the initial policy with the final incumbent in the compact paired-row
+style used by the paper appendices.
+
 ## Install the Agent Skills
 
 The agent skills and the benchmark runtime are separate prerequisites.

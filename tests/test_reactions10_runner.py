@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import asyncio
+import csv
 import copy
 import hashlib
 import importlib.util
@@ -2568,6 +2569,71 @@ def test_exporter_rejects_permissive_legacy_final_state_aliases(tmp_path: Path) 
             incumbents={lane.lane_id: candidate},
             campaign_root=tmp_path,
         )
+
+
+def test_candidate_log_preserves_report_fields(tmp_path: Path) -> None:
+    lane = EXPORT_RESULTS.LaneSpec(
+        lane_id="synthetic_reaction_aware",
+        reaction_key="synthetic",
+        reaction="A -> B",
+        contract="reaction_aware",
+        species=("a",),
+        terms=(("a", 1.0),),
+        seed_policy_sha256="a" * 64,
+    )
+    species_result = {
+        "absolute_energy_error_hartree": 0.001,
+        "exact_energy_hartree": -1.0,
+        "formula_order": 2,
+        "method_config": {
+            "formula_order": 2,
+            "n_steps": 8,
+            "schedule_strategy": "stationary_trotter",
+            "species": "a",
+            "term_order_strategy": "custom",
+            "zero_angle_threshold": 0.0,
+        },
+        "n_steps": 8,
+        "pf_energy_estimate_hartree": -0.999,
+        "schedule_strategy": "stationary_trotter",
+        "signed_energy_error_hartree": 0.001,
+        "t_gate_count": 100,
+        "term_order_strategy": "custom",
+        "zero_angle_threshold": 0.0,
+    }
+    candidate = EXPORT_RESULTS.Candidate(
+        lane=lane,
+        iteration=1,
+        policy_sha256="b" * 64,
+        policy_path=tmp_path / "simple_pf.py",
+        result={
+            "exact_reaction_energy_hartree": -1.0,
+            "pf_reaction_energy_hartree": -0.999,
+            "species": {"a": species_result},
+        },
+        total_t_gate_count=100,
+        signed_reaction_error_hartree=0.001,
+        absolute_reaction_error_hartree=0.001,
+        triangle_bound_hartree=0.001,
+        equal_share_error_limit_hartree=TARGET_HARTREE,
+        max_species_absolute_error_hartree=0.001,
+        passes_equal_share_constraint=True,
+        passes_reaction_constraint=True,
+        passes_contract=True,
+        accepted=True,
+        decision_reason="strict_t_gate_improvement",
+        mutation_summary="Used a custom order.",
+    )
+    output = tmp_path / "candidate_log.csv"
+    EXPORT_RESULTS.write_candidate_log(output, [candidate])
+    row = next(csv.DictReader(output.open(encoding="utf-8")))
+    assert row["decision_reason"] == "strict_t_gate_improvement"
+    assert row["mutation_summary"] == "Used a custom order."
+    assert row["exact_reaction_energy_hartree"] == "-1.0"
+    assert row["absolute_reaction_error_hartree"] == "0.001"
+    species = json.loads(row["species_json"])
+    assert species["a"]["formula_order"] == 2
+    assert species["a"]["term_order_strategy"] == "custom"
 
 
 def test_exporter_rejects_open_collection_transaction(tmp_path: Path) -> None:

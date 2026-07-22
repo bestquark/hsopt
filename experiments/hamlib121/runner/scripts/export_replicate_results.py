@@ -313,7 +313,8 @@ def sanitize_summary(value: object, *, run_root: Path, run_name: str) -> str:
     for root in sorted(roots, key=len, reverse=True):
         text = text.replace(f"file://{root}", run_name)
         text = text.replace(root, run_name)
-    return text
+    text = "".join(character if character >= " " else " " for character in text)
+    return " ".join(text.split())[:1000]
 
 
 def assert_portable_export(output_dir: Path) -> None:
@@ -348,7 +349,9 @@ def config_fields(result: dict[str, Any]) -> dict[str, Any]:
     return {
         "formula_order": config.get("formula_order"),
         "n_steps": config.get("n_steps"),
+        "schedule_strategy": config.get("schedule_strategy"),
         "term_order_strategy": config.get("term_order_strategy"),
+        "qdrift_samples": config.get("qdrift_samples"),
         "uniform_epsilon": config.get("uniform_epsilon"),
         "zero_angle_threshold": config.get("zero_angle_threshold"),
         "policy_name": config.get("name"),
@@ -361,6 +364,9 @@ def metric_fields(result: dict[str, Any]) -> dict[str, Any]:
 
     return {
         "total_t_gates_qpe": exact_t_count(result),
+        "ground_state_energy_hartree": result.get("ground_state_energy_hartree"),
+        "ground_state_energy_estimate_hartree": result.get("ground_state_energy_estimate_hartree"),
+        "ground_state_energy_error_hartree": result.get("ground_state_energy_error_hartree"),
         "ground_state_energy_error_mha": to_mha(result.get("ground_state_energy_error_hartree")),
         "analytic_total_error_bound_mha": to_mha(result.get("analytic_total_error_bound_hartree")),
         "pf_error_mha": to_mha(result.get("pf_error_bound_hartree")),

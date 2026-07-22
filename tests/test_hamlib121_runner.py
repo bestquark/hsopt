@@ -3327,6 +3327,16 @@ def test_strict_exporter_validates_and_normalizes_a_complete_fixture(
     assert str(run_root) not in lane_summary
     assert "run_01/iterations/iter_0001" in candidate_log
     assert "run_01/iterations/iter_0001" in lane_summary
+    candidate_fields = set(
+        next(csv.DictReader((output / "candidate_log.csv").open(encoding="utf-8")))
+    )
+    assert {
+        "schedule_strategy",
+        "qdrift_samples",
+        "ground_state_energy_hartree",
+        "ground_state_energy_estimate_hartree",
+        "ground_state_energy_error_hartree",
+    } <= candidate_fields
 
     baseline_provenance = list(
         csv.DictReader((output / "baseline_provenance.csv").open(encoding="utf-8"))

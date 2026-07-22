@@ -13,6 +13,11 @@ transcripts, virtual environments, and intermediate checkpoints stay in
 external storage. Only a reusable runner and compact, validated final results
 belong here.
 
+Final report trees contain two vector PDFs per scientific instance, plus a
+machine-readable report manifest and checksums. These PDFs are derived only
+from the strict portable export: bounded mutation summaries are included, but
+prompts, standard output/error, database files, and absolute paths are not.
+
 ## External workspace convention
 
 Every runner receives an explicit campaign root below one absolute
