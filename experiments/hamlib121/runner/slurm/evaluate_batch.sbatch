@@ -2,10 +2,10 @@
 #SBATCH --job-name=hamlib_pf_batch
 #SBATCH --nodes=1
 #SBATCH --ntasks=1
-#SBATCH --cpus-per-task=30
-#SBATCH --mem=229G
+#SBATCH --cpus-per-task=8
+#SBATCH --mem=64G
 #SBATCH --gres=gpu:1
-#SBATCH --time=04:00:00
+#SBATCH --time=01:00:00
 #SBATCH --output=logs/%x-%j.out
 #SBATCH --error=logs/%x-%j.err
 
@@ -36,7 +36,7 @@ export MKL_NUM_THREADS=1
 export CAMPAIGN_ARRAY_BACKEND=cupynumeric
 export CAMPAIGN_HDF5_SUBPROCESS=1
 export CAMPAIGN_LEGATE_FBMEM="${CAMPAIGN_LEGATE_FBMEM:-70000}"
-export CAMPAIGN_SYNTH_WORKERS="${CAMPAIGN_SYNTH_WORKERS:-30}"
+export CAMPAIGN_SYNTH_WORKERS="${CAMPAIGN_SYNTH_WORKERS:-8}"
 
 export VIRTUAL_ENV="$PWD/.venv"
 export CAMPAIGN_LOCKED_PYTHON="$VIRTUAL_ENV/bin/python"
