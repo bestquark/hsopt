@@ -132,6 +132,7 @@ def test_nvpark_submission_requests_only_one_small_gpu_allocation(
     assert "--cpus-per-task=2" in sbatch
     assert "--mem=16G" in sbatch
     assert "--gpus=1" in sbatch
+    assert "--fbmem=60000" in sbatch
     assert "uv run --no-sync" in sbatch
     assert "gpu-utilization.csv" in sbatch
     assert "--format=csv -l 5" in sbatch

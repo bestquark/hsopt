@@ -27,7 +27,7 @@ DEFAULT_WALLTIME = "01:00:00"
 DEFAULT_BACKEND = "cupynumeric"
 DEFAULT_ACCELERATOR = "gpu"
 DEFAULT_SYSTEM_MEMORY_MIB = 12_000
-DEFAULT_GPU_MEMORY_MIB = 8_192
+DEFAULT_GPU_MEMORY_MIB = 60_000
 
 
 def _run(command: Sequence[str], *, cwd: Path | None = None) -> subprocess.CompletedProcess[str]:

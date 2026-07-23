@@ -46,17 +46,18 @@ scheduler logs, caches, databases, and environments never belong in Git. A
 small validated final export or summary PDF may be copied to the corresponding
 `experiments/*/results/` directory after its completion gate passes.
 
-## CPU canonical and A100 replay
+## Expanded exact campaign
 
-The canonical mutation campaign uses cuPyNumeric on Slurm's `cpu` partition
-with 2 CPUs, 16 GB, and no GPU request. The separate A100 campaign uses
-`polar4`, one GPU, 2 CPUs, and 16 GB. It never invokes a second agent: it
-replays the exact finalized CPU candidate files with
-`--replay-campaign-root`, validates their hashes and T counts, and compares
-energy results at an explicit floating-point tolerance.
+The canonical exact campaign uses the 91 HamLib instances through 14 qubits,
+five independent lanes per instance, and the ten reactions with two lanes
+each. Its dense cuPyNumeric evaluator runs on `polar4` with one 80 GB A100,
+2 CPUs, and 16 GB host RAM. The compiled PF unitary is accumulated with one
+reused matrix-sized workspace; that workspace is released before the unitary
+eigendecomposition.
 
-Both campaigns use the same evaluator source and cuPyNumeric 25.11. A CPU run
-must use the `cpu` partition.
+The older 57-instance CPU campaign remains useful as an at-most-10-qubit parity
+pilot. Both placements use the same evaluator source and cuPyNumeric 25.11. A
+CPU run must use the `cpu` partition and request no GPU.
 
 ## Final paper reports
 
@@ -67,7 +68,7 @@ reports for every scientific instance with:
 
 ```bash
 uv run hsopt-export-exact \
-  --campaign-root /external/production-cpu-v2 \
+  --campaign-root /external/production-gpu91-v1 \
   --family hamlib121 \
   --output-dir /external/final/hamlib121-export
 
@@ -76,7 +77,7 @@ uv run hsopt-reports --family hamlib121 \
   --output-dir experiments/hamlib121/results/final
 
 uv run hsopt-export-exact \
-  --campaign-root /external/production-cpu-v2 \
+  --campaign-root /external/production-gpu91-v1 \
   --family reactions10 \
   --output-dir /external/final/reactions10-export
 
@@ -85,7 +86,7 @@ uv run hsopt-reports --family reactions10 \
   --output-dir experiments/reactions10/results/final
 ```
 
-The canonical CPU supervisor accepts four `--final-*-export-dir` and
+The canonical supervisor accepts four `--final-*-export-dir` and
 `--final-*-report-dir` options to run this sequence automatically. The renderer
 verifies the complete checksum set and declared iteration shape, then
 atomically publishes exactly two PDFs per Hamiltonian or reaction. It uses

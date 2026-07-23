@@ -9,11 +9,16 @@ import numpy as np
 import pytest
 
 from hsopt.compiled_unitary import (
+    DENSE_EVALUATOR_MAX_QUBITS,
     TARGET_STATE_DEFINITION,
     _anchored_ground_state,
+    _apply_compiled_rotation,
     _compile_rz,
+    _dense_hamiltonian,
+    _fixed_electron_hamiltonian,
     evaluate_exact_reference,
     evaluate_molecule,
+    load_problem,
 )
 
 
@@ -57,6 +62,105 @@ def test_pygridsynth_compilation_is_reproducible_and_within_tolerance() -> None:
     assert first["gate_string"] == second["gate_string"]
     assert first["t_count"] > 0
     assert first["operator_error"] <= 1.0e-5
+
+
+def test_fixed_electron_hamiltonian_matches_projected_full_matrix() -> None:
+    problem = {
+        "n_qubits": 4,
+        "electrons": 2,
+        "identity_coefficient": -0.25,
+        "terms": [
+            {"label": "ZIII", "coefficient": 0.3},
+            {"label": "XXII", "coefficient": -0.2},
+            {"label": "XYZI", "coefficient": 0.1},
+        ],
+    }
+
+    indices, sector = _fixed_electron_hamiltonian(problem)
+    expected = _dense_hamiltonian(problem)[np.ix_(indices, indices)]
+
+    assert sector == pytest.approx(expected)
+
+
+@pytest.mark.parametrize("label", ["XII", "IYI", "XYZ", "ZYX"])
+def test_compiled_rotation_workspace_matches_dense_left_multiplication(
+    label: str,
+) -> None:
+    rng = np.random.default_rng(20260723)
+    dimension = 1 << len(label)
+    unitary = (
+        rng.normal(size=(dimension, dimension))
+        + 1.0j * rng.normal(size=(dimension, dimension))
+    ).astype(np.complex128)
+    workspace = np.empty_like(unitary)
+    compiled_rz = np.asarray(
+        [
+            [np.exp(-0.5j * 0.317), 0.0],
+            [0.0, np.exp(0.5j * 0.317)],
+        ],
+        dtype=np.complex128,
+    )
+
+    actual, returned_workspace = _apply_compiled_rotation(
+        unitary,
+        workspace,
+        label=label,
+        compiled_rz=compiled_rz,
+        xp=np,
+    )
+
+    pauli = np.asarray([[1.0 + 0.0j]])
+    for character in label:
+        pauli = np.kron(
+            pauli,
+            {
+                "I": np.eye(2, dtype=np.complex128),
+                "X": np.asarray([[0.0, 1.0], [1.0, 0.0]], dtype=np.complex128),
+                "Y": np.asarray([[0.0, -1.0j], [1.0j, 0.0]], dtype=np.complex128),
+                "Z": np.asarray([[1.0, 0.0], [0.0, -1.0]], dtype=np.complex128),
+            }[character],
+        )
+    expected = (
+        np.cos(0.317 / 2.0) * np.eye(dimension)
+        - 1.0j * np.sin(0.317 / 2.0) * pauli
+    ) @ unitary
+
+    assert actual == pytest.approx(expected, abs=1.0e-12)
+    assert returned_workspace is unitary
+
+
+@pytest.mark.parametrize(
+    ("n_qubits", "accepted"),
+    [
+        (DENSE_EVALUATOR_MAX_QUBITS, True),
+        (DENSE_EVALUATOR_MAX_QUBITS + 1, False),
+    ],
+)
+def test_dense_evaluator_qubit_limit(
+    tmp_path: Path,
+    n_qubits: int,
+    accepted: bool,
+) -> None:
+    problem_path = tmp_path / f"q{n_qubits}.json"
+    problem_path.write_text(
+        json.dumps(
+            {
+                "name": "limit fixture",
+                "n_qubits": n_qubits,
+                "electrons": 1,
+                "target_time": 0.1,
+                "identity_coefficient": 0.0,
+                "terms": [{"label": "Z" + "I" * (n_qubits - 1), "coefficient": 1.0}],
+            }
+        ),
+        encoding="utf-8",
+    )
+
+    if accepted:
+        assert load_problem(problem_path)["n_qubits"] == n_qubits
+    else:
+        with pytest.raises(ValueError, match=f"limited to {DENSE_EVALUATOR_MAX_QUBITS}"):
+            load_problem(problem_path)
 
 
 def test_exact_reference_is_obtained_from_the_exact_unitary_once() -> None:

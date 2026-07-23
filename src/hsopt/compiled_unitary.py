@@ -12,7 +12,6 @@ import hashlib
 import importlib.util
 import json
 import math
-import random
 import sys
 import warnings
 from collections import Counter
@@ -29,6 +28,8 @@ CHEMICAL_ACCURACY_HARTREE = 1.0 / 627.5094740631
 EXACT_GROUND_SUBSPACE_ATOL_HARTREE = 1.0e-9
 TARGET_ANCHOR_MIN_PROBABILITY = 1.0e-12
 TARGET_STATE_DEFINITION = "normalized_anchor_projection_onto_exact_ground_eigenspace"
+DENSE_EVALUATOR_MAX_QUBITS = 15
+ROTATION_CHUNK_TARGET_BYTES = 1024**3
 _PAULIS = {
     "I": np.eye(2, dtype=np.complex128),
     "X": np.asarray([[0.0, 1.0], [1.0, 0.0]], dtype=np.complex128),
@@ -91,10 +92,10 @@ def load_problem(path: Path) -> dict[str, Any]:
     electrons = int(problem["electrons"])
     if n_qubits <= 0 or not 0 <= electrons <= n_qubits:
         raise ValueError(f"invalid problem dimensions in {path}")
-    if n_qubits > 10:
+    if n_qubits > DENSE_EVALUATOR_MAX_QUBITS:
         raise ValueError(
             f"{path.name} has {n_qubits} qubits; this exact dense evaluator is intentionally "
-            "limited to 10 qubits"
+            f"limited to {DENSE_EVALUATOR_MAX_QUBITS} qubits"
         )
     terms = problem["terms"]
     if not isinstance(terms, list) or not terms:
@@ -152,12 +153,26 @@ def _fixed_electron_hamiltonian(
 
     n_qubits = int(problem["n_qubits"])
     electrons = int(problem["electrons"])
+    full_dimension = 1 << n_qubits
     indices_host = np.asarray(
-        [index for index in range(1 << n_qubits) if index.bit_count() == electrons],
+        [index for index in range(full_dimension) if index.bit_count() == electrons],
         dtype=np.int64,
     )
-    full_host = _dense_hamiltonian(problem)
-    sector_host = full_host[np.ix_(indices_host, indices_host)]
+    sector_dimension = indices_host.size
+    sector_columns = np.arange(sector_dimension, dtype=np.int64)
+    sector_positions = np.full(full_dimension, -1, dtype=np.int64)
+    sector_positions[indices_host] = sector_columns
+    sector_host = float(problem["identity_coefficient"]) * np.eye(
+        sector_dimension,
+        dtype=np.complex128,
+    )
+    for term in problem["terms"]:
+        rows, phase = _pauli_left_action(str(term["label"]))
+        destination = sector_positions[rows[indices_host]]
+        retained = destination >= 0
+        sector_host[destination[retained], sector_columns[retained]] += (
+            float(term["coefficient"]) * phase[indices_host[retained]]
+        )
     return indices_host, sector_host
 
 
@@ -281,15 +296,9 @@ def _compile_rz(theta: float, epsilon: float) -> dict[str, Any]:
     from pygridsynth import gridsynth_gates
     from pygridsynth.unitary import DOmegaUnitary
 
-    seed_bytes = hashlib.sha256(f"{theta:.17e}|{epsilon:.17e}".encode()).digest()[:8]
-    previous_random_state = random.getstate()
-    try:
-        random.seed(int.from_bytes(seed_bytes, "big"))
-        with warnings.catch_warnings():
-            warnings.filterwarnings("ignore", message=r"pygridsynth is .*", category=UserWarning)
-            gate_string = gridsynth_gates(theta, epsilon)
-    finally:
-        random.setstate(previous_random_state)
+    with warnings.catch_warnings():
+        warnings.filterwarnings("ignore", message=r"pygridsynth is .*", category=UserWarning)
+        gate_string = gridsynth_gates(theta, epsilon)
 
     exact_matrix = DOmegaUnitary.from_gates(gate_string).to_complex_matrix
     matrix = np.asarray(
@@ -348,35 +357,61 @@ def _conjugated_pivot_pauli(label: str, pivot_pauli: str) -> tuple[complex, str]
 
 def _apply_compiled_rotation(
     unitary: Any,
+    workspace: Any,
     *,
     label: str,
     compiled_rz: np.ndarray,
-    actions: dict[str, tuple[Any, Any]],
     xp: Any,
-) -> None:
-    """Left-multiply a dense unitary by one compiled Pauli gadget."""
+) -> tuple[Any, Any]:
+    """Left-multiply using one reusable full-matrix workspace.
+
+    ``unitary`` remains unchanged while ``workspace`` is filled.  The caller
+    swaps the two arrays after every rotation, so no matrix-sized copy is
+    needed.  Pauli permutations are accumulated in bounded row chunks to avoid
+    hidden full-matrix expression temporaries.
+    """
 
     decomposition = {
         pauli: complex(0.5 * np.trace(matrix.conj().T @ compiled_rz))
         for pauli, matrix in _PAULIS.items()
     }
-    updated = decomposition["I"] * unitary
+    dimension = int(unitary.shape[0])
+    row_chunk = max(
+        1,
+        min(
+            dimension,
+            ROTATION_CHUNK_TARGET_BYTES
+            // (dimension * np.dtype(np.complex128).itemsize),
+        ),
+    )
+    identity_coefficient = decomposition["I"]
+    if abs(identity_coefficient) <= 1.0e-15:
+        workspace.fill(0.0)
+    else:
+        for start in range(0, dimension, row_chunk):
+            stop = min(start + row_chunk, dimension)
+            workspace[start:stop, :] = identity_coefficient * unitary[start:stop, :]
+
     for pivot_pauli in ("X", "Y", "Z"):
         coefficient = decomposition[pivot_pauli]
         if abs(coefficient) <= 1.0e-15:
             continue
         scaffold_phase, transformed_label = _conjugated_pivot_pauli(label, pivot_pauli)
-        if transformed_label not in actions:
-            rows, phases = _pauli_left_action(transformed_label)
-            actions[transformed_label] = (
-                xp.asarray(rows, dtype=xp.int64),
-                xp.asarray(phases, dtype=xp.complex128),
+        source_for_destination, source_phases = _pauli_left_action(transformed_label)
+        source_indices = xp.asarray(source_for_destination, dtype=xp.int64)
+        destination_phases = xp.asarray(
+            source_phases[source_for_destination],
+            dtype=xp.complex128,
+        )
+        scale = coefficient * scaffold_phase
+        for start in range(0, dimension, row_chunk):
+            stop = min(start + row_chunk, dimension)
+            workspace[start:stop, :] += (
+                scale
+                * destination_phases[start:stop, None]
+                * xp.take(unitary, source_indices[start:stop], axis=0)
             )
-        rows, phases = actions[transformed_label]
-        pauli_unitary = xp.empty_like(unitary)
-        pauli_unitary[rows, :] = phases[:, None] * unitary
-        updated = updated + coefficient * scaffold_phase * pauli_unitary
-    unitary[:] = updated
+    return workspace, unitary
 
 
 def _ordered_terms(
@@ -452,7 +487,7 @@ def _build_compiled_step(
 
     dim = 1 << int(problem["n_qubits"])
     unitary = xp.eye(dim, dtype=xp.complex128)
-    actions: dict[str, tuple[Any, Any]] = {}
+    workspace = xp.empty_like(unitary)
     t_count = 0
     skipped = 0
     epsilon_histogram: Counter[str] = Counter()
@@ -474,11 +509,11 @@ def _build_compiled_step(
                 )
         theta = float(round(-2.0 * alpha, 15))
         compiled = _compile_rz(theta, epsilon)
-        _apply_compiled_rotation(
+        unitary, workspace = _apply_compiled_rotation(
             unitary,
+            workspace,
             label=str(term["label"]),
             compiled_rz=compiled["matrix"],
-            actions=actions,
             xp=xp,
         )
         _fence(backend_name)
@@ -495,6 +530,7 @@ def _build_compiled_step(
             "operator_error": compiled["operator_error"],
         }
 
+    del workspace
     return unitary, {
         "policy": _config_dict(config),
         "n_steps": n_steps,
@@ -505,6 +541,10 @@ def _build_compiled_step(
         "skipped_rotation_count": skipped * n_steps,
         "one_step_t_count": t_count,
         "t_count": t_count * n_steps,
+        "dense_matrix_dimension": dim,
+        "dense_matrix_bytes": dim * dim * np.dtype(np.complex128).itemsize,
+        "rotation_workspace_bytes": dim * dim * np.dtype(np.complex128).itemsize,
+        "rotation_chunk_target_bytes": ROTATION_CHUNK_TARGET_BYTES,
         "synthesis_epsilon_histogram": dict(sorted(epsilon_histogram.items())),
         "unique_compilations": sorted(
             compilations.values(),

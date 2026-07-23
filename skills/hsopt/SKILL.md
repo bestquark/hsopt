@@ -86,11 +86,11 @@ compiled unitary used by the reported observable.
 
 ## Production topology
 
-- HamLib121 exact subset: 57 instances (at most 10 qubits) × 5 independent
-  mutation lanes.
+- HamLib121 exact subset: 91 instances (20 at 4, 2 at 6, 24 at 8, 11 at
+  10, 25 at 12, and 9 at 14 qubits) × 5 independent mutation lanes.
 - reactions10: 10 reactions × 2 policy lanes.
 - 50 mutations per lane, plus the separate iteration-0 baseline.
-- Total: 305 lanes and 15,250 mutation evaluations.
+- Total: 475 lanes and 23,750 mutation evaluations.
 
 Run OpenShell and OpenCode/Nemotron on persistent Omni infrastructure.
 OpenCode receives only the incumbent policy and prior result, with deny-all
@@ -107,31 +107,29 @@ repository.
 
 ## NVPark execution
 
-Use the `$ssh` skill for cluster details. The canonical mutation evaluator is
-cuPyNumeric running on the CPU partition:
+Use the `$ssh` skill for cluster details. The expanded 91-instance campaign's
+canonical mutation evaluator is cuPyNumeric on one 80 GB A100:
 
 ```text
 account: nvr_qualg_lmbm
-partition: cpu
+partition: polar4
 qos: normal
 nodes: 1
-gpus: 0
+gpus: 1
 cpus: 2
 memory: 16G
+Legate framebuffer: 60000 MiB
 ```
 
-Use the pinned cuPyNumeric/Legate 25.11 CPU build and configure one Legate CPU
-worker; the second Slurm CPU is available to the runtime. A CPU run must use
-the `cpu` partition and must not request a GPU.
+Use the pinned cuPyNumeric/Legate 25.11 GPU build. PyGridSynth still runs on the
+two allocated CPUs. The evaluator accepts up to 15 qubits, while the canonical
+91-row HamLib cutoff is 14 qubits because that is the next complete dataset
+boundary after the old 57-row, 10-qubit subset.
 
-The A100 validation/replay allocation uses `polar4`, `normal`, one GPU, 2 CPUs,
-and 16 GB. It runs the same uploaded evaluator source and cuPyNumeric version.
-The CPU campaign is the only campaign allowed to invoke OpenCode. Run the A100
-supervisor with `--no-mutations` and replay the archived CPU candidate files in
-the same order using `--replay-campaign-root`. Require policy hashes, T counts,
-and the acceptance trajectory to match and surface any discrepancy. Dense
-CPU/GPU eigensolvers need only agree within an explicit numerical tolerance;
-do not promise bitwise-identical floating-point eigenvalues.
+The old at-most-10-qubit CPU campaign may remain as a parity pilot. Any CPU run
+must use the `cpu` partition, request no GPU, and execute the same evaluator
+source. Dense CPU/GPU eigensolvers need only agree within an explicit numerical
+tolerance; do not promise bitwise-identical floating-point eigenvalues.
 
 PyGridSynth runs on CPU in both placements. Tasks within a submitted batch run
 sequentially so only one dense unitary is resident at a time. Do not request a
@@ -148,43 +146,26 @@ Initialize a fresh external campaign:
 
 ```bash
 uv run hsopt-campaign initialize \
-  --hamlib-inputs "$HSOPT_DATA_ROOT/exact/inputs-v1/hamlib57" \
+  --hamlib-inputs "$HSOPT_DATA_ROOT/exact/inputs-v2/hamlib91" \
   --reaction-inputs "$HSOPT_DATA_ROOT/exact/inputs-v1/reactions10" \
   --seed-validation experiments/reactions10/inputs/seed_validation.json \
   --generator examples/generate_initial_pf.py \
-  --campaign-root "$HSOPT_DATA_ROOT/exact/production-cpu-v2" \
+  --campaign-root "$HSOPT_DATA_ROOT/exact/production-gpu91-v1" \
   --hamlib-replicates 5 --iterations 50
 ```
 
-Run one idempotent CPU supervisor cycle:
+Run one idempotent A100 supervisor cycle:
 
 ```bash
 uv run hsopt-supervisor \
-  --campaign-root "$HSOPT_DATA_ROOT/exact/production-cpu-v2" \
+  --campaign-root "$HSOPT_DATA_ROOT/exact/production-gpu91-v1" \
   --repo-dir "$PWD" --once \
   --threshold 15 --max-active-jobs 4 --mutation-workers 16 \
   --max-difference-tasks-per-batch 3 \
   --mutation-timeout-seconds 300 \
-  --partition cpu --qos normal --cpus 2 --memory 16G --walltime 12:00:00 \
-  --backend cupynumeric --accelerator cpu \
-  --runtime-python /path/to/pinned/cupynumeric-cpu-25.11/bin/python
-```
-
-Initialize the A100 campaign from scratch with the same inputs and generator,
-verify all 305 generated `initial_pf.py` files against the CPU campaign, and
-run it separately with:
-
-```bash
-uv run hsopt-supervisor \
-  --campaign-root "$HSOPT_DATA_ROOT/exact/production-gpu-v3" \
-  --repo-dir "$PWD" \
-  --threshold 15 --max-active-jobs 2 \
-  --max-difference-tasks-per-batch 3 \
-  --partition polar4 --qos normal --cpus 2 --memory 16G --walltime 03:00:00 \
+  --partition polar4 --qos normal --cpus 2 --memory 16G --walltime 04:00:00 \
   --backend cupynumeric --accelerator gpu \
-  --runtime-python /path/to/pinned/cupynumeric-gpu-25.11/bin/python \
-  --no-mutations \
-  --replay-campaign-root "$HSOPT_DATA_ROOT/exact/production-cpu-v2"
+  --runtime-python /path/to/pinned/cupynumeric-gpu-25.11/bin/python
 ```
 
 Never point the CPU campaign at `polar4`.
@@ -193,7 +174,7 @@ After all lanes finish, generate both strict summaries:
 
 ```bash
 uv run hsopt-export-exact \
-  --campaign-root "$HSOPT_DATA_ROOT/exact/production-cpu-v2" \
+  --campaign-root "$HSOPT_DATA_ROOT/exact/production-gpu91-v1" \
   --family hamlib121 \
   --output-dir /path/to/final-hamlib-export
 
@@ -202,7 +183,7 @@ uv run hsopt-reports --family hamlib121 \
   --output-dir experiments/hamlib121/results/final
 
 uv run hsopt-export-exact \
-  --campaign-root "$HSOPT_DATA_ROOT/exact/production-cpu-v2" \
+  --campaign-root "$HSOPT_DATA_ROOT/exact/production-gpu91-v1" \
   --family reactions10 \
   --output-dir /path/to/final-reactions-export
 

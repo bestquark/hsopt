@@ -141,7 +141,7 @@ def prepare_hamlib(
     checksum_manifest: Path,
     data_root: Path,
     output_root: Path,
-    max_qubits: int = 10,
+    max_qubits: int = 14,
 ) -> dict[str, Any]:
     """Convert the exact-capable HamLib subset into compact immutable JSON."""
 
@@ -505,7 +505,7 @@ def _parser() -> argparse.ArgumentParser:
     hamlib.add_argument("--checksum-manifest", type=Path, required=True)
     hamlib.add_argument("--data-root", type=Path, required=True)
     hamlib.add_argument("--output-root", type=Path, required=True)
-    hamlib.add_argument("--max-qubits", type=int, default=10)
+    hamlib.add_argument("--max-qubits", type=int, default=14)
 
     reactions = commands.add_parser("prepare-reactions")
     reactions.add_argument("--seed-manifest", type=Path, required=True)
