@@ -7,8 +7,10 @@ import pytest
 
 import hsopt.openshell_agent as openshell_agent
 from hsopt.openshell_agent import (
+    _terminate_sandbox_opencode,
     agent_feedback,
     mutate,
+    mutation_prompt,
     opencode_config,
     summarize_opencode_events,
     summarize_openshell_log,
@@ -128,8 +130,11 @@ def test_agent_feedback_omits_large_compilation_payloads() -> None:
 
 
 def test_opencode_policy_only_allows_candidate_file_mutations() -> None:
-    permissions = opencode_config()["agent"]["hsopt-mutation"]["permission"]
+    agent = opencode_config()["agent"]["hsopt-mutation"]
+    permissions = agent["permission"]
 
+    assert agent["steps"] == 5
+    assert "exactly once" in agent["prompt"]
     assert permissions["*"] == "deny"
     assert permissions["edit"] == "allow"
     assert permissions["read"] == {
@@ -139,6 +144,39 @@ def test_opencode_policy_only_allows_candidate_file_mutations() -> None:
     }
     assert permissions["webfetch"] == "deny"
     assert permissions["websearch"] == "deny"
+
+
+def test_mutation_prompt_requires_one_edit_then_terminal_text() -> None:
+    prompt = mutation_prompt()
+
+    assert "Read candidate.py at most once" in prompt
+    assert "tool exactly once" in prompt
+    assert "immediately return a final text" in prompt
+
+
+def test_sandbox_cleanup_terminates_opencode_without_matching_itself(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    calls: list[tuple[list[str], dict[str, object]]] = []
+
+    def record(command: list[str], **kwargs: object) -> object:
+        calls.append((command, kwargs))
+        return object()
+
+    monkeypatch.setattr(openshell_agent, "_run", record)
+
+    _terminate_sandbox_opencode("hsopt-deadbeef")
+
+    command, kwargs = calls[0]
+    assert command[:5] == [
+        "openshell",
+        "sandbox",
+        "exec",
+        "--name",
+        "hsopt-deadbeef",
+    ]
+    assert "[o]pencode run" in command[-1]
+    assert kwargs == {"check": False, "timeout": 20}
 
 
 def test_mutation_failure_is_durable(

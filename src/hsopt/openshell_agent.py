@@ -364,6 +364,17 @@ def opencode_config() -> dict[str, Any]:
                 "model": OPENCODE_MODEL,
                 "temperature": 1.0,
                 "top_p": 0.95,
+                # Bound the model/tool loop. A successful mutation needs one read,
+                # one edit, and a final response; five steps leave recovery room
+                # without allowing repeated rewrites to run until the wall clock
+                # timeout.
+                "steps": 5,
+                "prompt": (
+                    "Perform exactly one candidate.py policy mutation. Read the "
+                    "file at most once, call one edit or write tool exactly once, "
+                    "then immediately return a final text response without calling "
+                    "another tool."
+                ),
                 "permission": {
                     "*": "deny",
                     "bash": "deny",
@@ -408,7 +419,9 @@ Make one coherent deterministic mutation intended to lower T count while
 remaining accurate. Preserve get_method_config(problem) and
 choose_synthesis_epsilon(term, alpha, step_index, config). Do not change any
 Hamiltonian, evaluator, source data, or benchmark definition. Do not fabricate
-an evaluation result. Finish after editing candidate.py.
+an evaluation result. Read candidate.py at most once. Call one edit or write
+tool exactly once. After that tool succeeds, immediately return a final text
+response without reading or rewriting the file.
 """
     if feedback is None:
         return prompt
@@ -484,6 +497,32 @@ def _validate_candidate(path: Path) -> None:
     missing = sorted(required - functions)
     if missing:
         raise RuntimeError(f"candidate is missing required functions: {missing}")
+
+
+def _terminate_sandbox_opencode(sandbox_name: str) -> None:
+    """Stop a timed-out OpenCode process before deleting its disposable sandbox."""
+
+    _run(
+        [
+            "openshell",
+            "sandbox",
+            "exec",
+            "--name",
+            sandbox_name,
+            "--timeout",
+            "15",
+            "--",
+            "sh",
+            "-lc",
+            (
+                "pkill -TERM -f '[o]pencode run' 2>/dev/null || true; "
+                "sleep 1; "
+                "pkill -KILL -f '[o]pencode run' 2>/dev/null || true"
+            ),
+        ],
+        check=False,
+        timeout=20,
+    )
 
 
 def _mutate_once(
@@ -619,7 +658,12 @@ def _mutate_once(
         )
     finally:
         if created and not keep_sandbox:
-            _run(["openshell", "sandbox", "delete", sandbox_name], check=False)
+            _terminate_sandbox_opencode(sandbox_name)
+            _run(
+                ["openshell", "sandbox", "delete", sandbox_name],
+                check=False,
+                timeout=45,
+            )
 
     _validate_candidate(candidate)
     if candidate.read_bytes() == (run_dir / "candidate.before.py").read_bytes():
