@@ -14,7 +14,7 @@ from hsopt.exact_queue import (
     requeue_missing,
     run_batch,
 )
-from hsopt.nvpark_queue import submit_batch, submit_ready
+from hsopt.nvpark_queue import _system_memory_mib, submit_batch, submit_ready
 
 
 REPO = Path(__file__).resolve().parents[1]
@@ -47,6 +47,15 @@ def test_queue_deduplicates_snapshots_and_merges_results(tmp_path: Path) -> None
     assert queue_status(tmp_path)["completed"] == 1
     result = json.loads((tmp_path / "completed" / first["task_id"] / "result.json").read_text())
     assert result["observable"] == "compiled_unitary_ground_eigenphase"
+    assert result["task_wall_seconds"] > 0.0
+    assert result["execution_backend"] == "numpy"
+    assert result["execution_accelerator"] == "unknown"
+    assert result["task_started_at"] < result["task_finished_at"]
+
+
+def test_legate_system_memory_tracks_the_slurm_request() -> None:
+    assert _system_memory_mib("16G") == 12_000
+    assert _system_memory_mib("64G") == 61_000
 
 
 def test_concurrent_queue_insertion_remains_content_deduplicated(
@@ -201,9 +210,7 @@ def test_submit_ready_balances_difference_tasks_when_absolute_work_is_available(
         threshold=15,
         max_difference_tasks=3,
     )
-    manifest = json.loads(
-        (Path(submitted["batch_dir"]) / "batch.json").read_text(encoding="utf-8")
-    )
+    manifest = json.loads((Path(submitted["batch_dir"]) / "batch.json").read_text(encoding="utf-8"))
 
     assert submitted["task_count"] == 15
     assert manifest["task_kinds"] == {"absolute": 12, "difference": 3}
@@ -233,9 +240,7 @@ def test_submit_ready_fills_from_differences_when_no_absolute_work_remains(
         threshold=15,
         max_difference_tasks=3,
     )
-    manifest = json.loads(
-        (Path(submitted["batch_dir"]) / "batch.json").read_text(encoding="utf-8")
-    )
+    manifest = json.loads((Path(submitted["batch_dir"]) / "batch.json").read_text(encoding="utf-8"))
 
     assert submitted["task_count"] == 15
     assert manifest["task_kinds"] == {"difference": 15}
@@ -276,6 +281,7 @@ def test_nvpark_cupynumeric_submission_uses_cpu_partition_without_a_gpu(
     assert submission["runtime_python"] is None
     assert "--cpus=1 --gpus=0" in submission["resources"]["legate_config"]
     assert "--fbmem=0" in submission["resources"]["legate_config"]
+    assert "--sysmem=12000" in submission["resources"]["legate_config"]
     sbatch = next(command[-1] for command in calls if "sbatch" in command[-1])
     assert "--partition=cpu" in sbatch
     assert "--qos=normal" in sbatch
@@ -284,6 +290,7 @@ def test_nvpark_cupynumeric_submission_uses_cpu_partition_without_a_gpu(
     assert "LEGATE_AUTO_CONFIG=0" in sbatch
     assert "LEGATE_CONFIG" in sbatch
     assert "--backend cupynumeric" in sbatch
+    assert "--accelerator cpu" in sbatch
     assert sum("sbatch" in command[-1] for command in calls) == 1
 
 

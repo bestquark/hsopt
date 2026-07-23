@@ -47,6 +47,18 @@ def _write_json(path: Path, payload: Any) -> None:
     temporary.replace(path)
 
 
+def _system_memory_mib(memory: str) -> int:
+    """Leave 4 GiB for the runtime while exposing the remainder to Legate."""
+
+    normalized = memory.strip().upper()
+    multipliers = {"K": 1 / 1024, "M": 1, "G": 1024, "T": 1024**2}
+    if len(normalized) < 2 or normalized[-1] not in multipliers:
+        raise ValueError("memory must use a Slurm K/M/G/T suffix")
+    requested = int(float(normalized[:-1]) * multipliers[normalized[-1]])
+    available = max(1_000, requested - 4 * 1024)
+    return (available // 1_000) * 1_000
+
+
 def _prepare_balanced_batch(
     queue_dir: Path,
     *,
@@ -72,9 +84,7 @@ def _prepare_balanced_batch(
     if len(selected) < limit:
         remaining = limit - len(selected)
         selected.extend(
-            by_kind["difference"][
-                len(selected_difference) : len(selected_difference) + remaining
-            ]
+            by_kind["difference"][len(selected_difference) : len(selected_difference) + remaining]
         )
     selected.sort()
     if not selected:
@@ -136,11 +146,7 @@ def _recover_job_id(host: str, job_name: str) -> str | None:
             "--format=JobIDRaw",
         ],
     )
-    job_ids = [
-        line.strip()
-        for line in accounting.stdout.splitlines()
-        if line.strip().isdigit()
-    ]
+    job_ids = [line.strip() for line in accounting.stdout.splitlines() if line.strip().isdigit()]
     return job_ids[0] if job_ids else None
 
 
@@ -232,10 +238,11 @@ def submit_batch(
     _run(["rsync", "-az", f"{batch_dir}/", f"{host}:{remote_batch}/"])
 
     legate_cpus = cpus if use_gpu else max(1, cpus - 1)
+    system_memory_mib = _system_memory_mib(memory)
     framebuffer_memory_mib = DEFAULT_GPU_MEMORY_MIB if use_gpu else 0
     legate_config = (
         f"--cpus={legate_cpus} --gpus={int(use_gpu)} "
-        f"--sysmem={DEFAULT_SYSTEM_MEMORY_MIB} --fbmem={framebuffer_memory_mib}"
+        f"--sysmem={system_memory_mib} --fbmem={framebuffer_memory_mib}"
     )
     environment_parts = [
         "set -euo pipefail;",
@@ -267,9 +274,7 @@ def submit_batch(
         )
         evaluator_python = "uv run --no-sync python"
     else:
-        batch_parts.append(
-            f"export PYTHONPATH={shlex.quote(f'{remote_source}/src')};"
-        )
+        batch_parts.append(f"export PYTHONPATH={shlex.quote(f'{remote_source}/src')};")
         evaluator_python = shlex.quote(runtime_python)
     if use_gpu:
         monitor_path = f"{remote_batch}/gpu-utilization.csv"
@@ -296,7 +301,8 @@ def submit_batch(
         )
     batch_parts.append(
         f"{evaluator_python} -m hsopt.exact_queue run-batch "
-        f"--batch-dir {shlex.quote(remote_batch)} --backend {backend}"
+        f"--batch-dir {shlex.quote(remote_batch)} --backend {backend} "
+        f"--accelerator {accelerator}"
     )
     batch_script = " ".join(batch_parts)
     job_command = f"bash -lc {shlex.quote(batch_script)}"

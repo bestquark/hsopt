@@ -13,6 +13,7 @@ import importlib.util
 import json
 import math
 import sys
+import time
 import warnings
 from collections import Counter
 from dataclasses import asdict, is_dataclass
@@ -30,6 +31,8 @@ TARGET_ANCHOR_MIN_PROBABILITY = 1.0e-12
 TARGET_STATE_DEFINITION = "normalized_anchor_projection_onto_exact_ground_eigenspace"
 DENSE_EVALUATOR_MAX_QUBITS = 15
 ROTATION_CHUNK_TARGET_BYTES = 1024**3
+DEFERRED_ROTATION_TARGET_BYTES = 8 * 1024**3
+MAX_ROTATIONS_BETWEEN_FENCES = 32
 _PAULIS = {
     "I": np.eye(2, dtype=np.complex128),
     "X": np.asarray([[0.0, 1.0], [1.0, 0.0]], dtype=np.complex128),
@@ -64,6 +67,20 @@ def _fence(backend_name: str) -> None:
     from legate.core import get_legate_runtime
 
     get_legate_runtime().issue_execution_fence(block=True)
+
+
+def _rotation_fence_interval(dimension: int) -> int:
+    """Bound deferred rotation temporaries while keeping the task queue fed."""
+
+    matrix_bytes = dimension * dimension * np.dtype(np.complex128).itemsize
+    worst_case_rotation_bytes = 4 * matrix_bytes
+    return max(
+        1,
+        min(
+            MAX_ROTATIONS_BETWEEN_FENCES,
+            DEFERRED_ROTATION_TARGET_BYTES // worst_case_rotation_bytes,
+        ),
+    )
 
 
 def load_policy(path: Path) -> ModuleType:
@@ -231,9 +248,7 @@ def _anchored_ground_state(
         anchor_position = hf_position
         anchor_kind = "hartree_fock"
     else:
-        resolved = np.flatnonzero(
-            determinant_probabilities >= TARGET_ANCHOR_MIN_PROBABILITY
-        )
+        resolved = np.flatnonzero(determinant_probabilities >= TARGET_ANCHOR_MIN_PROBABILITY)
         if resolved.size == 0:
             raise RuntimeError(
                 "exact ground eigenspace has no resolvable fixed-electron determinant anchor"
@@ -380,8 +395,7 @@ def _apply_compiled_rotation(
         1,
         min(
             dimension,
-            ROTATION_CHUNK_TARGET_BYTES
-            // (dimension * np.dtype(np.complex128).itemsize),
+            ROTATION_CHUNK_TARGET_BYTES // (dimension * np.dtype(np.complex128).itemsize),
         ),
     )
     identity_coefficient = decomposition["I"]
@@ -486,6 +500,7 @@ def _build_compiled_step(
     rotations = _step_rotations(terms, order=order, step_time=step_time)
 
     dim = 1 << int(problem["n_qubits"])
+    fence_interval = _rotation_fence_interval(dim)
     unitary = xp.eye(dim, dtype=xp.complex128)
     workspace = xp.empty_like(unitary)
     t_count = 0
@@ -493,6 +508,7 @@ def _build_compiled_step(
     epsilon_histogram: Counter[str] = Counter()
     compilations: dict[str, dict[str, Any]] = {}
 
+    applied_rotations = 0
     for term, alpha in rotations:
         if abs(alpha) <= threshold:
             skipped += 1
@@ -516,7 +532,9 @@ def _build_compiled_step(
             compiled_rz=compiled["matrix"],
             xp=xp,
         )
-        _fence(backend_name)
+        applied_rotations += 1
+        if applied_rotations % fence_interval == 0:
+            _fence(backend_name)
         t_count += int(compiled["t_count"])
         epsilon_histogram[f"{epsilon:.3e}"] += n_steps
         key = f"{term['label']}|{theta:.17e}|{epsilon:.17e}"
@@ -530,6 +548,7 @@ def _build_compiled_step(
             "operator_error": compiled["operator_error"],
         }
 
+    _fence(backend_name)
     del workspace
     return unitary, {
         "policy": _config_dict(config),
@@ -545,6 +564,7 @@ def _build_compiled_step(
         "dense_matrix_bytes": dim * dim * np.dtype(np.complex128).itemsize,
         "rotation_workspace_bytes": dim * dim * np.dtype(np.complex128).itemsize,
         "rotation_chunk_target_bytes": ROTATION_CHUNK_TARGET_BYTES,
+        "rotation_fence_interval": fence_interval,
         "synthesis_epsilon_histogram": dict(sorted(epsilon_histogram.items())),
         "unique_compilations": sorted(
             compilations.values(),
@@ -577,9 +597,7 @@ def _reference_state(
     if reference.get("observable") != "exact_unitary_ground_eigenphase":
         raise ValueError("reference is not an exact-unitary ground-eigenphase result")
     if reference.get("target_state_definition") != TARGET_STATE_DEFINITION:
-        raise ValueError(
-            "reference does not use the deterministic anchored exact-ground target"
-        )
+        raise ValueError("reference does not use the deterministic anchored exact-ground target")
     problem_path = Path(str(problem["_path"]))
     if reference.get("problem_sha256") != _sha256(problem_path):
         raise ValueError(f"exact reference does not match {problem_path}")
@@ -602,12 +620,20 @@ def evaluate_exact_reference(
 ) -> dict[str, Any]:
     """Construct and diagonalize ``U_exact = exp(+i H t)`` once."""
 
+    evaluation_started = time.perf_counter()
     problem = load_problem(problem_path)
     backend_name, xp = array_backend(backend)
+
+    sector_started = time.perf_counter()
     indices_host, sector_host = _fixed_electron_hamiltonian(problem)
     sector_hamiltonian = xp.asarray(sector_host, dtype=xp.complex128)
+    _fence(backend_name)
+    sector_build_seconds = time.perf_counter() - sector_started
+
+    hamiltonian_eigensolve_started = time.perf_counter()
     h_eigenvalues, h_eigenvectors = xp.linalg.eigh(sector_hamiltonian)
     _fence(backend_name)
+    hamiltonian_eigensolve_seconds = time.perf_counter() - hamiltonian_eigensolve_started
     (
         hamiltonian_energy,
         hamiltonian_target,
@@ -623,11 +649,18 @@ def evaluate_exact_reference(
         eigenvectors=h_eigenvectors,
         xp=xp,
     )
+    exact_unitary_started = time.perf_counter()
     phases = xp.exp(1.0j * h_eigenvalues * float(problem["target_time"]))
     exact_unitary = (h_eigenvectors * phases[None, :]) @ h_eigenvectors.conj().T
     _fence(backend_name)
+    exact_unitary_build_seconds = time.perf_counter() - exact_unitary_started
+
+    unitary_eigensolve_started = time.perf_counter()
     eigenvalues, eigenvectors = xp.linalg.eig(exact_unitary)
     _fence(backend_name)
+    unitary_eigensolve_seconds = time.perf_counter() - unitary_eigensolve_started
+
+    postprocess_started = time.perf_counter()
     eigenvectors /= xp.linalg.norm(eigenvectors, axis=0, keepdims=True)
     ground_overlaps = xp.abs(eigenvectors.conj().T @ hamiltonian_target) ** 2
     selected = int(np.asarray(xp.argmax(ground_overlaps)))
@@ -640,12 +673,18 @@ def evaluate_exact_reference(
     full_target_state = xp.zeros(1 << int(problem["n_qubits"]), dtype=xp.complex128)
     indices = xp.asarray(indices_host, dtype=xp.int64)
     full_target_state[indices] = hamiltonian_target
+    selected_overlap = float(np.asarray(ground_overlaps[selected]))
+    max_modulus_error = float(np.asarray(xp.max(xp.abs(xp.abs(eigenvalues) - 1.0))))
+    serialized_target_state = _serialize_state(full_target_state)
+    _fence(backend_name)
+    postprocess_seconds = time.perf_counter() - postprocess_started
     consistency_error = abs(unitary_energy - hamiltonian_energy)
     if consistency_error > 1.0e-9:
         raise RuntimeError(
             "exact-unitary eigenphase does not reproduce the fixed-electron "
             f"Hamiltonian ground energy: {consistency_error}"
         )
+    evaluation_wall_seconds = time.perf_counter() - evaluation_started
     return {
         "status": "ok",
         "observable": "exact_unitary_ground_eigenphase",
@@ -669,13 +708,20 @@ def evaluate_exact_reference(
         "unitary_hamiltonian_consistency_error_hartree": consistency_error,
         "selected_eigen_index": selected,
         "selected_eigenphase_radians": selected_phase,
-        "selected_ground_state_overlap": float(np.asarray(ground_overlaps[selected])),
+        "selected_ground_state_overlap": selected_overlap,
         "hf_ground_subspace_probability": hf_ground_probability,
         "qpe_success_probability_from_hf": hf_target_probability,
-        "max_eigenvalue_modulus_error": float(
-            np.asarray(xp.max(xp.abs(xp.abs(eigenvalues) - 1.0)))
-        ),
-        "exact_ground_state": _serialize_state(full_target_state),
+        "max_eigenvalue_modulus_error": max_modulus_error,
+        "exact_ground_state": serialized_target_state,
+        "evaluation_wall_seconds": evaluation_wall_seconds,
+        "timing_seconds": {
+            "fixed_electron_hamiltonian_build": sector_build_seconds,
+            "hamiltonian_eigensolve": hamiltonian_eigensolve_seconds,
+            "exact_unitary_build": exact_unitary_build_seconds,
+            "exact_unitary_eigensolve": unitary_eigensolve_seconds,
+            "postprocess": postprocess_seconds,
+            "total": evaluation_wall_seconds,
+        },
     }
 
 
@@ -686,6 +732,7 @@ def evaluate_exact_difference_reference(
 ) -> dict[str, Any]:
     """Compute immutable exact-unitary references for a signed energy difference."""
 
+    evaluation_started = time.perf_counter()
     reaction_path = reaction_path.resolve()
     reaction = json.loads(reaction_path.read_text(encoding="utf-8"))
     species_results: dict[str, dict[str, Any]] = {}
@@ -705,6 +752,7 @@ def evaluate_exact_difference_reference(
             "exact-unitary signed difference does not reproduce the Hamiltonian "
             f"difference: {consistency_error}"
         )
+    evaluation_wall_seconds = time.perf_counter() - evaluation_started
     return {
         "status": "ok",
         "observable": "exact_unitary_signed_energy_difference",
@@ -717,6 +765,13 @@ def evaluate_exact_difference_reference(
         "exact_unitary_difference_hartree": unitary_difference,
         "unitary_hamiltonian_consistency_error_hartree": consistency_error,
         "species": species_results,
+        "evaluation_wall_seconds": evaluation_wall_seconds,
+        "timing_seconds": {
+            "species_total": sum(
+                float(result["evaluation_wall_seconds"]) for result in species_results.values()
+            ),
+            "total": evaluation_wall_seconds,
+        },
     }
 
 
@@ -730,6 +785,7 @@ def evaluate_molecule(
 ) -> dict[str, Any]:
     """Return the exact compiled-unitary ground-energy error for one molecule."""
 
+    evaluation_started = time.perf_counter()
     problem = load_problem(problem_path)
     policy = load_policy(policy_path)
     backend_name, xp = array_backend(backend)
@@ -739,18 +795,30 @@ def evaluate_molecule(
         reference_result = json.loads(Path(reference_path).read_text(encoding="utf-8"))
     if reference_result is None:
         reference_result = evaluate_exact_reference(problem_path, backend=backend)
+
+    reference_started = time.perf_counter()
     exact_energy, exact_ground = _reference_state(problem, reference_result, xp=xp)
     hf_state = _hartree_fock_state(problem, xp)
+    _fence(backend_name)
+    reference_load_seconds = time.perf_counter() - reference_started
+
+    compiled_unitary_started = time.perf_counter()
     unitary_step, metrics = _build_compiled_step(
         problem,
         policy,
         backend_name=backend_name,
         xp=xp,
     )
+    compiled_unitary_build_seconds = time.perf_counter() - compiled_unitary_started
+
+    eigensolve_started = time.perf_counter()
     eigenvalues, eigenvectors = xp.linalg.eig(unitary_step)
     _fence(backend_name)
     eigenvectors /= xp.linalg.norm(eigenvectors, axis=0, keepdims=True)
+    _fence(backend_name)
+    compiled_unitary_eigensolve_seconds = time.perf_counter() - eigensolve_started
 
+    postprocess_started = time.perf_counter()
     ground_overlaps = xp.abs(eigenvectors.conj().T @ exact_ground) ** 2
     selected = int(np.asarray(xp.argmax(ground_overlaps)))
     hf_probabilities = xp.abs(eigenvectors.conj().T @ hf_state) ** 2
@@ -766,6 +834,12 @@ def evaluate_molecule(
     signed_error = estimated_energy - exact_energy
     absolute_error = abs(signed_error)
     passes = absolute_error <= CHEMICAL_ACCURACY_HARTREE
+    selected_ground_state_overlap = float(np.asarray(ground_overlaps[selected]))
+    qpe_success_probability = float(np.asarray(hf_probabilities[selected]))
+    max_modulus_error = float(np.asarray(xp.max(xp.abs(xp.abs(eigenvalues) - 1.0))))
+    _fence(backend_name)
+    postprocess_seconds = time.perf_counter() - postprocess_started
+    evaluation_wall_seconds = time.perf_counter() - evaluation_started
 
     return {
         "status": "ok",
@@ -793,19 +867,25 @@ def evaluate_molecule(
         "chemical_accuracy_hartree": CHEMICAL_ACCURACY_HARTREE,
         "passes_chemical_accuracy": passes,
         "selected_eigen_index": selected,
-        "selected_ground_state_overlap": float(np.asarray(ground_overlaps[selected])),
-        "qpe_success_probability_from_hf": float(np.asarray(hf_probabilities[selected])),
+        "selected_ground_state_overlap": selected_ground_state_overlap,
+        "qpe_success_probability_from_hf": qpe_success_probability,
         "selected_step_eigenphase_radians": step_phase,
         "selected_total_eigenphase_radians": total_phase,
-        "max_eigenvalue_modulus_error": float(
-            np.asarray(xp.max(xp.abs(xp.abs(eigenvalues) - 1.0)))
-        ),
+        "max_eigenvalue_modulus_error": max_modulus_error,
         "t_count": int(metrics["t_count"]),
         "score": int(metrics["t_count"]) if passes else None,
         "evaluation_contract": (
             "minimize exact compiled T count subject to the compiled-unitary "
             "ground-eigenphase error being within chemical accuracy"
         ),
+        "evaluation_wall_seconds": evaluation_wall_seconds,
+        "timing_seconds": {
+            "reference_load": reference_load_seconds,
+            "compiled_unitary_build": compiled_unitary_build_seconds,
+            "compiled_unitary_eigensolve": compiled_unitary_eigensolve_seconds,
+            "postprocess": postprocess_seconds,
+            "total": evaluation_wall_seconds,
+        },
         **metrics,
     }
 
@@ -819,6 +899,7 @@ def evaluate_difference(
 ) -> dict[str, Any]:
     """Evaluate a signed energy difference from independently compiled unitaries."""
 
+    evaluation_started = time.perf_counter()
     reaction_path = reaction_path.resolve()
     reaction = json.loads(reaction_path.read_text(encoding="utf-8"))
     reference = (
@@ -852,6 +933,7 @@ def evaluate_difference(
     signed_error = compiled_difference - exact_difference
     absolute_error = abs(signed_error)
     passes = absolute_error <= CHEMICAL_ACCURACY_HARTREE
+    evaluation_wall_seconds = time.perf_counter() - evaluation_started
     return {
         "status": "ok",
         "observable": "compiled_unitary_signed_energy_difference",
@@ -872,6 +954,13 @@ def evaluate_difference(
         "t_count": total_t_count,
         "score": total_t_count if passes else None,
         "species": species_results,
+        "evaluation_wall_seconds": evaluation_wall_seconds,
+        "timing_seconds": {
+            "species_total": sum(
+                float(result["evaluation_wall_seconds"]) for result in species_results.values()
+            ),
+            "total": evaluation_wall_seconds,
+        },
         "evaluation_contract": (
             "minimize the sum of exact compiled species T counts subject to the "
             "signed compiled-unitary energy-difference error being within chemical accuracy"

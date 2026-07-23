@@ -16,6 +16,7 @@ from hsopt.compiled_unitary import (
     _compile_rz,
     _dense_hamiltonian,
     _fixed_electron_hamiltonian,
+    _rotation_fence_interval,
     evaluate_exact_reference,
     evaluate_molecule,
     load_problem,
@@ -82,6 +83,13 @@ def test_fixed_electron_hamiltonian_matches_projected_full_matrix() -> None:
     assert sector == pytest.approx(expected)
 
 
+def test_rotation_fences_bound_deferred_memory_at_large_dimensions() -> None:
+    assert _rotation_fence_interval(1 << 10) == 32
+    assert _rotation_fence_interval(1 << 12) == 8
+    assert _rotation_fence_interval(1 << 14) == 1
+    assert _rotation_fence_interval(1 << 15) == 1
+
+
 @pytest.mark.parametrize("label", ["XII", "IYI", "XYZ", "ZYX"])
 def test_compiled_rotation_workspace_matches_dense_left_multiplication(
     label: str,
@@ -89,8 +97,7 @@ def test_compiled_rotation_workspace_matches_dense_left_multiplication(
     rng = np.random.default_rng(20260723)
     dimension = 1 << len(label)
     unitary = (
-        rng.normal(size=(dimension, dimension))
-        + 1.0j * rng.normal(size=(dimension, dimension))
+        rng.normal(size=(dimension, dimension)) + 1.0j * rng.normal(size=(dimension, dimension))
     ).astype(np.complex128)
     workspace = np.empty_like(unitary)
     compiled_rz = np.asarray(
@@ -121,8 +128,7 @@ def test_compiled_rotation_workspace_matches_dense_left_multiplication(
             }[character],
         )
     expected = (
-        np.cos(0.317 / 2.0) * np.eye(dimension)
-        - 1.0j * np.sin(0.317 / 2.0) * pauli
+        np.cos(0.317 / 2.0) * np.eye(dimension) - 1.0j * np.sin(0.317 / 2.0) * pauli
     ) @ unitary
 
     assert actual == pytest.approx(expected, abs=1.0e-12)
@@ -171,9 +177,7 @@ def test_exact_reference_is_obtained_from_the_exact_unitary_once() -> None:
 
     assert result["observable"] == "exact_unitary_ground_eigenphase"
     assert result["unitary_definition"] == "U_exact = exp(+i H t)"
-    assert result["exact_unitary_ground_energy_hartree"] == pytest.approx(
-        -1.144979079498297
-    )
+    assert result["exact_unitary_ground_energy_hartree"] == pytest.approx(-1.144979079498297)
     assert result["hamiltonian_ground_energy_hartree"] == pytest.approx(
         result["exact_unitary_ground_energy_hartree"]
     )
@@ -315,6 +319,10 @@ def test_absolute_baseline_uses_cached_exact_reference_and_compiled_eigenphase(
     assert result["n_steps"] == 512
     assert result["policy"]["term_order_strategy"] == "lexicographic"
     assert result["t_count"] == 1_072_128
+    assert result["evaluation_wall_seconds"] > 0.0
+    assert result["timing_seconds"]["compiled_unitary_build"] > 0.0
+    assert result["timing_seconds"]["compiled_unitary_eigensolve"] > 0.0
+    assert result["rotation_fence_interval"] == 32
     assert result["qpe_success_probability_from_hf"] == pytest.approx(0.9890367894564321)
     assert all("gate_string" not in row for row in result["unique_compilations"])
     assert all(len(row["gate_string_sha256"]) == 64 for row in result["unique_compilations"])

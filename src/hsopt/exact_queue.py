@@ -12,6 +12,7 @@ import fcntl
 import hashlib
 import json
 import shutil
+import time
 import traceback
 import uuid
 from contextlib import contextmanager
@@ -286,7 +287,12 @@ def prepare_batch(queue_dir: Path, *, limit: int = 40) -> dict[str, Any]:
     }
 
 
-def run_batch(batch_dir: Path, *, backend: str = "cupynumeric") -> dict[str, Any]:
+def run_batch(
+    batch_dir: Path,
+    *,
+    backend: str = "cupynumeric",
+    accelerator: str = "unknown",
+) -> dict[str, Any]:
     """Evaluate every task in one batch, sequentially."""
 
     batch_dir = batch_dir.resolve()
@@ -305,6 +311,8 @@ def run_batch(batch_dir: Path, *, backend: str = "cupynumeric") -> dict[str, Any
             failed += previous.get("status") != "ok"
             continue
         metadata = json.loads((task_dir / "task.json").read_text(encoding="utf-8"))
+        task_started_at = _now()
+        task_started = time.perf_counter()
         try:
             source = task_dir / metadata["source"]
             if metadata.get("stage", "candidate") == "reference":
@@ -315,9 +323,7 @@ def run_batch(batch_dir: Path, *, backend: str = "cupynumeric") -> dict[str, Any
             else:
                 policy = task_dir / "policy.py"
                 reference = (
-                    task_dir / str(metadata["reference"])
-                    if metadata.get("reference")
-                    else None
+                    task_dir / str(metadata["reference"]) if metadata.get("reference") else None
                 )
                 if metadata["kind"] == "absolute":
                     result = evaluate_molecule(
@@ -344,10 +350,20 @@ def run_batch(batch_dir: Path, *, backend: str = "cupynumeric") -> dict[str, Any
                 "traceback": traceback.format_exc(),
             }
             failed += 1
+        result.update(
+            {
+                "task_started_at": task_started_at,
+                "task_finished_at": _now(),
+                "task_wall_seconds": time.perf_counter() - task_started,
+                "execution_backend": backend,
+                "execution_accelerator": accelerator,
+            }
+        )
         _write_json(result_path, result)
 
     manifest["finished_at"] = _now()
     manifest["result_backend"] = backend
+    manifest["result_accelerator"] = accelerator
     manifest["succeeded"] = succeeded
     manifest["failed"] = failed
     _write_json(manifest_path, manifest)
@@ -358,6 +374,7 @@ def run_batch(batch_dir: Path, *, backend: str = "cupynumeric") -> dict[str, Any
         "succeeded": succeeded,
         "failed": failed,
         "backend": backend,
+        "accelerator": accelerator,
     }
 
 
@@ -495,6 +512,11 @@ def _parser() -> argparse.ArgumentParser:
     run_parser = subparsers.add_parser("run-batch")
     run_parser.add_argument("--batch-dir", type=Path, required=True)
     run_parser.add_argument("--backend", choices=("cupynumeric", "numpy"), default="cupynumeric")
+    run_parser.add_argument(
+        "--accelerator",
+        choices=("gpu", "cpu", "unknown"),
+        default="unknown",
+    )
 
     merge_parser = subparsers.add_parser("merge-batch")
     merge_parser.add_argument("--queue-dir", type=Path, required=True)
@@ -529,7 +551,11 @@ def main() -> int:
     elif args.command == "prepare-batch":
         result = prepare_batch(args.queue_dir, limit=args.limit)
     elif args.command == "run-batch":
-        result = run_batch(args.batch_dir, backend=args.backend)
+        result = run_batch(
+            args.batch_dir,
+            backend=args.backend,
+            accelerator=args.accelerator,
+        )
     elif args.command == "merge-batch":
         result = merge_batch(args.queue_dir, args.batch_dir)
     else:
