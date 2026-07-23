@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import json
 import subprocess
+from concurrent.futures import ThreadPoolExecutor
 from pathlib import Path
 
 from hsopt.exact_queue import (
@@ -46,6 +47,26 @@ def test_queue_deduplicates_snapshots_and_merges_results(tmp_path: Path) -> None
     assert queue_status(tmp_path)["completed"] == 1
     result = json.loads((tmp_path / "completed" / first["task_id"] / "result.json").read_text())
     assert result["observable"] == "compiled_unitary_ground_eigenphase"
+
+
+def test_concurrent_queue_insertion_remains_content_deduplicated(
+    tmp_path: Path,
+) -> None:
+    def insert(_: int) -> dict[str, object]:
+        return enqueue(
+            tmp_path,
+            kind="absolute",
+            source=ABSOLUTE / "hamiltonian.json",
+            policy=ABSOLUTE / "initial_pf.py",
+        )
+
+    with ThreadPoolExecutor(max_workers=8) as pool:
+        results = list(pool.map(insert, range(8)))
+
+    assert len({str(result["task_id"]) for result in results}) == 1
+    assert sum(result["status"] == "queued" for result in results) == 1
+    assert sum(result["status"] == "exists" for result in results) == 7
+    assert queue_status(tmp_path)["pending"] == 1
 
 
 def test_reference_is_a_distinct_cached_stage_before_candidate_evaluation(

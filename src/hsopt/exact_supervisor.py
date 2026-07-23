@@ -8,6 +8,7 @@ import json
 import os
 import time
 from collections import Counter
+from concurrent.futures import ThreadPoolExecutor
 from contextlib import contextmanager
 from datetime import UTC, datetime
 from pathlib import Path
@@ -69,6 +70,29 @@ def _write_json(path: Path, payload: Any) -> None:
 
 def _safe_error(exc: BaseException) -> str:
     return f"{type(exc).__name__}: {exc}"[:1000]
+
+
+def _run_mutation_proposals(
+    lane_dirs: list[Path],
+    *,
+    workers: int,
+    timeout_seconds: int,
+) -> list[tuple[Path, dict[str, Any]]]:
+    """Mutate distinct sequential lanes concurrently in isolated sandboxes."""
+
+    selected = lane_dirs[:workers]
+
+    def propose(lane_dir: Path) -> tuple[Path, dict[str, Any]]:
+        try:
+            result = propose_lane(lane_dir, timeout_seconds=timeout_seconds)
+        except Exception as exc:
+            result = {"status": "error", "error": _safe_error(exc)}
+        return lane_dir, result
+
+    if workers == 1:
+        return [propose(selected[0])] if selected else []
+    with ThreadPoolExecutor(max_workers=workers, thread_name_prefix="hsopt-mutation") as pool:
+        return list(pool.map(propose, selected))
 
 
 def _append_event(campaign_root: Path, event: str, **payload: Any) -> None:
@@ -291,6 +315,7 @@ def supervise_once(
     repo_dir: Path,
     threshold: int = 40,
     max_active_jobs: int = 4,
+    mutation_workers: int = 1,
     mutation_timeout_seconds: int = 900,
     max_batch_attempts: int = 3,
     mutations_enabled: bool = True,
@@ -510,6 +535,7 @@ def supervise_once(
         )
 
     mutation: dict[str, Any] | None = None
+    mutations: list[dict[str, Any]] = []
     if replay_campaign_root is not None and ready_lanes:
         replay_campaign_root = replay_campaign_root.expanduser().resolve()
         for lane_dir in ready_lanes:
@@ -544,32 +570,32 @@ def supervise_once(
         if mutation is None:
             mutation = {"status": "waiting_canonical"}
     elif mutations_enabled and ready_lanes:
-        lane_dir = ready_lanes[0]
-        try:
-            mutation = propose_lane(
-                lane_dir,
-                timeout_seconds=mutation_timeout_seconds,
-            )
-            _append_event(
-                campaign_root,
-                "mutation_proposed",
-                lane=str(lane_dir.relative_to(campaign_root)),
-                iteration=mutation.get("iteration"),
-                task_id=mutation.get("task_id"),
-                queue_status=mutation.get("queue_status"),
-            )
-        except Exception as exc:
+        for lane_dir, result in _run_mutation_proposals(
+            ready_lanes,
+            workers=mutation_workers,
+            timeout_seconds=mutation_timeout_seconds,
+        ):
             mutation = {
-                "status": "error",
+                **result,
                 "lane": str(lane_dir.relative_to(campaign_root)),
-                "error": _safe_error(exc),
             }
-            _append_event(
-                campaign_root,
-                "mutation_error",
-                lane=str(lane_dir.relative_to(campaign_root)),
-                error=mutation["error"],
-            )
+            mutations.append(mutation)
+            if mutation["status"] == "error":
+                _append_event(
+                    campaign_root,
+                    "mutation_error",
+                    lane=mutation["lane"],
+                    error=mutation["error"],
+                )
+            else:
+                _append_event(
+                    campaign_root,
+                    "mutation_proposed",
+                    lane=mutation["lane"],
+                    iteration=mutation.get("iteration"),
+                    task_id=mutation.get("task_id"),
+                    queue_status=mutation.get("queue_status"),
+                )
 
     lane_metrics, _ = _lane_summary(lane_dirs)
     status = {
@@ -583,9 +609,11 @@ def supervise_once(
         "active_jobs": active_jobs,
         "reconciliation_errors": reconciliation_errors,
         "last_mutation": mutation,
+        "last_mutations": mutations,
         "configuration": {
             "threshold": threshold,
             "max_active_jobs": max_active_jobs,
+            "mutation_workers": mutation_workers,
             "mutation_timeout_seconds": mutation_timeout_seconds,
             "max_batch_attempts": max_batch_attempts,
             "mutations_enabled": mutations_enabled,
@@ -671,6 +699,7 @@ def _parser() -> argparse.ArgumentParser:
     parser.add_argument("--interval-seconds", type=int, default=30)
     parser.add_argument("--threshold", type=int, default=40)
     parser.add_argument("--max-active-jobs", type=int, default=4)
+    parser.add_argument("--mutation-workers", type=int, default=1)
     parser.add_argument("--mutation-timeout-seconds", type=int, default=900)
     parser.add_argument("--max-batch-attempts", type=int, default=3)
     parser.add_argument("--no-mutations", action="store_true")
@@ -705,8 +734,16 @@ def main() -> int:
     args = _parser().parse_args()
     if args.interval_seconds <= 0:
         raise ValueError("interval-seconds must be positive")
-    if args.threshold <= 0 or args.max_active_jobs <= 0 or args.max_batch_attempts <= 0:
-        raise ValueError("threshold, max-active-jobs, and max-batch-attempts must be positive")
+    if (
+        args.threshold <= 0
+        or args.max_active_jobs <= 0
+        or args.mutation_workers <= 0
+        or args.max_batch_attempts <= 0
+    ):
+        raise ValueError(
+            "threshold, max-active-jobs, mutation-workers, and max-batch-attempts "
+            "must be positive"
+        )
     final_paths = (
         args.final_hamlib_export_dir,
         args.final_hamlib_report_dir,
@@ -721,6 +758,7 @@ def main() -> int:
         "repo_dir": args.repo_dir,
         "threshold": args.threshold,
         "max_active_jobs": args.max_active_jobs,
+        "mutation_workers": args.mutation_workers,
         "mutation_timeout_seconds": args.mutation_timeout_seconds,
         "max_batch_attempts": args.max_batch_attempts,
         "mutations_enabled": not args.no_mutations,

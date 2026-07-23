@@ -2,12 +2,19 @@ from __future__ import annotations
 
 import json
 import shutil
+import time
+from threading import Lock
 from pathlib import Path
 
 from hsopt.campaign_setup import initialize_campaign
 from hsopt.exact_loop import initialize_lane, reconcile_lane
 from hsopt.exact_queue import enqueue_reference, merge_batch, prepare_batch, run_batch
-from hsopt.exact_supervisor import _finalize_campaign, slurm_state, supervise_once
+from hsopt.exact_supervisor import (
+    _finalize_campaign,
+    _run_mutation_proposals,
+    slurm_state,
+    supervise_once,
+)
 
 
 REPO = Path(__file__).resolve().parents[1]
@@ -60,6 +67,31 @@ def test_slurm_state_prefers_the_root_job_row() -> None:
     }
 
     assert slurm_state(status) == "COMPLETED"
+
+
+def test_mutation_workers_run_distinct_lanes_concurrently(monkeypatch) -> None:
+    lock = Lock()
+    active = 0
+    peak = 0
+
+    def fake_propose(lane_dir: Path, *, timeout_seconds: int) -> dict[str, object]:
+        nonlocal active, peak
+        assert timeout_seconds == 123
+        with lock:
+            active += 1
+            peak = max(peak, active)
+        time.sleep(0.05)
+        with lock:
+            active -= 1
+        return {"status": "proposed", "candidate": str(lane_dir / "candidate.py")}
+
+    monkeypatch.setattr("hsopt.exact_supervisor.propose_lane", fake_propose)
+    lanes = [Path(f"/lane-{index}") for index in range(4)]
+
+    results = _run_mutation_proposals(lanes, workers=4, timeout_seconds=123)
+
+    assert [lane for lane, _ in results] == lanes
+    assert peak == 4
 
 
 def test_supervisor_collects_and_reconciles_a_completed_baseline(

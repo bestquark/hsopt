@@ -8,11 +8,13 @@ so only one dense unitary is resident at a time.
 from __future__ import annotations
 
 import argparse
+import fcntl
 import hashlib
 import json
 import shutil
 import traceback
 import uuid
+from contextlib import contextmanager
 from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any
@@ -34,6 +36,18 @@ def _now() -> str:
 
 def _write_json(path: Path, payload: Any) -> None:
     path.write_text(json.dumps(payload, indent=2, sort_keys=True) + "\n", encoding="utf-8")
+
+
+@contextmanager
+def _enqueue_lock(queue_dir: Path):
+    """Serialize content-addressed insertion for concurrent mutation workers."""
+
+    with (queue_dir / ".enqueue.lock").open("a", encoding="utf-8") as stream:
+        fcntl.flock(stream.fileno(), fcntl.LOCK_EX)
+        try:
+            yield
+        finally:
+            fcntl.flock(stream.fileno(), fcntl.LOCK_UN)
 
 
 def _source_files(kind: str, source: Path) -> list[Path]:
@@ -126,43 +140,49 @@ def enqueue(
         policy=policy,
         reference=reference,
     )
-    existing = _find_task(queue_dir, task_id)
-    if existing is not None:
-        phase, path = existing
-        return {"status": "exists", "phase": phase, "task_id": task_id, "path": str(path)}
+    with _enqueue_lock(queue_dir):
+        existing = _find_task(queue_dir, task_id)
+        if existing is not None:
+            phase, path = existing
+            return {
+                "status": "exists",
+                "phase": phase,
+                "task_id": task_id,
+                "path": str(path),
+            }
 
-    temporary = queue_dir / f".enqueue-{uuid.uuid4().hex}"
-    temporary.mkdir()
-    try:
-        source_name = _snapshot_source(kind, source, temporary)
-        shutil.copyfile(policy, temporary / "policy.py")
-        if reference is not None:
-            shutil.copyfile(reference, temporary / "reference.json")
-        metadata = {
-            "schema": 1,
-            "task_id": task_id,
-            "stage": "candidate",
-            "kind": kind,
-            "source": source_name,
-            "source_original": str(source.resolve()),
-            "policy_original": str(policy),
-            "policy_sha256": hashlib.sha256(policy.read_bytes()).hexdigest(),
-            "reference": "reference.json" if reference is not None else None,
-            "reference_original": str(reference) if reference is not None else None,
-            "reference_sha256": (
-                hashlib.sha256(reference.read_bytes()).hexdigest()
-                if reference is not None
-                else None
-            ),
-            "queued_at": _now(),
-            "batch_attempts": 0,
-        }
-        _write_json(temporary / "task.json", metadata)
-        destination = queue_dir / "pending" / task_id
-        temporary.rename(destination)
-    finally:
-        if temporary.exists():
-            shutil.rmtree(temporary)
+        temporary = queue_dir / f".enqueue-{uuid.uuid4().hex}"
+        temporary.mkdir()
+        try:
+            source_name = _snapshot_source(kind, source, temporary)
+            shutil.copyfile(policy, temporary / "policy.py")
+            if reference is not None:
+                shutil.copyfile(reference, temporary / "reference.json")
+            metadata = {
+                "schema": 1,
+                "task_id": task_id,
+                "stage": "candidate",
+                "kind": kind,
+                "source": source_name,
+                "source_original": str(source.resolve()),
+                "policy_original": str(policy),
+                "policy_sha256": hashlib.sha256(policy.read_bytes()).hexdigest(),
+                "reference": "reference.json" if reference is not None else None,
+                "reference_original": str(reference) if reference is not None else None,
+                "reference_sha256": (
+                    hashlib.sha256(reference.read_bytes()).hexdigest()
+                    if reference is not None
+                    else None
+                ),
+                "queued_at": _now(),
+                "batch_attempts": 0,
+            }
+            _write_json(temporary / "task.json", metadata)
+            destination = queue_dir / "pending" / task_id
+            temporary.rename(destination)
+        finally:
+            if temporary.exists():
+                shutil.rmtree(temporary)
     return {"status": "queued", "phase": "pending", "task_id": task_id, "path": str(destination)}
 
 
@@ -179,31 +199,37 @@ def enqueue_reference(
     for phase in (*QUEUE_PHASES, "batches"):
         (queue_dir / phase).mkdir(parents=True, exist_ok=True)
     task_id = _task_id(kind, source, stage="reference")
-    existing = _find_task(queue_dir, task_id)
-    if existing is not None:
-        phase, path = existing
-        return {"status": "exists", "phase": phase, "task_id": task_id, "path": str(path)}
+    with _enqueue_lock(queue_dir):
+        existing = _find_task(queue_dir, task_id)
+        if existing is not None:
+            phase, path = existing
+            return {
+                "status": "exists",
+                "phase": phase,
+                "task_id": task_id,
+                "path": str(path),
+            }
 
-    temporary = queue_dir / f".enqueue-{uuid.uuid4().hex}"
-    temporary.mkdir()
-    try:
-        source_name = _snapshot_source(kind, source, temporary)
-        metadata = {
-            "schema": 1,
-            "task_id": task_id,
-            "stage": "reference",
-            "kind": kind,
-            "source": source_name,
-            "source_original": str(source),
-            "queued_at": _now(),
-            "batch_attempts": 0,
-        }
-        _write_json(temporary / "task.json", metadata)
-        destination = queue_dir / "pending" / task_id
-        temporary.rename(destination)
-    finally:
-        if temporary.exists():
-            shutil.rmtree(temporary)
+        temporary = queue_dir / f".enqueue-{uuid.uuid4().hex}"
+        temporary.mkdir()
+        try:
+            source_name = _snapshot_source(kind, source, temporary)
+            metadata = {
+                "schema": 1,
+                "task_id": task_id,
+                "stage": "reference",
+                "kind": kind,
+                "source": source_name,
+                "source_original": str(source),
+                "queued_at": _now(),
+                "batch_attempts": 0,
+            }
+            _write_json(temporary / "task.json", metadata)
+            destination = queue_dir / "pending" / task_id
+            temporary.rename(destination)
+        finally:
+            if temporary.exists():
+                shutil.rmtree(temporary)
     return {"status": "queued", "phase": "pending", "task_id": task_id, "path": str(destination)}
 
 

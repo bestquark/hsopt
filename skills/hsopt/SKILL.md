@@ -152,7 +152,7 @@ Run one idempotent CPU supervisor cycle:
 uv run hsopt-supervisor \
   --campaign-root "$HSOPT_DATA_ROOT/exact/production-cpu-v2" \
   --repo-dir "$PWD" --once \
-  --threshold 40 --max-active-jobs 4 \
+  --threshold 40 --max-active-jobs 4 --mutation-workers 4 \
   --partition cpu --qos normal --cpus 2 --memory 16G --walltime 03:00:00 \
   --backend cupynumeric --accelerator cpu \
   --runtime-python /path/to/pinned/cupynumeric-cpu-25.11/bin/python
