@@ -42,7 +42,7 @@ instance; two reaction policies share one exact reaction reference.
 Generate `initial_pf.py` only with `examples/generate_initial_pf.py`. The
 generator must load
 `examples/paper_baselines/reiher_wiebe_svore_2017.json`; do not infer a policy
-from an analytical error bound or invent a paper attribution.
+or invent a paper attribution.
 
 The checked-in paper contract records:
 
@@ -77,8 +77,8 @@ eigenphase energies and compare it with the cached exact signed difference.
 The candidate unitary is still constructed and diagonalized in the full
 Hilbert space so Clifford+T synthesis leakage is retained. Hartree--Fock
 overlap is a QPE success-probability diagnostic and may be zero when the
-deterministic fallback anchor is required; propagation of the HF state and
-analytical error bounds are not the acceptance metric.
+deterministic fallback anchor is required; propagation of the HF state is not
+the acceptance metric.
 
 The dense implementation may operate in the fixed-electron sector where
 appropriate, but it must actually construct and diagonalize the exact or
@@ -164,7 +164,7 @@ uv run hsopt-supervisor \
   --repo-dir "$PWD" --once \
   --threshold 40 --max-active-jobs 4 --mutation-workers 4 \
   --mutation-timeout-seconds 300 \
-  --partition cpu --qos normal --cpus 2 --memory 16G --walltime 03:00:00 \
+  --partition cpu --qos normal --cpus 2 --memory 16G --walltime 12:00:00 \
   --backend cupynumeric --accelerator cpu \
   --runtime-python /path/to/pinned/cupynumeric-cpu-25.11/bin/python
 ```
