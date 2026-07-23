@@ -7,6 +7,9 @@ import hashlib
 import json
 import shlex
 import subprocess
+import uuid
+from collections import Counter
+from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any, Sequence
 
@@ -42,6 +45,73 @@ def _write_json(path: Path, payload: Any) -> None:
     temporary = path.with_suffix(path.suffix + ".tmp")
     temporary.write_text(json.dumps(payload, indent=2, sort_keys=True) + "\n", encoding="utf-8")
     temporary.replace(path)
+
+
+def _prepare_balanced_batch(
+    queue_dir: Path,
+    *,
+    limit: int,
+    max_difference_tasks: int,
+) -> dict[str, Any]:
+    """Prepare one full batch while spreading expensive reaction tasks."""
+
+    if limit <= 0 or max_difference_tasks <= 0:
+        raise ValueError("batch limits must be positive")
+    queue_dir = queue_dir.resolve()
+    pending = sorted(path for path in (queue_dir / "pending").glob("*") if path.is_dir())
+    by_kind: dict[str, list[Path]] = {"difference": [], "other": []}
+    for task in pending:
+        metadata = json.loads((task / "task.json").read_text(encoding="utf-8"))
+        key = "difference" if metadata.get("kind") == "difference" else "other"
+        by_kind[key].append(task)
+
+    difference_limit = min(limit, max_difference_tasks)
+    selected_difference = by_kind["difference"][:difference_limit]
+    selected_other = by_kind["other"][: limit - len(selected_difference)]
+    selected = [*selected_difference, *selected_other]
+    if len(selected) < limit:
+        remaining = limit - len(selected)
+        selected.extend(
+            by_kind["difference"][
+                len(selected_difference) : len(selected_difference) + remaining
+            ]
+        )
+    selected.sort()
+    if not selected:
+        raise RuntimeError("the queue has no pending tasks")
+
+    batch_id = f"{datetime.now(UTC):%Y%m%dT%H%M%SZ}-{uuid.uuid4().hex[:8]}"
+    batch_dir = queue_dir / "batches" / batch_id
+    tasks_dir = batch_dir / "tasks"
+    results_dir = batch_dir / "results"
+    tasks_dir.mkdir(parents=True)
+    results_dir.mkdir()
+    task_kinds: Counter[str] = Counter()
+    for task in selected:
+        destination = tasks_dir / task.name
+        task.rename(destination)
+        metadata_path = destination / "task.json"
+        metadata = json.loads(metadata_path.read_text(encoding="utf-8"))
+        task_kinds[str(metadata.get("kind", "unknown"))] += 1
+        metadata["batch_attempts"] = int(metadata.get("batch_attempts", 0)) + 1
+        _write_json(metadata_path, metadata)
+    _write_json(
+        batch_dir / "batch.json",
+        {
+            "schema": 1,
+            "batch_id": batch_id,
+            "created_at": datetime.now(UTC).isoformat(),
+            "task_ids": [task.name for task in selected],
+            "task_kinds": dict(sorted(task_kinds.items())),
+            "result_backend": None,
+        },
+    )
+    return {
+        "status": "prepared",
+        "batch_id": batch_id,
+        "batch_dir": str(batch_dir),
+        "task_count": len(selected),
+    }
 
 
 def _recover_job_id(host: str, job_name: str) -> str | None:
@@ -301,11 +371,14 @@ def submit_ready(
             "threshold": threshold,
             "needed": threshold - status["pending"],
         }
-    prepared = prepare_batch(
-        queue_dir,
-        limit=threshold,
-        max_difference_tasks=max_difference_tasks,
-    )
+    if max_difference_tasks is None:
+        prepared = prepare_batch(queue_dir, limit=threshold)
+    else:
+        prepared = _prepare_balanced_batch(
+            queue_dir,
+            limit=threshold,
+            max_difference_tasks=max_difference_tasks,
+        )
     submitted = submit_batch(
         Path(prepared["batch_dir"]),
         repo_dir=repo_dir,

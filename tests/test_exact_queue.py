@@ -172,8 +172,9 @@ def test_submit_ready_uses_threshold_as_the_batch_size(
     assert queue_status(tmp_path)["batched_tasks"] == 15
 
 
-def test_prepare_batch_balances_difference_tasks_when_absolute_work_is_available(
+def test_submit_ready_balances_difference_tasks_when_absolute_work_is_available(
     tmp_path: Path,
+    monkeypatch,
 ) -> None:
     pending = tmp_path / "pending"
     pending.mkdir()
@@ -189,21 +190,27 @@ def test_prepare_batch_balances_difference_tasks_when_absolute_work_is_available
                 encoding="utf-8",
             )
 
-    prepared = prepare_batch(
+    monkeypatch.setattr(
+        "hsopt.nvpark_queue.submit_batch",
+        lambda batch_dir, **kwargs: {"status": "submitted", "job_id": "12345"},
+    )
+    submitted = submit_ready(
         tmp_path,
-        limit=15,
+        repo_dir=REPO,
+        threshold=15,
         max_difference_tasks=3,
     )
     manifest = json.loads(
-        (Path(prepared["batch_dir"]) / "batch.json").read_text(encoding="utf-8")
+        (Path(submitted["batch_dir"]) / "batch.json").read_text(encoding="utf-8")
     )
 
-    assert prepared["task_count"] == 15
+    assert submitted["task_count"] == 15
     assert manifest["task_kinds"] == {"absolute": 12, "difference": 3}
 
 
-def test_prepare_batch_fills_from_differences_when_no_absolute_work_remains(
+def test_submit_ready_fills_from_differences_when_no_absolute_work_remains(
     tmp_path: Path,
+    monkeypatch,
 ) -> None:
     pending = tmp_path / "pending"
     pending.mkdir()
@@ -215,16 +222,21 @@ def test_prepare_batch_fills_from_differences_when_no_absolute_work_remains(
             encoding="utf-8",
         )
 
-    prepared = prepare_batch(
+    monkeypatch.setattr(
+        "hsopt.nvpark_queue.submit_batch",
+        lambda batch_dir, **kwargs: {"status": "submitted", "job_id": "12345"},
+    )
+    submitted = submit_ready(
         tmp_path,
-        limit=15,
+        repo_dir=REPO,
+        threshold=15,
         max_difference_tasks=3,
     )
     manifest = json.loads(
-        (Path(prepared["batch_dir"]) / "batch.json").read_text(encoding="utf-8")
+        (Path(submitted["batch_dir"]) / "batch.json").read_text(encoding="utf-8")
     )
 
-    assert prepared["task_count"] == 15
+    assert submitted["task_count"] == 15
     assert manifest["task_kinds"] == {"difference": 15}
 
 

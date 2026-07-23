@@ -14,7 +14,6 @@ import json
 import shutil
 import traceback
 import uuid
-from collections import Counter
 from contextlib import contextmanager
 from datetime import UTC, datetime
 from pathlib import Path
@@ -248,40 +247,14 @@ def queue_status(queue_dir: Path) -> dict[str, Any]:
     return {"queue_dir": str(queue_dir), **counts}
 
 
-def prepare_batch(
-    queue_dir: Path,
-    *,
-    limit: int = 40,
-    max_difference_tasks: int | None = None,
-) -> dict[str, Any]:
+def prepare_batch(queue_dir: Path, *, limit: int = 40) -> dict[str, Any]:
     """Move up to ``limit`` pending tasks into an immutable batch directory."""
 
     if limit <= 0:
         raise ValueError("limit must be positive")
-    if max_difference_tasks is not None and max_difference_tasks <= 0:
-        raise ValueError("max_difference_tasks must be positive when provided")
     queue_dir = queue_dir.resolve()
     pending = sorted(path for path in (queue_dir / "pending").glob("*") if path.is_dir())
-    if max_difference_tasks is None:
-        selected = pending[:limit]
-    else:
-        by_kind: dict[str, list[Path]] = {"difference": [], "other": []}
-        for task in pending:
-            metadata = json.loads((task / "task.json").read_text(encoding="utf-8"))
-            key = "difference" if metadata.get("kind") == "difference" else "other"
-            by_kind[key].append(task)
-        difference_limit = min(limit, max_difference_tasks)
-        selected_difference = by_kind["difference"][:difference_limit]
-        selected_other = by_kind["other"][: limit - len(selected_difference)]
-        selected = [*selected_difference, *selected_other]
-        if len(selected) < limit:
-            remaining = limit - len(selected)
-            selected.extend(
-                by_kind["difference"][
-                    len(selected_difference) : len(selected_difference) + remaining
-                ]
-            )
-        selected.sort()
+    selected = pending[:limit]
     if not selected:
         raise RuntimeError("the queue has no pending tasks")
     batch_id = f"{datetime.now(UTC):%Y%m%dT%H%M%SZ}-{uuid.uuid4().hex[:8]}"
@@ -290,13 +263,11 @@ def prepare_batch(
     results_dir = batch_dir / "results"
     tasks_dir.mkdir(parents=True)
     results_dir.mkdir()
-    task_kinds: Counter[str] = Counter()
     for task in selected:
         destination = tasks_dir / task.name
         task.rename(destination)
         metadata_path = destination / "task.json"
         metadata = json.loads(metadata_path.read_text(encoding="utf-8"))
-        task_kinds[str(metadata.get("kind", "unknown"))] += 1
         metadata["batch_attempts"] = int(metadata.get("batch_attempts", 0)) + 1
         _write_json(metadata_path, metadata)
     manifest = {
@@ -304,7 +275,6 @@ def prepare_batch(
         "batch_id": batch_id,
         "created_at": _now(),
         "task_ids": [task.name for task in selected],
-        "task_kinds": dict(sorted(task_kinds.items())),
         "result_backend": None,
     }
     _write_json(batch_dir / "batch.json", manifest)
