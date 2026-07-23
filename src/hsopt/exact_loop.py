@@ -48,6 +48,57 @@ def _task_result(queue_dir: Path, task_id: str) -> tuple[str, dict[str, Any] | N
     return "pending", None
 
 
+def _exact_error(result: dict[str, Any]) -> float:
+    """Return the exact constrained error for either benchmark family."""
+
+    for key in (
+        "absolute_energy_error_hartree",
+        "absolute_difference_error_hartree",
+    ):
+        value = result.get(key)
+        if isinstance(value, (int, float)):
+            return float(value)
+    raise RuntimeError("the exact evaluator result has no absolute energy error")
+
+
+def _accept_candidate(
+    candidate: dict[str, Any],
+    incumbent: dict[str, Any],
+) -> tuple[bool, str]:
+    """Apply a deterministic feasibility-first constrained objective.
+
+    Once a lane is chemically accurate, only an accurate strict T-count
+    reduction can replace its incumbent.  Before feasibility, exact-error
+    progress is retained so an initially inaccurate paper baseline can be
+    improved over multiple mutations.
+    """
+
+    if candidate.get("status") != "ok":
+        return False, "evaluator_error"
+    candidate_passes = bool(candidate.get("passes_chemical_accuracy"))
+    incumbent_passes = bool(incumbent.get("passes_chemical_accuracy"))
+    if incumbent_passes:
+        if not candidate_passes:
+            return False, "chemical_accuracy_failed"
+        accepted = int(candidate["t_count"]) < int(incumbent["t_count"])
+        return accepted, (
+            "strict_t_gate_improvement" if accepted else "no_strict_t_gate_improvement"
+        )
+    if candidate_passes:
+        return True, "chemical_accuracy_reached"
+
+    candidate_error = _exact_error(candidate)
+    incumbent_error = _exact_error(incumbent)
+    if candidate_error < incumbent_error - REPLAY_ENERGY_ATOL_HARTREE:
+        return True, "exact_error_improvement"
+    if (
+        abs(candidate_error - incumbent_error) <= REPLAY_ENERGY_ATOL_HARTREE
+        and int(candidate["t_count"]) < int(incumbent["t_count"])
+    ):
+        return True, "infeasible_tie_break_t_gate_improvement"
+    return False, "no_exact_error_improvement"
+
+
 def _archive_mutation_attempt(lane_dir: Path, iteration_dir: Path) -> Path | None:
     """Preserve a failed or interrupted agent attempt before retrying it."""
 
@@ -68,6 +119,7 @@ def _validate_replay(
     *,
     result: dict[str, Any],
     accepted: bool,
+    acceptance_reason: str,
 ) -> dict[str, Any] | None:
     canonical_result_path = iteration_dir / "canonical_cpu_result.json"
     canonical_decision_path = iteration_dir / "canonical_cpu_decision.json"
@@ -92,6 +144,10 @@ def _validate_replay(
         == canonical_result.get("passes_chemical_accuracy"),
         "accepted": accepted == bool(canonical_decision.get("accepted")),
     }
+    if "acceptance_reason" in canonical_decision:
+        checks["acceptance_reason"] = (
+            acceptance_reason == canonical_decision["acceptance_reason"]
+        )
     energy_differences: dict[str, float] = {}
     for key in (
         "exact_unitary_ground_energy_hartree",
@@ -267,8 +323,8 @@ def reconcile_lane(lane_dir: Path) -> dict[str, Any]:
         }
 
     if state["pending_kind"] == "baseline":
-        if result.get("status") != "ok" or not result.get("passes_chemical_accuracy"):
-            raise RuntimeError("the generated baseline did not pass the exact accuracy contract")
+        if result.get("status") != "ok":
+            raise RuntimeError("the generated baseline exact evaluation failed")
         shutil.copyfile(
             Path(manifest["queue_dir"]) / phase / task_id / "result.json",
             lane_dir / "incumbent_result.json",
@@ -281,27 +337,31 @@ def reconcile_lane(lane_dir: Path) -> dict[str, Any]:
             {
                 "pending_kind": None,
                 "pending_task_id": None,
-                "incumbent_score": result["score"],
+                "incumbent_score": result.get("score"),
                 "incumbent_task_id": task_id,
                 "updated_at": _now(),
             }
         )
         _write_json(lane_dir / "state.json", state)
-        return {"status": "baseline_ready", "score": result["score"], "task_id": task_id}
+        return {
+            "status": "baseline_ready",
+            "score": result.get("score"),
+            "t_count": result["t_count"],
+            "passes_chemical_accuracy": bool(result.get("passes_chemical_accuracy")),
+            "task_id": task_id,
+        }
 
     iteration = int(state["pending_iteration"])
     iteration_dir = lane_dir / "iterations" / f"{iteration:04d}"
     _write_json(iteration_dir / "result.json", result)
-    accepted = (
-        result.get("status") == "ok"
-        and bool(result.get("passes_chemical_accuracy"))
-        and int(result["score"]) < int(state["incumbent_score"])
-    )
+    incumbent_result = _read_json(lane_dir / "incumbent_result.json")
+    accepted, acceptance_reason = _accept_candidate(result, incumbent_result)
     previous_score = state["incumbent_score"]
     replay_validation = _validate_replay(
         iteration_dir,
         result=result,
         accepted=accepted,
+        acceptance_reason=acceptance_reason,
     )
     if replay_validation is not None and replay_validation["status"] != "ok":
         decision = {
@@ -313,6 +373,7 @@ def reconcile_lane(lane_dir: Path) -> dict[str, Any]:
             "passes_chemical_accuracy": result.get(
                 "passes_chemical_accuracy", False
             ),
+            "acceptance_reason": acceptance_reason,
             "task_id": task_id,
             "decided_at": _now(),
             "replay_validation": "mismatch",
@@ -335,7 +396,7 @@ def reconcile_lane(lane_dir: Path) -> dict[str, Any]:
     if accepted:
         shutil.copyfile(iteration_dir / "candidate.py", lane_dir / "incumbent.py")
         shutil.copyfile(iteration_dir / "result.json", lane_dir / "incumbent_result.json")
-        state["incumbent_score"] = result["score"]
+        state["incumbent_score"] = result.get("score")
         state["incumbent_task_id"] = task_id
         state["accepted_mutations"] += 1
     decision = {
@@ -345,6 +406,7 @@ def reconcile_lane(lane_dir: Path) -> dict[str, Any]:
         "previous_incumbent_score": previous_score,
         "result_status": result.get("status"),
         "passes_chemical_accuracy": result.get("passes_chemical_accuracy", False),
+        "acceptance_reason": acceptance_reason,
         "task_id": task_id,
         "decided_at": _now(),
         "replay_validation": (

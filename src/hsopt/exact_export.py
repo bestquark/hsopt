@@ -115,6 +115,9 @@ def _mutation_summary(result: Mapping[str, Any]) -> str:
 
 
 def _decision_reason(decision: Mapping[str, Any], result: Mapping[str, Any]) -> str:
+    recorded = decision.get("acceptance_reason")
+    if recorded:
+        return str(recorded)
     if bool(decision.get("accepted")):
         return "strict_t_gate_improvement"
     if result.get("status") != "ok":

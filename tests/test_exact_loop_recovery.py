@@ -3,11 +3,48 @@ from __future__ import annotations
 import json
 from pathlib import Path
 
-from hsopt.exact_loop import initialize_lane, propose_replay_lane, reconcile_lane
+from hsopt.exact_loop import (
+    _accept_candidate,
+    initialize_lane,
+    propose_replay_lane,
+    reconcile_lane,
+)
 
 
 REPO = Path(__file__).resolve().parents[1]
 ABSOLUTE = REPO / "examples" / "abs_energy" / "hamlib_h2_r0_7"
+
+
+def _result(*, error: float, t_count: int, passes: bool) -> dict[str, object]:
+    return {
+        "status": "ok",
+        "passes_chemical_accuracy": passes,
+        "absolute_energy_error_hartree": error,
+        "t_count": t_count,
+        "score": t_count if passes else None,
+    }
+
+
+def test_infeasible_incumbent_uses_exact_error_until_accuracy_is_reached() -> None:
+    baseline = _result(error=0.004, t_count=100, passes=False)
+
+    assert _accept_candidate(
+        _result(error=0.003, t_count=120, passes=False), baseline
+    ) == (True, "exact_error_improvement")
+    assert _accept_candidate(
+        _result(error=0.005, t_count=80, passes=False), baseline
+    ) == (False, "no_exact_error_improvement")
+    assert _accept_candidate(
+        _result(error=0.001, t_count=140, passes=True), baseline
+    ) == (True, "chemical_accuracy_reached")
+
+    feasible = _result(error=0.001, t_count=140, passes=True)
+    assert _accept_candidate(
+        _result(error=0.0011, t_count=130, passes=True), feasible
+    ) == (True, "strict_t_gate_improvement")
+    assert _accept_candidate(
+        _result(error=0.004, t_count=80, passes=False), feasible
+    ) == (False, "chemical_accuracy_failed")
 
 
 def test_reconcile_archives_an_interrupted_mutation_attempt(tmp_path: Path) -> None:
@@ -70,6 +107,10 @@ def test_gpu_lane_replays_the_exact_archived_cpu_candidate(tmp_path: Path) -> No
     )
     state_path.write_text(json.dumps(state), encoding="utf-8")
     (lane_dir / "exact_reference.json").write_text('{"status":"ok"}\n', encoding="utf-8")
+    (lane_dir / "incumbent_result.json").write_text(
+        json.dumps(_result(error=0.001, t_count=100, passes=True)) + "\n",
+        encoding="utf-8",
+    )
 
     canonical = (
         tmp_path / "cpu-campaign" / "lanes" / "hamlib121" / "fixture" / "run_01"

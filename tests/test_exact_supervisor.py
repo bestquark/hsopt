@@ -189,6 +189,46 @@ def test_lane_computes_reference_then_iteration_zero_before_any_mutation(
     assert not any((lane / "iterations").iterdir())
 
 
+def test_iteration_zero_retains_an_inaccurate_paper_baseline(
+    tmp_path: Path,
+) -> None:
+    queue = tmp_path / "queue"
+    lane = tmp_path / "lane"
+    initialized = initialize_lane(
+        lane,
+        queue_dir=queue,
+        kind="absolute",
+        source=ABSOLUTE / "hamiltonian.json",
+        initial_policy=ABSOLUTE / "initial_pf.py",
+        iterations=2,
+    )
+    baseline_batch = Path(prepare_batch(queue)["batch_dir"])
+    run_batch(baseline_batch, backend="numpy")
+    merge_batch(queue, baseline_batch)
+    task_id = initialized["baseline_task_id"]
+    result_path = queue / "completed" / task_id / "result.json"
+    result = json.loads(result_path.read_text(encoding="utf-8"))
+    result.update(
+        {
+            "passes_chemical_accuracy": False,
+            "score": None,
+            "absolute_energy_error_hartree": 0.004,
+        }
+    )
+    result_path.write_text(json.dumps(result) + "\n", encoding="utf-8")
+
+    baseline_event = reconcile_lane(lane)
+
+    assert baseline_event["status"] == "baseline_ready"
+    assert baseline_event["passes_chemical_accuracy"] is False
+    state = json.loads((lane / "state.json").read_text(encoding="utf-8"))
+    assert state["pending_kind"] is None
+    assert state["incumbent_score"] is None
+    assert json.loads((lane / "baseline_result.json").read_text(encoding="utf-8"))[
+        "passes_chemical_accuracy"
+    ] is False
+
+
 def test_campaign_shares_one_reference_before_all_replicate_baselines(
     tmp_path: Path,
     monkeypatch,
