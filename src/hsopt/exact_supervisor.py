@@ -475,7 +475,10 @@ def supervise_once(
         pending = int(current_queue["pending"])
         if pending == 0:
             break
-        force_partial = pending < threshold and not ready_lanes
+        force_partial = pending < threshold and (
+            not ready_lanes
+            or (replay_campaign_root is not None and active_jobs == 0)
+        )
         if pending < threshold and not force_partial:
             break
         try:

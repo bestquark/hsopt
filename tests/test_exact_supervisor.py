@@ -141,6 +141,58 @@ def test_supervisor_forces_a_partial_batch_when_every_lane_is_waiting(
     assert status["queue"]["batched_tasks"] == 1
 
 
+def test_idle_replay_supervisor_forces_its_partial_gpu_batch(
+    tmp_path: Path,
+    monkeypatch,
+) -> None:
+    root, queue, lane = _campaign(tmp_path)
+    state_path = lane / "state.json"
+    state = json.loads(state_path.read_text(encoding="utf-8"))
+    state.update(
+        {
+            "pending_kind": None,
+            "pending_task_id": None,
+            "incumbent_score": 100,
+        }
+    )
+    state_path.write_text(json.dumps(state) + "\n", encoding="utf-8")
+    calls: list[dict[str, object]] = []
+
+    def fake_submit_ready(queue_dir: Path, **kwargs: object) -> dict[str, object]:
+        calls.append(kwargs)
+        prepared = prepare_batch(queue_dir)
+        batch_dir = Path(str(prepared["batch_dir"]))
+        submission = {
+            "status": "submitted",
+            "job_id": "999",
+            "resources": {
+                "nodes": 1,
+                "gpus": 1,
+                "cpus": 2,
+                "memory": "16G",
+                "walltime": "03:00:00",
+            },
+        }
+        (batch_dir / "submission.json").write_text(json.dumps(submission) + "\n")
+        return {**prepared, **submission}
+
+    monkeypatch.setattr("hsopt.exact_supervisor.submit_ready", fake_submit_ready)
+
+    status = supervise_once(
+        root,
+        repo_dir=REPO,
+        mutations_enabled=False,
+        replay_campaign_root=tmp_path / "canonical",
+        max_active_jobs=2,
+        threshold=40,
+    )
+
+    assert calls[0]["force"] is True
+    assert status["active_jobs"] == 1
+    assert status["queue"]["pending"] == 0
+    assert status["queue"]["batched_tasks"] == 1
+
+
 def test_lane_computes_reference_then_iteration_zero_before_any_mutation(
     tmp_path: Path,
 ) -> None:
