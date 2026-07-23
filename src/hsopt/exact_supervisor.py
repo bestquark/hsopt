@@ -8,7 +8,8 @@ import json
 import os
 import time
 from collections import Counter
-from concurrent.futures import ThreadPoolExecutor
+from collections.abc import Callable
+from concurrent.futures import ThreadPoolExecutor, as_completed
 from contextlib import contextmanager
 from datetime import UTC, datetime
 from pathlib import Path
@@ -77,6 +78,7 @@ def _run_mutation_proposals(
     *,
     workers: int,
     timeout_seconds: int,
+    on_result: Callable[[Path, dict[str, Any]], None] | None = None,
 ) -> list[tuple[Path, dict[str, Any]]]:
     """Mutate distinct sequential lanes concurrently in isolated sandboxes."""
 
@@ -90,9 +92,24 @@ def _run_mutation_proposals(
         return lane_dir, result
 
     if workers == 1:
-        return [propose(selected[0])] if selected else []
+        if not selected:
+            return []
+        item = propose(selected[0])
+        if on_result is not None:
+            on_result(*item)
+        return [item]
     with ThreadPoolExecutor(max_workers=workers, thread_name_prefix="hsopt-mutation") as pool:
-        return list(pool.map(propose, selected))
+        futures = {
+            pool.submit(propose, lane_dir): index
+            for index, lane_dir in enumerate(selected)
+        }
+        ordered: dict[int, tuple[Path, dict[str, Any]]] = {}
+        for future in as_completed(futures):
+            item = future.result()
+            ordered[futures[future]] = item
+            if on_result is not None:
+                on_result(*item)
+    return [ordered[index] for index in range(len(selected))]
 
 
 def _append_event(campaign_root: Path, event: str, **payload: Any) -> None:
@@ -601,11 +618,8 @@ def supervise_once(
         if mutation is None:
             mutation = {"status": "waiting_canonical"}
     elif mutations_enabled and ready_lanes:
-        for lane_dir, result in _run_mutation_proposals(
-            ready_lanes,
-            workers=mutation_workers,
-            timeout_seconds=mutation_timeout_seconds,
-        ):
+        def record_mutation_result(lane_dir: Path, result: dict[str, Any]) -> None:
+            nonlocal mutation
             mutation = {
                 **result,
                 "lane": str(lane_dir.relative_to(campaign_root)),
@@ -627,6 +641,14 @@ def supervise_once(
                     task_id=mutation.get("task_id"),
                     queue_status=mutation.get("queue_status"),
                 )
+            submit_available(ready_lanes)
+
+        _run_mutation_proposals(
+            ready_lanes,
+            workers=mutation_workers,
+            timeout_seconds=mutation_timeout_seconds,
+            on_result=record_mutation_result,
+        )
 
     lane_metrics, ready_lanes = _lane_summary(lane_dirs)
     submit_available(ready_lanes)

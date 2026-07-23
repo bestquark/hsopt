@@ -94,7 +94,32 @@ def test_mutation_workers_run_distinct_lanes_concurrently(monkeypatch) -> None:
     assert peak == 4
 
 
-def test_supervisor_submits_new_batch_immediately_after_mutation_wave(
+def test_mutation_callback_observes_fast_result_before_slowest_worker(
+    monkeypatch,
+) -> None:
+    callback_order: list[Path] = []
+
+    def fake_propose(lane_dir: Path, *, timeout_seconds: int) -> dict[str, object]:
+        assert timeout_seconds == 123
+        if lane_dir.name == "slow":
+            time.sleep(0.1)
+        return {"status": "proposed", "candidate": str(lane_dir / "candidate.py")}
+
+    monkeypatch.setattr("hsopt.exact_supervisor.propose_lane", fake_propose)
+    lanes = [Path("/slow"), Path("/fast")]
+
+    results = _run_mutation_proposals(
+        lanes,
+        workers=2,
+        timeout_seconds=123,
+        on_result=lambda lane, result: callback_order.append(lane),
+    )
+
+    assert callback_order == [Path("/fast"), Path("/slow")]
+    assert [lane for lane, _ in results] == lanes
+
+
+def test_supervisor_submits_new_batch_immediately_when_mutation_completes(
     tmp_path: Path,
     monkeypatch,
 ) -> None:
@@ -128,6 +153,7 @@ def test_supervisor_submits_new_batch_immediately_after_mutation_wave(
         *,
         workers: int,
         timeout_seconds: int,
+        on_result,
     ) -> list[tuple[Path, dict[str, object]]]:
         nonlocal pending
         assert lane_dirs == [lane]
@@ -135,17 +161,14 @@ def test_supervisor_submits_new_batch_immediately_after_mutation_wave(
         assert timeout_seconds == 123
         calls.append("mutation")
         pending = 15
-        return [
-            (
-                lane,
-                {
-                    "status": "proposed",
-                    "iteration": 1,
-                    "task_id": "task-after-mutation",
-                    "queue_status": "queued",
-                },
-            )
-        ]
+        result = {
+            "status": "proposed",
+            "iteration": 1,
+            "task_id": "task-after-mutation",
+            "queue_status": "queued",
+        }
+        on_result(lane, result)
+        return [(lane, result)]
 
     def fake_submit_ready(queue_dir: Path, **kwargs: object) -> dict[str, object]:
         nonlocal pending, submitted_batches
