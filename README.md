@@ -1,20 +1,17 @@
 # hsopt
 
-Hamiltonian-simulation T-gate optimization with fixed fault-tolerant chemistry
-benchmarks and agent-friendly mutation loops.
+Hamiltonian-simulation T-gate optimization with exact compiled-unitary
+eigenphase evaluation and isolated agent mutation loops.
 
-`main` is intentionally narrow. It keeps the product-formula benchmark
-definition in `examples/pfs/` and the two repo skills that operate
-on those lanes:
+On the clean exact workflow, the scientific source of truth is
+`src/hsopt/compiled_unitary.py`, `src/hsopt/exact_queue.py`, and
+`src/hsopt/exact_loop.py`. Each lane caches `U_exact = exp(+iHt)` once,
+evaluates the immutable generated paper baseline as iteration 0, and then runs
+50 OpenCode/Nemotron mutations. Analytical error bounds and Hartree--Fock state
+propagation are not acceptance metrics.
 
-- `$hsopt`: sequential `simple_pf.py` mutation runs scored by a fixed
-  evaluator.
-- `$hsgepa`: GEPA prompt optimization for the agent strategy that drives those
-  mutation runs.
-
-Raw campaign workspaces stay outside the benchmark tree. Only compact,
-completion-gated results for the five 121-Hamiltonian campaigns and the ten
-reaction comparisons belong on `main`.
+Raw campaign workspaces stay outside the benchmark tree. Only checksummed,
+completion-gated exports and reports belong in `experiments/*/results/`.
 
 The portable paper runners and final-artifact gates are documented in
 [`experiments/`](experiments/README.md).
@@ -49,29 +46,50 @@ scheduler logs, caches, databases, and environments never belong in Git. A
 small validated final export or summary PDF may be copied to the corresponding
 `experiments/*/results/` directory after its completion gate passes.
 
+## CPU canonical and A100 replay
+
+The canonical mutation campaign uses cuPyNumeric on Slurm's `cpu` partition
+with 2 CPUs, 16 GB, and no GPU request. The separate A100 campaign uses
+`polar4`, one GPU, 2 CPUs, and 16 GB. It never invokes a second agent: it
+replays the exact finalized CPU candidate files with
+`--replay-campaign-root`, validates their hashes and T counts, and compares
+energy results at an explicit floating-point tolerance.
+
+Both campaigns use the same evaluator source and cuPyNumeric 25.11. A CPU run
+must use the `cpu` partition.
+
 ## Final paper reports
 
 The strict exporters retain normalized product-formula settings, exact and
 estimated energies, accept/reject decisions, and a bounded mutation summary.
-After an exporter writes `FINAL_EXPORT_COMPLETE` and `SHA256SUMS`, build the
-two reports for every scientific instance with:
+After all lanes complete, create the normalized export and then build the two
+reports for every scientific instance with:
 
 ```bash
+uv run hsopt-export-exact \
+  --campaign-root /external/production-cpu-v2 \
+  --family hamlib121 \
+  --output-dir /external/final/hamlib121-export
+
 uv run hsopt-reports --family hamlib121 \
   --export-dir /external/final/hamlib121-export \
   --output-dir experiments/hamlib121/results/final
+
+uv run hsopt-export-exact \
+  --campaign-root /external/production-cpu-v2 \
+  --family reactions10 \
+  --output-dir /external/final/reactions10-export
 
 uv run hsopt-reports --family reactions10 \
   --export-dir /external/final/reactions10-export \
   --output-dir experiments/reactions10/results/final
 ```
 
-The renderer verifies the complete checksum set and expected iteration shape,
-compiles in a temporary directory, and atomically publishes exactly two PDFs
-per Hamiltonian or reaction. It never reads a live database or raw transcript.
-The extended PDF records every mutation and evaluator outcome; the summary PDF
-compares the initial policy with the final incumbent in the compact paired-row
-style used by the paper appendices.
+The canonical CPU supervisor accepts four `--final-*-export-dir` and
+`--final-*-report-dir` options to run this sequence automatically. The renderer
+verifies the complete checksum set and declared iteration shape, then
+atomically publishes exactly two PDFs per Hamiltonian or reaction. It uses
+LaTeX when available and a portable ReportLab engine otherwise.
 
 ## Install the Agent Skills
 

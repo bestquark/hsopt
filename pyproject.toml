@@ -9,12 +9,14 @@ dependencies = [
   "openfermion>=1.7.1",
   "pygridsynth>=1.1.0,<2",
   "pyscf>=2.5.0",
+  "reportlab>=4.4,<5",
   "scipy>=1.17.1,<1.18",
 ]
 
 [project.scripts]
 hsopt = "hsopt.tgate_opt.t_autoresearch_cli:main"
 hsopt-exact = "hsopt.exact_queue:main"
+hsopt-export-exact = "hsopt.exact_export:main"
 hsopt-loop = "hsopt.exact_loop:main"
 hsopt-nvpark = "hsopt.nvpark_queue:main"
 hsopt-openshell = "hsopt.openshell_agent:main"

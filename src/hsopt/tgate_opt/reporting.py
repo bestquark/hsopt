@@ -9,6 +9,7 @@ from __future__ import annotations
 
 import csv
 import hashlib
+import html
 import json
 import math
 import os
@@ -312,7 +313,15 @@ def _hamlib_extended(
         )
     mutation_rows: list[list[object]] = []
     for row in sorted(candidates, key=lambda item: (item["run"], _integer(item["iteration"]))):
-        error = _assert_energy(row)
+        has_energy = all(
+            value_present(row.get(key))
+            for key in (
+                "ground_state_energy_hartree",
+                "ground_state_energy_estimate_hartree",
+                "ground_state_energy_error_hartree",
+            )
+        )
+        error = _assert_energy(row) if has_energy else math.nan
         mutation_rows.append(
             [
                 row["run"],
@@ -535,7 +544,16 @@ def _reaction_extended(
                 ]
             )
         else:
-            signed = _reaction_error(row)
+            has_energy = all(
+                value_present(row.get(key))
+                for key in (
+                    "pf_reaction_energy_hartree",
+                    "exact_reaction_energy_hartree",
+                    "signed_reaction_error_hartree",
+                    "absolute_reaction_error_hartree",
+                )
+            )
+            signed = _reaction_error(row) if has_energy else math.nan
             target.append(
                 [
                     row["source_contract"],
@@ -619,21 +637,296 @@ def _compile_pdf(tex: str, destination: Path, latexmk: str) -> None:
         shutil.rmtree(build, ignore_errors=True)
 
 
+def _hamlib_reportlab_content(
+    lane_id: str,
+    summaries: Sequence[Mapping[str, str]],
+    candidates: Sequence[Mapping[str, str]],
+    *,
+    extended: bool,
+) -> tuple[str, list[tuple[str, list[str]]]]:
+    first = summaries[0]
+    intro = (
+        f"Lane {lane_id}; molecule {first['molecule']}; {first['nqubits']} qubits; "
+        f"{first['electrons']} electrons; {first['terms']} Pauli terms."
+    )
+    baseline_lines = []
+    for row in sorted(summaries, key=lambda item: item["run"]):
+        baseline_error = 1000.0 * _assert_energy(row, "baseline_")
+        best_error = 1000.0 * _assert_energy(row, "best_")
+        baseline_lines.append(
+            f"{row['run']} | initial | T={row['baseline_total_t_gates_qpe']} | "
+            f"|dE|={_number(baseline_error, 6)} mHa | "
+            f"{_pf(row['baseline_formula_order'])}, n_steps={row['baseline_n_steps']}, "
+            f"order={_order(row['baseline_term_order_strategy'])}"
+        )
+        baseline_lines.append(
+            f"{row['run']} | final after accepted iter {row['best_iteration']} | "
+            f"T={row['best_total_t_gates_qpe']} | |dE|={_number(best_error, 6)} mHa | "
+            f"reduction={_number(row['reduction_percent'], 6)}% | "
+            f"accepted/rejected={row['accepted']}/{row['rejected']}"
+        )
+    if not extended:
+        return intro, [("Initial and final incumbents", baseline_lines)]
+
+    mutation_lines = []
+    for row in sorted(candidates, key=lambda item: (item["run"], _integer(item["iteration"]))):
+        has_energy = all(
+            value_present(row.get(key))
+            for key in (
+                "ground_state_energy_hartree",
+                "ground_state_energy_estimate_hartree",
+                "ground_state_energy_error_hartree",
+            )
+        )
+        error_text = (
+            f"{_number(1000.0 * _assert_energy(row), 6)} mHa" if has_energy else "--"
+        )
+        mutation_lines.append(
+            f"{row['run']} iter {row['iteration']} | "
+            f"{'accepted' if _yes(row['accepted']) == 'yes' else 'rejected'} | "
+            f"T={row.get('total_t_gates_qpe') or '--'} | |dE|={error_text} | "
+            f"pass={_yes(row.get('passes_accuracy'))} | "
+            f"{row.get('mutation_summary') or '--'} | "
+            f"reason={row.get('decision_reason') or '--'} | "
+            f"agent tools={row.get('agent_tool_calls') or '--'}, "
+            f"web={row.get('agent_web_searches') or '0'}, "
+            f"tokens={row.get('agent_total_tokens') or '--'}"
+        )
+    return intro, [
+        ("Initial product formulas", baseline_lines),
+        ("Mutation log", mutation_lines),
+    ]
+
+
+def _reaction_reportlab_content(
+    reaction_key: str,
+    rows: Sequence[Mapping[str, str]],
+    pooled: Mapping[str, Any],
+    *,
+    extended: bool,
+) -> tuple[str, list[tuple[str, list[str]]]]:
+    intro = f"Reaction {pooled['reaction']} ({reaction_key})."
+    by_contract: dict[str, list[Mapping[str, str]]] = defaultdict(list)
+    for row in rows:
+        by_contract[row["source_contract"]].append(row)
+    summary_lines = []
+    for contract in sorted(by_contract):
+        baseline, final = _reaction_incumbents(by_contract[contract])
+        proposals = [
+            item for item in by_contract[contract] if _integer(item["iteration"]) > 0
+        ]
+        accepted = sum(_yes(item["accepted"]) == "yes" for item in proposals)
+        reduction = (
+            100.0
+            * (
+                _integer(baseline["total_t_gate_count"])
+                - _integer(final["total_t_gate_count"])
+            )
+            / _integer(baseline["total_t_gate_count"])
+        )
+        summary_lines.append(
+            f"{contract} | initial | T={baseline['total_t_gate_count']} | "
+            f"|dE reaction|={_number(1000.0 * abs(_reaction_error(baseline)), 6)} mHa | "
+            f"max |dE species|="
+            f"{_number(1000.0 * _float(baseline['max_species_absolute_error_hartree']), 6)} mHa"
+        )
+        summary_lines.append(
+            f"{contract} | final after accepted iter {item_iteration(final)} | "
+            f"T={final['total_t_gate_count']} | "
+            f"|dE reaction|={_number(1000.0 * abs(_reaction_error(final)), 6)} mHa | "
+            f"reduction={_number(reduction, 6)}% | "
+            f"accepted/rejected={accepted}/{len(proposals) - accepted}"
+        )
+    pooled_lines = []
+    for selection in ("equal_share", "reaction_aware"):
+        item = pooled[selection]
+        pooled_lines.append(
+            f"{selection} <- {item['selected_source_contract']} iter "
+            f"{item['selected_source_iteration']} | T={item['total_t_gate_count']} | "
+            f"|dE reaction|="
+            f"{_number(1000.0 * _float(item['absolute_reaction_error_hartree']), 6)} mHa"
+        )
+    if not extended:
+        return intro, [
+            ("Initial and final incumbents", summary_lines),
+            ("Pooled selections", pooled_lines),
+        ]
+
+    mutation_lines = []
+    for row in sorted(
+        rows, key=lambda item: (item["source_contract"], _integer(item["iteration"]))
+    ):
+        has_energy = all(
+            value_present(row.get(key))
+            for key in (
+                "pf_reaction_energy_hartree",
+                "exact_reaction_energy_hartree",
+                "signed_reaction_error_hartree",
+                "absolute_reaction_error_hartree",
+            )
+        )
+        signed = _reaction_error(row) if has_energy else math.nan
+        mutation_lines.append(
+            f"{row['source_contract']} iter {row['iteration']} | "
+            f"{'accepted' if _yes(row['accepted']) == 'yes' else 'rejected'} | "
+            f"T={row.get('total_t_gate_count') or '--'} | "
+            f"signed dE={_number(1000.0 * signed, 6)} mHa | "
+            f"pass={_yes(row.get('passes_contract'))} | "
+            f"{row.get('mutation_summary') or '--'} | "
+            f"reason={row.get('decision_reason') or '--'} | "
+            f"agent tools={row.get('agent_tool_calls') or '--'}, "
+            f"web={row.get('agent_web_searches') or '0'}, "
+            f"tokens={row.get('agent_total_tokens') or '--'}"
+        )
+    return intro, [
+        ("Initial and final incumbents", summary_lines),
+        ("Mutation log", mutation_lines),
+        ("Pooled selections", pooled_lines),
+    ]
+
+
+def _compile_reportlab_pdf(
+    title: str,
+    intro: str,
+    sections: Sequence[tuple[str, Sequence[str]]],
+    destination: Path,
+) -> None:
+    """Render a portable, deterministic PDF without a system TeX installation."""
+
+    from reportlab.lib.enums import TA_CENTER
+    from reportlab.lib.pagesizes import landscape, letter
+    from reportlab.lib.styles import ParagraphStyle, getSampleStyleSheet
+    from reportlab.lib.units import inch
+    from reportlab.pdfgen.canvas import Canvas
+    from reportlab.platypus import Paragraph, SimpleDocTemplate, Spacer
+
+    class InvariantCanvas(Canvas):
+        def __init__(self, *args: Any, **kwargs: Any) -> None:
+            kwargs["invariant"] = 1
+            super().__init__(*args, **kwargs)
+
+    destination.parent.mkdir(parents=True, exist_ok=True)
+    styles = getSampleStyleSheet()
+    title_style = ParagraphStyle(
+        "HSOptTitle",
+        parent=styles["Title"],
+        fontName="Helvetica-Bold",
+        fontSize=16,
+        leading=19,
+        alignment=TA_CENTER,
+        spaceAfter=10,
+    )
+    heading_style = ParagraphStyle(
+        "HSOptHeading",
+        parent=styles["Heading2"],
+        fontName="Helvetica-Bold",
+        fontSize=10,
+        leading=12,
+        spaceBefore=8,
+        spaceAfter=4,
+    )
+    line_style = ParagraphStyle(
+        "HSOptLine",
+        parent=styles["BodyText"],
+        fontName="Courier",
+        fontSize=6.5,
+        leading=8.2,
+        spaceAfter=2,
+    )
+    intro_style = ParagraphStyle(
+        "HSOptIntro",
+        parent=styles["BodyText"],
+        fontName="Helvetica",
+        fontSize=8,
+        leading=10,
+        spaceAfter=6,
+    )
+    document = SimpleDocTemplate(
+        str(destination),
+        pagesize=landscape(letter),
+        leftMargin=0.45 * inch,
+        rightMargin=0.45 * inch,
+        topMargin=0.4 * inch,
+        bottomMargin=0.4 * inch,
+        title=title,
+        author="HSOpt",
+    )
+    story: list[Any] = [
+        Paragraph(html.escape(title), title_style),
+        Paragraph(html.escape(intro), intro_style),
+    ]
+    for heading, lines in sections:
+        story.extend(
+            [
+                Spacer(1, 2),
+                Paragraph(html.escape(heading), heading_style),
+            ]
+        )
+        story.extend(Paragraph(html.escape(str(line)), line_style) for line in lines)
+    document.build(story, canvasmaker=InvariantCanvas)
+    if not destination.read_bytes().startswith(b"%PDF-"):
+        raise ReportValidationError(f"ReportLab did not create a PDF: {destination}")
+
+
+def _export_shape(export_dir: Path, family: str) -> dict[str, Any]:
+    """Read dynamic exact-campaign dimensions, with legacy paper defaults."""
+
+    path = export_dir / "export_manifest.json"
+    if not path.is_file():
+        return {
+            "family": family,
+            "instance_count": HAMLIB_LANES if family == "hamlib121" else REACTIONS,
+            "lane_count": (
+                HAMLIB_LANES * HAMLIB_RUNS
+                if family == "hamlib121"
+                else REACTIONS * REACTION_CONTRACTS
+            ),
+            "iterations": (
+                HAMLIB_ITERATIONS if family == "hamlib121" else REACTION_ITERATIONS
+            ),
+            "replicates": (
+                [f"run_{index:02d}" for index in range(1, HAMLIB_RUNS + 1)]
+                if family == "hamlib121"
+                else ["equal_share", "reaction_aware"]
+            ),
+        }
+    manifest = json.loads(path.read_text(encoding="utf-8"))
+    if manifest.get("status") != "complete" or manifest.get("family") != family:
+        raise ReportValidationError("exact-campaign export manifest is incomplete or mismatched")
+    required = ("instance_count", "lane_count", "iterations", "replicates")
+    if any(key not in manifest for key in required):
+        raise ReportValidationError("exact-campaign export manifest lacks dimensions")
+    return manifest
+
+
 def _validate_hamlib(export_dir: Path) -> tuple[list[dict[str, str]], list[dict[str, str]]]:
     candidates = _read_csv(export_dir / "candidate_log.csv")
     summaries = _read_csv(export_dir / "lane_run_summary.csv")
-    if len(candidates) != HAMLIB_LANES * HAMLIB_RUNS * HAMLIB_ITERATIONS:
-        raise ReportValidationError("HamLib candidate_log.csv does not contain 30,250 mutations")
-    if len(summaries) != HAMLIB_LANES * HAMLIB_RUNS:
-        raise ReportValidationError("HamLib lane_run_summary.csv does not contain 605 run rows")
+    shape = _export_shape(export_dir, "hamlib121")
+    expected_candidates = int(shape["lane_count"]) * int(shape["iterations"])
+    if len(candidates) != expected_candidates:
+        raise ReportValidationError(
+            f"HamLib candidate_log.csv has {len(candidates)} rows, "
+            f"expected {expected_candidates}"
+        )
+    if len(summaries) != int(shape["lane_count"]):
+        raise ReportValidationError(
+            f"HamLib lane_run_summary.csv has {len(summaries)} rows, "
+            f"expected {shape['lane_count']}"
+        )
     keys = {(row["run"], row["lane_id"], _integer(row["iteration"])) for row in candidates}
     if len(keys) != len(candidates):
         raise ReportValidationError("HamLib candidate log has duplicate run/lane/iteration rows")
+    expected_iterations = set(range(1, int(shape["iterations"]) + 1))
+    expected_runs = set(map(str, shape["replicates"]))
     for lane in {row["lane_id"] for row in summaries}:
         lane_rows = [row for row in candidates if row["lane_id"] == lane]
-        for run in {row["run"] for row in summaries if row["lane_id"] == lane}:
+        summary_runs = {row["run"] for row in summaries if row["lane_id"] == lane}
+        if summary_runs != expected_runs:
+            raise ReportValidationError(f"{lane} lacks the declared replicate set")
+        for run in summary_runs:
             iterations = {_integer(row["iteration"]) for row in lane_rows if row["run"] == run}
-            if iterations != set(range(1, HAMLIB_ITERATIONS + 1)):
+            if iterations != expected_iterations:
                 raise ReportValidationError(f"{lane}/{run} lacks contiguous proposal iterations")
     return candidates, summaries
 
@@ -646,12 +939,20 @@ def _validate_reactions(
     reaction_summary = json.loads(
         (export_dir / "reaction_summary.json").read_text(encoding="utf-8")
     )
-    if summary.get("status") != "complete" or summary.get("candidate_record_count") != 1020:
+    shape = _export_shape(export_dir, "reactions10")
+    expected_candidates = int(shape["lane_count"]) * (int(shape["iterations"]) + 1)
+    if (
+        summary.get("status") != "complete"
+        or int(summary.get("candidate_record_count", -1)) != expected_candidates
+    ):
         raise ReportValidationError(
-            "reaction summary does not attest a complete 1,020-row campaign"
+            "reaction summary does not attest the complete declared campaign"
         )
-    if len(candidates) != REACTIONS * REACTION_CONTRACTS * (REACTION_ITERATIONS + 1):
-        raise ReportValidationError("reaction candidate_log.csv does not contain 1,020 candidates")
+    if len(candidates) != expected_candidates:
+        raise ReportValidationError(
+            f"reaction candidate_log.csv has {len(candidates)} rows, "
+            f"expected {expected_candidates}"
+        )
     keys = {
         (row["reaction_key"], row["source_contract"], _integer(row["iteration"]))
         for row in candidates
@@ -659,27 +960,38 @@ def _validate_reactions(
     if len(keys) != len(candidates):
         raise ReportValidationError("reaction candidate log has duplicate contract iterations")
     pooled = {row["reaction_key"]: row for row in reaction_summary["reactions"]}
-    if len(pooled) != REACTIONS:
-        raise ReportValidationError("reaction_summary.json does not contain ten reactions")
+    if len(pooled) != int(shape["instance_count"]):
+        raise ReportValidationError(
+            "reaction_summary.json does not contain the declared reaction set"
+        )
+    expected_iterations = set(range(int(shape["iterations"]) + 1))
     for reaction_key in pooled:
-        for contract in ("equal_share", "reaction_aware"):
+        for contract in map(str, shape["replicates"]):
             iterations = {
                 _integer(row["iteration"])
                 for row in candidates
                 if row["reaction_key"] == reaction_key and row["source_contract"] == contract
             }
-            if iterations != set(range(REACTION_ITERATIONS + 1)):
+            if iterations != expected_iterations:
                 raise ReportValidationError(
                     f"{reaction_key}/{contract} lacks contiguous evaluation iterations"
                 )
     return candidates, pooled
 
 
-def _write_report_metadata(root: Path, family: str, pdfs: Sequence[Path], export_dir: Path) -> None:
+def _write_report_metadata(
+    root: Path,
+    family: str,
+    pdfs: Sequence[Path],
+    export_dir: Path,
+    *,
+    engine: str,
+) -> None:
     manifest = {
         "family": family,
         "schema_version": 1,
         "source": "strict normalized final export",
+        "render_engine": engine,
         "source_checksum_manifest_sha256": sha256_file(export_dir / "SHA256SUMS"),
         "source_completion_marker_sha256": sha256_file(export_dir / "FINAL_EXPORT_COMPLETE"),
         "pdf_count": len(pdfs),
@@ -701,7 +1013,12 @@ def _write_report_metadata(root: Path, family: str, pdfs: Sequence[Path], export
 
 
 def generate_reports(
-    family: str, export_dir: Path, output_dir: Path, *, latexmk: str = "latexmk"
+    family: str,
+    export_dir: Path,
+    output_dir: Path,
+    *,
+    latexmk: str = "latexmk",
+    engine: str = "auto",
 ) -> None:
     export_dir = export_dir.expanduser().resolve()
     output_dir = output_dir.expanduser().absolute()
@@ -714,50 +1031,112 @@ def generate_reports(
     temporary = Path(tempfile.mkdtemp(prefix=f".{output_dir.name}.tmp-", dir=output_dir.parent))
     pdfs: list[Path] = []
     try:
+        if engine not in {"auto", "latex", "reportlab"}:
+            raise ReportValidationError(f"unsupported report engine: {engine}")
+        latex_path = shutil.which(latexmk)
+        if latex_path is None and Path(latexmk).is_file():
+            latex_path = latexmk
+        selected_engine = (
+            ("latex" if latex_path is not None else "reportlab")
+            if engine == "auto"
+            else engine
+        )
+        if selected_engine == "latex" and latex_path is None:
+            raise ReportValidationError(f"LaTeX engine is unavailable: {latexmk}")
         if family == "hamlib121":
             candidates, summaries = _validate_hamlib(export_dir)
+            shape = _export_shape(export_dir, family)
             lane_ids = sorted({row["lane_id"] for row in summaries})
-            if len(lane_ids) != HAMLIB_LANES:
-                raise ReportValidationError("HamLib export does not contain 121 lanes")
+            if len(lane_ids) != int(shape["instance_count"]):
+                raise ReportValidationError(
+                    "HamLib export does not contain the declared Hamiltonian set"
+                )
             for lane_id in lane_ids:
                 if SAFE_ID.fullmatch(lane_id) is None:
                     raise ReportValidationError(f"unsafe HamLib lane ID: {lane_id}")
                 directory = temporary / "hamiltonians" / lane_id
                 lane_summaries = [row for row in summaries if row["lane_id"] == lane_id]
                 lane_candidates = [row for row in candidates if row["lane_id"] == lane_id]
-                for name, tex in (
-                    ("summary.pdf", _hamlib_summary(lane_id, lane_summaries)),
+                for name, title, tex, content in (
+                    (
+                        "summary.pdf",
+                        f"HamLib121 summary: {lane_id}",
+                        _hamlib_summary(lane_id, lane_summaries),
+                        _hamlib_reportlab_content(
+                            lane_id,
+                            lane_summaries,
+                            lane_candidates,
+                            extended=False,
+                        ),
+                    ),
                     (
                         "extended_log.pdf",
+                        f"HamLib121 extended log: {lane_id}",
                         _hamlib_extended(lane_id, lane_summaries, lane_candidates),
+                        _hamlib_reportlab_content(
+                            lane_id,
+                            lane_summaries,
+                            lane_candidates,
+                            extended=True,
+                        ),
                     ),
                 ):
                     destination = directory / name
-                    _compile_pdf(tex, destination, latexmk)
+                    if selected_engine == "latex":
+                        _compile_pdf(tex, destination, str(latex_path))
+                    else:
+                        _compile_reportlab_pdf(title, *content, destination)
                     pdfs.append(destination)
         elif family == "reactions10":
             candidates, pooled = _validate_reactions(export_dir)
+            shape = _export_shape(export_dir, family)
             for reaction_key in sorted(pooled):
                 if SAFE_ID.fullmatch(reaction_key) is None:
                     raise ReportValidationError(f"unsafe reaction key: {reaction_key}")
                 directory = temporary / "reactions" / reaction_key
                 rows = [row for row in candidates if row["reaction_key"] == reaction_key]
-                for name, tex in (
-                    ("summary.pdf", _reaction_summary(reaction_key, rows, pooled[reaction_key])),
+                for name, title, tex, content in (
+                    (
+                        "summary.pdf",
+                        f"Reactions10 summary: {reaction_key}",
+                        _reaction_summary(reaction_key, rows, pooled[reaction_key]),
+                        _reaction_reportlab_content(
+                            reaction_key,
+                            rows,
+                            pooled[reaction_key],
+                            extended=False,
+                        ),
+                    ),
                     (
                         "extended_log.pdf",
+                        f"Reactions10 extended log: {reaction_key}",
                         _reaction_extended(reaction_key, rows, pooled[reaction_key]),
+                        _reaction_reportlab_content(
+                            reaction_key,
+                            rows,
+                            pooled[reaction_key],
+                            extended=True,
+                        ),
                     ),
                 ):
                     destination = directory / name
-                    _compile_pdf(tex, destination, latexmk)
+                    if selected_engine == "latex":
+                        _compile_pdf(tex, destination, str(latex_path))
+                    else:
+                        _compile_reportlab_pdf(title, *content, destination)
                     pdfs.append(destination)
         else:
             raise ReportValidationError(f"unsupported report family: {family}")
-        expected = 2 * (HAMLIB_LANES if family == "hamlib121" else REACTIONS)
+        expected = 2 * int(shape["instance_count"])
         if len(pdfs) != expected:
             raise ReportValidationError(f"built {len(pdfs)} PDFs, expected {expected}")
-        _write_report_metadata(temporary, family, pdfs, export_dir)
+        _write_report_metadata(
+            temporary,
+            family,
+            pdfs,
+            export_dir,
+            engine=selected_engine,
+        )
         temporary.rename(output_dir)
     except BaseException:
         shutil.rmtree(temporary, ignore_errors=True)
@@ -774,8 +1153,15 @@ def main() -> None:
     parser.add_argument("--export-dir", type=Path, required=True)
     parser.add_argument("--output-dir", type=Path, required=True)
     parser.add_argument("--latexmk", default="latexmk")
+    parser.add_argument("--engine", choices=("auto", "latex", "reportlab"), default="auto")
     args = parser.parse_args()
-    generate_reports(args.family, args.export_dir, args.output_dir, latexmk=args.latexmk)
+    generate_reports(
+        args.family,
+        args.export_dir,
+        args.output_dir,
+        latexmk=args.latexmk,
+        engine=args.engine,
+    )
 
 
 if __name__ == "__main__":

@@ -7,7 +7,7 @@ from pathlib import Path
 from hsopt.campaign_setup import initialize_campaign
 from hsopt.exact_loop import initialize_lane, reconcile_lane
 from hsopt.exact_queue import enqueue_reference, merge_batch, prepare_batch, run_batch
-from hsopt.exact_supervisor import slurm_state, supervise_once
+from hsopt.exact_supervisor import _finalize_campaign, slurm_state, supervise_once
 
 
 REPO = Path(__file__).resolve().parents[1]
@@ -253,3 +253,38 @@ def test_campaign_shares_one_reference_before_all_replicate_baselines(
         )
         assert state["pending_kind"] == "reference"
         assert state["iterations_completed"] == 0
+
+
+def test_finalizer_runs_both_requested_export_and_report_pairs_once(
+    tmp_path: Path,
+    monkeypatch,
+) -> None:
+    campaign = tmp_path / "campaign"
+    campaign.mkdir()
+    exports: list[tuple[str, Path]] = []
+    reports: list[tuple[str, Path, Path]] = []
+
+    def fake_export(root: Path, family: str, output: Path) -> None:
+        assert root == campaign
+        exports.append((family, output))
+        output.mkdir(parents=True)
+
+    def fake_reports(family: str, export: Path, output: Path) -> None:
+        reports.append((family, export, output))
+        output.mkdir(parents=True)
+        (output / "report_manifest.json").write_text("{}\n")
+
+    monkeypatch.setattr("hsopt.exact_supervisor.export_family", fake_export)
+    monkeypatch.setattr("hsopt.exact_supervisor.generate_reports", fake_reports)
+    result = _finalize_campaign(
+        campaign,
+        hamlib_export_dir=tmp_path / "exports/hamlib",
+        hamlib_report_dir=tmp_path / "reports/hamlib",
+        reactions_export_dir=tmp_path / "exports/reactions",
+        reactions_report_dir=tmp_path / "reports/reactions",
+    )
+
+    assert [family for family, _ in exports] == ["hamlib121", "reactions10"]
+    assert [family for family, _, _ in reports] == ["hamlib121", "reactions10"]
+    assert result["status"] == "complete"
+    assert (campaign / "supervisor/finalization.json").is_file()

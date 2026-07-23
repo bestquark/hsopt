@@ -21,6 +21,8 @@ DEFAULT_QOS = "normal"
 DEFAULT_CPUS = 2
 DEFAULT_MEMORY = "16G"
 DEFAULT_WALLTIME = "01:00:00"
+DEFAULT_BACKEND = "cupynumeric"
+DEFAULT_ACCELERATOR = "gpu"
 DEFAULT_SYSTEM_MEMORY_MIB = 12_000
 DEFAULT_GPU_MEMORY_MIB = 8_192
 
@@ -82,6 +84,20 @@ def _source_id(repo_dir: Path) -> str:
     return digest.hexdigest()[:20]
 
 
+def _evaluator_source_id(repo_dir: Path) -> str:
+    """Fingerprint only the fixed scientific evaluator and its locked dependencies."""
+
+    digest = hashlib.sha256()
+    paths = [
+        repo_dir / "src" / "hsopt" / "compiled_unitary.py",
+        repo_dir / "src" / "hsopt" / "exact_queue.py",
+    ]
+    for path in paths:
+        digest.update(str(path.relative_to(repo_dir)).encode())
+        digest.update(path.read_bytes())
+    return digest.hexdigest()[:20]
+
+
 def submit_batch(
     batch_dir: Path,
     *,
@@ -94,17 +110,26 @@ def submit_batch(
     cpus: int = DEFAULT_CPUS,
     memory: str = DEFAULT_MEMORY,
     walltime: str = DEFAULT_WALLTIME,
+    backend: str = DEFAULT_BACKEND,
+    accelerator: str = DEFAULT_ACCELERATOR,
+    runtime_python: str | None = None,
 ) -> dict[str, Any]:
-    """Upload one batch and submit a one-GPU Slurm job."""
+    """Upload one batch and submit an evaluator with explicit CPU/GPU placement."""
 
     batch_dir = batch_dir.resolve()
     repo_dir = repo_dir.resolve()
+    if backend not in {"numpy", "cupynumeric"}:
+        raise ValueError("backend must be numpy or cupynumeric")
+    if accelerator not in {"cpu", "gpu"}:
+        raise ValueError("accelerator must be cpu or gpu")
+    use_gpu = accelerator == "gpu"
     manifest = json.loads((batch_dir / "batch.json").read_text(encoding="utf-8"))
     source_id = _source_id(repo_dir)
+    evaluator_source_id = _evaluator_source_id(repo_dir)
     remote_source = f"{remote_root}/sources/{source_id}"
     remote_batch = f"{remote_root}/batches/{manifest['batch_id']}"
     submission_path = batch_dir / "submission.json"
-    job_name = f"hsopt-{manifest['batch_id']}"
+    job_name = f"hsopt-{'gpu' if use_gpu else 'cpu'}-{manifest['batch_id']}"
     if submission_path.is_file():
         previous = json.loads(submission_path.read_text(encoding="utf-8"))
         if previous.get("job_id"):
@@ -136,45 +161,74 @@ def submit_batch(
     )
     _run(["rsync", "-az", f"{batch_dir}/", f"{host}:{remote_batch}/"])
 
+    legate_cpus = cpus if use_gpu else max(1, cpus - 1)
+    framebuffer_memory_mib = DEFAULT_GPU_MEMORY_MIB if use_gpu else 0
     legate_config = (
-        f"--cpus={cpus} --gpus=1 "
-        f"--sysmem={DEFAULT_SYSTEM_MEMORY_MIB} --fbmem={DEFAULT_GPU_MEMORY_MIB}"
+        f"--cpus={legate_cpus} --gpus={int(use_gpu)} "
+        f"--sysmem={DEFAULT_SYSTEM_MEMORY_MIB} --fbmem={framebuffer_memory_mib}"
     )
-    environment_script = " ".join(
-        [
-            "set -euo pipefail;",
-            f"cd {shlex.quote(remote_source)};",
-            "export UV_PROJECT_ENVIRONMENT=.venv;",
-            f"export UV_CACHE_DIR={shlex.quote(f'{remote_root}/uv-cache')};",
-            "uv sync --extra cupynumeric --frozen;",
-        ]
-    )
+    environment_parts = [
+        "set -euo pipefail;",
+        f"cd {shlex.quote(remote_source)};",
+    ]
+    if runtime_python is None:
+        environment_parts.extend(
+            [
+                "export UV_PROJECT_ENVIRONMENT=.venv;",
+                f"export UV_CACHE_DIR={shlex.quote(f'{remote_root}/uv-cache')};",
+                f"uv sync {'--extra cupynumeric ' if backend == 'cupynumeric' else ''}--frozen;",
+            ]
+        )
+    else:
+        environment_parts.append(f"test -x {shlex.quote(runtime_python)};")
+    environment_script = " ".join(environment_parts)
     _run(["ssh", host, f"bash -lc {shlex.quote(environment_script)}"])
 
-    monitor_path = f"{remote_batch}/gpu-utilization.csv"
-    batch_script = " ".join(
-        [
-            "set -euo pipefail;",
-            f"cd {shlex.quote(remote_source)};",
-            "export UV_PROJECT_ENVIRONMENT=.venv;",
-            f"export UV_CACHE_DIR={shlex.quote(f'{remote_root}/uv-cache')};",
-            "nvidia-smi -L;",
-            ("nvidia-smi --query-gpu=index,name,memory.total --format=csv,noheader;"),
-            (
-                "nvidia-smi --query-gpu=timestamp,index,utilization.gpu,"
-                "utilization.memory,memory.used,power.draw --format=csv -l 30 "
-                f"> {shlex.quote(monitor_path)} 2>&1 &"
-            ),
-            "HSOPT_GPU_MONITOR_PID=$!;",
-            "trap 'kill \"$HSOPT_GPU_MONITOR_PID\" 2>/dev/null || true' EXIT;",
-            f"export LEGATE_CONFIG={shlex.quote(legate_config)};",
-            "export CUPYNUMERIC_FORCE_THUNK=deferred;",
-            (
-                "uv run --no-sync python -m hsopt.exact_queue run-batch "
-                f"--batch-dir {shlex.quote(remote_batch)} --backend cupynumeric"
-            ),
-        ]
+    batch_parts = [
+        "set -euo pipefail;",
+        f"cd {shlex.quote(remote_source)};",
+    ]
+    if runtime_python is None:
+        batch_parts.extend(
+            [
+                "export UV_PROJECT_ENVIRONMENT=.venv;",
+                f"export UV_CACHE_DIR={shlex.quote(f'{remote_root}/uv-cache')};",
+            ]
+        )
+        evaluator_python = "uv run --no-sync python"
+    else:
+        batch_parts.append(
+            f"export PYTHONPATH={shlex.quote(f'{remote_source}/src')};"
+        )
+        evaluator_python = shlex.quote(runtime_python)
+    if use_gpu:
+        monitor_path = f"{remote_batch}/gpu-utilization.csv"
+        batch_parts.extend(
+            [
+                "nvidia-smi -L;",
+                "nvidia-smi --query-gpu=index,name,memory.total --format=csv,noheader;",
+                (
+                    "nvidia-smi --query-gpu=timestamp,index,utilization.gpu,"
+                    "utilization.memory,memory.used,power.draw --format=csv -l 30 "
+                    f"> {shlex.quote(monitor_path)} 2>&1 &"
+                ),
+                "HSOPT_GPU_MONITOR_PID=$!;",
+                "trap 'kill \"$HSOPT_GPU_MONITOR_PID\" 2>/dev/null || true' EXIT;",
+            ]
+        )
+    if backend == "cupynumeric":
+        batch_parts.extend(
+            [
+                "export LEGATE_AUTO_CONFIG=0;",
+                f"export LEGATE_CONFIG={shlex.quote(legate_config)};",
+                "export CUPYNUMERIC_FORCE_THUNK=deferred;",
+            ]
+        )
+    batch_parts.append(
+        f"{evaluator_python} -m hsopt.exact_queue run-batch "
+        f"--batch-dir {shlex.quote(remote_batch)} --backend {backend}"
     )
+    batch_script = " ".join(batch_parts)
     job_command = f"bash -lc {shlex.quote(batch_script)}"
     submission = {
         "status": "submitting",
@@ -185,16 +239,20 @@ def submit_batch(
         "remote_source": remote_source,
         "remote_batch": remote_batch,
         "source_id": source_id,
+        "evaluator_source_id": evaluator_source_id,
+        "backend": backend,
+        "accelerator": accelerator,
+        "runtime_python": runtime_python,
         "resources": {
             "nodes": 1,
-            "gpus": 1,
+            "gpus": int(use_gpu),
             "cpus": cpus,
             "memory": memory,
             "walltime": walltime,
             "partition": partition,
             "account": account,
             "qos": qos,
-            "legate_config": legate_config,
+            "legate_config": legate_config if backend == "cupynumeric" else None,
         },
     }
     _write_json(submission_path, submission)
@@ -206,7 +264,6 @@ def submit_batch(
         f"--qos={qos}",
         "--nodes=1",
         "--ntasks=1",
-        "--gpus-per-node=1",
         f"--cpus-per-task={cpus}",
         f"--mem={memory}",
         f"--time={walltime}",
@@ -215,6 +272,8 @@ def submit_batch(
         "--wrap",
         job_command,
     ]
+    if use_gpu:
+        sbatch.insert(7, "--gpus-per-node=1")
     remote_sbatch = " ".join(shlex.quote(part) for part in sbatch)
     submitted = _run(["ssh", host, remote_sbatch])
     job_id = submitted.stdout.strip().split(";", maxsplit=1)[0]
@@ -286,24 +345,27 @@ def collect_batch(queue_dir: Path, batch_dir: Path) -> dict[str, Any]:
         stdout=subprocess.PIPE,
         stderr=subprocess.PIPE,
     )
-    utilization = subprocess.run(
-        [
-            "rsync",
-            "-az",
-            f"{host}:{remote_batch}/gpu-utilization.csv",
-            f"{batch_dir}/",
-        ],
-        check=False,
-        text=True,
-        stdout=subprocess.PIPE,
-        stderr=subprocess.PIPE,
-    )
+    utilization_downloaded = False
+    if submission.get("accelerator", "gpu") == "gpu":
+        utilization = subprocess.run(
+            [
+                "rsync",
+                "-az",
+                f"{host}:{remote_batch}/gpu-utilization.csv",
+                f"{batch_dir}/",
+            ],
+            check=False,
+            text=True,
+            stdout=subprocess.PIPE,
+            stderr=subprocess.PIPE,
+        )
+        utilization_downloaded = utilization.returncode == 0
     merged = merge_batch(queue_dir, batch_dir)
     return {
         **merged,
         "job_id": submission["job_id"],
         "slurm_log_downloaded": logs.returncode == 0,
-        "gpu_utilization_downloaded": utilization.returncode == 0,
+        "gpu_utilization_downloaded": utilization_downloaded,
     }
 
 
@@ -317,6 +379,23 @@ def _common_submit_flags(parser: argparse.ArgumentParser) -> None:
     parser.add_argument("--cpus", type=int, default=DEFAULT_CPUS)
     parser.add_argument("--memory", default=DEFAULT_MEMORY)
     parser.add_argument("--walltime", default=DEFAULT_WALLTIME)
+    parser.add_argument(
+        "--backend",
+        choices=("cupynumeric", "numpy"),
+        default=DEFAULT_BACKEND,
+    )
+    parser.add_argument(
+        "--accelerator",
+        choices=("gpu", "cpu"),
+        default=DEFAULT_ACCELERATOR,
+    )
+    parser.add_argument(
+        "--runtime-python",
+        help=(
+            "optional prebuilt Python interpreter; evaluates the uploaded source "
+            "through PYTHONPATH instead of the source snapshot's uv environment"
+        ),
+    )
 
 
 def _parser() -> argparse.ArgumentParser:

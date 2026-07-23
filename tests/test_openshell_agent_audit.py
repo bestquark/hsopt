@@ -131,11 +131,7 @@ def test_opencode_policy_only_allows_candidate_file_mutations() -> None:
     permissions = opencode_config()["agent"]["hsopt-mutation"]["permission"]
 
     assert permissions["*"] == "deny"
-    assert permissions["edit"] == {
-        "*": "deny",
-        "candidate.py": "allow",
-        "/sandbox/work/candidate.py": "allow",
-    }
+    assert permissions["edit"] == "allow"
     assert permissions["read"] == {
         "*": "deny",
         "candidate.py": "allow",

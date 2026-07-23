@@ -1,45 +1,93 @@
-# hsopt Fault-Tolerant Protocol Agent Notes
+# hsopt Exact-Unitary Campaign Notes
 
-The canonical product-formula T-gate optimization code lives in
-`examples/pfs/`. Do not use the old standalone checkout as a runtime
-dependency or source of truth.
+The production paper workflow is the exact compiled-unitary pipeline in
+`src/hsopt/compiled_unitary.py`, `src/hsopt/exact_queue.py`, and
+`src/hsopt/exact_loop.py`. The older `examples/pfs/` runners remain useful for
+small development checks, but they are not the source of truth for the current
+HamLib121 and reactions10 campaigns.
 
-Use the repo skills first:
+Use `$hsopt` for product-formula T-gate optimization and `$ssh` for NVPark
+submission or Slurm diagnosis.
 
-- `$hsopt` for sequential code-mutation runs that edit only a lane's
-  `simple_pf.py` and score proposals with one of the fixed evaluators.
-- `$hsgepa` for optimizing the prompt that drives those T-gate mutation runs
-  through GEPA's `optimize_anything` API.
+## Immutable scientific ordering
 
-Treat these as fixed infrastructure unless the user explicitly asks to change
-the benchmark framework:
+Every production lane must follow these stages:
 
-- `examples/pfs/*/evaluate.py`
-- `examples/pfs/evaluate_energy.py`
-- `examples/pfs/evaluate_fidelity.py`
-- `examples/pfs/chemistry.py`
+1. Construct and diagonalize `U_exact = exp(+i H t)` once for each distinct
+   Hamiltonian reference and cache the resulting exact eigenphase energy and
+   state. Five HamLib replicas share one reference per instance; the two
+   policies for a reaction share one reaction reference.
+2. Measure the generated paper policy unchanged as iteration 0 against that
+   cached reference.
+3. Permit OpenCode mutations only after iteration 0 passes. Mutations are
+   iterations 1 through 50.
 
-The usual mutation target is the active lane's `simple_pf.py`. Do not change
-molecules, geometries, basis sets, active spaces, target times, localization, or
-evaluator scoring semantics during an optimization run.
+Candidate evaluation must load `exact_reference.json`; it must not reconstruct
+or diagonalize `U_exact`. Analytical product-formula or synthesis error bounds
+are not acceptance metrics.
 
-Canonical benchmark folders:
+## Immutable baseline
 
-- `examples/pfs/h2`
-- `examples/pfs/bh`
-- `examples/pfs/lih`
-- `examples/pfs/dmds`
-- `examples/pfs/n2`
-- `examples/pfs/co`
-- `examples/pfs/nh3`
-- `examples/pfs/hcn`
+`examples/generate_initial_pf.py` is the sole generator of `initial_pf.py`. It
+loads the checked-in contract
+`examples/paper_baselines/reiher_wiebe_svore_2017.json`, which records the
+Reiher--Wiebe--Svore--Wecker--Troyer citation and the distinction between the
+paper method and benchmark-specific numerical choices.
 
-The PF examples expose two fixed scoring contracts:
+Never invent or hand-edit an initializer. Never mutate `initial_pf.py`, and do
+not create an in-tree `optimized_pf.py`. A lane's mutable `candidate.py` and
+`incumbent.py`, all evaluations, and all transcripts live in its external
+campaign directory.
 
-- `evaluate_energy.py`: compiled T count subject to chemical accuracy on the
-  lowest HF-reference spectral peak in the fixed-electron sector.
-- `evaluate_fidelity.py`: compiled T count subject to final-state infidelity
-  against exact `exp(+i H t)` being below the selected epsilon budget.
+Do not change Hamiltonians, molecules, geometries, basis sets, active spaces,
+target times, localization, electron sectors, or evaluator semantics during a
+campaign.
 
-Campaign histories should live in external run directories. The `pfs/` tree is
-kept as benchmark definition plus fixed evaluator infrastructure.
+## Production shape and resources
+
+- HamLib exact subset: 57 instances with at most 10 qubits, five independent
+  mutation lanes per instance, 50 mutation iterations per lane.
+- Reaction set: 10 reactions, two policy lanes per reaction, 50 mutation
+  iterations per lane.
+- Total: 305 lanes and 15,250 mutation evaluations, excluding iteration 0.
+
+Dense exact work uses cuPyNumeric on NVPark for both placements. PyGridSynth
+remains CPU-side. Both placements evaluate the same uploaded source snapshot
+and batch tasks sequentially so only one dense task is resident at a time:
+
+- Canonical mutation campaign: `cpu` partition, `normal` QoS, zero GPUs,
+  2 Slurm CPUs, 16 GB system memory, and the pinned cuPyNumeric 25.11 CPU
+  build with Legate configured as one CPU worker plus runtime utility work.
+- A100 validation/replay campaign: `polar4` partition, `normal` QoS, one GPU,
+  2 CPUs, and 16 GB system memory.
+
+The CPU campaign owns the stochastic OpenCode mutation trace. The A100
+campaign must use `--no-mutations` and replay the exact archived CPU candidate
+files in order; never run a second independent agent pass. Candidate hashes,
+T counts, and accept/reject trajectory are required to match; record and stop
+on any validation discrepancy. CPU and GPU eigensolvers may differ in the last
+floating-point bits, so compare energy observables at the campaign's explicit
+numerical tolerance rather than claiming bitwise equality.
+
+Do not increase CPUs or RAM merely to improve scheduling priority. A CPU run
+must use the `cpu` partition and request no GPU resource.
+
+OpenShell and OpenCode/Nemotron run persistently on Omni. Preserve raw
+OpenCode/OpenShell logs plus redacted tool-action and metrics summaries.
+
+## Fixed infrastructure
+
+Treat these as fixed during a campaign unless the user explicitly changes the
+benchmark framework:
+
+- `src/hsopt/compiled_unitary.py`
+- `src/hsopt/exact_queue.py`
+- `src/hsopt/exact_loop.py`
+- `examples/generate_initial_pf.py`
+- `examples/paper_baselines/reiher_wiebe_svore_2017.json`
+
+Campaign histories belong outside the checkout. After every lane completes,
+run `hsopt-export-exact` for `hamlib121` and `reactions10`, then run
+`hsopt-reports` on both checksummed exports. The canonical CPU supervisor is
+configured with all four final export/report paths so this completion gate runs
+automatically and idempotently.

@@ -1,193 +1,217 @@
 ---
 name: hsopt
-description: Run and organize sequential autoresearch-style T-gate optimization in hsopt. Use this whenever the user asks to reduce T gates, optimize synthesis precision, mutate product-formula precision policies, continue a lane, inspect T-count progress, manage HSOpt campaign storage, or run the repo's `/hsopt` workflow.
+description: Run sequential exact compiled-unitary T-gate autoresearch in hsopt. Use whenever the user asks to reduce T gates, optimize synthesis precision or product formulas, start or continue HamLib/reaction lanes, inspect exact-energy or T-count progress, or run the repo's HSOpt campaign workflow.
 ---
 
-# HSOpt
+# HSOpt Exact Autoresearch
 
-Use this skill for direct T-gate optimization runs where an agent edits a
-benchmark lane's `simple_pf.py`, scores the mutation, reads the result, and
-continues one scored step at a time.
-
-Invocation note:
-- In Codex, use this skill as `$hsopt` or through `/skills`.
-- OpenCode and other skill-aware clients may expose it as `/hsopt`.
-- The repo CLI is `uv run hsopt ...`.
-
-## Prerequisites
+Use this skill for product-formula optimization where an isolated agent mutates
+one lane policy, the fixed evaluator diagonalizes the compiled unitary, and the
+lane advances only after reading that exact result.
 
 Treat the installed agent skill and the benchmark runtime as separate pieces.
-Installing the skill supplies these instructions; it does not clone the fixed
-benchmark files or install their Python dependencies. Direct evaluator runs
-also require a local HSOpt checkout with `uv sync` completed. Run the commands
-below from that checkout's root. Cloning the repository alone likewise does not
-register this skill with the agent.
+The skill supplies workflow instructions; it does not clone the repository or
+install its dependencies. Direct evaluator runs require a local HSOpt checkout
+with `uv sync` completed.
 
-## First Step
+## Required stage order
 
-Resolve the run storage before inspecting or mutating a lane. Prefer an
-explicit absolute `HSOPT_DATA_ROOT`; otherwise use the caller's established
-central HSOpt data directory. Never invent a campaign folder in the checkout,
-`examples/pfs/`, the current working directory, or directly in the user's home
-directory.
+A production campaign has three strictly ordered stages:
+
+1. **Exact reference:** construct and diagonalize
+   `U_exact = exp(+i H t)` once for each distinct Hamiltonian reference. Cache
+   `E_exact`, the selected fixed-electron eigenstate, source hashes, and
+   diagnostics in `exact_reference.json`.
+2. **Iteration 0:** evaluate the immutable paper baseline against the cached
+   exact reference. This is a measurement, not a mutation.
+3. **Iterations 1–50:** mutate the current external incumbent, evaluate the
+   compiled candidate against the same cached reference, and accept only a
+   feasible strict T-count improvement.
+
+Never let a candidate recompute `U_exact`. Never start mutations before
+iteration 0 succeeds. Five HamLib replicates share one exact reference per
+instance; two reaction policies share one exact reaction reference.
+
+## Baseline and mutation boundaries
+
+Generate `initial_pf.py` only with `examples/generate_initial_pf.py`. The
+generator must load
+`examples/paper_baselines/reiher_wiebe_svore_2017.json`; do not infer a policy
+from an analytical error bound or invent a paper attribution.
+
+The checked-in paper contract records:
+
+- the Reiher, Wiebe, Svore, Wecker, and Troyer PNAS 2017 citation;
+- symmetric second-order Trotter--Suzuki structure;
+- lexicographic term ordering;
+- explicit benchmark choices that the paper itself does not numerically fix.
+
+`initial_pf.py` is immutable. Do not create or mutate an in-tree
+`optimized_pf.py`. External lane directories contain `candidate.py`,
+`incumbent.py`, exact results, decisions, and audit logs.
+
+Do not modify Hamiltonians, geometries, basis sets, active spaces, target
+times, localization, electron sectors, or evaluator semantics during a run.
+
+## Scientific contract
+
+The score is compiled Clifford+T count subject to chemical accuracy of the
+target compiled-unitary eigenphase:
 
 ```text
-$HSOPT_DATA_ROOT/
-  paper/hamlib121/<family>_YYYYMMDD_<commit>/run_01 ... run_05
-  paper/reactions10/<family>_YYYYMMDD_<commit>/
-  development/<benchmark>/<campaign-id>/
-  old_experiments/<benchmark>/<campaign-id>/
-  scratch/preflight/<campaign-id>/
+U_PF = product_i compiled(exp(+i alpha_i P_i))
+E_PF = unwrapped target eigenphase(U_PF) / t
+acceptance = abs(E_PF - E_exact) <= chemical accuracy
+score = compiled T count
 ```
 
-Use `paper` only for protocol-locked campaigns, `development` for exploratory
-runs, `scratch/preflight` for disposable checks, and `old_experiments` for
-inactive or superseded campaigns. Once a campaign starts, keep its ID and
-directory contents together. Do not delete histories during cleanup; move the
-whole inactive campaign to `old_experiments` after confirming that no local
-supervisor or scheduler job still references it.
+For a reaction, form the signed difference from independently compiled species
+eigenphase energies and compare it with the cached exact signed difference.
+Hartree--Fock overlap is a QPE success-probability diagnostic; propagation of
+the HF state and analytical error bounds are not the acceptance metric.
 
-Then inspect lanes and pick the active benchmark:
+The dense implementation may operate in the fixed-electron sector where
+appropriate, but it must actually construct and diagonalize the exact or
+compiled unitary used by the reported observable.
+
+## Production topology
+
+- HamLib121 exact subset: 57 instances (at most 10 qubits) × 5 independent
+  mutation lanes.
+- reactions10: 10 reactions × 2 policy lanes.
+- 50 mutations per lane, plus the separate iteration-0 baseline.
+- Total: 305 lanes and 15,250 mutation evaluations.
+
+Run OpenShell and OpenCode/Nemotron on persistent Omni infrastructure.
+OpenCode receives only the incumbent policy and prior result, with deny-all
+permissions except the allowed candidate read/edit operations. Preserve:
+
+- raw `opencode.jsonl` and `openshell.log`;
+- redacted `agent_actions.jsonl`;
+- `opencode_metrics.json`, `openshell_metrics.json`, and `agent_audit.json`;
+- the durable mutation result and every evaluator decision.
+
+API credentials must enter through a protected environment file or process
+environment. Never put them in prompts, command lines, manifests, logs, or the
+repository.
+
+## NVPark execution
+
+Use the `$ssh` skill for cluster details. The canonical mutation evaluator is
+cuPyNumeric running on the CPU partition:
+
+```text
+account: nvr_qualg_lmbm
+partition: cpu
+qos: normal
+nodes: 1
+gpus: 0
+cpus: 2
+memory: 16G
+```
+
+Use the pinned cuPyNumeric/Legate 25.11 CPU build and configure one Legate CPU
+worker; the second Slurm CPU is available to the runtime. A CPU run must use
+the `cpu` partition and must not request a GPU.
+
+The A100 validation/replay allocation uses `polar4`, `normal`, one GPU, 2 CPUs,
+and 16 GB. It runs the same uploaded evaluator source and cuPyNumeric version.
+The CPU campaign is the only campaign allowed to invoke OpenCode. Run the A100
+supervisor with `--no-mutations` and replay the archived CPU candidate files in
+the same order using `--replay-campaign-root`. Require policy hashes, T counts,
+and the acceptance trajectory to match and surface any discrepancy. Dense
+CPU/GPU eigensolvers need only agree within an explicit numerical tolerance;
+do not promise bitwise-identical floating-point eigenvalues.
+
+PyGridSynth runs on CPU in both placements. Tasks within a submitted batch run
+sequentially so only one dense unitary is resident at a time. Do not request a
+full multi-GPU node, excess CPUs, or excess RAM. `(Priority)` is scheduling
+priority, not an OOM condition.
+
+The persistent supervisor must durably record submission intent, recover a job
+ID after a lost SSH response, collect terminal batches, and retry only tasks
+without results.
+
+## Canonical commands
+
+Initialize a fresh external campaign:
 
 ```bash
-uv run hsopt list
-uv run hsopt status examples/pfs/h2
+uv run hsopt-campaign initialize \
+  --hamlib-inputs "$HSOPT_DATA_ROOT/exact/inputs-v1/hamlib57" \
+  --reaction-inputs "$HSOPT_DATA_ROOT/exact/inputs-v1/reactions10" \
+  --seed-validation experiments/reactions10/inputs/seed_validation.json \
+  --generator examples/generate_initial_pf.py \
+  --campaign-root "$HSOPT_DATA_ROOT/exact/production-cpu-v2" \
+  --hamlib-replicates 5 --iterations 50
 ```
 
-Render the exact agent prompt for a lane:
+Run one idempotent CPU supervisor cycle:
 
 ```bash
-uv run hsopt prompt examples/pfs/h2
+uv run hsopt-supervisor \
+  --campaign-root "$HSOPT_DATA_ROOT/exact/production-cpu-v2" \
+  --repo-dir "$PWD" --once \
+  --threshold 40 --max-active-jobs 4 \
+  --partition cpu --qos normal --cpus 2 --memory 16G --walltime 03:00:00 \
+  --backend cupynumeric --accelerator cpu \
+  --runtime-python /path/to/pinned/cupynumeric-cpu-25.11/bin/python
 ```
 
-The primary runnable family is `examples/pfs/`. The CLI also
-accepts legacy shorthand targets such as `pfs/h2`.
-Read [references/layout.md](references/layout.md) when locating the installed
-skill, CLI runtime, benchmark definitions, or external campaign root.
-
-## Loop Contract
-
-1. Read the lane status and choose `--evaluator energy` or `--evaluator fidelity`.
-2. Edit only the lane's `simple_pf.py` unless the user explicitly changes the
-   benchmark framework.
-3. Inspect the product-formula API exposed by that file before editing:
-   `ProductFormulaConfig`, `choose_synthesis_epsilon`, term-order fields, and
-   any custom order hook.
-4. Make one coherent Hamiltonian-aware mutation: synthesis precision, term
-   ordering/grouping, or PF order/step count when the error budget justifies it.
-5. Run exactly one fixed evaluator command.
-6. Read the JSON result before choosing the next mutation.
-7. Preserve all detailed history in the selected external campaign directory.
-8. Copy only completion-gated compact exports or a small summary PDF into the
-   repository; never commit raw transcripts, caches, databases, environments,
-   scheduler logs, or partial runs.
-
-## Agent and Evaluator Choices
-
-- Mutation and evaluation are independent choices. Use `--agent codex` or
-  `--agent opencode`; use `--transport local` or `--transport slurm` for the
-  evaluator.
-- OpenCode defaults to pinned `opencode-ai@1.4.11` with
-  `nvidia/nvidia/nemotron-3-super-v3`. Supply `NVIDIA_API_KEY` only through the
-  process environment or a protected environment file. Never put it in a
-  prompt, command line, campaign manifest, log, or repository file.
-- Every mutation runs in an isolated directory containing only `simple_pf.py`.
-  OpenCode uses deny-all permissions with only read/edit access to that file.
-  Never pass `--auto`, `--yolo`, or any permission-bypass flag.
-- Local evaluation uses NumPy by default when Legate is unavailable. Select
-  cuPyNumeric explicitly on a local NVIDIA GPU with `--backend cupynumeric`.
-- Slurm evaluation submits the same deterministic evaluator with
-  `sbatch --wait`, one GPU per job, and no `squeue`/`sacct` polling. A durable
-  supervisor may keep up to the campaign's declared job cap blocked in those
-  wait calls and resume mutation only after each call returns.
-- Never start recurring `nvidia-smi`, scheduler, or device-monitoring loops on
-  a login node. A single GPU identity query inside the allocated job is enough.
-- Preserve a nonzero mutation exit and its stderr as experiment evidence. Let
-  the bounded retry policy resume that lane; do not silently skip it.
-
-## Canonical Commands
-
-Print the evaluator command:
+Initialize the A100 campaign from scratch with the same inputs and generator,
+verify all 305 generated `initial_pf.py` files against the CPU campaign, and
+run it separately with:
 
 ```bash
-uv run hsopt evaluate examples/pfs/h2 --evaluator energy --print-only
-uv run hsopt evaluate examples/pfs/h2 --evaluator fidelity --epsilon 1e-3 --print-only
+uv run hsopt-supervisor \
+  --campaign-root "$HSOPT_DATA_ROOT/exact/production-gpu-v3" \
+  --repo-dir "$PWD" \
+  --threshold 40 --max-active-jobs 2 \
+  --partition polar4 --qos normal --cpus 2 --memory 16G --walltime 03:00:00 \
+  --backend cupynumeric --accelerator gpu \
+  --runtime-python /path/to/pinned/cupynumeric-gpu-25.11/bin/python \
+  --no-mutations \
+  --replay-campaign-root "$HSOPT_DATA_ROOT/exact/production-cpu-v2"
 ```
 
-Score one mutation directly:
+Never point the CPU campaign at `polar4`.
+
+After all lanes finish, generate both strict summaries:
 
 ```bash
-uv run hsopt evaluate examples/pfs/h2 --evaluator energy --transport local --backend numpy
-uv run hsopt evaluate examples/pfs/h2 --evaluator energy \
-  --transport local --backend cupynumeric
+uv run hsopt-export-exact \
+  --campaign-root "$HSOPT_DATA_ROOT/exact/production-cpu-v2" \
+  --family hamlib121 \
+  --output-dir /path/to/final-hamlib-export
+
+uv run hsopt-reports --family hamlib121 \
+  --export-dir /path/to/final-hamlib-export \
+  --output-dir experiments/hamlib121/results/final
+
+uv run hsopt-export-exact \
+  --campaign-root "$HSOPT_DATA_ROOT/exact/production-cpu-v2" \
+  --family reactions10 \
+  --output-dir /path/to/final-reactions-export
+
+uv run hsopt-reports --family reactions10 \
+  --export-dir /path/to/final-reactions-export \
+  --output-dir experiments/reactions10/results/final
 ```
 
-Create one OpenCode/Nemotron proposal with external history:
+Configure the four `--final-*-export-dir` and `--final-*-report-dir` supervisor
+flags to run this completion gate automatically. `hsopt-reports` uses LaTeX
+when available and its portable ReportLab renderer otherwise.
 
-```bash
-NVIDIA_API_KEY=... uv run hsopt mutate examples/pfs/h2 \
-  --agent opencode --run-dir "$HSOPT_DATA_ROOT/development/pfs/h2-proposal-001"
-```
+## Mutation behavior
 
-Print a one-A100 Slurm handoff without submitting it:
+Prefer coherent, auditable policies over blind sweeps:
 
-```bash
-uv run hsopt evaluate examples/pfs/h2 --transport slurm --print-only \
-  --submit-host nvlogin --remote-repo-root /shared/hsopt \
-  --account ACCOUNT --partition PARTITION \
-  --remote-python /shared/hsopt/.venv/bin/python \
-  --remote-legate /shared/hsopt/.venv/bin/legate
-```
+- grouped synthesis tolerances by Pauli family, support, coefficient, or angle;
+- deterministic term-order changes;
+- PF order or step-count changes only when exposed by the method contract;
+- targeted tightening after an exact-energy failure;
+- loosening where exact results demonstrate margin.
 
-## Optimization Target
-
-Optimize the evaluator's lower-is-better `score`. In practice, this means
-lowering compiled `t_gate_count` while keeping the fixed accuracy contract true:
-
-- `energy`: chemical-accuracy estimate from the lowest HF-reference spectral
-  peak in the fixed-electron sector.
-- `fidelity`: final-state infidelity below the selected epsilon budget.
-
-Treat these as fixed infrastructure:
-
-- `chemistry.py`
-- `evaluate_energy.py`
-- `evaluate_fidelity.py`
-- molecule-local `evaluate.py` wrappers
-
-## Search Behavior
-
-Prefer simple precision policies that are easy to audit:
-
-- Pauli label families (`XXYY`, `ZZ`, single-`Z`, etc.)
-- support size
-- coefficient magnitude
-- per-application rotation angle magnitude, usually available as `alpha`
-- grouped epsilon buckets
-- targeted tightening for terms implicated by failed accuracy diagnostics
-- product-formula term ordering when the benchmark exposes it, for example
-  reordering by coefficient magnitude, support size, Pauli family, or a
-  symmetric large/small interleaving before applying PF1/PF2 sweeps
-- custom deterministic term-order hooks such as
-  `order_product_formula_terms(terms, config)` when present or explicitly
-  allowed by the benchmark
-- evaluator-seeded randomized Trotter, qDRIFT, or a custom explicit schedule
-  when the benchmark exposes `schedule_strategy`; custom schedule items identify
-  a Hamiltonian `term_index`, an `alpha`, and may supply a per-occurrence `epsilon`
-
-For product-formula lanes, do not default to scalar-only edits of
-`formula_order`, `n_steps`, or `uniform_epsilon`. First check whether
-`choose_synthesis_epsilon(term, alpha, step_index, config)` receives
-Hamiltonian metadata such as Pauli label, coefficient, support size, and
-Pauli-family counts. Explicit schedules may use `step_index` for arbitrary
-per-occurrence tolerances. Use those features to loosen synthesis precision for
-low-impact terms and tighten only where the error budget needs it.
-
-Changing product-formula order or the number of PF steps is allowed only when
-the method file already exposes those knobs or the user explicitly requests it.
-When doing so, verify that the reported `nonzero_rotation_count`,
-`scheduled_rotation_count`, and `t_gate_count` reflect the additional rotations
-introduced by the higher-order formula or extra steps.
-
-Avoid scripted sweeps, future-result batching, evaluator edits, chemistry
-changes, and long stretches of tiny one-label tweaks after progress stalls.
+Make exactly one proposal per lane at a time. Read the exact JSON result before
+the next mutation. Preserve failed proposals and agent failures as evidence;
+never silently skip or rewrite history.

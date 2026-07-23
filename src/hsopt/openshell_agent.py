@@ -377,11 +377,10 @@ def opencode_config() -> dict[str, Any]:
                         "candidate.py": "allow",
                         "/sandbox/work/candidate.py": "allow",
                     },
-                    "edit": {
-                        "*": "deny",
-                        "candidate.py": "allow",
-                        "/sandbox/work/candidate.py": "allow",
-                    },
+                    # OpenCode's edit permission gates edit, write, and patch.
+                    # The OpenShell sandbox contains only the disposable candidate
+                    # worktree, and only candidate.py is downloaded afterwards.
+                    "edit": "allow",
                     "skill": "deny",
                     "task": "deny",
                     "todowrite": "deny",

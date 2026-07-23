@@ -13,10 +13,13 @@ from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any, Iterator
 
-from .exact_loop import propose_lane, reconcile_lane
+from .exact_export import export_family
+from .exact_loop import propose_lane, propose_replay_lane, reconcile_lane
 from .exact_queue import queue_status, requeue_missing
 from .nvpark_queue import (
+    DEFAULT_ACCELERATOR,
     DEFAULT_ACCOUNT,
+    DEFAULT_BACKEND,
     DEFAULT_CPUS,
     DEFAULT_HOST,
     DEFAULT_MEMORY,
@@ -29,6 +32,7 @@ from .nvpark_queue import (
     submit_batch,
     submit_ready,
 )
+from .tgate_opt.reporting import generate_reports, verify_strict_export
 
 
 TERMINAL_SLURM_STATES = frozenset(
@@ -194,6 +198,8 @@ def _lane_summary(lane_dirs: list[Path]) -> tuple[dict[str, Any], list[Path]]:
             status = "complete"
         elif state.get("pending_kind") == "mutation":
             status = "mutating"
+        elif state.get("pending_kind") == "replay_validation_failed":
+            status = "needs_attention"
         elif state.get("pending_task_id") is not None:
             status = "waiting_evaluation"
         else:
@@ -232,6 +238,53 @@ def _lane_summary(lane_dirs: list[Path]) -> tuple[dict[str, Any], list[Path]]:
     )
 
 
+def _finalize_campaign(
+    campaign_root: Path,
+    *,
+    hamlib_export_dir: Path,
+    hamlib_report_dir: Path,
+    reactions_export_dir: Path,
+    reactions_report_dir: Path,
+) -> dict[str, Any]:
+    """Create both checksummed exports and both report trees exactly once."""
+
+    pairs = (
+        ("hamlib121", hamlib_export_dir, hamlib_report_dir),
+        ("reactions10", reactions_export_dir, reactions_report_dir),
+    )
+    records: dict[str, Any] = {}
+    for family, export_dir, report_dir in pairs:
+        export_dir = export_dir.expanduser().absolute()
+        report_dir = report_dir.expanduser().absolute()
+        if export_dir.exists():
+            verify_strict_export(export_dir)
+            export_status = "existing"
+        else:
+            export_family(campaign_root, family, export_dir)
+            export_status = "created"
+        if report_dir.exists():
+            if not (report_dir / "report_manifest.json").is_file():
+                raise RuntimeError(f"existing report directory is incomplete: {report_dir}")
+            report_status = "existing"
+        else:
+            generate_reports(family, export_dir, report_dir)
+            report_status = "created"
+        records[family] = {
+            "export_dir": str(export_dir),
+            "export_status": export_status,
+            "report_dir": str(report_dir),
+            "report_status": report_status,
+        }
+    result = {
+        "schema": 1,
+        "status": "complete",
+        "completed_at": _now(),
+        "families": records,
+    }
+    _write_json(campaign_root / "supervisor" / "finalization.json", result)
+    return result
+
+
 def supervise_once(
     campaign_root: Path,
     *,
@@ -249,6 +302,14 @@ def supervise_once(
     cpus: int = DEFAULT_CPUS,
     memory: str = DEFAULT_MEMORY,
     walltime: str = DEFAULT_WALLTIME,
+    backend: str = DEFAULT_BACKEND,
+    accelerator: str = DEFAULT_ACCELERATOR,
+    runtime_python: str | None = None,
+    replay_campaign_root: Path | None = None,
+    hamlib_export_dir: Path | None = None,
+    hamlib_report_dir: Path | None = None,
+    reactions_export_dir: Path | None = None,
+    reactions_report_dir: Path | None = None,
 ) -> dict[str, Any]:
     """Run one idempotent collect/reconcile/submit/mutate cycle."""
 
@@ -265,6 +326,9 @@ def supervise_once(
         "cpus": cpus,
         "memory": memory,
         "walltime": walltime,
+        "backend": backend,
+        "accelerator": accelerator,
+        "runtime_python": runtime_python,
     }
 
     batch_rows: list[dict[str, Any]] = []
@@ -443,7 +507,40 @@ def supervise_once(
         )
 
     mutation: dict[str, Any] | None = None
-    if mutations_enabled and ready_lanes:
+    if replay_campaign_root is not None and ready_lanes:
+        replay_campaign_root = replay_campaign_root.expanduser().resolve()
+        for lane_dir in ready_lanes:
+            canonical_lane = replay_campaign_root / lane_dir.relative_to(campaign_root)
+            try:
+                mutation = propose_replay_lane(lane_dir, canonical_lane)
+            except Exception as exc:
+                mutation = {
+                    "status": "error",
+                    "lane": str(lane_dir.relative_to(campaign_root)),
+                    "error": _safe_error(exc),
+                }
+                _append_event(
+                    campaign_root,
+                    "replay_error",
+                    lane=str(lane_dir.relative_to(campaign_root)),
+                    error=mutation["error"],
+                )
+                break
+            if mutation["status"] == "replay_proposed":
+                _append_event(
+                    campaign_root,
+                    "candidate_replayed",
+                    lane=str(lane_dir.relative_to(campaign_root)),
+                    iteration=mutation["iteration"],
+                    task_id=mutation["task_id"],
+                    canonical_candidate_sha256=mutation[
+                        "canonical_candidate_sha256"
+                    ],
+                )
+                break
+        if mutation is None:
+            mutation = {"status": "waiting_canonical"}
+    elif mutations_enabled and ready_lanes:
         lane_dir = ready_lanes[0]
         try:
             mutation = propose_lane(
@@ -497,6 +594,20 @@ def supervise_once(
             "cpus": cpus,
             "memory": memory,
             "walltime": walltime,
+            "backend": backend,
+            "accelerator": accelerator,
+            "runtime_python": runtime_python,
+            "replay_campaign_root": (
+                str(replay_campaign_root) if replay_campaign_root else None
+            ),
+            "hamlib_export_dir": str(hamlib_export_dir) if hamlib_export_dir else None,
+            "hamlib_report_dir": str(hamlib_report_dir) if hamlib_report_dir else None,
+            "reactions_export_dir": (
+                str(reactions_export_dir) if reactions_export_dir else None
+            ),
+            "reactions_report_dir": (
+                str(reactions_report_dir) if reactions_report_dir else None
+            ),
         },
     }
     _write_json(campaign_root / "supervisor" / "status.json", status)
@@ -512,6 +623,40 @@ def supervise_once(
                 },
             )
             _append_event(campaign_root, "campaign_complete", lanes=lane_metrics["total"])
+        final_paths = (
+            hamlib_export_dir,
+            hamlib_report_dir,
+            reactions_export_dir,
+            reactions_report_dir,
+        )
+        if any(path is not None for path in final_paths):
+            if not all(path is not None for path in final_paths):
+                raise ValueError("all four final export/report directories must be configured")
+            finalization_path = campaign_root / "supervisor" / "finalization.json"
+            if not finalization_path.is_file() and active_jobs == 0:
+                try:
+                    finalization = _finalize_campaign(
+                        campaign_root,
+                        hamlib_export_dir=hamlib_export_dir,
+                        hamlib_report_dir=hamlib_report_dir,
+                        reactions_export_dir=reactions_export_dir,
+                        reactions_report_dir=reactions_report_dir,
+                    )
+                    status["finalization"] = finalization
+                    _append_event(campaign_root, "campaign_finalized")
+                except Exception as exc:
+                    status["finalization"] = {
+                        "status": "error",
+                        "error": _safe_error(exc),
+                    }
+                    _append_event(
+                        campaign_root,
+                        "campaign_finalization_error",
+                        error=_safe_error(exc),
+                    )
+            elif finalization_path.is_file():
+                status["finalization"] = _read_json(finalization_path)
+            _write_json(campaign_root / "supervisor" / "status.json", status)
     return status
 
 
@@ -534,6 +679,22 @@ def _parser() -> argparse.ArgumentParser:
     parser.add_argument("--cpus", type=int, default=DEFAULT_CPUS)
     parser.add_argument("--memory", default=DEFAULT_MEMORY)
     parser.add_argument("--walltime", default=DEFAULT_WALLTIME)
+    parser.add_argument(
+        "--backend",
+        choices=("cupynumeric", "numpy"),
+        default=DEFAULT_BACKEND,
+    )
+    parser.add_argument(
+        "--accelerator",
+        choices=("gpu", "cpu"),
+        default=DEFAULT_ACCELERATOR,
+    )
+    parser.add_argument("--runtime-python")
+    parser.add_argument("--replay-campaign-root", type=Path)
+    parser.add_argument("--final-hamlib-export-dir", type=Path)
+    parser.add_argument("--final-hamlib-report-dir", type=Path)
+    parser.add_argument("--final-reactions-export-dir", type=Path)
+    parser.add_argument("--final-reactions-report-dir", type=Path)
     return parser
 
 
@@ -543,6 +704,16 @@ def main() -> int:
         raise ValueError("interval-seconds must be positive")
     if args.threshold <= 0 or args.max_active_jobs <= 0 or args.max_batch_attempts <= 0:
         raise ValueError("threshold, max-active-jobs, and max-batch-attempts must be positive")
+    final_paths = (
+        args.final_hamlib_export_dir,
+        args.final_hamlib_report_dir,
+        args.final_reactions_export_dir,
+        args.final_reactions_report_dir,
+    )
+    if any(path is not None for path in final_paths) and not all(
+        path is not None for path in final_paths
+    ):
+        raise ValueError("all four final export/report directories must be configured")
     options = {
         "repo_dir": args.repo_dir,
         "threshold": args.threshold,
@@ -558,6 +729,14 @@ def main() -> int:
         "cpus": args.cpus,
         "memory": args.memory,
         "walltime": args.walltime,
+        "backend": args.backend,
+        "accelerator": args.accelerator,
+        "runtime_python": args.runtime_python,
+        "replay_campaign_root": args.replay_campaign_root,
+        "hamlib_export_dir": args.final_hamlib_export_dir,
+        "hamlib_report_dir": args.final_hamlib_report_dir,
+        "reactions_export_dir": args.final_reactions_export_dir,
+        "reactions_report_dir": args.final_reactions_report_dir,
     }
     with _campaign_lock(args.campaign_root.resolve()):
         while True:
