@@ -209,7 +209,7 @@ def submit_batch(
                 "nvidia-smi --query-gpu=index,name,memory.total --format=csv,noheader;",
                 (
                     "nvidia-smi --query-gpu=timestamp,index,utilization.gpu,"
-                    "utilization.memory,memory.used,power.draw --format=csv -l 30 "
+                    "utilization.memory,memory.used,power.draw --format=csv -l 5 "
                     f"> {shlex.quote(monitor_path)} 2>&1 &"
                 ),
                 "HSOPT_GPU_MONITOR_PID=$!;",

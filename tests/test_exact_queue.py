@@ -134,6 +134,7 @@ def test_nvpark_submission_requests_only_one_small_gpu_allocation(
     assert "--gpus=1" in sbatch
     assert "uv run --no-sync" in sbatch
     assert "gpu-utilization.csv" in sbatch
+    assert "--format=csv -l 5" in sbatch
     assert "uv sync --extra cupynumeric --frozen" not in sbatch
 
 
