@@ -489,9 +489,11 @@ def opencode_config() -> dict[str, Any]:
                         "/sandbox/work/candidate.py": "allow",
                     },
                     # OpenCode's edit permission gates edit, write, and patch.
-                    # The OpenShell sandbox contains only the disposable candidate
-                    # worktree, and only candidate.py is downloaded afterwards.
-                    "edit": "allow",
+                    "edit": {
+                        "*": "deny",
+                        "candidate.py": "allow",
+                        "/sandbox/work/candidate.py": "allow",
+                    },
                     "skill": {
                         "*": "deny",
                         "hsopt": "allow",
@@ -515,7 +517,8 @@ Read and edit only candidate.py.
 You may optionally use an installed skill or browse/search for product-formula
 and synthesis ideas before editing. Use at most three research tool calls in
 total. Web research is optional, and search content is inspiration rather than
-an evaluator result or permission to change the benchmark.
+an evaluator result or permission to change the benchmark. If an optional
+research tool is unavailable, continue with the mutation instead of retrying it.
 
 The fixed evaluator compiles every Pauli rotation with PyGridSynth, constructs
 the actual compiled product-formula unitary, diagonalizes it, and selects the

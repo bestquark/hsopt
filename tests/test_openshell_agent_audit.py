@@ -215,7 +215,11 @@ def test_opencode_policy_only_allows_candidate_file_mutations() -> None:
     assert "coefficient_desc" in agent["prompt"]
     assert "reverse_lexicographic" not in agent["prompt"]
     assert permissions["*"] == "deny"
-    assert permissions["edit"] == "allow"
+    assert permissions["edit"] == {
+        "*": "deny",
+        "candidate.py": "allow",
+        "/sandbox/work/candidate.py": "allow",
+    }
     assert permissions["read"] == {
         "*": "deny",
         "candidate.py": "allow",
