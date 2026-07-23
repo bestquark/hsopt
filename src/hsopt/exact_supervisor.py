@@ -313,7 +313,7 @@ def supervise_once(
     campaign_root: Path,
     *,
     repo_dir: Path,
-    threshold: int = 40,
+    threshold: int = 15,
     max_active_jobs: int = 4,
     mutation_workers: int = 1,
     mutation_timeout_seconds: int = 900,
@@ -696,7 +696,7 @@ def _parser() -> argparse.ArgumentParser:
     parser.add_argument("--repo-dir", type=Path, required=True)
     parser.add_argument("--once", action="store_true")
     parser.add_argument("--interval-seconds", type=int, default=30)
-    parser.add_argument("--threshold", type=int, default=40)
+    parser.add_argument("--threshold", type=int, default=15)
     parser.add_argument("--max-active-jobs", type=int, default=4)
     parser.add_argument("--mutation-workers", type=int, default=1)
     parser.add_argument("--mutation-timeout-seconds", type=int, default=900)

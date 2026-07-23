@@ -286,11 +286,11 @@ def submit_ready(
     queue_dir: Path,
     *,
     repo_dir: Path,
-    threshold: int = 40,
+    threshold: int = 15,
     force: bool = False,
     **submit_options: Any,
 ) -> dict[str, Any]:
-    """Submit at most 40 tasks once the local queue reaches the threshold."""
+    """Submit at most ``threshold`` tasks once the queue reaches that size."""
 
     status = queue_status(queue_dir)
     if status["pending"] < threshold and not force:
@@ -300,7 +300,7 @@ def submit_ready(
             "threshold": threshold,
             "needed": threshold - status["pending"],
         }
-    prepared = prepare_batch(queue_dir, limit=40)
+    prepared = prepare_batch(queue_dir, limit=threshold)
     submitted = submit_batch(
         Path(prepared["batch_dir"]),
         repo_dir=repo_dir,

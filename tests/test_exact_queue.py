@@ -14,7 +14,7 @@ from hsopt.exact_queue import (
     requeue_missing,
     run_batch,
 )
-from hsopt.nvpark_queue import submit_batch
+from hsopt.nvpark_queue import submit_batch, submit_ready
 
 
 REPO = Path(__file__).resolve().parents[1]
@@ -136,6 +136,40 @@ def test_nvpark_submission_requests_only_one_small_gpu_allocation(
     assert "gpu-utilization.csv" in sbatch
     assert "--format=csv -l 5" in sbatch
     assert "uv sync --extra cupynumeric --frozen" not in sbatch
+
+
+def test_submit_ready_uses_threshold_as_the_batch_size(
+    tmp_path: Path,
+    monkeypatch,
+) -> None:
+    pending = tmp_path / "pending"
+    pending.mkdir()
+    for index in range(20):
+        task = pending / f"task-{index:02d}"
+        task.mkdir()
+        (task / "task.json").write_text(
+            json.dumps({"batch_attempts": 0}) + "\n",
+            encoding="utf-8",
+        )
+
+    monkeypatch.setattr(
+        "hsopt.nvpark_queue.submit_batch",
+        lambda batch_dir, **kwargs: {
+            "status": "submitted",
+            "batch_id": batch_dir.name,
+            "job_id": "12345",
+        },
+    )
+
+    submitted = submit_ready(
+        tmp_path,
+        repo_dir=REPO,
+        threshold=15,
+    )
+
+    assert submitted["task_count"] == 15
+    assert queue_status(tmp_path)["pending"] == 5
+    assert queue_status(tmp_path)["batched_tasks"] == 15
 
 
 def test_nvpark_cupynumeric_submission_uses_cpu_partition_without_a_gpu(
