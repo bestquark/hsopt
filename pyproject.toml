@@ -44,6 +44,9 @@ build-backend = "uv_build"
 [tool.uv]
 package = true
 
+[tool.uv.build-backend]
+module-root = "skills/hsopt/scripts"
+
 [tool.ruff]
 line-length = 100
 target-version = "py312"

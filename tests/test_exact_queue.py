@@ -331,8 +331,15 @@ def test_nvpark_cpu_submission_can_use_pinned_cupynumeric_runtime(
     environment_sync = next(command[-1] for command in calls if "test -x" in command[-1])
     assert runtime_python in environment_sync
     assert "uv sync" not in environment_sync
+    source_upload = next(command for command in calls if "./skills/hsopt" in command)
+    assert source_upload[-2] == "./skills/hsopt"
+    assert "--exclude=__pycache__" in source_upload
+    assert "--exclude=*.py[co]" in source_upload
     sbatch = next(command[-1] for command in calls if "sbatch" in command[-1])
-    assert f"PYTHONPATH=/lustre/test/hsopt-exact/sources/{submission['source_id']}/src" in sbatch
+    runtime_root = (
+        f"/lustre/test/hsopt-exact/sources/{submission['source_id']}/skills/hsopt/scripts"
+    )
+    assert f"PYTHONPATH={runtime_root}" in sbatch
     assert f"{runtime_python} -m hsopt.exact_queue" in sbatch
     assert "uv run --no-sync python -m hsopt.exact_queue" not in sbatch
 

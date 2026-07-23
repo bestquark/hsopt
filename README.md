@@ -53,8 +53,11 @@ hsopt/
 │   ├── diff_energy/            Ten-reaction definition and compact fixture
 │   └── generate_initial_pf.py  Immutable initializer for both families
 ├── plots/                      Publication-plot source code
-├── skills/hsopt/               Optimization-agent instructions
-├── src/hsopt/                  Evaluator, queue, supervisor, export, and reports
+├── skills/hsopt/
+│   ├── SKILL.md                Optimization-agent instructions
+│   ├── references/             On-demand workflow references
+│   └── scripts/
+│       └── hsopt/              Evaluator, queue, supervisor, export, and reports
 └── tests/                      Scientific-contract and recovery tests
 ```
 
@@ -230,9 +233,12 @@ runners because they are part of execution rather than paper plotting.
 
 ## Agent skill
 
-The repository contains the `$hsopt` agent skill, but cloning the Python
-runtime does not automatically install it into an agent environment. Install
-the skill separately with:
+The repository contains `$hsopt` as a single source bundle: its instructions,
+references, and complete Python runtime live together under `skills/hsopt/`.
+The package is installed from `skills/hsopt/scripts/hsopt/` by `uv sync`.
+
+Cloning the repository does not automatically activate the skill in an agent
+environment. Install that agent-facing entry separately with:
 
 ```bash
 npx skills add bestquark/hsopt --skill hsopt -y

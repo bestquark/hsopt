@@ -19,7 +19,7 @@ stoichiometry registry. `inputs/` also contains the validated per-contract
 seed budgets and checksums for the 21 external species-cache pairs.
 `hsopt-campaign prepare-reactions` converts those checksummed caches into ten
 external reaction directories consumed by the fixed evaluator in
-`src/hsopt/compiled_unitary.py`.
+`skills/hsopt/scripts/hsopt/compiled_unitary.py`.
 
 Each reaction has two policy lanes, `equal_share` and `reaction_aware`, but
 both use the same exact signed reaction reference. During campaign

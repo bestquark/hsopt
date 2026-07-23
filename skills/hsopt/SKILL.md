@@ -9,10 +9,11 @@ Use this skill for product-formula optimization where an isolated agent mutates
 one lane policy, the fixed evaluator diagonalizes the compiled unitary, and the
 lane advances only after reading that exact result.
 
-Treat the installed agent skill and the benchmark runtime as separate pieces.
-The skill supplies workflow instructions; it does not clone the repository or
-install its dependencies. Direct evaluator runs require a local HSOpt checkout
-with `uv sync` completed.
+Treat `skills/hsopt/` as the single source bundle for this workflow. The skill
+instructions live in `SKILL.md`, supporting guidance lives in `references/`,
+and the complete importable runtime lives in `scripts/hsopt/`. Direct evaluator
+runs require a local HSOpt checkout with `uv sync` completed so that the
+runtime's dependencies and CLI entry points are available.
 
 ## Required stage order
 

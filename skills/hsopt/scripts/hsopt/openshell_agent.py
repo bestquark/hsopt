@@ -23,7 +23,7 @@ NEMOTRON_MODEL = "nvidia/nvidia/nemotron-3-super-v3"
 OPENCODE_MODEL = "openshell/nemotron-3-super-v3"
 OPENCODE_AGENT = "hsopt-mutation"
 ONLINE_TOOLS = frozenset({"webfetch", "websearch", "codesearch"})
-HSOPT_SKILL_PATH = Path(__file__).resolve().parents[2] / "skills" / "hsopt" / "SKILL.md"
+HSOPT_SKILL_PATH = Path(__file__).resolve().parents[2] / "SKILL.md"
 OPENCODE_NETWORK_BINARIES = (
     "/usr/lib/node_modules/opencode-ai/bin/.opencode",
     "/usr/local/lib/node_modules/opencode-ai/bin/.opencode",

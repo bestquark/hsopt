@@ -25,7 +25,8 @@ def _find_repo_root(start: Path) -> Path:
     if override:
         return Path(override).expanduser().resolve()
     for candidate in (start, *start.parents):
-        if (candidate / "pyproject.toml").exists() and (candidate / "src" / "hsopt").is_dir():
+        runtime = candidate / "skills" / "hsopt" / "scripts" / "hsopt"
+        if (candidate / "pyproject.toml").exists() and runtime.is_dir():
             return candidate
     raise RuntimeError(
         "could not locate hsopt repo root; set HSOPT_REPO_ROOT or run inside the repository"
