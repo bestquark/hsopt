@@ -72,6 +72,13 @@ acceptance = abs(E_PF - E_exact) <= chemical accuracy
 score = compiled T count
 ```
 
+For the stationary formulas exposed by the benchmark, construct the compiled
+matrix for one full formula step, diagonalize it, and obtain the full compiled
+formula through the exact spectral identity
+`U_PF = U_step ** n_steps`. Multiplying each selected step eigenphase by
+`n_steps` is therefore an exact evaluation of that compiled repeated product,
+not an approximation or surrogate.
+
 For a reaction, form the signed difference from independently compiled species
 eigenphase energies and compare it with the cached exact signed difference.
 The candidate unitary is still constructed and diagonalized in the full

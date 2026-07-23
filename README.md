@@ -62,12 +62,16 @@ match, while floating-point energies are compared within an explicit numerical
 tolerance. A CPU run must use the `cpu` partition and request no GPU.
 
 The compiled PF unitary is accumulated with one reused matrix-sized workspace;
-that workspace is released before the unitary eigendecomposition.
+that workspace is released before the unitary eigendecomposition. For the
+stationary benchmark formulas, diagonalizing one fully compiled step and
+multiplying its eigenphase by `n_steps` evaluates the exact repeated product
+`U_PF = U_step ** n_steps`; it is not an error estimate or propagation
+surrogate.
 
 ## Final paper reports
 
 The strict exporters retain normalized product-formula settings, exact and
-estimated energies, accept/reject decisions, and a bounded mutation summary.
+estimated energies, accept/reject decisions, and a concise mutation summary.
 After all lanes complete, create the normalized export and then build the two
 reports for every scientific instance with:
 

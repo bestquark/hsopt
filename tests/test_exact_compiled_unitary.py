@@ -13,12 +13,15 @@ from hsopt.compiled_unitary import (
     TARGET_STATE_DEFINITION,
     _anchored_ground_state,
     _apply_compiled_rotation,
+    _build_compiled_step,
     _compile_rz,
     _dense_hamiltonian,
     _fixed_electron_hamiltonian,
     _rotation_fence_interval,
+    _unwrap_energy,
     evaluate_exact_reference,
     evaluate_molecule,
+    load_policy,
     load_problem,
 )
 
@@ -326,3 +329,42 @@ def test_absolute_baseline_uses_cached_exact_reference_and_compiled_eigenphase(
     assert result["qpe_success_probability_from_hf"] == pytest.approx(0.9890367894564321)
     assert all("gate_string" not in row for row in result["unique_compilations"])
     assert all(len(row["gate_string_sha256"]) == 64 for row in result["unique_compilations"])
+
+
+def test_step_eigendecomposition_equals_explicit_full_compiled_pf_product() -> None:
+    problem = load_problem(ABSOLUTE / "hamiltonian.json")
+    policy = load_policy(ABSOLUTE / "initial_pf.py")
+    reference = evaluate_exact_reference(
+        ABSOLUTE / "hamiltonian.json",
+        backend="numpy",
+    )
+    evaluated = evaluate_molecule(
+        ABSOLUTE / "hamiltonian.json",
+        ABSOLUTE / "initial_pf.py",
+        backend="numpy",
+        reference_result=reference,
+    )
+    step, metrics = _build_compiled_step(
+        problem,
+        policy,
+        backend_name="numpy",
+        xp=np,
+    )
+    full_compiled_pf = np.linalg.matrix_power(step, int(metrics["n_steps"]))
+    eigenvalues, eigenvectors = np.linalg.eig(full_compiled_pf)
+    eigenvectors /= np.linalg.norm(eigenvectors, axis=0, keepdims=True)
+    target = np.asarray(
+        [complex(real, imaginary) for real, imaginary in reference["exact_ground_state"]]
+    )
+    selected = int(np.argmax(np.abs(eigenvectors.conj().T @ target) ** 2))
+    explicit_energy = _unwrap_energy(
+        float(np.angle(eigenvalues[selected])),
+        float(problem["target_time"]),
+        float(reference["exact_unitary_ground_energy_hartree"])
+        - float(problem["identity_coefficient"]),
+    ) + float(problem["identity_coefficient"])
+
+    assert explicit_energy == pytest.approx(
+        evaluated["compiled_pf_energy_hartree"],
+        abs=1.0e-10,
+    )
