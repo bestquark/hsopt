@@ -1,0 +1,15 @@
+{
+  "name": "HamLib H2 bond-stretch energy difference R=0.7 -> R=0.8",
+  "terms": [
+    {
+      "species": "h2_r0_7",
+      "coefficient": -1.0,
+      "problem": "hamiltonians/h2_r0_7.json"
+    },
+    {
+      "species": "h2_r0_8",
+      "coefficient": 1.0,
+      "problem": "hamiltonians/h2_r0_8.json"
+    }
+  ]
+}

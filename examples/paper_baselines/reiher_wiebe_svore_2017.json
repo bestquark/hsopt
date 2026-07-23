@@ -1,0 +1,31 @@
+{
+  "schema": 1,
+  "baseline_id": "reiher_wiebe_svore_wecker_troyer_2017_pf2",
+  "citation": {
+    "authors": [
+      "Markus Reiher",
+      "Nathan Wiebe",
+      "Krysta M. Svore",
+      "Dave Wecker",
+      "Matthias Troyer"
+    ],
+    "title": "Elucidating Reaction Mechanisms on Quantum Computers",
+    "journal": "Proceedings of the National Academy of Sciences",
+    "year": 2017,
+    "doi": "10.1073/pnas.1619152114",
+    "arxiv": "1605.03590"
+  },
+  "paper_method": {
+    "formula_order": 2,
+    "formula_name": "symmetric_second_order_trotter_suzuki",
+    "term_order_strategy": "lexicographic",
+    "rotation_synthesis": "clifford_plus_t",
+    "error_allocation": "uniform_per_scheduled_rotation"
+  },
+  "benchmark_instantiation": {
+    "n_steps": 512,
+    "total_synthesis_error_budget_hartree": 0.0005312004792135052,
+    "zero_angle_threshold": 0.0
+  },
+  "scope_note": "The paper fixes the symmetric second-order formula and uses lexicographic ordering, while its Trotter number is molecule-specific and empirically estimated. This benchmark therefore records n_steps and its synthesis budget explicitly instead of attributing those two numerical values to the paper."
+}

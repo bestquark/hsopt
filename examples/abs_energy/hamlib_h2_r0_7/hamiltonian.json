@@ -1,0 +1,30 @@
+{
+  "name": "HamLib H2 linear R=0.7 STO-6G Jordan-Wigner",
+  "source": {
+    "collection": "hydrogen_data",
+    "archive": "ES_H2_linear_R0.7_sto-6g.zip",
+    "archive_sha256": "b68abd283bd8c61370df643e97b339f7de0eabccd55387536a880a0706630392",
+    "dataset": "/ham_JW",
+    "hamlib_one_norm": 1.9999937423313927
+  },
+  "n_qubits": 4,
+  "electrons": 2,
+  "target_time": 1.5708012415717054,
+  "identity_coefficient": -0.049751615584930575,
+  "terms": [
+    {"label": "IIIZ", "coefficient": -0.2413093490372312},
+    {"label": "IIZI", "coefficient": -0.2413093490372312},
+    {"label": "IIZZ", "coefficient": 0.17671418654641863},
+    {"label": "IZII", "coefficient": 0.17962554760002494},
+    {"label": "IZIZ", "coefficient": 0.12303498572448816},
+    {"label": "IZZI", "coefficient": 0.16785640343478264},
+    {"label": "XXYY", "coefficient": -0.044821417710294506},
+    {"label": "XYYX", "coefficient": 0.044821417710294506},
+    {"label": "YXXY", "coefficient": 0.044821417710294506},
+    {"label": "YYXX", "coefficient": -0.044821417710294506},
+    {"label": "ZIII", "coefficient": 0.1796255476000249},
+    {"label": "ZIIZ", "coefficient": 0.16785640343478264},
+    {"label": "ZIZI", "coefficient": 0.12303498572448816},
+    {"label": "ZZII", "coefficient": 0.17058969776581176}
+  ]
+}
