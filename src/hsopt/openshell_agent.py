@@ -9,6 +9,7 @@ import os
 import re
 import shutil
 import subprocess
+import time
 import uuid
 from collections import Counter
 from datetime import UTC, datetime
@@ -46,22 +47,49 @@ def _run_logged(
     stdout_path: Path,
     stderr_path: Path,
     timeout: int,
-) -> int:
+    completed_edit_grace_seconds: float | None = None,
+) -> tuple[int, bool]:
     """Run a command with logs visible to external monitors while it is active."""
 
     with (
         stdout_path.open("w", encoding="utf-8") as stdout,
         stderr_path.open("w", encoding="utf-8") as stderr,
     ):
-        completed = subprocess.run(
+        process = subprocess.Popen(
             list(command),
-            check=False,
-            timeout=timeout,
             text=True,
             stdout=stdout,
             stderr=stderr,
         )
-    return completed.returncode
+        deadline = time.monotonic() + timeout
+        edit_completed_at: float | None = None
+        while True:
+            returncode = process.poll()
+            if returncode is not None:
+                return returncode, False
+            now = time.monotonic()
+            if (
+                completed_edit_grace_seconds is not None
+                and edit_completed_at is None
+                and _has_completed_candidate_edit(stdout_path)
+            ):
+                edit_completed_at = now
+            if (
+                edit_completed_at is not None
+                and now - edit_completed_at >= completed_edit_grace_seconds
+            ):
+                process.terminate()
+                try:
+                    returncode = process.wait(timeout=5)
+                except subprocess.TimeoutExpired:
+                    process.kill()
+                    returncode = process.wait(timeout=5)
+                return returncode, True
+            if now >= deadline:
+                process.kill()
+                process.wait(timeout=5)
+                raise subprocess.TimeoutExpired(list(command), timeout)
+            time.sleep(0.25)
 
 
 def _write_json(path: Path, payload: Any) -> None:
@@ -182,6 +210,18 @@ def summarize_opencode_events(path: Path) -> tuple[dict[str, Any], list[dict[str
         "sessions": sorted(session_ids),
     }
     return metrics, actions
+
+
+def _has_completed_candidate_edit(path: Path) -> bool:
+    """Return whether OpenCode durably reported a completed candidate mutation."""
+
+    _, actions = summarize_opencode_events(path)
+    return any(
+        action["tool"] in {"edit", "write", "apply_patch"}
+        and action["status"] == "completed"
+        and action["target"] in {None, "candidate.py"}
+        for action in actions
+    )
 
 
 _OCSF_RE = re.compile(r"\bOCSF\s+(?P<class>[A-Z]+):(?P<activity>[A-Z_]+)")
@@ -638,17 +678,21 @@ def _mutate_once(
             "/sandbox/work",
             prompt,
         ]
+        stopped_after_edit = False
         try:
-            returncode = _run_logged(
+            returncode, stopped_after_edit = _run_logged(
                 command,
                 stdout_path=run_dir / "opencode.jsonl",
                 stderr_path=run_dir / "opencode.stderr",
                 timeout=timeout_seconds + 30,
+                completed_edit_grace_seconds=10,
             )
         finally:
+            if stopped_after_edit:
+                _terminate_sandbox_opencode(sandbox_name)
             _capture_openshell_logs(sandbox_name, run_dir / "openshell.log")
             audit = write_agent_audit(run_dir)
-        if returncode != 0:
+        if returncode != 0 and not stopped_after_edit:
             raise RuntimeError(f"OpenCode exited with status {returncode}")
         _run(
             [
@@ -681,6 +725,9 @@ def _mutate_once(
         "candidate": str(candidate),
         "run_dir": str(run_dir),
         "agent_audit": audit,
+        "agent_completion": (
+            "completed_edit_observed" if stopped_after_edit else "normal_exit"
+        ),
     }
 
 
@@ -735,6 +782,7 @@ def mutate(
             "model": result["model"],
             "candidate": "candidate.py",
             "agent_audit": "agent_audit.json",
+            "agent_completion": result["agent_completion"],
         },
     )
     return result

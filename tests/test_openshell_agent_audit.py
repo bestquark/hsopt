@@ -1,12 +1,15 @@
 from __future__ import annotations
 
 import json
+import sys
 from pathlib import Path
 
 import pytest
 
 import hsopt.openshell_agent as openshell_agent
 from hsopt.openshell_agent import (
+    _has_completed_candidate_edit,
+    _run_logged,
     _terminate_sandbox_opencode,
     agent_feedback,
     mutate,
@@ -84,6 +87,77 @@ def test_opencode_audit_counts_unique_redacted_tool_calls(tmp_path: Path) -> Non
     assert actions[0]["target"] == "candidate.py"
     assert actions[0]["duration_ms"] == 100
     assert "secret file contents" not in json.dumps(actions)
+
+
+def test_completed_candidate_edit_is_a_terminal_agent_event(tmp_path: Path) -> None:
+    log = tmp_path / "opencode.jsonl"
+    log.write_text(
+        json.dumps(
+            {
+                "type": "tool_use",
+                "part": {
+                    "callID": "call-edit",
+                    "tool": "edit",
+                    "state": {
+                        "status": "completed",
+                        "input": {"filePath": "/sandbox/work/candidate.py"},
+                    },
+                },
+            }
+        )
+        + "\n"
+    )
+
+    assert _has_completed_candidate_edit(log)
+
+    log.write_text(
+        json.dumps(
+            {
+                "type": "tool_use",
+                "part": {
+                    "callID": "call-read",
+                    "tool": "read",
+                    "state": {
+                        "status": "completed",
+                        "input": {"filePath": "/sandbox/work/candidate.py"},
+                    },
+                },
+            }
+        )
+        + "\n"
+    )
+    assert not _has_completed_candidate_edit(log)
+
+
+def test_logged_process_stops_after_completed_edit(tmp_path: Path) -> None:
+    event = json.dumps(
+        {
+            "type": "tool_use",
+            "part": {
+                "callID": "call-write",
+                "tool": "write",
+                "state": {
+                    "status": "completed",
+                    "input": {"filePath": "/sandbox/work/candidate.py"},
+                },
+            },
+        }
+    )
+
+    returncode, stopped_after_edit = _run_logged(
+        [
+            sys.executable,
+            "-c",
+            f"import time; print({event!r}, flush=True); time.sleep(30)",
+        ],
+        stdout_path=tmp_path / "stdout.jsonl",
+        stderr_path=tmp_path / "stderr.log",
+        timeout=5,
+        completed_edit_grace_seconds=0,
+    )
+
+    assert stopped_after_edit
+    assert returncode != 0
 
 
 def test_openshell_audit_counts_ocsf_security_events(tmp_path: Path) -> None:
