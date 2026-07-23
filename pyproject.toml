@@ -16,6 +16,7 @@ dependencies = [
 [project.scripts]
 hsopt = "hsopt.tgate_opt.t_autoresearch_cli:main"
 hsopt-exact = "hsopt.exact_queue:main"
+hsopt-exact-parity = "hsopt.exact_parity:main"
 hsopt-export-exact = "hsopt.exact_export:main"
 hsopt-loop = "hsopt.exact_loop:main"
 hsopt-nvpark = "hsopt.nvpark_queue:main"

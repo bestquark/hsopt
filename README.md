@@ -97,6 +97,23 @@ verifies the complete checksum set and declared iteration shape, then
 atomically publishes exactly two PDFs per Hamiltonian or reaction. It uses
 LaTeX when available and a portable ReportLab engine otherwise.
 
+After both backends finish, certify the A100 replay against the canonical CPU
+campaign and retain the cross-backend timing comparison:
+
+```bash
+uv run hsopt-exact-parity \
+  --cpu-campaign-root /external/production-cpu91-v1 \
+  --gpu-campaign-root /external/production-gpu91-v2 \
+  --output /external/production-gpu91-v2/cross_backend_audit.json \
+  --wait --interval-seconds 60
+```
+
+The gate requires identical lane grids, initial and candidate policy hashes,
+compiled PyGridSynth records, T counts, policy settings, and acceptance
+trajectories. CPU/A100 energies must agree within `1e-10` Hartree. Its final
+JSON includes matched wall-time medians and CPU/GPU speedups by stage and
+qubit count.
+
 ## Install the Agent Skills
 
 The agent skills and the benchmark runtime are separate prerequisites.

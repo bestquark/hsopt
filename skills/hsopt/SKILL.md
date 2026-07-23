@@ -231,6 +231,22 @@ Configure the four `--final-*-export-dir` and `--final-*-report-dir` supervisor
 flags to run this completion gate automatically. `hsopt-reports` uses LaTeX
 when available and its portable ReportLab renderer otherwise.
 
+Run the cross-backend audit as an unattended completion gate:
+
+```bash
+uv run hsopt-exact-parity \
+  --cpu-campaign-root "$HSOPT_DATA_ROOT/exact/production-cpu91-v1" \
+  --gpu-campaign-root "$HSOPT_DATA_ROOT/exact/production-gpu91-v2" \
+  --output "$HSOPT_DATA_ROOT/exact/production-gpu91-v2/cross_backend_audit.json" \
+  --wait --interval-seconds 60
+```
+
+The audit must pass before treating the A100 replay as reproducible. It checks
+the complete lane grid, initial and candidate hashes, compiled synthesis
+records, T counts, policies, decisions, replay validations, and exact energies
+within `1e-10` Hartree. Preserve its per-stage, per-qubit CPU/A100 timing
+summary with the final reports.
+
 ## Mutation behavior
 
 Prefer coherent, auditable policies over blind sweeps:
