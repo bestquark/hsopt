@@ -39,9 +39,9 @@ instance; two reaction policies share one exact reaction reference.
 
 ## Baseline and mutation boundaries
 
-Generate `initial_pf.py` only with `examples/generate_initial_pf.py`. The
+Generate `initial_pf.py` only with `experiments/generate_initial_pf.py`. The
 generator must load
-`examples/paper_baselines/reiher_wiebe_svore_2017.json`; do not infer a policy
+`experiments/paper_baselines/reiher_wiebe_svore_2017.json`; do not infer a policy
 or invent a paper attribution.
 
 The checked-in paper contract records:
@@ -60,17 +60,24 @@ times, localization, electron sectors, or evaluator semantics during a run.
 
 ## Scientific contract
 
-The score is compiled Clifford+T count subject to chemical accuracy of the
-target compiled-unitary eigenphase:
+The score is the compiled Clifford+T cost needed to observe the selected
+product-formula QPE peak with 95% confidence, subject to chemical accuracy:
 
 ```text
 U_PF = product_i compiled(exp(+i alpha_i P_i))
-anchor = HF if resolvable, else lowest resolved fixed-electron determinant
-target = normalize(project_ground(H) |anchor>)
-E_PF = unwrapped eigenphase of the U_PF eigenstate with maximum target overlap
+input = fixed Hartree--Fock determinant
+E_PF = lowest unwrapped U_PF eigenphase with resolved HF weight
+p_HF = squared HF overlap of that selected PF eigenstate
+R_95 = ceil(log(0.05) / log(1 - p_HF))
 acceptance = abs(E_PF - E_exact) <= chemical accuracy
-score = compiled T count
+score = R_95 * compiled T count per attempt
 ```
+
+The fixed HF-weight threshold only suppresses numerical zero-weight
+eigenvectors; it is not a physical `p_min`. Any resolved small probability
+remains eligible and pays its correspondingly large repetition cost. The exact
+ground energy remains the reference, but the exact ground-state vector is not
+used to select the PF eigenphase.
 
 For the stationary formulas exposed by the benchmark, construct the compiled
 matrix for one full formula step, diagonalize it, and obtain the full compiled
@@ -81,11 +88,12 @@ not an approximation or surrogate.
 
 For a reaction, form the signed difference from independently compiled species
 eigenphase energies and compare it with the cached exact signed difference.
-The candidate unitary is still constructed and diagonalized in the full
-Hilbert space so Clifford+T synthesis leakage is retained. Hartree--Fock
-overlap is a QPE success-probability diagnostic and may be zero when the
-deterministic fallback anchor is required; propagation of the HF state is not
-the acceptance metric.
+Give each unique species an equal share of the five-percent failure budget;
+the union bound then guarantees at least 95% confidence that all required
+peaks have been observed. The reaction score is the sum of those
+confidence-adjusted species costs. The candidate unitary is still constructed
+and diagonalized in the full Hilbert space so Clifford+T synthesis leakage is
+retained.
 
 The dense implementation may operate in the fixed-electron sector where
 appropriate, but it must actually construct and diagonalize the exact or
@@ -166,7 +174,7 @@ uv run hsopt-campaign initialize \
   --hamlib-inputs "$HSOPT_DATA_ROOT/exact/inputs-v2/hamlib91" \
   --reaction-inputs "$HSOPT_DATA_ROOT/exact/inputs-v1/reactions10" \
   --seed-validation experiments/reactions10/inputs/seed_validation.json \
-  --generator examples/generate_initial_pf.py \
+  --generator experiments/generate_initial_pf.py \
   --campaign-root "$HSOPT_DATA_ROOT/exact/production-cpu91-v1" \
   --hamlib-replicates 5 --iterations 50
 ```
@@ -194,7 +202,7 @@ uv run hsopt-campaign initialize \
   --hamlib-inputs "$HSOPT_DATA_ROOT/exact/inputs-v2/hamlib91" \
   --reaction-inputs "$HSOPT_DATA_ROOT/exact/inputs-v1/reactions10" \
   --seed-validation experiments/reactions10/inputs/seed_validation.json \
-  --generator examples/generate_initial_pf.py \
+  --generator experiments/generate_initial_pf.py \
   --campaign-root "$HSOPT_DATA_ROOT/exact/production-gpu91-v2" \
   --hamlib-replicates 5 --iterations 50
 

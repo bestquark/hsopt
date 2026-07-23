@@ -112,9 +112,7 @@ def previous_incumbent(conn, lane_id: str, iteration: int) -> dict[str, Any] | N
         "total_t_gates_qpe": None if total_t is None else int(total_t),
         "score": result.get("score"),
         "config": result.get("config", {}),
-        "ground_state_energy_error_hartree": result.get(
-            "ground_state_energy_error_hartree"
-        ),
+        "ground_state_energy_error_hartree": result.get("ground_state_energy_error_hartree"),
         "policy_path": row["policy_path"],
     }
 

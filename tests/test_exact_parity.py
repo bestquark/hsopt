@@ -5,6 +5,7 @@ from pathlib import Path
 
 import pytest
 
+from hsopt.compiled_unitary import EVALUATION_CONTRACT_VERSION
 from hsopt.exact_parity import ParityAuditPending, audit_campaigns
 
 
@@ -16,6 +17,7 @@ def _write_json(path: Path, payload: object) -> None:
 def _reference(*, energy: float, seconds: float) -> dict[str, object]:
     return {
         "status": "ok",
+        "evaluation_contract_version": EVALUATION_CONTRACT_VERSION,
         "observable": "exact_unitary_ground_eigenphase",
         "unitary_definition": "U_exact = exp(+i H t)",
         "target_state_definition": "anchored_ground",
@@ -32,8 +34,12 @@ def _reference(*, energy: float, seconds: float) -> dict[str, object]:
 def _compiled(*, energy: float, seconds: float) -> dict[str, object]:
     return {
         "status": "ok",
-        "observable": "compiled_unitary_ground_eigenphase",
+        "evaluation_contract_version": EVALUATION_CONTRACT_VERSION,
+        "observable": "compiled_unitary_lowest_hf_accessible_eigenphase",
         "policy": {"formula_order": 2, "n_steps": 8, "uniform_epsilon": 1.0e-8},
+        "per_attempt_t_count": 80,
+        "qpe_repetitions": 1,
+        "confidence_adjusted_t_count": 80,
         "t_count": 80,
         "score": 80,
         "passes_chemical_accuracy": True,
@@ -111,7 +117,7 @@ def _campaign(root: Path, *, accelerator: str) -> Path:
         iteration / "decision.json",
         {
             "accepted": True,
-            "acceptance_reason": "strict_t_gate_improvement",
+            "acceptance_reason": "strict_confidence_adjusted_t_gate_improvement",
             "candidate_score": 80,
             "previous_incumbent_score": 100,
             "passes_chemical_accuracy": True,

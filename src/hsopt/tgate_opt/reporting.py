@@ -164,6 +164,23 @@ def value_present(value: object) -> bool:
     return value not in (None, "", "None", "null")
 
 
+def _qpe_cost(row: Mapping[str, object], prefix: str = "") -> str:
+    cost = row.get(f"{prefix}total_t_gates_qpe")
+    raw = row.get(f"{prefix}per_attempt_t_gates_qpe")
+    repetitions = row.get(f"{prefix}qpe_repetitions")
+    if value_present(raw) and value_present(repetitions):
+        return f"{cost} ({raw} x {repetitions})"
+    return str(cost or "--")
+
+
+def _reaction_qpe_cost(row: Mapping[str, object]) -> str:
+    cost = row.get("total_t_gate_count")
+    raw = row.get("per_attempt_t_gate_count")
+    if value_present(raw):
+        return f"{cost} (raw {raw})"
+    return str(cost or "--")
+
+
 def _order(value: object) -> str:
     if not value_present(value):
         return "--"
@@ -248,7 +265,7 @@ def _hamlib_summary(lane_id: str, rows: Sequence[Mapping[str, str]]) -> str:
                 f"{_pf(row['baseline_formula_order'])}; {_order(row['baseline_term_order_strategy'])}",
                 _schedule(row, "baseline_"),
                 f"eps={_number(row['baseline_uniform_epsilon'], 4)}; zero={_number(row['baseline_zero_angle_threshold'], 3)}",
-                row["baseline_total_t_gates_qpe"],
+                _qpe_cost(row, "baseline_"),
                 _number(baseline_error, 5),
                 "--",
             ]
@@ -260,7 +277,7 @@ def _hamlib_summary(lane_id: str, rows: Sequence[Mapping[str, str]]) -> str:
                 f"{_pf(row['best_formula_order'])}; {_order(row['best_term_order_strategy'])}",
                 _schedule(row, "best_"),
                 f"eps={_number(row['best_uniform_epsilon'], 4)}; zero={_number(row['best_zero_angle_threshold'], 3)}",
-                row["best_total_t_gates_qpe"],
+                _qpe_cost(row, "best_"),
                 _number(final_error, 5),
                 f"{_number(row['reduction_percent'], 5)}%",
             ]
@@ -269,7 +286,8 @@ def _hamlib_summary(lane_id: str, rows: Sequence[Mapping[str, str]]) -> str:
         f"Lane {lane_id}; molecule {first['molecule']}; {first['nqubits']} qubits; "
         f"{first['electrons']} electrons; {first['terms']} Pauli terms. "
         "A/R denotes accepted/rejected mutations. Energy errors are measured against the exact "
-        "ground-state energy in the fixed evaluator."
+        "ground-state energy in the fixed evaluator. T95 is the 95%-confidence "
+        "cost; parentheses show per-attempt T count x QPE attempts."
     )
     body = (
         latex_escape(identity)
@@ -283,7 +301,7 @@ def _hamlib_summary(lane_id: str, rows: Sequence[Mapping[str, str]]) -> str:
                 "Product formula / order",
                 "Schedule / repetitions",
                 "Epsilon / zero threshold",
-                "T gates",
+                "T95 (raw x R)",
                 "|Delta E| (mHa)",
                 "Reduction",
             ),
@@ -306,7 +324,7 @@ def _hamlib_extended(
                 _pf(row["baseline_formula_order"]),
                 _schedule(row, "baseline_"),
                 _order(row["baseline_term_order_strategy"]),
-                row["baseline_total_t_gates_qpe"],
+                _qpe_cost(row, "baseline_"),
                 _number(row["baseline_ground_state_energy_estimate_hartree"], 9),
                 _number(1000.0 * _assert_energy(row, "baseline_"), 6),
             ]
@@ -329,7 +347,7 @@ def _hamlib_extended(
                 "accepted" if _yes(row["accepted"]) == "yes" else "rejected",
                 row.get("mutation_summary") or "--",
                 f"{_pf(row['formula_order'])}; {_order(row['term_order_strategy'])}; {_schedule(row)}",
-                row["total_t_gates_qpe"],
+                _qpe_cost(row),
                 _number(row["ground_state_energy_estimate_hartree"], 8),
                 _number(1000.0 * error, 5),
                 _yes(row["passes_accuracy"]),
@@ -352,7 +370,7 @@ def _hamlib_extended(
                 "PF",
                 "Schedule / repetitions",
                 "Term order",
-                "T gates",
+                "T95 (raw x R)",
                 "Estimated E (Ha)",
                 "|Delta E| (mHa)",
             ),
@@ -367,7 +385,7 @@ def _hamlib_extended(
             "Decision",
             "Mutation summary",
             "Attempted PF settings",
-            "T gates",
+            "T95 (raw x R)",
             "Estimated E",
             "|Delta E| mHa",
             "Pass",
@@ -396,7 +414,15 @@ def _species_signature(raw: object) -> str:
             schedule_text = "custom"
         else:
             schedule_text = f"{str(schedule).replace('_', ' ')} r={repetitions}"
-        parts.append(f"{name}:PF{item.get('formula_order')}/{_order(order)}/{schedule_text}")
+        qpe = ""
+        if value_present(item.get("confidence_adjusted_t_gate_count")):
+            qpe = (
+                f"/T95={item['confidence_adjusted_t_gate_count']}"
+                f"(raw={item.get('per_attempt_t_gate_count')},"
+                f"R={item.get('qpe_repetitions')},"
+                f"p={_number(item.get('qpe_peak_probability_from_hf'), 4)})"
+            )
+        parts.append(f"{name}:PF{item.get('formula_order')}/{_order(order)}/{schedule_text}{qpe}")
     return "; ".join(parts)
 
 
@@ -466,7 +492,7 @@ def _reaction_summary(
                     ar,
                     label,
                     _species_signature(item["species_json"]),
-                    item["total_t_gate_count"],
+                    _reaction_qpe_cost(item),
                     _number(1000.0 * reaction_error, 5),
                     _number(1000.0 * _float(item["max_species_absolute_error_hartree"]), 5),
                     reduction_text,
@@ -480,7 +506,7 @@ def _reaction_summary(
                 selection,
                 item["selected_source_contract"],
                 item["selected_source_iteration"],
-                item["total_t_gate_count"],
+                _reaction_qpe_cost(item),
                 _number(1000.0 * _float(item["absolute_reaction_error_hartree"]), 5),
                 _number(1000.0 * _float(item["max_species_absolute_error_hartree"]), 5),
             ]
@@ -496,7 +522,7 @@ def _reaction_summary(
             "A/R",
             "Protocol",
             "PF parameters by species",
-            "T gates",
+            "T95 (raw total)",
             "|dE reaction| (mHa)",
             "max |dE species| (mHa)",
             "Reduction",
@@ -509,7 +535,7 @@ def _reaction_summary(
             "Selection",
             "Source contract",
             "Iteration",
-            "T gates",
+            "T95 (raw total)",
             "|dE reaction| (mHa)",
             "max |dE species| (mHa)",
         ),
@@ -537,7 +563,7 @@ def _reaction_extended(
                 [
                     row["source_contract"],
                     _species_signature(row["species_json"]),
-                    row["total_t_gate_count"],
+                    _reaction_qpe_cost(row),
                     _number(row["exact_reaction_energy_hartree"], 9),
                     _number(row["pf_reaction_energy_hartree"], 9),
                     _number(1000.0 * abs(signed), 5),
@@ -561,7 +587,7 @@ def _reaction_extended(
                     "accepted" if _yes(row["accepted"]) == "yes" else "rejected",
                     row.get("mutation_summary") or "--",
                     _species_signature(row["species_json"]),
-                    row["total_t_gate_count"],
+                    _reaction_qpe_cost(row),
                     _number(1000.0 * signed, 5),
                     _number(1000.0 * _float(row["max_species_absolute_error_hartree"]), 5),
                     _yes(row["passes_contract"]),
@@ -577,7 +603,7 @@ def _reaction_extended(
         (
             "Contract",
             "PF parameters by species",
-            "T gates",
+            "T95 (raw total)",
             "Exact E_rxn",
             "PF E_rxn",
             "|Delta E_rxn| mHa",
@@ -592,7 +618,7 @@ def _reaction_extended(
             "Decision",
             "Mutation summary",
             "Attempted PF settings",
-            "T gates",
+            "T95 (raw total)",
             "signed dE (mHa)",
             "max species error (mHa)",
             "Pass",
@@ -654,14 +680,14 @@ def _hamlib_reportlab_content(
         baseline_error = 1000.0 * _assert_energy(row, "baseline_")
         best_error = 1000.0 * _assert_energy(row, "best_")
         baseline_lines.append(
-            f"{row['run']} | initial | T={row['baseline_total_t_gates_qpe']} | "
+            f"{row['run']} | initial | T95={_qpe_cost(row, 'baseline_')} | "
             f"|dE|={_number(baseline_error, 6)} mHa | "
             f"{_pf(row['baseline_formula_order'])}, n_steps={row['baseline_n_steps']}, "
             f"order={_order(row['baseline_term_order_strategy'])}"
         )
         baseline_lines.append(
             f"{row['run']} | final after accepted iter {row['best_iteration']} | "
-            f"T={row['best_total_t_gates_qpe']} | |dE|={_number(best_error, 6)} mHa | "
+            f"T95={_qpe_cost(row, 'best_')} | |dE|={_number(best_error, 6)} mHa | "
             f"reduction={_number(row['reduction_percent'], 6)}% | "
             f"accepted/rejected={row['accepted']}/{row['rejected']}"
         )
@@ -678,13 +704,11 @@ def _hamlib_reportlab_content(
                 "ground_state_energy_error_hartree",
             )
         )
-        error_text = (
-            f"{_number(1000.0 * _assert_energy(row), 6)} mHa" if has_energy else "--"
-        )
+        error_text = f"{_number(1000.0 * _assert_energy(row), 6)} mHa" if has_energy else "--"
         mutation_lines.append(
             f"{row['run']} iter {row['iteration']} | "
             f"{'accepted' if _yes(row['accepted']) == 'yes' else 'rejected'} | "
-            f"T={row.get('total_t_gates_qpe') or '--'} | |dE|={error_text} | "
+            f"T95={_qpe_cost(row)} | |dE|={error_text} | "
             f"pass={_yes(row.get('passes_accuracy'))} | "
             f"{row.get('mutation_summary') or '--'} | "
             f"reason={row.get('decision_reason') or '--'} | "
@@ -712,27 +736,22 @@ def _reaction_reportlab_content(
     summary_lines = []
     for contract in sorted(by_contract):
         baseline, final = _reaction_incumbents(by_contract[contract])
-        proposals = [
-            item for item in by_contract[contract] if _integer(item["iteration"]) > 0
-        ]
+        proposals = [item for item in by_contract[contract] if _integer(item["iteration"]) > 0]
         accepted = sum(_yes(item["accepted"]) == "yes" for item in proposals)
         reduction = (
             100.0
-            * (
-                _integer(baseline["total_t_gate_count"])
-                - _integer(final["total_t_gate_count"])
-            )
+            * (_integer(baseline["total_t_gate_count"]) - _integer(final["total_t_gate_count"]))
             / _integer(baseline["total_t_gate_count"])
         )
         summary_lines.append(
-            f"{contract} | initial | T={baseline['total_t_gate_count']} | "
+            f"{contract} | initial | T95={_reaction_qpe_cost(baseline)} | "
             f"|dE reaction|={_number(1000.0 * abs(_reaction_error(baseline)), 6)} mHa | "
             f"max |dE species|="
             f"{_number(1000.0 * _float(baseline['max_species_absolute_error_hartree']), 6)} mHa"
         )
         summary_lines.append(
             f"{contract} | final after accepted iter {item_iteration(final)} | "
-            f"T={final['total_t_gate_count']} | "
+            f"T95={_reaction_qpe_cost(final)} | "
             f"|dE reaction|={_number(1000.0 * abs(_reaction_error(final)), 6)} mHa | "
             f"reduction={_number(reduction, 6)}% | "
             f"accepted/rejected={accepted}/{len(proposals) - accepted}"
@@ -742,7 +761,7 @@ def _reaction_reportlab_content(
         item = pooled[selection]
         pooled_lines.append(
             f"{selection} <- {item['selected_source_contract']} iter "
-            f"{item['selected_source_iteration']} | T={item['total_t_gate_count']} | "
+            f"{item['selected_source_iteration']} | T95={_reaction_qpe_cost(item)} | "
             f"|dE reaction|="
             f"{_number(1000.0 * _float(item['absolute_reaction_error_hartree']), 6)} mHa"
         )
@@ -769,7 +788,7 @@ def _reaction_reportlab_content(
         mutation_lines.append(
             f"{row['source_contract']} iter {row['iteration']} | "
             f"{'accepted' if _yes(row['accepted']) == 'yes' else 'rejected'} | "
-            f"T={row.get('total_t_gate_count') or '--'} | "
+            f"T95={_reaction_qpe_cost(row)} | "
             f"signed dE={_number(1000.0 * signed, 6)} mHa | "
             f"pass={_yes(row.get('passes_contract'))} | "
             f"{row.get('mutation_summary') or '--'} | "
@@ -881,9 +900,7 @@ def _export_shape(export_dir: Path, family: str) -> dict[str, Any]:
                 if family == "hamlib121"
                 else REACTIONS * REACTION_CONTRACTS
             ),
-            "iterations": (
-                HAMLIB_ITERATIONS if family == "hamlib121" else REACTION_ITERATIONS
-            ),
+            "iterations": (HAMLIB_ITERATIONS if family == "hamlib121" else REACTION_ITERATIONS),
             "replicates": (
                 [f"run_{index:02d}" for index in range(1, HAMLIB_RUNS + 1)]
                 if family == "hamlib121"
@@ -906,13 +923,11 @@ def _validate_hamlib(export_dir: Path) -> tuple[list[dict[str, str]], list[dict[
     expected_candidates = int(shape["lane_count"]) * int(shape["iterations"])
     if len(candidates) != expected_candidates:
         raise ReportValidationError(
-            f"HamLib candidate_log.csv has {len(candidates)} rows, "
-            f"expected {expected_candidates}"
+            f"HamLib candidate_log.csv has {len(candidates)} rows, expected {expected_candidates}"
         )
     if len(summaries) != int(shape["lane_count"]):
         raise ReportValidationError(
-            f"HamLib lane_run_summary.csv has {len(summaries)} rows, "
-            f"expected {shape['lane_count']}"
+            f"HamLib lane_run_summary.csv has {len(summaries)} rows, expected {shape['lane_count']}"
         )
     keys = {(row["run"], row["lane_id"], _integer(row["iteration"])) for row in candidates}
     if len(keys) != len(candidates):
@@ -950,8 +965,7 @@ def _validate_reactions(
         )
     if len(candidates) != expected_candidates:
         raise ReportValidationError(
-            f"reaction candidate_log.csv has {len(candidates)} rows, "
-            f"expected {expected_candidates}"
+            f"reaction candidate_log.csv has {len(candidates)} rows, expected {expected_candidates}"
         )
     keys = {
         (row["reaction_key"], row["source_contract"], _integer(row["iteration"]))
@@ -1037,9 +1051,7 @@ def generate_reports(
         if latex_path is None and Path(latexmk).is_file():
             latex_path = latexmk
         selected_engine = (
-            ("latex" if latex_path is not None else "reportlab")
-            if engine == "auto"
-            else engine
+            ("latex" if latex_path is not None else "reportlab") if engine == "auto" else engine
         )
         if selected_engine == "latex" and latex_path is None:
             raise ReportValidationError(f"LaTeX engine is unavailable: {latexmk}")

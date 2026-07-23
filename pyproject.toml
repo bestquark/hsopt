@@ -14,7 +14,7 @@ dependencies = [
 ]
 
 [project.scripts]
-hsopt = "hsopt.tgate_opt.t_autoresearch_cli:main"
+hsopt = "hsopt.exact_loop:main"
 hsopt-exact = "hsopt.exact_queue:main"
 hsopt-exact-parity = "hsopt.exact_parity:main"
 hsopt-export-exact = "hsopt.exact_export:main"
@@ -54,9 +54,6 @@ package = true
 [tool.ruff]
 line-length = 100
 target-version = "py312"
-
-[tool.ruff.lint.per-file-ignores]
-"examples/pfs/*/evaluate.py" = ["E402"]
 
 [tool.ruff.format]
 quote-style = "double"

@@ -14,10 +14,14 @@ each unique species circuit once; a stoichiometric coefficient greater than one
 reuses the same energy estimate.
 
 The fixed evaluator uses Legate/cuPyNumeric on one A100 to diagonalize each
-compiled one-step product-formula unitary in the full Hilbert space, matches its
-eigenphase to the exact fixed-electron ground state by overlap, and measures the signed molecular energy error. This
-is deliberately separate from the HF-reference spectral-peak evaluator used by
-the standalone molecule lanes.
+compiled one-step product-formula unitary in the full Hilbert space. For each
+species it selects the lowest-energy eigenphase with numerically resolved
+Hartree--Fock support and measures its signed error against the exact
+fixed-electron ground energy. The exact ground-state vector is not used for PF
+peak selection. The cost multiplies each species' per-attempt compiled T count
+by the QPE attempts required under an equal union-bound allocation of the 5%
+failure budget, guaranteeing at least 95% confidence that every unique
+species peak has been observed.
 
 ## Repository boundary
 

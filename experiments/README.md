@@ -1,12 +1,18 @@
-# Paper Experiments
+# Experiments
 
-This tree contains portable experiment definitions and completion-gated paper
+This is the repository's only benchmark tree. It contains compact runnable
+fixtures, portable paper experiment definitions, and completion-gated paper
 artifacts. It does not contain live campaign workspaces.
 
+- `abs_energy/` contains compact HamLib absolute-energy fixtures.
+- `diff_energy/` contains compact molecular and reaction energy-difference
+  fixtures plus the portable reactions10 runtime.
 - `hamlib121/` defines five independent autoresearch runs over the fixed
   121-Hamiltonian benchmark.
 - `reactions10/` defines the ten-reaction equal-share versus reaction-aware
   error-allocation comparison.
+- `generate_initial_pf.py` and `paper_baselines/` define the immutable
+  iteration-0 initializer.
 
 Campaign databases, mutation directories, scheduler logs, telemetry, agent
 transcripts, virtual environments, and intermediate checkpoints stay in

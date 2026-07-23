@@ -78,9 +78,7 @@ def rsync_results(
     sync_host = validate_ssh_host(sync_host, "sync_host")
     destination = iteration_dir(root, iteration) / "results"
     destination.mkdir(parents=True, exist_ok=True)
-    remote_results = (
-        f"{cluster_root.rstrip('/')}/iterations/iter_{iteration:04d}/results"
-    )
+    remote_results = f"{cluster_root.rstrip('/')}/iterations/iter_{iteration:04d}/results"
     probe = subprocess.run(
         ssh_command(
             sync_host,
@@ -95,9 +93,7 @@ def rsync_results(
         # existing retry_ready transaction can resubmit the same candidates.
         return
     if probe.returncode != 0:
-        raise RuntimeError(
-            f"could not inspect remote reaction result directory: {remote_results}"
-        )
+        raise RuntimeError(f"could not inspect remote reaction result directory: {remote_results}")
     subprocess.run(
         [
             "rsync",

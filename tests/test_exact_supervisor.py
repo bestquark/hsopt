@@ -18,7 +18,7 @@ from hsopt.exact_supervisor import (
 
 
 REPO = Path(__file__).resolve().parents[1]
-ABSOLUTE = REPO / "examples" / "abs_energy" / "hamlib_h2_r0_7"
+ABSOLUTE = REPO / "experiments" / "abs_energy" / "hamlib_h2_r0_7"
 
 
 def _campaign(tmp_path: Path) -> tuple[Path, Path, Path]:
@@ -223,8 +223,7 @@ def test_supervisor_collects_and_reconciles_a_completed_baseline(
     batch_dir = Path(prepare_batch(queue)["batch_dir"])
     run_batch(batch_dir, backend="numpy")
     (batch_dir / "submission.json").write_text(
-        json.dumps({"job_id": "12345", "host": "nvlogin", "remote_batch": "/unused"})
-        + "\n"
+        json.dumps({"job_id": "12345", "host": "nvlogin", "remote_batch": "/unused"}) + "\n"
     )
 
     monkeypatch.setattr(
@@ -503,9 +502,12 @@ def test_iteration_zero_retains_an_inaccurate_paper_baseline(
     assert state["pending_kind"] is None
     assert state["incumbent_score"] is None
     assert state["last_error"] is None
-    assert json.loads((lane / "baseline_result.json").read_text(encoding="utf-8"))[
-        "passes_chemical_accuracy"
-    ] is False
+    assert (
+        json.loads((lane / "baseline_result.json").read_text(encoding="utf-8"))[
+            "passes_chemical_accuracy"
+        ]
+        is False
+    )
 
 
 def test_campaign_shares_one_reference_before_all_replicate_baselines(
@@ -529,7 +531,7 @@ def test_campaign_shares_one_reference_before_all_replicate_baselines(
         )
         + "\n"
     )
-    reaction_source = REPO / "examples" / "diff_energy" / "h2_bond_stretch" / "reaction.json"
+    reaction_source = REPO / "experiments" / "diff_energy" / "h2_bond_stretch" / "reaction.json"
     (reaction_inputs / "manifest.json").write_text(
         json.dumps(
             {
@@ -555,7 +557,7 @@ def test_campaign_shares_one_reference_before_all_replicate_baselines(
         hamlib_inputs=hamlib_inputs,
         reaction_inputs=reaction_inputs,
         seed_validation=seed_validation,
-        generator=REPO / "examples" / "generate_initial_pf.py",
+        generator=REPO / "experiments" / "generate_initial_pf.py",
         campaign_root=tmp_path / "campaign",
         hamlib_replicates=5,
         iterations=50,
@@ -567,9 +569,7 @@ def test_campaign_shares_one_reference_before_all_replicate_baselines(
     queue = Path(campaign["queue_dir"])
     assert len(list((queue / "pending").iterdir())) == 2
     for row in campaign["lanes"]:
-        state = json.loads(
-            (tmp_path / "campaign" / row["lane_dir"] / "state.json").read_text()
-        )
+        state = json.loads((tmp_path / "campaign" / row["lane_dir"] / "state.json").read_text())
         assert state["pending_kind"] == "reference"
         assert state["iterations_completed"] == 0
 

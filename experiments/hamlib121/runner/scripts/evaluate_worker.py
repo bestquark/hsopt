@@ -384,7 +384,11 @@ def pf_error_bound_hartree(
 
 
 def score(total_t_gates: int, total_error: float | None) -> float:
-    if total_error is not None and math.isfinite(total_error) and total_error <= CHEMICAL_ACCURACY_HARTREE:
+    if (
+        total_error is not None
+        and math.isfinite(total_error)
+        and total_error <= CHEMICAL_ACCURACY_HARTREE
+    ):
         return float(total_t_gates)
     if total_error is None or not math.isfinite(total_error):
         return float(total_t_gates) + 1.0e48
@@ -435,9 +439,7 @@ def apply_cnot_to_state(*, state, control: int, target: int, nqubits: int, xp):
     if control == target:
         raise ValueError("CNOT control and target must be different")
     if not 0 <= control < nqubits or not 0 <= target < nqubits:
-        raise ValueError(
-            f"CNOT ({control}, {target}) is outside a {nqubits}-qubit register"
-        )
+        raise ValueError(f"CNOT ({control}, {target}) is outside a {nqubits}-qubit register")
 
     first = min(control, target)
     second = max(control, target)
@@ -487,9 +489,7 @@ def conjugated_scaffold_pauli(label: str, central_pauli: str) -> tuple[complex, 
     phase = 1.0 + 0.0j
 
     for control in support[:-1]:
-        pair_phase, pair = _CNOT_PAULI_CONJUGATION[
-            transformed[control] + transformed[pivot]
-        ]
+        pair_phase, pair = _CNOT_PAULI_CONJUGATION[transformed[control] + transformed[pivot]]
         phase *= pair_phase
         transformed[control], transformed[pivot] = pair
 
@@ -574,9 +574,7 @@ def apply_pauli_to_state_split(
             tensor = replacement
             del replacement, previous
             gc.collect()
-            replacement = tensor * xp.asarray(phases, dtype=xp.complex128).reshape(
-                left_size, 1
-            )
+            replacement = tensor * xp.asarray(phases, dtype=xp.complex128).reshape(left_size, 1)
             execution_fence()
             previous = tensor
             tensor = replacement
@@ -594,9 +592,7 @@ def apply_pauli_to_state_split(
             tensor = replacement
             del replacement, previous
             gc.collect()
-            replacement = tensor * xp.asarray(phases, dtype=xp.complex128).reshape(
-                1, right_size
-            )
+            replacement = tensor * xp.asarray(phases, dtype=xp.complex128).reshape(1, right_size)
             execution_fence()
             previous = tensor
             tensor = replacement
@@ -732,16 +728,16 @@ def build_pauli_rotation_compiler(
             if cache_key not in rz_cache:
                 raise RuntimeError(f"missing precompiled Rz cache entry {cache_key}")
             gate_string = str(rz_cache[cache_key]["gate_string"])
-            approximate = np.asarray(
-                rz_cache[cache_key]["matrix_host"], dtype=np.complex128
-            )
+            approximate = np.asarray(rz_cache[cache_key]["matrix_host"], dtype=np.complex128)
         elif abs(theta) <= epsilon:
             gate_string = ""
             approximate = np.eye(2, dtype=np.complex128)
         else:
             pygridsynth = import_pygridsynth()
             with warnings.catch_warnings():
-                warnings.filterwarnings("ignore", message=r"pygridsynth is .*", category=UserWarning)
+                warnings.filterwarnings(
+                    "ignore", message=r"pygridsynth is .*", category=UserWarning
+                )
                 gate_string = pygridsynth.gridsynth_gates(theta, epsilon)
             approximate = pygridsynth_matrix_from_gates(gate_string)
         return {
@@ -773,9 +769,7 @@ def build_pauli_rotation_compiler(
             np.finfo(np.float64).eps
             * max(abs(coefficient) for coefficient in coefficients.values()),
         )
-        images = {
-            pauli: conjugated_scaffold_pauli(label, pauli) for pauli in ("X", "Y", "Z")
-        }
+        images = {pauli: conjugated_scaffold_pauli(label, pauli) for pauli in ("X", "Y", "Z")}
         z_phase, z_label = images["Z"]
         if abs(z_phase - 1.0) > 1.0e-12 or z_label != label:
             raise RuntimeError(f"Pauli scaffold did not map central Z back to {label}")
@@ -792,9 +786,7 @@ def build_pauli_rotation_compiler(
             )
         )
 
-        non_identity_components = [
-            pauli for pauli in active_components if pauli != "I"
-        ]
+        non_identity_components = [pauli for pauli in active_components if pauli != "I"]
 
         def apply_state(
             state,
@@ -969,9 +961,7 @@ def product_formula_step_schedule(
     if formula_order == 2:
         if not terms:
             return []
-        leading = [
-            (term, 0.5 * float(term["coefficient"]) * step_time) for term in terms[:-1]
-        ]
+        leading = [(term, 0.5 * float(term["coefficient"]) * step_time) for term in terms[:-1]]
         center = [(terms[-1], float(terms[-1]["coefficient"]) * step_time)]
         return leading + center + list(reversed(leading))
     raise ValueError(f"unsupported formula_order={formula_order}")
@@ -1052,9 +1042,7 @@ def run_compiled_product_formula(
         if "epsilon" in item:
             epsilon = float(item["epsilon"])
         else:
-            epsilon = float(
-                choose_synthesis_epsilon(term, alpha, occurrence_index, config)
-            )
+            epsilon = float(choose_synthesis_epsilon(term, alpha, occurrence_index, config))
         if not math.isfinite(epsilon) or epsilon <= 0.0:
             raise ValueError(f"invalid synthesis epsilon {epsilon} for term {term['label']}")
         prepared_schedule.append((term, alpha, epsilon, occurrence_index, term_index))
@@ -1112,11 +1100,7 @@ def run_compiled_product_formula(
         non_identity_component_count = sum(
             pauli != "I" for pauli in compiled.get("active_pauli_components", [])
         )
-        if (
-            not is_deferred_backend
-            and non_identity_component_count > 1
-            and pauli_workspace is None
-        ):
+        if not is_deferred_backend and non_identity_component_count > 1 and pauli_workspace is None:
             pauli_workspace = xp.empty_like(state)
         updated_state = compiled["apply_state"](
             state,
@@ -1149,9 +1133,7 @@ def run_compiled_product_formula(
                 "operator_error",
             )
         }
-        compilation_record["active_pauli_components"] = compiled.get(
-            "active_pauli_components", []
-        )
+        compilation_record["active_pauli_components"] = compiled.get("active_pauli_components", [])
         compilation_record["discarded_component_norm_bound"] = component_omission
         unique_compilations[compiled["cache_key"]] = compilation_record
 
@@ -1380,9 +1362,7 @@ def estimate_reference_peak_energy(
     return {
         "spectral_peak_phase_overlap_magnitude": phase_magnitude,
         "ground_state_energy_estimate_hartree": float(energy_estimate),
-        "selected_spectral_peak_phase_error_hartree": float(
-            abs(energy_estimate - selected_energy)
-        ),
+        "selected_spectral_peak_phase_error_hartree": float(abs(energy_estimate - selected_energy)),
     }
 
 
@@ -1536,9 +1516,7 @@ def evaluate_lane(
     )
     scheduled = int(propagation["scheduled_rotation_count_per_base_unitary"])
     nonzero = int(propagation["nonzero_rotation_count_per_base_unitary"])
-    rotation_synthesis_error_per_base = float(
-        propagation["synthesis_epsilon_sum_per_base_unitary"]
-    )
+    rotation_synthesis_error_per_base = float(propagation["synthesis_epsilon_sum_per_base_unitary"])
     component_omission_error_per_base = float(
         propagation["numerical_component_omission_bound_per_base_unitary"]
     )
@@ -1565,9 +1543,7 @@ def evaluate_lane(
         samples = int(propagation["explicit_schedule_rotation_count"])
         nonidentity_one_norm = sum(abs(float(term["coefficient"])) for term in ordered_terms)
         qdrift_channel_error_bound_per_base = (
-            2.0
-            * (nonidentity_one_norm * float(protocol["tau"])) ** 2
-            / float(samples)
+            2.0 * (nonidentity_one_norm * float(protocol["tau"])) ** 2 / float(samples)
         )
         pf_error = qpe_apps * qdrift_channel_error_bound_per_base / float(protocol["tau"])
         pf_error_bound_kind = "qdrift_average_channel_diamond_bound"
@@ -1596,9 +1572,7 @@ def evaluate_lane(
         None if energy_estimate is None else float(abs(float(energy_estimate) - ground_energy))
     )
     total_t = int(propagation["base_unitary_t_gates"]) * qpe_apps
-    passes_energy = (
-        energy_error is not None and energy_error <= CHEMICAL_ACCURACY_HARTREE
-    )
+    passes_energy = energy_error is not None and energy_error <= CHEMICAL_ACCURACY_HARTREE
 
     return {
         "lane_id": lane["lane_id"],
@@ -1731,9 +1705,7 @@ def main() -> None:
             raise ValueError(f"lane ids are not active in manifest: {sorted(missing)}")
         lanes = [lane for lane in lanes if lane["lane_id"] in selected_lane_ids]
     if args.compute_baseline and args.iteration != 0:
-        raise RuntimeError(
-            "baseline chunks may only evaluate iteration 0"
-        )
+        raise RuntimeError("baseline chunks may only evaluate iteration 0")
     campaign_id_env = os.environ.get("CAMPAIGN_ID")
     manifest_sha_env = os.environ.get("CAMPAIGN_MANIFEST_SHA256")
     if campaign_id_env is not None and campaign_id_env != manifest["campaign_id"]:

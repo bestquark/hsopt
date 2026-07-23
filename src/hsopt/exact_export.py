@@ -15,9 +15,7 @@ from typing import Any, Iterable, Mapping
 
 
 FAMILIES = ("hamlib121", "reactions10")
-SAFE_COMPONENT = frozenset(
-    "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789._-"
-)
+SAFE_COMPONENT = frozenset("abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789._-")
 
 
 class ExactExportError(RuntimeError):
@@ -119,12 +117,20 @@ def _decision_reason(decision: Mapping[str, Any], result: Mapping[str, Any]) -> 
     if recorded:
         return str(recorded)
     if bool(decision.get("accepted")):
-        return "strict_t_gate_improvement"
+        return "strict_confidence_adjusted_t_gate_improvement"
     if result.get("status") != "ok":
         return "evaluator_error"
     if not bool(result.get("passes_chemical_accuracy")):
         return "chemical_accuracy_failed"
-    return "no_strict_t_gate_improvement"
+    return "no_strict_confidence_adjusted_t_gate_improvement"
+
+
+def _confidence_cost(result: Mapping[str, Any]) -> Any:
+    for key in ("confidence_adjusted_t_count", "score", "t_count"):
+        value = result.get(key)
+        if value is not None:
+            return value
+    return ""
 
 
 def _campaign_lanes(campaign_root: Path, family: str) -> list[tuple[Path, dict[str, Any]]]:
@@ -152,7 +158,12 @@ def _validate_lane(
         raise ExactExportError(f"incomplete lane: {lane_dir}")
     if state.get("pending_kind") is not None or state.get("pending_task_id") is not None:
         raise ExactExportError(f"lane still has pending work: {lane_dir}")
-    for required in ("initial_pf.py", "incumbent.py", "baseline_result.json", "exact_reference.json"):
+    for required in (
+        "initial_pf.py",
+        "incumbent.py",
+        "baseline_result.json",
+        "exact_reference.json",
+    ):
         if not (lane_dir / required).is_file():
             raise ExactExportError(f"completed lane lacks {required}: {lane_dir}")
     if manifest.get("family") != campaign_row.get("family"):
@@ -161,9 +172,7 @@ def _validate_lane(
         iteration_dir = lane_dir / "iterations" / f"{iteration:04d}"
         for required in ("candidate.py", "result.json", "decision.json", "mutation_result.json"):
             if not (iteration_dir / required).is_file():
-                raise ExactExportError(
-                    f"lane iteration {iteration} lacks {required}: {lane_dir}"
-                )
+                raise ExactExportError(f"lane iteration {iteration} lacks {required}: {lane_dir}")
     return manifest, state
 
 
@@ -219,17 +228,17 @@ def _hamlib_candidate_row(
         "decision_reason": _decision_reason(decision, result),
         "passes_accuracy": int(bool(result.get("passes_chemical_accuracy"))),
         **policy,
-        "total_t_gates_qpe": result.get("t_count", result.get("score", "")),
+        "per_attempt_t_gates_qpe": result.get("t_count", ""),
+        "qpe_peak_probability_from_hf": result.get("qpe_success_probability_from_hf", ""),
+        "qpe_repetitions": result.get("qpe_repetitions", ""),
+        "confidence_adjusted_t_gates_qpe": _confidence_cost(result),
+        "total_t_gates_qpe": _confidence_cost(result),
         "ground_state_energy_hartree": result.get(
             "exact_unitary_ground_energy_hartree",
             result.get("exact_ground_energy_hartree", ""),
         ),
-        "ground_state_energy_estimate_hartree": result.get(
-            "compiled_pf_energy_hartree", ""
-        ),
-        "ground_state_energy_error_hartree": result.get(
-            "absolute_energy_error_hartree", ""
-        ),
+        "ground_state_energy_estimate_hartree": result.get("compiled_pf_energy_hartree", ""),
+        "ground_state_energy_error_hartree": result.get("absolute_energy_error_hartree", ""),
         "mutation_summary": _mutation_summary(result),
         "task_id": result.get("task_id", decision.get("task_id", "")),
         "backend": result.get("backend", ""),
@@ -256,15 +265,13 @@ def _hamlib_summary_row(
     best = (
         baseline
         if best_iteration == 0
-        else _read_json(
-            lane_dir / "iterations" / f"{best_iteration:04d}" / "result.json"
-        )
+        else _read_json(lane_dir / "iterations" / f"{best_iteration:04d}" / "result.json")
     )
     problem = _read_json(Path(str(manifest["source"])))
     baseline_policy = _policy_fields(baseline)
     best_policy = _policy_fields(best)
-    baseline_t = int(baseline.get("t_count", baseline["score"]))
-    best_t = int(best.get("t_count", best["score"]))
+    baseline_t = int(_confidence_cost(baseline))
+    best_t = int(_confidence_cost(best))
     return {
         "run": replicate,
         "lane_id": instance,
@@ -275,28 +282,26 @@ def _hamlib_summary_row(
         "accepted": int(state.get("accepted_mutations", len(accepted_iterations))),
         "rejected": int(manifest["iterations_target"]) - len(accepted_iterations),
         **{f"baseline_{key}": value for key, value in baseline_policy.items()},
+        "baseline_per_attempt_t_gates_qpe": baseline.get("t_count", ""),
+        "baseline_qpe_peak_probability_from_hf": baseline.get(
+            "qpe_success_probability_from_hf", ""
+        ),
+        "baseline_qpe_repetitions": baseline.get("qpe_repetitions", ""),
+        "baseline_confidence_adjusted_t_gates_qpe": baseline_t,
         "baseline_total_t_gates_qpe": baseline_t,
-        "baseline_ground_state_energy_hartree": baseline[
-            "exact_unitary_ground_energy_hartree"
-        ],
-        "baseline_ground_state_energy_estimate_hartree": baseline[
-            "compiled_pf_energy_hartree"
-        ],
-        "baseline_ground_state_energy_error_hartree": baseline[
-            "absolute_energy_error_hartree"
-        ],
+        "baseline_ground_state_energy_hartree": baseline["exact_unitary_ground_energy_hartree"],
+        "baseline_ground_state_energy_estimate_hartree": baseline["compiled_pf_energy_hartree"],
+        "baseline_ground_state_energy_error_hartree": baseline["absolute_energy_error_hartree"],
         "best_iteration": best_iteration,
         **{f"best_{key}": value for key, value in best_policy.items()},
+        "best_per_attempt_t_gates_qpe": best.get("t_count", ""),
+        "best_qpe_peak_probability_from_hf": best.get("qpe_success_probability_from_hf", ""),
+        "best_qpe_repetitions": best.get("qpe_repetitions", ""),
+        "best_confidence_adjusted_t_gates_qpe": best_t,
         "best_total_t_gates_qpe": best_t,
-        "best_ground_state_energy_hartree": best[
-            "exact_unitary_ground_energy_hartree"
-        ],
-        "best_ground_state_energy_estimate_hartree": best[
-            "compiled_pf_energy_hartree"
-        ],
-        "best_ground_state_energy_error_hartree": best[
-            "absolute_energy_error_hartree"
-        ],
+        "best_ground_state_energy_hartree": best["exact_unitary_ground_energy_hartree"],
+        "best_ground_state_energy_estimate_hartree": best["compiled_pf_energy_hartree"],
+        "best_ground_state_energy_error_hartree": best["absolute_energy_error_hartree"],
         "reduction_percent": 100.0 * (baseline_t - best_t) / baseline_t,
     }
 
@@ -307,7 +312,11 @@ def _species_json(result: Mapping[str, Any]) -> str:
         policy = _policy_fields(item)
         species[name] = {
             **policy,
-            "t_gate_count": item.get("t_count", item.get("score", "")),
+            "per_attempt_t_gate_count": item.get("t_count", ""),
+            "qpe_peak_probability_from_hf": item.get("qpe_success_probability_from_hf", ""),
+            "qpe_repetitions": item.get("qpe_repetitions", ""),
+            "confidence_adjusted_t_gate_count": _confidence_cost(item),
+            "t_gate_count": _confidence_cost(item),
         }
     return json.dumps(species, sort_keys=True, separators=(",", ":"))
 
@@ -334,9 +343,7 @@ def _reaction_row(
         "iteration": iteration,
         "accepted": str(accepted).lower(),
         "decision_reason": (
-            "initial_baseline"
-            if iteration == 0
-            else _decision_reason(decision or {}, result)
+            "initial_baseline" if iteration == 0 else _decision_reason(decision or {}, result)
         ),
         "mutation_summary": (
             "Immutable paper baseline"
@@ -344,15 +351,13 @@ def _reaction_row(
             else _mutation_summary(next(iter((result.get("species") or {}).values()), {}))
         ),
         "species_json": _species_json(result),
-        "total_t_gate_count": result.get("t_count", result.get("score", "")),
+        "per_attempt_t_gate_count": result.get("t_count", ""),
+        "confidence_adjusted_t_gate_count": _confidence_cost(result),
+        "total_t_gate_count": _confidence_cost(result),
         "exact_reaction_energy_hartree": result.get("exact_difference_hartree", ""),
         "pf_reaction_energy_hartree": result.get("compiled_pf_difference_hartree", ""),
-        "signed_reaction_error_hartree": result.get(
-            "signed_difference_error_hartree", ""
-        ),
-        "absolute_reaction_error_hartree": result.get(
-            "absolute_difference_error_hartree", ""
-        ),
+        "signed_reaction_error_hartree": result.get("signed_difference_error_hartree", ""),
+        "absolute_reaction_error_hartree": result.get("absolute_difference_error_hartree", ""),
         "max_species_absolute_error_hartree": max(species_errors, default=math.nan),
         "passes_contract": str(bool(result.get("passes_chemical_accuracy"))).lower(),
         "task_id": result.get("task_id", (decision or {}).get("task_id", "")),
@@ -388,9 +393,7 @@ def export_family(campaign_root: Path, family: str, output_dir: Path) -> dict[st
         raise ExactExportError(f"refusing to overwrite export: {output_dir}")
     lanes = _campaign_lanes(campaign_root, family)
     output_dir.parent.mkdir(parents=True, exist_ok=True)
-    temporary = Path(
-        tempfile.mkdtemp(prefix=f".{output_dir.name}.tmp-", dir=output_dir.parent)
-    )
+    temporary = Path(tempfile.mkdtemp(prefix=f".{output_dir.name}.tmp-", dir=output_dir.parent))
     try:
         candidates: list[dict[str, Any]] = []
         summaries: list[dict[str, Any]] = []
@@ -470,7 +473,9 @@ def export_family(campaign_root: Path, family: str, output_dir: Path) -> dict[st
                 reaction_final[(instance, replicate)] = {
                     "selected_source_contract": replicate,
                     "selected_source_iteration": incumbent_iteration,
-                    "total_t_gate_count": incumbent["t_count"],
+                    "per_attempt_t_gate_count": incumbent["t_count"],
+                    "confidence_adjusted_t_gate_count": _confidence_cost(incumbent),
+                    "total_t_gate_count": _confidence_cost(incumbent),
                     "absolute_reaction_error_hartree": incumbent[
                         "absolute_difference_error_hartree"
                     ],
@@ -506,6 +511,10 @@ def export_family(campaign_root: Path, family: str, output_dir: Path) -> dict[st
                     "qdrift_samples",
                     "uniform_epsilon",
                     "zero_angle_threshold",
+                    "per_attempt_t_gates_qpe",
+                    "qpe_peak_probability_from_hf",
+                    "qpe_repetitions",
+                    "confidence_adjusted_t_gates_qpe",
                     "total_t_gates_qpe",
                     "ground_state_energy_hartree",
                     "ground_state_energy_estimate_hartree",
@@ -541,6 +550,10 @@ def export_family(campaign_root: Path, family: str, output_dir: Path) -> dict[st
                     "baseline_qdrift_samples",
                     "baseline_uniform_epsilon",
                     "baseline_zero_angle_threshold",
+                    "baseline_per_attempt_t_gates_qpe",
+                    "baseline_qpe_peak_probability_from_hf",
+                    "baseline_qpe_repetitions",
+                    "baseline_confidence_adjusted_t_gates_qpe",
                     "baseline_total_t_gates_qpe",
                     "baseline_ground_state_energy_hartree",
                     "baseline_ground_state_energy_estimate_hartree",
@@ -553,6 +566,10 @@ def export_family(campaign_root: Path, family: str, output_dir: Path) -> dict[st
                     "best_qdrift_samples",
                     "best_uniform_epsilon",
                     "best_zero_angle_threshold",
+                    "best_per_attempt_t_gates_qpe",
+                    "best_qpe_peak_probability_from_hf",
+                    "best_qpe_repetitions",
+                    "best_confidence_adjusted_t_gates_qpe",
                     "best_total_t_gates_qpe",
                     "best_ground_state_energy_hartree",
                     "best_ground_state_energy_estimate_hartree",
@@ -573,6 +590,8 @@ def export_family(campaign_root: Path, family: str, output_dir: Path) -> dict[st
                     "decision_reason",
                     "mutation_summary",
                     "species_json",
+                    "per_attempt_t_gate_count",
+                    "confidence_adjusted_t_gate_count",
                     "total_t_gate_count",
                     "exact_reaction_energy_hartree",
                     "pf_reaction_energy_hartree",

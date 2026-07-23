@@ -22,9 +22,7 @@ from .exact_loop import initialize_lane
 from .exact_queue import enqueue_reference
 
 
-HAMLIB_BASE_URL = (
-    "https://portal.nersc.gov/cfs/m888/dcamps/hamlib/chemistry/electronic"
-)
+HAMLIB_BASE_URL = "https://portal.nersc.gov/cfs/m888/dcamps/hamlib/chemistry/electronic"
 PAULI_TOKEN = re.compile(r"([IXYZ])(\d+)")
 
 
@@ -96,9 +94,7 @@ def _parse_hamlib_archive(
     with h5py.File(io.BytesIO(payload), "r") as handle:
         data = handle[dataset]
         text = data[()].decode("utf-8")
-        attributes = {
-            str(key): _clean_hdf5_attribute(value) for key, value in data.attrs.items()
-        }
+        attributes = {str(key): _clean_hdf5_attribute(value) for key, value in data.attrs.items()}
 
     identity = 0.0
     coefficients: dict[str, float] = {}
@@ -129,10 +125,14 @@ def _parse_hamlib_archive(
         for label, coefficient in sorted(coefficients.items())
         if abs(coefficient) > 1.0e-15
     ]
-    return identity, terms, {
-        "hdf5_attributes": attributes,
-        "maximum_abs_imaginary_coefficient": maximum_imaginary,
-    }
+    return (
+        identity,
+        terms,
+        {
+            "hdf5_attributes": attributes,
+            "maximum_abs_imaginary_coefficient": maximum_imaginary,
+        },
+    )
 
 
 def prepare_hamlib(
@@ -278,9 +278,7 @@ def prepare_reactions(
             metadata = json.loads(metadata_path.read_text(encoding="utf-8"))
             with np.load(npz_path, allow_pickle=False) as arrays:
                 labels = [str(value) for value in arrays["pauli_labels"].tolist()]
-                coefficients = [
-                    float(value) for value in arrays["pauli_coefficients"].tolist()
-                ]
+                coefficients = [float(value) for value in arrays["pauli_coefficients"].tolist()]
             if len(labels) != len(coefficients) or len(labels) != int(
                 metadata["total_pauli_rotation_terms"]
             ):
@@ -400,9 +398,7 @@ def initialize_campaign(
     lanes_root = campaign_root / "lanes"
     policies_root = campaign_root / "policies"
     hamlib_manifest = json.loads((hamlib_inputs / "manifest.json").read_text(encoding="utf-8"))
-    reaction_manifest = json.loads(
-        (reaction_inputs / "manifest.json").read_text(encoding="utf-8")
-    )
+    reaction_manifest = json.loads((reaction_inputs / "manifest.json").read_text(encoding="utf-8"))
     lanes = []
     for record in hamlib_manifest["instances"]:
         instance = str(record["instance"])
@@ -440,9 +436,7 @@ def initialize_campaign(
         source = reaction_inputs / str(record["reaction"])
         reference = enqueue_reference(queue_dir, kind="difference", source=source)
         for contract in ("equal_share", "reaction_aware"):
-            policy = (
-                policies_root / "reactions10" / instance / contract / "initial_pf.py"
-            )
+            policy = policies_root / "reactions10" / instance / contract / "initial_pf.py"
             _generate_policy(
                 generator=generator,
                 source=source,

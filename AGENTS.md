@@ -2,9 +2,8 @@
 
 The production paper workflow is the exact compiled-unitary pipeline in
 `src/hsopt/compiled_unitary.py`, `src/hsopt/exact_queue.py`, and
-`src/hsopt/exact_loop.py`. The older `examples/pfs/` runners remain useful for
-small development checks, but they are not the source of truth for the current
-HamLib121 and reactions10 campaigns.
+`src/hsopt/exact_loop.py`. All checked-in benchmark fixtures, paper protocols,
+and support files live under `experiments/`.
 
 Use `$hsopt` for product-formula T-gate optimization and `$ssh` for NVPark
 submission or Slurm diagnosis.
@@ -28,9 +27,9 @@ are not acceptance metrics.
 
 ## Immutable baseline
 
-`examples/generate_initial_pf.py` is the sole generator of `initial_pf.py`. It
+`experiments/generate_initial_pf.py` is the sole generator of `initial_pf.py`. It
 loads the checked-in contract
-`examples/paper_baselines/reiher_wiebe_svore_2017.json`, which records the
+`experiments/paper_baselines/reiher_wiebe_svore_2017.json`, which records the
 Reiher--Wiebe--Svore--Wecker--Troyer citation and the distinction between the
 paper method and benchmark-specific numerical choices.
 
@@ -45,18 +44,18 @@ campaign.
 
 ## Production shape and resources
 
-- HamLib exact subset: 57 instances with at most 10 qubits, five independent
+- HamLib exact subset: 91 instances through 14 qubits, five independent
   mutation lanes per instance, 50 mutation iterations per lane.
 - Reaction set: 10 reactions, two policy lanes per reaction, 50 mutation
   iterations per lane.
-- Total: 305 lanes and 15,250 mutation evaluations, excluding iteration 0.
+- Total: 475 lanes and 23,750 mutation evaluations, excluding iteration 0.
 
 Dense exact work uses cuPyNumeric on NVPark for both placements. PyGridSynth
 remains CPU-side. Both placements evaluate the same uploaded source snapshot
 and batch tasks sequentially so only one dense task is resident at a time:
 
 - Canonical mutation campaign: `cpu` partition, `normal` QoS, zero GPUs,
-  2 Slurm CPUs, 16 GB system memory, and the pinned cuPyNumeric 25.11 CPU
+  2 Slurm CPUs, 64 GB system memory, and the pinned cuPyNumeric 25.11 CPU
   build with Legate configured as one CPU worker plus runtime utility work.
 - A100 validation/replay campaign: `polar4` partition, `normal` QoS, one GPU,
   2 CPUs, and 16 GB system memory.
@@ -64,10 +63,11 @@ and batch tasks sequentially so only one dense task is resident at a time:
 The CPU campaign owns the stochastic OpenCode mutation trace. The A100
 campaign must use `--no-mutations` and replay the exact archived CPU candidate
 files in order; never run a second independent agent pass. Candidate hashes,
-T counts, and accept/reject trajectory are required to match; record and stop
-on any validation discrepancy. CPU and GPU eigensolvers may differ in the last
-floating-point bits, so compare energy observables at the campaign's explicit
-numerical tolerance rather than claiming bitwise equality.
+per-attempt and confidence-adjusted T counts, and accept/reject trajectory are
+required to match; record and stop on any validation discrepancy. CPU and GPU
+eigensolvers may differ in the last floating-point bits, so compare energy
+observables at the campaign's explicit numerical tolerance rather than
+claiming bitwise equality.
 
 Do not increase CPUs or RAM merely to improve scheduling priority. A CPU run
 must use the `cpu` partition and request no GPU resource.
@@ -83,8 +83,8 @@ benchmark framework:
 - `src/hsopt/compiled_unitary.py`
 - `src/hsopt/exact_queue.py`
 - `src/hsopt/exact_loop.py`
-- `examples/generate_initial_pf.py`
-- `examples/paper_baselines/reiher_wiebe_svore_2017.json`
+- `experiments/generate_initial_pf.py`
+- `experiments/paper_baselines/reiher_wiebe_svore_2017.json`
 
 Campaign histories belong outside the checkout. After every lane completes,
 run `hsopt-export-exact` for `hamlib121` and `reactions10`, then run

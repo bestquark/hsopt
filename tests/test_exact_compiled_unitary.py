@@ -10,6 +10,8 @@ import pytest
 
 from hsopt.compiled_unitary import (
     DENSE_EVALUATOR_MAX_QUBITS,
+    EVALUATION_CONTRACT_VERSION,
+    QPE_TARGET_CONFIDENCE,
     TARGET_STATE_DEFINITION,
     _anchored_ground_state,
     _apply_compiled_rotation,
@@ -18,7 +20,8 @@ from hsopt.compiled_unitary import (
     _dense_hamiltonian,
     _fixed_electron_hamiltonian,
     _rotation_fence_interval,
-    _unwrap_energy,
+    _qpe_repetitions,
+    _select_lowest_hf_accessible_peak,
     evaluate_exact_reference,
     evaluate_molecule,
     load_policy,
@@ -27,9 +30,25 @@ from hsopt.compiled_unitary import (
 
 
 REPO = Path(__file__).resolve().parents[1]
-ABSOLUTE = REPO / "examples" / "abs_energy" / "hamlib_h2_r0_7"
-DIFFERENCE = REPO / "examples" / "diff_energy" / "h2_bond_stretch"
-GENERATOR = REPO / "examples" / "generate_initial_pf.py"
+ABSOLUTE = REPO / "experiments" / "abs_energy" / "hamlib_h2_r0_7"
+DIFFERENCE = REPO / "experiments" / "diff_energy" / "h2_bond_stretch"
+GENERATOR = REPO / "experiments" / "generate_initial_pf.py"
+
+
+def test_experiments_tree_is_the_only_checked_in_benchmark_tree() -> None:
+    experiments = REPO / "experiments"
+    directories = {
+        path.name for path in experiments.iterdir() if path.is_dir() and path.name != "__pycache__"
+    }
+
+    assert directories == {
+        "abs_energy",
+        "diff_energy",
+        "hamlib121",
+        "paper_baselines",
+        "reactions10",
+    }
+    assert not (REPO / "examples").exists()
 
 
 @pytest.mark.parametrize(
@@ -301,6 +320,8 @@ def test_absolute_baseline_uses_cached_exact_reference_and_compiled_eigenphase(
         ABSOLUTE / "hamiltonian.json",
         backend="numpy",
     )
+    # Candidate peak selection must not depend on the exact ground-state vector.
+    reference.pop("exact_ground_state")
     monkeypatch.setattr(
         "hsopt.compiled_unitary.evaluate_exact_reference",
         lambda *args, **kwargs: (_ for _ in ()).throw(
@@ -314,7 +335,8 @@ def test_absolute_baseline_uses_cached_exact_reference_and_compiled_eigenphase(
         reference_result=reference,
     )
 
-    assert result["observable"] == "compiled_unitary_ground_eigenphase"
+    assert result["evaluation_contract_version"] == EVALUATION_CONTRACT_VERSION
+    assert result["observable"] == "compiled_unitary_lowest_hf_accessible_eigenphase"
     assert result["exact_ground_energy_hartree"] == pytest.approx(-1.144979079498297)
     assert result["compiled_pf_energy_hartree"] == pytest.approx(-1.1449932429897123)
     assert result["passes_chemical_accuracy"] is True
@@ -322,6 +344,12 @@ def test_absolute_baseline_uses_cached_exact_reference_and_compiled_eigenphase(
     assert result["n_steps"] == 512
     assert result["policy"]["term_order_strategy"] == "lexicographic"
     assert result["t_count"] == 1_072_128
+    assert result["per_attempt_t_count"] == result["t_count"]
+    assert result["qpe_repetitions"] == 1
+    assert result["qpe_target_confidence"] == QPE_TARGET_CONFIDENCE
+    assert result["qpe_achieved_confidence"] >= QPE_TARGET_CONFIDENCE
+    assert result["confidence_adjusted_t_count"] == result["t_count"]
+    assert result["score"] == result["confidence_adjusted_t_count"]
     assert result["evaluation_wall_seconds"] > 0.0
     assert result["timing_seconds"]["compiled_unitary_build"] > 0.0
     assert result["timing_seconds"]["compiled_unitary_eigensolve"] > 0.0
@@ -353,18 +381,45 @@ def test_step_eigendecomposition_equals_explicit_full_compiled_pf_product() -> N
     full_compiled_pf = np.linalg.matrix_power(step, int(metrics["n_steps"]))
     eigenvalues, eigenvectors = np.linalg.eig(full_compiled_pf)
     eigenvectors /= np.linalg.norm(eigenvectors, axis=0, keepdims=True)
-    target = np.asarray(
-        [complex(real, imaginary) for real, imaginary in reference["exact_ground_state"]]
+    hf = np.zeros(1 << int(problem["n_qubits"]), dtype=np.complex128)
+    hf_index = sum(
+        1 << (int(problem["n_qubits"]) - qubit - 1) for qubit in range(int(problem["electrons"]))
     )
-    selected = int(np.argmax(np.abs(eigenvectors.conj().T @ target) ** 2))
-    explicit_energy = _unwrap_energy(
-        float(np.angle(eigenvalues[selected])),
-        float(problem["target_time"]),
-        float(reference["exact_unitary_ground_energy_hartree"])
-        - float(problem["identity_coefficient"]),
-    ) + float(problem["identity_coefficient"])
+    hf[hf_index] = 1.0
+    explicit = _select_lowest_hf_accessible_peak(
+        np.angle(eigenvalues),
+        np.abs(eigenvectors.conj().T @ hf) ** 2,
+        n_steps=1,
+        target_time=float(problem["target_time"]),
+        identity_coefficient=float(problem["identity_coefficient"]),
+        exact_energy=float(reference["exact_unitary_ground_energy_hartree"]),
+    )
 
-    assert explicit_energy == pytest.approx(
+    assert explicit["compiled_pf_energy_hartree"] == pytest.approx(
         evaluated["compiled_pf_energy_hartree"],
         abs=1.0e-10,
     )
+
+
+def test_lowest_hf_accessible_peak_is_not_the_largest_probability_peak() -> None:
+    selected = _select_lowest_hf_accessible_peak(
+        [0.2, -0.4, -0.8],
+        [0.80, 0.19, 1.0e-16],
+        n_steps=1,
+        target_time=1.0,
+        identity_coefficient=0.0,
+        exact_energy=0.0,
+    )
+
+    assert selected["selected_eigen_index"] == 1
+    assert selected["compiled_pf_energy_hartree"] == pytest.approx(-0.4)
+    assert selected["qpe_success_probability_from_hf"] == pytest.approx(0.19)
+
+
+def test_qpe_repetition_cost_reaches_95_percent_without_a_physical_p_min() -> None:
+    assert _qpe_repetitions(1.0) == 1
+    assert _qpe_repetitions(0.5) == 5
+    tiny_probability_repetitions = _qpe_repetitions(1.0e-6)
+
+    assert tiny_probability_repetitions == 2_995_731
+    assert 1.0 - (1.0 - 1.0e-6) ** tiny_probability_repetitions >= 0.95

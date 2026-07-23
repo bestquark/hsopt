@@ -2,8 +2,8 @@
 
 Use this split to keep `main` small and make future work explicit.
 
-- `main`: `hsopt`, focused on product-formula T-gate optimization in
-  `examples/pfs/` with `$hsopt` and `$hsgepa`.
+- `main` / `clean`: exact compiled-unitary HSOpt with all compact fixtures and
+  paper protocols under `experiments/`.
 - `site`: tracked documentation-site source and the GitHub Pages deployment
   workflow removed from `main` during the 2026-07-15 cleanup.
 - `codex/safety-pre-cleanup-20260715`: exact tracked snapshot of the July 2026

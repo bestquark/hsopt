@@ -207,9 +207,7 @@ def main() -> None:
                 undeclared = [
                     entry.name
                     for entry in directory.iterdir()
-                    if entry.is_symlink()
-                    or not entry.is_file()
-                    or entry.name not in allowed_names
+                    if entry.is_symlink() or not entry.is_file() or entry.name not in allowed_names
                 ]
                 if undeclared:
                     raise RuntimeError(

@@ -207,7 +207,7 @@ def jw_creation_operators(n_qubits: int) -> List[np.ndarray]:
 def hartree_fock_state(active_electrons: int, active_orbitals: int) -> np.ndarray:
     n_qubits = 2 * active_orbitals
     creation_ops = jw_creation_operators(n_qubits)
-    vacuum = np.zeros(2 ** n_qubits, dtype=np.complex128)
+    vacuum = np.zeros(2**n_qubits, dtype=np.complex128)
     vacuum[0] = 1.0
     state = vacuum
     for spin_orbital in range(active_electrons):
@@ -217,7 +217,11 @@ def hartree_fock_state(active_electrons: int, active_orbitals: int) -> np.ndarra
 
 def electron_number_indices(n_qubits: int, n_electrons: int) -> np.ndarray:
     return np.asarray(
-        [basis_index for basis_index in range(2 ** n_qubits) if bin(basis_index).count("1") == n_electrons],
+        [
+            basis_index
+            for basis_index in range(2**n_qubits)
+            if bin(basis_index).count("1") == n_electrons
+        ],
         dtype=np.int64,
     )
 
@@ -229,11 +233,15 @@ def fixed_electron_sector_eigensystem(
 ) -> Tuple[np.ndarray, np.ndarray, np.ndarray]:
     sector_indices = electron_number_indices(n_qubits, n_electrons)
     if sector_indices.size == 0:
-        raise ValueError(f"empty electron-number sector for n_qubits={n_qubits}, n_electrons={n_electrons}")
+        raise ValueError(
+            f"empty electron-number sector for n_qubits={n_qubits}, n_electrons={n_electrons}"
+        )
 
     sector_hamiltonian = hamiltonian[np.ix_(sector_indices, sector_indices)]
     eigenvalues, sector_eigenvectors = np.linalg.eigh(sector_hamiltonian)
-    embedded_eigenvectors = np.zeros((hamiltonian.shape[0], sector_eigenvectors.shape[1]), dtype=np.complex128)
+    embedded_eigenvectors = np.zeros(
+        (hamiltonian.shape[0], sector_eigenvectors.shape[1]), dtype=np.complex128
+    )
     embedded_eigenvectors[sector_indices, :] = sector_eigenvectors
     return (
         np.asarray(np.real(eigenvalues), dtype=np.float64),
@@ -252,7 +260,7 @@ def build_qubit_hamiltonian(
     creation_ops = jw_creation_operators(n_qubits)
     annihilation_ops = [op.conj().T for op in creation_ops]
 
-    dim = 2 ** n_qubits
+    dim = 2**n_qubits
     hamiltonian = constant * np.eye(dim, dtype=np.complex128)
 
     for p in range(n_qubits):
@@ -281,8 +289,15 @@ def build_qubit_hamiltonian(
                         continue
                     coefficient = two_body[orb_p, orb_r, orb_q, orb_s]
                     if abs(coefficient) > 1e-14:
-                        hamiltonian += 0.5 * coefficient * (
-                            creation_ops[p] @ creation_ops[q] @ annihilation_ops[s] @ annihilation_ops[r]
+                        hamiltonian += (
+                            0.5
+                            * coefficient
+                            * (
+                                creation_ops[p]
+                                @ creation_ops[q]
+                                @ annihilation_ops[s]
+                                @ annihilation_ops[r]
+                            )
                         )
 
     if not np.allclose(hamiltonian, hamiltonian.conj().T, atol=1e-10):
@@ -330,7 +345,9 @@ def pauli_matrix_from_label(label: str) -> np.ndarray:
     return matrix
 
 
-def apply_single_qubit_gate_to_state(state: np.ndarray, gate: np.ndarray, qubit: int, n_qubits: int) -> np.ndarray:
+def apply_single_qubit_gate_to_state(
+    state: np.ndarray, gate: np.ndarray, qubit: int, n_qubits: int
+) -> np.ndarray:
     tensor = runtime_np.asarray(state, dtype=runtime_np.complex128).reshape((2,) * n_qubits)
     gate = runtime_np.asarray(gate, dtype=runtime_np.complex128)
     moved = runtime_np.moveaxis(tensor, qubit, 0)
@@ -455,7 +472,11 @@ def build_pauli_rotation_compiler(n_qubits: int):
     }
 
     @functools.lru_cache(maxsize=None)
-    def term_scaffold(label: str) -> Tuple[Tuple[Tuple[int, str], ...], Tuple[Tuple[int, str], ...], Tuple[Tuple[int, int], ...], int]:
+    def term_scaffold(
+        label: str,
+    ) -> Tuple[
+        Tuple[Tuple[int, str], ...], Tuple[Tuple[int, str], ...], Tuple[Tuple[int, int], ...], int
+    ]:
         support = [idx for idx, ch in enumerate(label) if ch != "I"]
         if not support:
             raise ValueError("cannot compile an identity Pauli rotation")
@@ -513,7 +534,9 @@ def build_pauli_rotation_compiler(n_qubits: int):
             )
 
         if not candidates:
-            raise RuntimeError(f"pygridsynth returned no candidates for theta={theta:.16e}, epsilon={epsilon:.16e}")
+            raise RuntimeError(
+                f"pygridsynth returned no candidates for theta={theta:.16e}, epsilon={epsilon:.16e}"
+            )
 
         best = min(
             candidates,
@@ -550,6 +573,7 @@ def build_pauli_rotation_compiler(n_qubits: int):
         )
 
         if rz_compilation["gate_count"] == 0:
+
             def apply_state_identity(state: np.ndarray) -> np.ndarray:
                 return runtime_np.asarray(state, dtype=runtime_np.complex128)
 
@@ -570,14 +594,18 @@ def build_pauli_rotation_compiler(n_qubits: int):
         def apply_state(state: np.ndarray) -> np.ndarray:
             updated = runtime_np.asarray(state, dtype=runtime_np.complex128)
             for qubit, gate_name in basis_forward:
-                updated = apply_single_qubit_gate_to_state(updated, named_single_qubit_gates[gate_name], qubit, n_qubits)
+                updated = apply_single_qubit_gate_to_state(
+                    updated, named_single_qubit_gates[gate_name], qubit, n_qubits
+                )
             for control, target in cnot_pairs:
                 updated = apply_cnot_to_state(updated, control, target, n_qubits)
             updated = apply_single_qubit_gate_to_state(updated, single_gate, pivot, n_qubits)
             for control, target in cnot_pairs:
                 updated = apply_cnot_to_state(updated, control, target, n_qubits)
             for qubit, gate_name in basis_inverse:
-                updated = apply_single_qubit_gate_to_state(updated, named_single_qubit_gates[gate_name], qubit, n_qubits)
+                updated = apply_single_qubit_gate_to_state(
+                    updated, named_single_qubit_gates[gate_name], qubit, n_qubits
+                )
             return updated
 
         return {
@@ -597,7 +625,9 @@ def build_pauli_rotation_compiler(n_qubits: int):
     return compile_pauli_rotation
 
 
-def spatial_to_spin_integrals(one_body: np.ndarray, two_body: np.ndarray) -> Tuple[np.ndarray, np.ndarray]:
+def spatial_to_spin_integrals(
+    one_body: np.ndarray, two_body: np.ndarray
+) -> Tuple[np.ndarray, np.ndarray]:
     n_orbitals = one_body.shape[0]
     n_spin = 2 * n_orbitals
 
@@ -680,7 +710,13 @@ def _build_active_space_data(spec: MoleculeSpec) -> Dict[str, object]:
     from pyscf import ao2mo, gto, lo, mcscf, scf
     from pyscf.mcscf import avas
 
-    mol = gto.M(atom=spec.geometry, basis=spec.basis, charge=spec.charge, spin=spec.multiplicity - 1, verbose=0)
+    mol = gto.M(
+        atom=spec.geometry,
+        basis=spec.basis,
+        charge=spec.charge,
+        spin=spec.multiplicity - 1,
+        verbose=0,
+    )
     mf = scf.RHF(mol).run()
     if not mf.converged:
         raise RuntimeError(f"RHF did not converge for {spec.key}")
@@ -727,11 +763,17 @@ def _build_active_space_data(spec: MoleculeSpec) -> Dict[str, object]:
         mo_inactive_occ = mo_avas[:, :n_inactive_occ]
         mo_inactive_vir = mo_avas[:, active_start + ncas_occ_avas + ncas_vir_avas :]
 
-        mo_core = np.hstack([mo_inactive_occ, active_occ_block[:, occ_discard]]) if occ_discard.size > 0 else mo_inactive_occ
+        mo_core = (
+            np.hstack([mo_inactive_occ, active_occ_block[:, occ_discard]])
+            if occ_discard.size > 0
+            else mo_inactive_occ
+        )
         mo_active_occ = active_occ_block[:, occ_keep_idx]
         mo_active_vir = active_vir_block[:, vir_keep_idx]
         mo_external = (
-            np.hstack([active_vir_block[:, vir_discard], mo_inactive_vir]) if vir_discard.size > 0 else mo_inactive_vir
+            np.hstack([active_vir_block[:, vir_discard], mo_inactive_vir])
+            if vir_discard.size > 0
+            else mo_inactive_vir
         )
         n_core = mo_core.shape[1]
     else:
@@ -805,16 +847,18 @@ def cache_paths(spec: MoleculeSpec) -> Tuple[Path, Path]:
     return CACHE_ROOT / f"{spec.key}.json", CACHE_ROOT / f"{spec.key}.npz"
 
 
-
-
 def build_problem_cache(spec: MoleculeSpec) -> Dict[str, object]:
     one_body, two_body, constant = _active_space_integrals(spec)
     n_qubits = 2 * spec.active_orbitals
     if HAS_OPENFERMION:
-        hamiltonian, identity_coefficient, pauli_terms = qubit_problem_from_integrals(one_body, two_body, constant)
+        hamiltonian, identity_coefficient, pauli_terms = qubit_problem_from_integrals(
+            one_body, two_body, constant
+        )
     else:
         if n_qubits > 8:
-            raise RuntimeError("OpenFermion is required to build cached PF problems with more than 8 qubits.")
+            raise RuntimeError(
+                "OpenFermion is required to build cached PF problems with more than 8 qubits."
+            )
         hamiltonian = build_qubit_hamiltonian(one_body, two_body, constant)
         identity_coefficient, pauli_terms = pauli_decomposition(hamiltonian)
     initial_state = hartree_fock_state(spec.active_electrons, spec.active_orbitals)
@@ -875,9 +919,15 @@ def build_problem_cache(spec: MoleculeSpec) -> Dict[str, object]:
         "sector_eigenvectors_real": np.real(sector_eigenvectors),
         "sector_eigenvectors_imag": np.imag(sector_eigenvectors),
         "sector_indices": sector_indices,
-        "pauli_labels": np.asarray([item["label"] for item in pauli_terms], dtype=f"<U{metadata['n_qubits']}"),
-        "pauli_coefficients": np.asarray([item["coefficient"] for item in pauli_terms], dtype=np.float64),
-        "pauli_support_sizes": np.asarray([item["support_size"] for item in pauli_terms], dtype=np.int64),
+        "pauli_labels": np.asarray(
+            [item["label"] for item in pauli_terms], dtype=f"<U{metadata['n_qubits']}"
+        ),
+        "pauli_coefficients": np.asarray(
+            [item["coefficient"] for item in pauli_terms], dtype=np.float64
+        ),
+        "pauli_support_sizes": np.asarray(
+            [item["support_size"] for item in pauli_terms], dtype=np.int64
+        ),
     }
     json_path, npz_path = cache_paths(spec)
     json_path.write_text(json.dumps(metadata, indent=2))
@@ -945,9 +995,7 @@ def load_problem_data(molecule: str) -> Dict[str, object]:
     ):
         matrix = pauli_matrix_from_label(str(label)) if build_dense_term_matrices else None
         runtime_matrix = (
-            runtime_np.asarray(matrix, dtype=runtime_np.complex128)
-            if matrix is not None
-            else None
+            runtime_np.asarray(matrix, dtype=runtime_np.complex128) if matrix is not None else None
         )
         pauli_terms.append(
             {
@@ -1023,7 +1071,9 @@ def fidelity(state_a: np.ndarray, state_b: np.ndarray) -> float:
     return float(abs(overlap) ** 2)
 
 
-def unwrap_energy_near_reference(phase: float, target_time: float, reference_energy: float) -> float:
+def unwrap_energy_near_reference(
+    phase: float, target_time: float, reference_energy: float
+) -> float:
     principal_energy = float(phase / target_time)
     phase_period = float((2.0 * math.pi) / target_time)
     wrap_index = round((reference_energy - principal_energy) / phase_period)

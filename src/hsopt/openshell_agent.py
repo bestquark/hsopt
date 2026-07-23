@@ -23,6 +23,26 @@ NEMOTRON_MODEL = "nvidia/nvidia/nemotron-3-super-v3"
 OPENCODE_MODEL = "openshell/nemotron-3-super-v3"
 OPENCODE_AGENT = "hsopt-mutation"
 ONLINE_TOOLS = frozenset({"webfetch", "websearch", "codesearch"})
+HSOPT_SKILL_PATH = Path(__file__).resolve().parents[2] / "skills" / "hsopt" / "SKILL.md"
+OPENCODE_NETWORK_BINARIES = (
+    "/usr/lib/node_modules/opencode-ai/bin/.opencode",
+    "/usr/local/lib/node_modules/opencode-ai/bin/.opencode",
+)
+RESEARCH_ENDPOINTS = (
+    "mcp.exa.ai:443",
+    "arxiv.org:443:read-only:rest:enforce",
+    "export.arxiv.org:443:read-only:rest:enforce",
+    "ar5iv.labs.arxiv.org:443:read-only:rest:enforce",
+    "doi.org:443:read-only:rest:enforce",
+    "journals.aps.org:443:read-only:rest:enforce",
+    "quantum-journal.org:443:read-only:rest:enforce",
+)
+OPENCODE_FILE_LIST_SHIM = """#!/bin/sh
+# OpenCode uses `rg --files` to discover skills. Glob/grep/list are denied to
+# the model, so this deliberately implements only the file-listing operation
+# needed by the skill loader and avoids an in-sandbox binary download.
+exec /usr/bin/find . -type f ! -path '*/.git/*' -print
+"""
 
 
 def _run(
@@ -39,6 +59,44 @@ def _run(
         stdout=subprocess.PIPE,
         stderr=subprocess.PIPE,
     )
+
+
+def _configure_research_network(sandbox_name: str) -> dict[str, Any]:
+    """Best-effort, binary-scoped egress for optional literature research."""
+
+    command = ["openshell", "policy", "update", sandbox_name]
+    for endpoint in RESEARCH_ENDPOINTS:
+        command.extend(["--add-endpoint", endpoint])
+    for binary in OPENCODE_NETWORK_BINARIES:
+        command.extend(["--binary", binary])
+    command.extend(["--wait", "--timeout", "60"])
+    try:
+        result = _run(command, check=False, timeout=75)
+    except (OSError, subprocess.SubprocessError) as exc:
+        return {
+            "status": "optional_unavailable",
+            "required": False,
+            "endpoints": list(RESEARCH_ENDPOINTS),
+            "binaries": list(OPENCODE_NETWORK_BINARIES),
+            "returncode": None,
+            "error": f"{type(exc).__name__}: {exc}"[:1000],
+        }
+    configured = result.returncode == 0
+    return {
+        "status": "configured" if configured else "optional_unavailable",
+        "required": False,
+        "endpoints": list(RESEARCH_ENDPOINTS),
+        "binaries": list(OPENCODE_NETWORK_BINARIES),
+        "returncode": result.returncode,
+        "error": None if configured else result.stderr.strip()[:1000],
+    }
+
+
+def _write_opencode_file_list_shim(path: Path) -> None:
+    """Supply only the `rg --files` behavior needed for skill discovery."""
+
+    path.write_text(OPENCODE_FILE_LIST_SHIM, encoding="utf-8")
+    path.chmod(0o755)
 
 
 def _run_logged(
@@ -277,7 +335,7 @@ def _capture_openshell_logs(sandbox_name: str, destination: Path) -> None:
             "-lc",
             (
                 "for file in /var/log/openshell*.log; do "
-                "[ -f \"$file\" ] && { printf '\\n== %s ==\\n' \"$file\"; cat \"$file\"; }; "
+                '[ -f "$file" ] && { printf \'\\n== %s ==\\n\' "$file"; cat "$file"; }; '
                 "done"
             ),
         ],
@@ -404,18 +462,18 @@ def opencode_config() -> dict[str, Any]:
                 "model": OPENCODE_MODEL,
                 "temperature": 1.0,
                 "top_p": 0.95,
-                # Bound the model/tool loop. A successful mutation needs one read,
-                # one edit, and a final response; five steps leave recovery room
-                # without allowing repeated rewrites to run until the wall clock
-                # timeout.
-                "steps": 5,
+                # Leave room for optional research before the single candidate
+                # read/edit while still bounding the model/tool loop.
+                "steps": 8,
                 "prompt": (
-                    "Perform exactly one candidate.py policy mutation. Read the "
-                    "file at most once, call one edit or write tool exactly once, "
-                    "then immediately return a final text response without calling "
-                    "another tool. The only supported term_order_strategy values "
-                    "are input, lexicographic, coefficient_desc, coefficient_asc, "
-                    "support_desc, and custom."
+                    "Perform exactly one candidate.py policy mutation. Before "
+                    "editing, you may optionally use skill, websearch, webfetch, "
+                    "or codesearch for at most three research calls total. Read "
+                    "candidate.py at most once, call one edit or write tool exactly "
+                    "once, then immediately return a final text response without "
+                    "calling another tool. The only supported term_order_strategy "
+                    "values are input, lexicographic, coefficient_desc, "
+                    "coefficient_asc, support_desc, and custom."
                 ),
                 "permission": {
                     "*": "deny",
@@ -434,11 +492,15 @@ def opencode_config() -> dict[str, Any]:
                     # The OpenShell sandbox contains only the disposable candidate
                     # worktree, and only candidate.py is downloaded afterwards.
                     "edit": "allow",
-                    "skill": "deny",
+                    "skill": {
+                        "*": "deny",
+                        "hsopt": "allow",
+                    },
                     "task": "deny",
                     "todowrite": "deny",
-                    "webfetch": "deny",
-                    "websearch": "deny",
+                    "codesearch": "allow",
+                    "webfetch": "allow",
+                    "websearch": "allow",
                 },
             }
         },
@@ -450,17 +512,23 @@ def mutation_prompt(feedback: dict[str, Any] | None = None) -> str:
 
 Read and edit only candidate.py.
 
-The fixed evaluator compiles every Pauli rotation with PyGridSynth, constructs
-the actual compiled product-formula unitary, diagonalizes it, identifies the
-eigenstate connected to a normalized deterministic-anchor projection onto the
-complete exact ground eigenspace, and measures its exact eigenphase energy
-error. The anchor is HF when it has ground support, otherwise the lowest
-resolved fixed-electron determinant. The score is the exact compiled T count
-only when the candidate is within chemical accuracy. HF overlap is diagnostic
-QPE success probability, not an energy average.
+You may optionally use an installed skill or browse/search for product-formula
+and synthesis ideas before editing. Use at most three research tool calls in
+total. Web research is optional, and search content is inspiration rather than
+an evaluator result or permission to change the benchmark.
 
-Make one coherent deterministic mutation intended to lower T count while
-remaining accurate. Preserve get_method_config(problem) and
+The fixed evaluator compiles every Pauli rotation with PyGridSynth, constructs
+the actual compiled product-formula unitary, diagonalizes it, and selects the
+lowest-energy eigenphase with resolved weight from the fixed Hartree--Fock
+input. The score is the per-attempt compiled T count multiplied by the number
+of independent QPE attempts needed to observe that peak with 95% confidence,
+and is feasible only when the eigenphase is within chemical accuracy of the
+cached exact ground energy. Small resolved HF peak weight is therefore
+penalized by a larger repetition cost; it is not an energy average.
+
+Make one coherent deterministic mutation intended to lower the
+confidence-adjusted T cost while remaining accurate. Preserve
+get_method_config(problem) and
 choose_synthesis_epsilon(term, alpha, step_index, config). Do not change any
 Hamiltonian, evaluator, source data, or benchmark definition. Do not fabricate
 an evaluation result. Read candidate.py at most once. Call one edit or write
@@ -497,6 +565,8 @@ def agent_feedback(feedback: dict[str, Any]) -> dict[str, Any]:
         "absolute_energy_error_mha",
         "absolute_difference_error_mha",
         "passes_chemical_accuracy",
+        "per_attempt_t_count",
+        "confidence_adjusted_t_count",
         "t_count",
         "score",
         "formula_order",
@@ -504,7 +574,9 @@ def agent_feedback(feedback: dict[str, Any]) -> dict[str, Any]:
         "rotations_per_step",
         "scheduled_rotation_count",
         "one_step_t_count",
-        "selected_ground_state_overlap",
+        "qpe_repetitions",
+        "qpe_target_confidence",
+        "qpe_achieved_confidence",
         "qpe_success_probability_from_hf",
     )
     result = {key: feedback[key] for key in scalar_keys if key in feedback}
@@ -520,11 +592,16 @@ def agent_feedback(feedback: dict[str, Any]) -> dict[str, Any]:
                     "electrons",
                     "absolute_energy_error_mha",
                     "passes_chemical_accuracy",
+                    "per_attempt_t_count",
+                    "confidence_adjusted_t_count",
                     "t_count",
                     "formula_order",
                     "n_steps",
                     "rotations_per_step",
                     "scheduled_rotation_count",
+                    "qpe_repetitions",
+                    "qpe_target_confidence",
+                    "qpe_achieved_confidence",
                     "qpe_success_probability_from_hf",
                     "policy",
                 )
@@ -601,6 +678,12 @@ def _mutate_once(
         encoding="utf-8",
     )
     (run_dir / "prompt.md").write_text(prompt, encoding="utf-8")
+    if not HSOPT_SKILL_PATH.is_file():
+        raise RuntimeError(f"OpenCode hsopt skill is unavailable: {HSOPT_SKILL_PATH}")
+    sandbox_skill = run_dir / "hsopt.SKILL.md"
+    shutil.copyfile(HSOPT_SKILL_PATH, sandbox_skill)
+    sandbox_file_list_shim = run_dir / "rg"
+    _write_opencode_file_list_shim(sandbox_file_list_shim)
 
     sandbox_name = f"hsopt-{uuid.uuid4().hex[:12]}"
     if len(sandbox_name) > 19:
@@ -625,6 +708,27 @@ def _mutate_once(
             timeout=timeout_seconds,
         )
         created = True
+        _write_json(
+            run_dir / "research_network.json",
+            _configure_research_network(sandbox_name),
+        )
+        _run(
+            [
+                "openshell",
+                "sandbox",
+                "exec",
+                "--name",
+                sandbox_name,
+                "--timeout",
+                "30",
+                "--",
+                "mkdir",
+                "-p",
+                "/sandbox/work/.opencode/skills/hsopt",
+                "/sandbox/work/.local/bin",
+            ],
+            timeout=45,
+        )
         _run(
             [
                 "openshell",
@@ -647,6 +751,44 @@ def _mutate_once(
             ],
             timeout=timeout_seconds,
         )
+        _run(
+            [
+                "openshell",
+                "sandbox",
+                "upload",
+                sandbox_name,
+                str(sandbox_skill),
+                "/sandbox/work/.opencode/skills/hsopt/SKILL.md",
+            ],
+            timeout=timeout_seconds,
+        )
+        _run(
+            [
+                "openshell",
+                "sandbox",
+                "upload",
+                sandbox_name,
+                str(sandbox_file_list_shim),
+                "/sandbox/work/.local/bin/rg",
+            ],
+            timeout=timeout_seconds,
+        )
+        _run(
+            [
+                "openshell",
+                "sandbox",
+                "exec",
+                "--name",
+                sandbox_name,
+                "--timeout",
+                "30",
+                "--",
+                "chmod",
+                "755",
+                "/sandbox/work/.local/bin/rg",
+            ],
+            timeout=45,
+        )
         command = [
             "openshell",
             "sandbox",
@@ -667,6 +809,10 @@ def _mutate_once(
             "OPENCODE_DISABLE_MODELS_FETCH=true",
             "--env",
             "OPENCODE_DISABLE_LSP_DOWNLOAD=true",
+            "--env",
+            "OPENCODE_ENABLE_EXA=1",
+            "--env",
+            "PATH=/sandbox/work/.local/bin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin",
             "--",
             "opencode",
             "run",
@@ -727,9 +873,7 @@ def _mutate_once(
         "candidate": str(candidate),
         "run_dir": str(run_dir),
         "agent_audit": audit,
-        "agent_completion": (
-            "completed_edit_observed" if stopped_after_edit else "normal_exit"
-        ),
+        "agent_completion": ("completed_edit_observed" if stopped_after_edit else "normal_exit"),
     }
 
 
@@ -767,9 +911,7 @@ def mutate(
                     "error_type": type(exc).__name__,
                     "error": str(exc)[:500],
                     "agent_audit": (
-                        "agent_audit.json"
-                        if (run_dir / "agent_audit.json").is_file()
-                        else None
+                        "agent_audit.json" if (run_dir / "agent_audit.json").is_file() else None
                     ),
                 },
             )

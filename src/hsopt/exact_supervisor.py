@@ -99,10 +99,7 @@ def _run_mutation_proposals(
             on_result(*item)
         return [item]
     with ThreadPoolExecutor(max_workers=workers, thread_name_prefix="hsopt-mutation") as pool:
-        futures = {
-            pool.submit(propose, lane_dir): index
-            for index, lane_dir in enumerate(selected)
-        }
+        futures = {pool.submit(propose, lane_dir): index for index, lane_dir in enumerate(selected)}
         ordered: dict[int, tuple[Path, dict[str, Any]]] = {}
         for future in as_completed(futures):
             item = future.result()
@@ -271,8 +268,7 @@ def _lane_summary(lane_dirs: list[Path]) -> tuple[dict[str, Any], list[Path]]:
             ),
             "by_status": dict(sorted(status_counts.items())),
             "by_family": {
-                family: dict(sorted(counts.items()))
-                for family, counts in sorted(by_family.items())
+                family: dict(sorted(counts.items())) for family, counts in sorted(by_family.items())
             },
         },
         ready,
@@ -544,8 +540,7 @@ def supervise_once(
             if pending == 0:
                 break
             force_partial = pending < threshold and (
-                not ready_lanes_now
-                or (replay_campaign_root is not None and active_jobs == 0)
+                not ready_lanes_now or (replay_campaign_root is not None and active_jobs == 0)
             )
             if pending < threshold and not force_partial:
                 break
@@ -613,13 +608,12 @@ def supervise_once(
                     lane=str(lane_dir.relative_to(campaign_root)),
                     iteration=mutation["iteration"],
                     task_id=mutation["task_id"],
-                    canonical_candidate_sha256=mutation[
-                        "canonical_candidate_sha256"
-                    ],
+                    canonical_candidate_sha256=mutation["canonical_candidate_sha256"],
                 )
         if mutation is None:
             mutation = {"status": "waiting_canonical"}
     elif mutations_enabled and ready_lanes:
+
         def record_mutation_result(lane_dir: Path, result: dict[str, Any]) -> None:
             nonlocal mutation
             mutation = {
@@ -685,17 +679,11 @@ def supervise_once(
             "backend": backend,
             "accelerator": accelerator,
             "runtime_python": runtime_python,
-            "replay_campaign_root": (
-                str(replay_campaign_root) if replay_campaign_root else None
-            ),
+            "replay_campaign_root": (str(replay_campaign_root) if replay_campaign_root else None),
             "hamlib_export_dir": str(hamlib_export_dir) if hamlib_export_dir else None,
             "hamlib_report_dir": str(hamlib_report_dir) if hamlib_report_dir else None,
-            "reactions_export_dir": (
-                str(reactions_export_dir) if reactions_export_dir else None
-            ),
-            "reactions_report_dir": (
-                str(reactions_report_dir) if reactions_report_dir else None
-            ),
+            "reactions_export_dir": (str(reactions_export_dir) if reactions_export_dir else None),
+            "reactions_report_dir": (str(reactions_report_dir) if reactions_report_dir else None),
         },
     }
     _write_json(campaign_root / "supervisor" / "status.json", status)

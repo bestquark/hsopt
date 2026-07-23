@@ -5,6 +5,10 @@ from pathlib import Path
 
 from hsopt.exact_export import export_family
 from hsopt.tgate_opt.reporting import (
+    _hamlib_extended,
+    _hamlib_summary,
+    _reaction_extended,
+    _reaction_summary,
     _validate_hamlib,
     _validate_reactions,
     generate_reports,
@@ -34,6 +38,12 @@ def _absolute_result(t_count: int, estimate: float) -> dict[str, object]:
         "task_id": f"task-{t_count}",
         "passes_chemical_accuracy": True,
         "score": t_count,
+        "per_attempt_t_count": t_count,
+        "qpe_success_probability_from_hf": 1.0,
+        "qpe_target_confidence": 0.95,
+        "qpe_achieved_confidence": 1.0,
+        "qpe_repetitions": 1,
+        "confidence_adjusted_t_count": t_count,
         "t_count": t_count,
         "policy": _policy(),
         "exact_unitary_ground_energy_hartree": -1.0,
@@ -50,6 +60,8 @@ def _reaction_result(t_count: int, estimate: float) -> dict[str, object]:
         "task_id": f"reaction-{t_count}",
         "passes_chemical_accuracy": True,
         "score": t_count,
+        "per_attempt_t_count": t_count,
+        "confidence_adjusted_t_count": t_count,
         "t_count": t_count,
         "exact_difference_hartree": -1.0,
         "compiled_pf_difference_hartree": estimate,
@@ -167,13 +179,13 @@ def test_completed_hamlib_campaign_exports_dynamic_strict_report_tables(
     assert len(candidates) == 1
     assert len(summaries) == 1
     assert candidates[0]["agent_tool_calls"] == "2"
+    assert "T95 (raw x R)" in _hamlib_summary("fixture", summaries)
+    assert "T95 (raw x R)" in _hamlib_extended("fixture", summaries, candidates)
     assert (output / "records/fixture/run_01/iterations/0001/agent_actions.jsonl").exists() is False
     reports = tmp_path / "hamlib-reports"
     generate_reports("hamlib121", output, reports, engine="reportlab")
     assert (reports / "hamiltonians/fixture/summary.pdf").read_bytes().startswith(b"%PDF-")
-    assert (reports / "hamiltonians/fixture/extended_log.pdf").read_bytes().startswith(
-        b"%PDF-"
-    )
+    assert (reports / "hamiltonians/fixture/extended_log.pdf").read_bytes().startswith(b"%PDF-")
 
 
 def test_completed_reaction_campaign_exports_both_contracts(tmp_path: Path) -> None:
@@ -210,6 +222,9 @@ def test_completed_reaction_campaign_exports_both_contracts(tmp_path: Path) -> N
 
     assert len(candidates) == 4
     assert set(pooled["fixture"]) >= {"equal_share", "reaction_aware", "reaction"}
+    reaction_rows = [row for row in candidates if row["reaction_key"] == "fixture"]
+    assert "T95 (raw total)" in _reaction_summary("fixture", reaction_rows, pooled["fixture"])
+    assert "T95 (raw total)" in _reaction_extended("fixture", reaction_rows, pooled["fixture"])
     reports = tmp_path / "reaction-reports"
     generate_reports("reactions10", output, reports, engine="reportlab")
     assert (reports / "reactions/fixture/summary.pdf").read_bytes().startswith(b"%PDF-")

@@ -136,7 +136,6 @@ def prepare_trial_workspace(trial_root: Path, family: str) -> Path:
     for relative in [
         Path("src/hsopt/__init__.py"),
         Path("src/hsopt/tgate_opt"),
-        Path("examples/pfs"),
         Path("skills"),
     ]:
         source = REPO_ROOT / relative
@@ -178,7 +177,7 @@ def build_trial_agent_prompt(candidate_prompt: str, lane: Lane, target_iteration
     base_prompt = build_agent_prompt(lane, target_iteration)
     return f"""{base_prompt}
 
-Candidate strategy prompt being evaluated by `$hsgepa`:
+Candidate strategy prompt being evaluated by the optional `hsgepa` CLI:
 ---
 {candidate_prompt.strip()}
 ---
@@ -212,9 +211,15 @@ def launch_agent(
         cmd.extend(["-m", model])
     cmd.append(prompt)
     if dry_run:
-        return {"dry_run": True, "command": shell_join(cmd), "prompt_file": str(output_path.parent / "agent_prompt.md")}
+        return {
+            "dry_run": True,
+            "command": shell_join(cmd),
+            "prompt_file": str(output_path.parent / "agent_prompt.md"),
+        }
     start = time.perf_counter()
-    proc = subprocess.run(cmd, cwd=repo_root, capture_output=True, text=True, timeout=max_seconds, check=False)
+    proc = subprocess.run(
+        cmd, cwd=repo_root, capture_output=True, text=True, timeout=max_seconds, check=False
+    )
     (output_path.parent / "agent_stdout.txt").write_text(proc.stdout)
     (output_path.parent / "agent_stderr.txt").write_text(proc.stderr)
     return {
@@ -264,7 +269,10 @@ def evaluate_candidate_prompt(
 ) -> tuple[float, dict[str, Any]]:
     prompt = candidate_text(candidate)
     if not prompt.strip():
-        return -0.25, {"Feedback": {"status": "empty candidate prompt"}, "scores": {"t_gate_reduction_fraction": -0.25}}
+        return -0.25, {
+            "Feedback": {"status": "empty candidate prompt"},
+            "scores": {"t_gate_reduction_fraction": -0.25},
+        }
 
     family = normalize_family(str(example.get("family", DEFAULT_FAMILY)))
     molecule = str(example.get("molecule", "h2"))
@@ -297,7 +305,9 @@ def evaluate_candidate_prompt(
         (trial_root / "dry_run.json").write_text(json.dumps(payload, indent=2))
         return 0.0, {"Feedback": payload, "scores": {"t_gate_reduction_fraction": 0.0}}
 
-    restore = subprocess.run(restore_command(lane), cwd=repo_root, capture_output=True, text=True, check=False)
+    restore = subprocess.run(
+        restore_command(lane), cwd=repo_root, capture_output=True, text=True, check=False
+    )
     reward, side_info = score_trial(lane)
     side_info["Input"] = {"example": example, "candidate_prompt": prompt}
     side_info["Generated Outputs"] = {
@@ -307,7 +317,9 @@ def evaluate_candidate_prompt(
         "restore_stdout_tail": restore.stdout[-2000:],
         "restore_stderr_tail": restore.stderr[-2000:],
     }
-    (trial_root / "evaluation.json").write_text(json.dumps({"reward": reward, "side_info": side_info}, indent=2))
+    (trial_root / "evaluation.json").write_text(
+        json.dumps({"reward": reward, "side_info": side_info}, indent=2)
+    )
     return reward, side_info
 
 
@@ -371,8 +383,12 @@ def cmd_optimize(args: argparse.Namespace) -> int:
     run_root = Path(args.run_root).resolve()
     run_root.mkdir(parents=True, exist_ok=True)
 
-    def evaluator(candidate: dict[str, str], example: dict[str, Any]) -> tuple[float, dict[str, Any]]:
-        return evaluate_candidate_prompt(candidate, example, run_root=run_root / "trials", model=args.model, dry_run=False)
+    def evaluator(
+        candidate: dict[str, str], example: dict[str, Any]
+    ) -> tuple[float, dict[str, Any]]:
+        return evaluate_candidate_prompt(
+            candidate, example, run_root=run_root / "trials", model=args.model, dry_run=False
+        )
 
     result = optimize_anything(
         seed_candidate={"prompt": seed},
@@ -404,18 +420,26 @@ def cmd_optimize(args: argparse.Namespace) -> int:
     if best_candidate is not None:
         summary["best_candidate"] = _jsonable(best_candidate)
     (run_root / "result.json").write_text(json.dumps(summary, indent=2))
-    print(json.dumps({"run_root": str(run_root), "result_file": str(run_root / "result.json")}, indent=2))
+    print(
+        json.dumps(
+            {"run_root": str(run_root), "result_file": str(run_root / "result.json")}, indent=2
+        )
+    )
     return 0
 
 
 def build_parser() -> argparse.ArgumentParser:
-    parser = argparse.ArgumentParser(description="Optimize T-gate autoresearch prompts with GEPA optimize_anything.")
+    parser = argparse.ArgumentParser(
+        description="Optimize T-gate autoresearch prompts with GEPA optimize_anything."
+    )
     sub = parser.add_subparsers(dest="command", required=True)
 
     seed = sub.add_parser("seed-prompt", help="Print the default GEPA seed prompt.")
     seed.set_defaults(func=cmd_seed_prompt)
 
-    dataset = sub.add_parser("dataset", help="Write a default train dataset JSON for T-gate prompt optimization.")
+    dataset = sub.add_parser(
+        "dataset", help="Write a default train dataset JSON for T-gate prompt optimization."
+    )
     dataset.add_argument(
         "--output",
         required=True,
@@ -425,7 +449,9 @@ def build_parser() -> argparse.ArgumentParser:
     dataset.add_argument("--smoke", action="store_true", help="Use only the cheapest H2 lane.")
     dataset.set_defaults(func=cmd_dataset)
 
-    eval_prompt = sub.add_parser("evaluate-prompt", help="Evaluate one prompt candidate on one isolated T-gate trial.")
+    eval_prompt = sub.add_parser(
+        "evaluate-prompt", help="Evaluate one prompt candidate on one isolated T-gate trial."
+    )
     eval_prompt.add_argument("--prompt-file", required=True)
     eval_prompt.add_argument("--family", default=DEFAULT_FAMILY)
     eval_prompt.add_argument("--molecule", default="h2")
@@ -441,7 +467,9 @@ def build_parser() -> argparse.ArgumentParser:
     eval_prompt.add_argument("--dry-run", action="store_true")
     eval_prompt.set_defaults(func=cmd_evaluate_prompt)
 
-    optimize = sub.add_parser("optimize", help="Run GEPA optimize_anything over the T-gate agent prompt.")
+    optimize = sub.add_parser(
+        "optimize", help="Run GEPA optimize_anything over the T-gate agent prompt."
+    )
     optimize.add_argument("--seed-prompt")
     optimize.add_argument("--dataset")
     optimize.add_argument("--valset")
@@ -452,7 +480,9 @@ def build_parser() -> argparse.ArgumentParser:
         required=True,
         help="Explicit external directory for GEPA state, trial workspaces, and results.",
     )
-    optimize.add_argument("--model", help="Optional Codex model used inside each trial agent launch.")
+    optimize.add_argument(
+        "--model", help="Optional Codex model used inside each trial agent launch."
+    )
     optimize.add_argument("--max-metric-calls", type=int, default=12)
     optimize.add_argument("--parallel", action=argparse.BooleanOptionalAction, default=False)
     optimize.add_argument("--max-workers", type=int, default=1)

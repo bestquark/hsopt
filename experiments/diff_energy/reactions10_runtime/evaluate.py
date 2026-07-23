@@ -28,7 +28,7 @@ from typing import Any, Mapping, Sequence
 
 import numpy as np
 
-from pfs.chemistry import (
+from .chemistry import (
     MoleculeSpec,
     _active_space_integrals,
     build_pauli_rotation_compiler,
@@ -408,6 +408,7 @@ def _validate_custom_order(
     normalized = [dict(term) for term in ordered if isinstance(term, Mapping)]
     if len(normalized) != len(ordered) or len(normalized) != len(original):
         raise ValueError("custom term ordering must return every term dictionary exactly once")
+
     def canonical(item: Mapping[str, object]) -> str:
         return json.dumps(item, sort_keys=True, separators=(",", ":"))
 
@@ -446,15 +447,11 @@ def order_product_formula_terms(
     raise ValueError(f"unsupported term_order_strategy {strategy!r}")
 
 
-def _validate_explicit_schedule(
-    schedule: object, *, term_count: int
-) -> list[dict[str, object]]:
+def _validate_explicit_schedule(schedule: object, *, term_count: int) -> list[dict[str, object]]:
     if not isinstance(schedule, (list, tuple)) or not schedule:
         raise ValueError("explicit product-formula schedule must be a nonempty list or tuple")
     if len(schedule) > MAX_EXPLICIT_SCHEDULE_ROTATIONS:
-        raise ValueError(
-            f"explicit schedule exceeds {MAX_EXPLICIT_SCHEDULE_ROTATIONS} rotations"
-        )
+        raise ValueError(f"explicit schedule exceeds {MAX_EXPLICIT_SCHEDULE_ROTATIONS} rotations")
     normalized: list[dict[str, object]] = []
     for index, raw in enumerate(schedule):
         if not isinstance(raw, Mapping) or set(raw) - {"term_index", "alpha", "epsilon"}:
@@ -517,7 +514,11 @@ def build_explicit_product_formula_schedule(
         formula_order = int(getattr(config, "formula_order"))
         n_steps = int(getattr(config, "n_steps"))
         per_step = len(copied) if formula_order == 1 else 2 * len(copied) - 1
-        if formula_order not in {1, 2} or n_steps <= 0 or n_steps * per_step > MAX_EXPLICIT_SCHEDULE_ROTATIONS:
+        if (
+            formula_order not in {1, 2}
+            or n_steps <= 0
+            or n_steps * per_step > MAX_EXPLICIT_SCHEDULE_ROTATIONS
+        ):
             raise ValueError("randomized Trotter parameters exceed the explicit schedule limit")
         rng = random.Random(evaluator_seed)
         step_time = target_time / n_steps
@@ -945,9 +946,7 @@ def _run_compiled_explicit_schedule(
 ) -> tuple[Any, dict[str, object]]:
     strategy = str(getattr(config, "schedule_strategy"))
     term_order_strategy = str(getattr(config, "term_order_strategy", "input"))
-    terms = order_product_formula_terms(
-        problem["pauli_terms"], term_order_strategy, policy, config
-    )
+    terms = order_product_formula_terms(problem["pauli_terms"], term_order_strategy, policy, config)
     if strategy == "qdrift":
         # Keep the finite seeded qDRIFT realization independent of a policy's
         # term permutation, which otherwise becomes an indirect seed-selection
@@ -1111,9 +1110,7 @@ def evaluate_species(
         total_phase = int(getattr(config, "n_steps")) * step_phase
         estimator_details = {
             "selected_compiled_unitary_eigen_index": selected,
-            "selected_compiled_unitary_ground_overlap": float(
-                np.asarray(overlaps[selected])
-            ),
+            "selected_compiled_unitary_ground_overlap": float(np.asarray(overlaps[selected])),
             "selected_compiled_step_eigenphase_radians": step_phase,
             "selected_compiled_total_eigenphase_radians": total_phase,
             "max_eigenvalue_modulus_error": float(

@@ -29,6 +29,12 @@ CHEMICAL_ACCURACY_HARTREE = 1.0 / 627.5094740631
 EXACT_GROUND_SUBSPACE_ATOL_HARTREE = 1.0e-9
 TARGET_ANCHOR_MIN_PROBABILITY = 1.0e-12
 TARGET_STATE_DEFINITION = "normalized_anchor_projection_onto_exact_ground_eigenspace"
+EVALUATION_CONTRACT_VERSION = "lowest_resolved_hf_qpe_peak_95pct_t_count_v1"
+QPE_TARGET_CONFIDENCE = 0.95
+# Match the established HF-reference spectral evaluator. This suppresses
+# floating-point zero-weight eigenvectors; it is not a physical p_min or an
+# energy-error bound. Resolved small weights pay their full repetition cost.
+QPE_PEAK_WEIGHT_THRESHOLD = 1.0e-10
 DENSE_EVALUATOR_MAX_QUBITS = 15
 ROTATION_CHUNK_TARGET_BYTES = 1024**3
 DEFERRED_ROTATION_TARGET_BYTES = 8 * 1024**3
@@ -579,6 +585,90 @@ def _unwrap_energy(phase: float, time: float, reference: float) -> float:
     return principal + round((reference - principal) / period) * period
 
 
+def _qpe_repetitions(
+    success_probability: float,
+    *,
+    target_confidence: float = QPE_TARGET_CONFIDENCE,
+) -> int:
+    """Return the attempts needed to observe a peak at the target confidence."""
+
+    probability = min(1.0, max(0.0, float(success_probability)))
+    confidence = float(target_confidence)
+    if not 0.0 < confidence < 1.0:
+        raise ValueError("target_confidence must be strictly between zero and one")
+    if probability <= 0.0:
+        raise ValueError("QPE peak probability must be positive")
+    if probability >= 1.0:
+        return 1
+    return max(
+        1,
+        int(math.ceil(math.log1p(-confidence) / math.log1p(-probability))),
+    )
+
+
+def _qpe_achieved_confidence(success_probability: float, repetitions: int) -> float:
+    probability = min(1.0, max(0.0, float(success_probability)))
+    if repetitions <= 0:
+        raise ValueError("repetitions must be positive")
+    if probability >= 1.0:
+        return 1.0
+    return -math.expm1(repetitions * math.log1p(-probability))
+
+
+def _select_lowest_hf_accessible_peak(
+    step_phases: Sequence[float],
+    hf_probabilities: Sequence[float],
+    *,
+    n_steps: int,
+    target_time: float,
+    identity_coefficient: float,
+    exact_energy: float,
+) -> dict[str, Any]:
+    """Select the lowest resolved PF energy that ideal QPE can sample from HF."""
+
+    phases = np.asarray(step_phases, dtype=np.float64)
+    probabilities = np.asarray(hf_probabilities, dtype=np.float64)
+    if phases.ndim != 1 or probabilities.shape != phases.shape or phases.size == 0:
+        raise ValueError("PF eigenphases and HF probabilities must be nonempty 1D arrays")
+    if n_steps <= 0 or target_time <= 0.0:
+        raise ValueError("n_steps and target_time must be positive")
+
+    centered_reference = exact_energy - identity_coefficient
+    total_phases = int(n_steps) * phases
+    energies = np.asarray(
+        [
+            _unwrap_energy(float(phase), target_time, centered_reference) + identity_coefficient
+            for phase in total_phases
+        ],
+        dtype=np.float64,
+    )
+    accessible = np.flatnonzero(probabilities >= QPE_PEAK_WEIGHT_THRESHOLD)
+    if accessible.size == 0:
+        raise RuntimeError(
+            "compiled PF unitary has no numerically resolved eigenphase with HF support"
+        )
+    selected = min(
+        (int(index) for index in accessible),
+        key=lambda index: (float(energies[index]), -float(probabilities[index]), index),
+    )
+    selected_probability = min(1.0, max(0.0, float(probabilities[selected])))
+    return {
+        "selected_eigen_index": selected,
+        "selected_step_eigenphase_radians": float(phases[selected]),
+        "selected_total_eigenphase_radians": float(total_phases[selected]),
+        "compiled_pf_energy_hartree": float(energies[selected]),
+        "qpe_success_probability_from_hf": selected_probability,
+        "hf_accessible_peak_count": int(accessible.size),
+        "hf_accessible_probability_mass": float(
+            min(1.0, max(0.0, probabilities[accessible].sum()))
+        ),
+        "phase_unwrap_energy_window_hartree": [
+            float(exact_energy - math.pi / target_time),
+            float(exact_energy + math.pi / target_time),
+        ],
+    }
+
+
 def _sha256(path: Path) -> str:
     return hashlib.sha256(path.resolve().read_bytes()).hexdigest()
 
@@ -588,29 +678,20 @@ def _serialize_state(state: Any) -> list[list[float]]:
     return [[float(value.real), float(value.imag)] for value in host]
 
 
-def _reference_state(
+def _reference_energy(
     problem: Mapping[str, Any],
     reference: Mapping[str, Any],
-    *,
-    xp: Any,
-) -> tuple[float, Any]:
+) -> float:
+    """Validate a cached exact reference without loading its ground-state vector."""
+
     if reference.get("observable") != "exact_unitary_ground_eigenphase":
         raise ValueError("reference is not an exact-unitary ground-eigenphase result")
-    if reference.get("target_state_definition") != TARGET_STATE_DEFINITION:
-        raise ValueError("reference does not use the deterministic anchored exact-ground target")
+    if reference.get("evaluation_contract_version") != EVALUATION_CONTRACT_VERSION:
+        raise ValueError("reference uses a different evaluator contract")
     problem_path = Path(str(problem["_path"]))
     if reference.get("problem_sha256") != _sha256(problem_path):
         raise ValueError(f"exact reference does not match {problem_path}")
-    encoded = reference.get("exact_ground_state")
-    if not isinstance(encoded, list) or len(encoded) != 1 << int(problem["n_qubits"]):
-        raise ValueError("exact reference has an invalid ground-state vector")
-    state_host = np.asarray(
-        [complex(float(value[0]), float(value[1])) for value in encoded],
-        dtype=np.complex128,
-    )
-    state = xp.asarray(state_host, dtype=xp.complex128)
-    state /= xp.linalg.norm(state)
-    return float(reference["exact_unitary_ground_energy_hartree"]), state
+    return float(reference["exact_unitary_ground_energy_hartree"])
 
 
 def evaluate_exact_reference(
@@ -687,6 +768,7 @@ def evaluate_exact_reference(
     evaluation_wall_seconds = time.perf_counter() - evaluation_started
     return {
         "status": "ok",
+        "evaluation_contract_version": EVALUATION_CONTRACT_VERSION,
         "observable": "exact_unitary_ground_eigenphase",
         "unitary_definition": "U_exact = exp(+i H t)",
         "problem": problem["name"],
@@ -755,6 +837,7 @@ def evaluate_exact_difference_reference(
     evaluation_wall_seconds = time.perf_counter() - evaluation_started
     return {
         "status": "ok",
+        "evaluation_contract_version": EVALUATION_CONTRACT_VERSION,
         "observable": "exact_unitary_signed_energy_difference",
         "unitary_definition": "U_exact = exp(+i H t) for each species",
         "reaction": reaction["name"],
@@ -782,8 +865,9 @@ def evaluate_molecule(
     backend: str = "cupynumeric",
     reference_path: Path | None = None,
     reference_result: Mapping[str, Any] | None = None,
+    target_confidence: float = QPE_TARGET_CONFIDENCE,
 ) -> dict[str, Any]:
-    """Return the exact compiled-unitary ground-energy error for one molecule."""
+    """Evaluate the lowest HF-accessible compiled-PF energy for one molecule."""
 
     evaluation_started = time.perf_counter()
     problem = load_problem(problem_path)
@@ -797,7 +881,7 @@ def evaluate_molecule(
         reference_result = evaluate_exact_reference(problem_path, backend=backend)
 
     reference_started = time.perf_counter()
-    exact_energy, exact_ground = _reference_state(problem, reference_result, xp=xp)
+    exact_energy = _reference_energy(problem, reference_result)
     hf_state = _hartree_fock_state(problem, xp)
     _fence(backend_name)
     reference_load_seconds = time.perf_counter() - reference_started
@@ -819,23 +903,33 @@ def evaluate_molecule(
     compiled_unitary_eigensolve_seconds = time.perf_counter() - eigensolve_started
 
     postprocess_started = time.perf_counter()
-    ground_overlaps = xp.abs(eigenvectors.conj().T @ exact_ground) ** 2
-    selected = int(np.asarray(xp.argmax(ground_overlaps)))
-    hf_probabilities = xp.abs(eigenvectors.conj().T @ hf_state) ** 2
-    step_phase = float(np.asarray(xp.angle(eigenvalues[selected])))
-    total_phase = metrics["n_steps"] * step_phase
-    centered_reference = exact_energy - float(problem["identity_coefficient"])
-    estimated_centered = _unwrap_energy(
-        total_phase,
-        float(problem["target_time"]),
-        centered_reference,
+    hf_probabilities = np.asarray(
+        xp.abs(eigenvectors.conj().T @ hf_state) ** 2,
+        dtype=np.float64,
     )
-    estimated_energy = estimated_centered + float(problem["identity_coefficient"])
+    peak = _select_lowest_hf_accessible_peak(
+        np.asarray(xp.angle(eigenvalues), dtype=np.float64),
+        hf_probabilities,
+        n_steps=int(metrics["n_steps"]),
+        target_time=float(problem["target_time"]),
+        identity_coefficient=float(problem["identity_coefficient"]),
+        exact_energy=exact_energy,
+    )
+    estimated_energy = float(peak["compiled_pf_energy_hartree"])
     signed_error = estimated_energy - exact_energy
     absolute_error = abs(signed_error)
     passes = absolute_error <= CHEMICAL_ACCURACY_HARTREE
-    selected_ground_state_overlap = float(np.asarray(ground_overlaps[selected]))
-    qpe_success_probability = float(np.asarray(hf_probabilities[selected]))
+    qpe_success_probability = float(peak["qpe_success_probability_from_hf"])
+    qpe_repetitions = _qpe_repetitions(
+        qpe_success_probability,
+        target_confidence=target_confidence,
+    )
+    qpe_achieved_confidence = _qpe_achieved_confidence(
+        qpe_success_probability,
+        qpe_repetitions,
+    )
+    per_attempt_t_count = int(metrics["t_count"])
+    confidence_adjusted_t_count = qpe_repetitions * per_attempt_t_count
     max_modulus_error = float(np.asarray(xp.max(xp.abs(xp.abs(eigenvalues) - 1.0))))
     _fence(backend_name)
     postprocess_seconds = time.perf_counter() - postprocess_started
@@ -843,7 +937,8 @@ def evaluate_molecule(
 
     return {
         "status": "ok",
-        "observable": "compiled_unitary_ground_eigenphase",
+        "evaluation_contract_version": EVALUATION_CONTRACT_VERSION,
+        "observable": "compiled_unitary_lowest_hf_accessible_eigenphase",
         "problem": problem["name"],
         "problem_path": str(Path(problem_path).resolve()),
         "policy_path": str(Path(policy_path).resolve()),
@@ -852,9 +947,6 @@ def evaluate_molecule(
         ),
         "exact_reference_problem_sha256": reference_result["problem_sha256"],
         "exact_ground_subspace_dimension": int(reference_result["exact_ground_subspace_dimension"]),
-        "target_state_definition": reference_result["target_state_definition"],
-        "target_anchor_kind": reference_result["target_anchor_kind"],
-        "target_anchor_basis_index": int(reference_result["target_anchor_basis_index"]),
         "backend": backend_name,
         "n_qubits": int(problem["n_qubits"]),
         "electrons": int(problem["electrons"]),
@@ -866,17 +958,20 @@ def evaluate_molecule(
         "absolute_energy_error_mha": 1000.0 * absolute_error,
         "chemical_accuracy_hartree": CHEMICAL_ACCURACY_HARTREE,
         "passes_chemical_accuracy": passes,
-        "selected_eigen_index": selected,
-        "selected_ground_state_overlap": selected_ground_state_overlap,
-        "qpe_success_probability_from_hf": qpe_success_probability,
-        "selected_step_eigenphase_radians": step_phase,
-        "selected_total_eigenphase_radians": total_phase,
+        **peak,
+        "pf_peak_selection": "lowest_energy_peak_with_resolved_hf_weight",
+        "qpe_peak_weight_threshold": QPE_PEAK_WEIGHT_THRESHOLD,
+        "qpe_target_confidence": float(target_confidence),
+        "qpe_achieved_confidence": qpe_achieved_confidence,
+        "qpe_repetitions": qpe_repetitions,
         "max_eigenvalue_modulus_error": max_modulus_error,
-        "t_count": int(metrics["t_count"]),
-        "score": int(metrics["t_count"]) if passes else None,
+        "per_attempt_t_count": per_attempt_t_count,
+        "confidence_adjusted_t_count": confidence_adjusted_t_count,
+        "t_count": per_attempt_t_count,
+        "score": confidence_adjusted_t_count if passes else None,
         "evaluation_contract": (
-            "minimize exact compiled T count subject to the compiled-unitary "
-            "ground-eigenphase error being within chemical accuracy"
+            "minimize 95%-confidence QPE T cost subject to chemical accuracy "
+            "of the lowest resolved HF-reference compiled-PF eigenphase"
         ),
         "evaluation_wall_seconds": evaluation_wall_seconds,
         "timing_seconds": {
@@ -909,33 +1004,58 @@ def evaluate_difference(
     )
     if reference.get("observable") != "exact_unitary_signed_energy_difference":
         raise ValueError("reference is not an exact-unitary signed-difference result")
+    if reference.get("evaluation_contract_version") != EVALUATION_CONTRACT_VERSION:
+        raise ValueError("reference uses a different evaluator contract")
     if reference.get("reaction_sha256") != _sha256(reaction_path):
         raise ValueError(f"exact reference does not match {reaction_path}")
     species_results: dict[str, dict[str, Any]] = {}
     exact_difference = 0.0
     compiled_difference = 0.0
     total_t_count = 0
+    confidence_adjusted_t_count = 0
+    unique_species = {str(item["species"]) for item in reaction["terms"]}
+    if not unique_species:
+        raise ValueError("reaction must contain at least one species")
+    # Give each unique species an equal share of the five-percent failure
+    # budget. The union bound therefore guarantees at least 95% probability
+    # that every required species peak has been observed.
+    species_target_confidence = 1.0 - ((1.0 - QPE_TARGET_CONFIDENCE) / len(unique_species))
     for item in reaction["terms"]:
         species = str(item["species"])
         coefficient = float(item["coefficient"])
-        problem_path = (reaction_path.parent / str(item["problem"])).resolve()
-        result = evaluate_molecule(
-            problem_path,
-            policy_path,
-            backend=backend,
-            reference_result=reference["species"][species],
-        )
-        species_results[species] = result
+        if species not in species_results:
+            problem_path = (reaction_path.parent / str(item["problem"])).resolve()
+            result = evaluate_molecule(
+                problem_path,
+                policy_path,
+                backend=backend,
+                reference_result=reference["species"][species],
+                target_confidence=species_target_confidence,
+            )
+            species_results[species] = result
+            total_t_count += int(result["t_count"])
+            confidence_adjusted_t_count += int(result["confidence_adjusted_t_count"])
+        result = species_results[species]
         exact_difference += coefficient * result["exact_ground_energy_hartree"]
         compiled_difference += coefficient * result["compiled_pf_energy_hartree"]
-        total_t_count += int(result["t_count"])
 
     signed_error = compiled_difference - exact_difference
     absolute_error = abs(signed_error)
     passes = absolute_error <= CHEMICAL_ACCURACY_HARTREE
+    union_bound_confidence = max(
+        0.0,
+        1.0
+        - sum(
+            1.0 - float(result["qpe_achieved_confidence"]) for result in species_results.values()
+        ),
+    )
+    independent_joint_confidence = math.prod(
+        float(result["qpe_achieved_confidence"]) for result in species_results.values()
+    )
     evaluation_wall_seconds = time.perf_counter() - evaluation_started
     return {
         "status": "ok",
+        "evaluation_contract_version": EVALUATION_CONTRACT_VERSION,
         "observable": "compiled_unitary_signed_energy_difference",
         "reaction": reaction["name"],
         "reaction_path": str(reaction_path),
@@ -951,8 +1071,15 @@ def evaluate_difference(
         "absolute_difference_error_mha": 1000.0 * absolute_error,
         "chemical_accuracy_hartree": CHEMICAL_ACCURACY_HARTREE,
         "passes_chemical_accuracy": passes,
+        "qpe_joint_target_confidence": QPE_TARGET_CONFIDENCE,
+        "qpe_species_target_confidence": species_target_confidence,
+        "qpe_confidence_allocation": "equal_union_bound_failure_budget",
+        "qpe_joint_achieved_confidence_union_bound": union_bound_confidence,
+        "qpe_joint_achieved_confidence_independent": independent_joint_confidence,
+        "per_attempt_t_count": total_t_count,
+        "confidence_adjusted_t_count": confidence_adjusted_t_count,
         "t_count": total_t_count,
-        "score": total_t_count if passes else None,
+        "score": confidence_adjusted_t_count if passes else None,
         "species": species_results,
         "evaluation_wall_seconds": evaluation_wall_seconds,
         "timing_seconds": {
@@ -962,7 +1089,8 @@ def evaluate_difference(
             "total": evaluation_wall_seconds,
         },
         "evaluation_contract": (
-            "minimize the sum of exact compiled species T counts subject to the "
-            "signed compiled-unitary energy-difference error being within chemical accuracy"
+            "minimize the summed confidence-adjusted species QPE T cost with at "
+            "least 95% union-bound confidence, subject to signed reaction-energy "
+            "error being within chemical accuracy"
         ),
     }

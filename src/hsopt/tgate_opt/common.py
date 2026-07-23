@@ -9,7 +9,6 @@ from pathlib import Path
 from typing import Any
 
 
-PFS_ROOT_RELATIVE = Path("examples/pfs")
 DEFAULT_FAMILY = "pf"
 DEFAULT_MOLECULE = "h2"
 DEFAULT_EVALUATOR = "energy"
@@ -26,13 +25,7 @@ def _find_repo_root(start: Path) -> Path:
     if override:
         return Path(override).expanduser().resolve()
     for candidate in (start, *start.parents):
-        pfs_root = candidate / PFS_ROOT_RELATIVE
-        if (
-            (candidate / "pyproject.toml").exists()
-            and (pfs_root / "chemistry.py").exists()
-            and (pfs_root / "evaluate_energy.py").exists()
-            and (pfs_root / "evaluate_fidelity.py").exists()
-        ):
+        if (candidate / "pyproject.toml").exists() and (candidate / "src" / "hsopt").is_dir():
             return candidate
     raise RuntimeError(
         "could not locate hsopt repo root; set HSOPT_REPO_ROOT or run inside the repository"
@@ -111,14 +104,17 @@ def _pfs_lanes(repo_root: Path, family: str, relative_path: Path) -> list[Lane]:
                 evaluator_wrapper=evaluator_wrapper,
                 target_iteration=int(getattr(spec, "target_iteration", 100)),
                 supported=supported,
-                notes="" if supported else "Missing simple_pf.py or one of the two evaluator entry points.",
+                notes=""
+                if supported
+                else "Missing simple_pf.py or one of the two evaluator entry points.",
             )
         )
     return lanes
 
 
 def discover_lanes(repo_root: Path = REPO_ROOT) -> list[Lane]:
-    return _pfs_lanes(repo_root, DEFAULT_FAMILY, PFS_ROOT_RELATIVE)
+    _ = repo_root
+    return []
 
 
 def normalize_family(family: str | None) -> str:
@@ -135,11 +131,6 @@ def _candidate_target_paths(target: str | Path, repo_root: Path) -> list[Path]:
         (Path.cwd() / raw).resolve(),
         (repo_root / raw).resolve(),
     ]
-    if raw.parts and raw.parts[0] == "pfs":
-        candidates.append((repo_root / "examples" / raw).resolve())
-    if len(raw.parts) >= 3 and raw.parts[:3] == ("examples", "ft_protocols", "pfs"):
-        candidates.append((repo_root / "examples" / "pfs" / Path(*raw.parts[3:])).resolve())
-
     unique: list[Path] = []
     for candidate in candidates:
         if candidate not in unique:
@@ -147,7 +138,9 @@ def _candidate_target_paths(target: str | Path, repo_root: Path) -> list[Path]:
     return unique
 
 
-def lane_for_path(target: str | Path, repo_root: Path = REPO_ROOT, require_supported: bool = True) -> Lane:
+def lane_for_path(
+    target: str | Path, repo_root: Path = REPO_ROOT, require_supported: bool = True
+) -> Lane:
     paths = _candidate_target_paths(target, repo_root)
     matches: list[Lane] = []
     for lane in discover_lanes(repo_root):
@@ -176,7 +169,11 @@ def resolve_lane(
         return lane_for_path(target, repo_root=repo_root, require_supported=require_supported)
     family = normalize_family(family)
     molecule = molecule or DEFAULT_MOLECULE
-    matches = [lane for lane in discover_lanes(repo_root) if lane.family == family and lane.molecule == molecule]
+    matches = [
+        lane
+        for lane in discover_lanes(repo_root)
+        if lane.family == family and lane.molecule == molecule
+    ]
     if not matches:
         available = ", ".join(lane.key for lane in discover_lanes(repo_root)) or "none"
         raise SystemExit(f"unknown lane {family}:{molecule}; available lanes: {available}")
@@ -257,7 +254,7 @@ def restore_command(_lane: Lane, _script: Path | None = None) -> list[str]:
     return [
         "python",
         "-c",
-        "print('{\"status\":\"noop\",\"reason\":\"simplified pfs layout has no in-tree snapshots\"}')",
+        'print(\'{"status":"noop","reason":"simplified pfs layout has no in-tree snapshots"}\')',
     ]
 
 

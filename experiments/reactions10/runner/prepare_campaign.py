@@ -65,10 +65,11 @@ EXPECTED_INPUT_HASHES = {
     "problem_cache.sha256": "cf521d0a98c7b9cb3478ef28349200f4ab98b171a79a915edca6459349f9c22f",
 }
 CORE_FILES = (
-    Path("examples/pfs/array_backend.py"),
-    Path("examples/pfs/chemistry.py"),
-    Path("examples/pfs/reactions/evaluate.py"),
-    Path("examples/pfs/reactions/simple_pf.py"),
+    Path("experiments/diff_energy/reactions10_runtime/__init__.py"),
+    Path("experiments/diff_energy/reactions10_runtime/array_backend.py"),
+    Path("experiments/diff_energy/reactions10_runtime/chemistry.py"),
+    Path("experiments/diff_energy/reactions10_runtime/evaluate.py"),
+    Path("experiments/diff_energy/reactions10_runtime/simple_pf.py"),
     Path("experiments/reactions10/__init__.py"),
     Path("experiments/reactions10/benchmark.py"),
     Path("experiments/reactions10/inputs/seed_manifest.json"),

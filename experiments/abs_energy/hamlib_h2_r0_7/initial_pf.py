@@ -4,7 +4,7 @@ Source: hamiltonian.json
 Source SHA-256: 9b5e4fbd215ad3492c7a3b626792894629e399cbad30d90e72237ea8e2f5c7d1
 Paper contract: reiher_wiebe_svore_2017.json
 Paper contract SHA-256: 8300ffe6936a1e5c531f82717ba6d6d083261b157e0f1a9bf8b109aa15963578
-Generator: examples/generate_initial_pf.py
+Generator: experiments/generate_initial_pf.py
 Paper: Reiher et al., PNAS 114, 7555-7560 (2017), DOI 10.1073/pnas.1619152114
 
 This file is measured unchanged as iteration 0. Scientific acceptance is based

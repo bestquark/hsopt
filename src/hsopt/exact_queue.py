@@ -21,6 +21,7 @@ from pathlib import Path
 from typing import Any
 
 from .compiled_unitary import (
+    EVALUATION_CONTRACT_VERSION,
     evaluate_difference,
     evaluate_exact_difference_reference,
     evaluate_exact_reference,
@@ -70,7 +71,9 @@ def _task_id(
     reference: Path | None = None,
 ) -> str:
     digest = hashlib.sha256()
-    digest.update(b"hsopt-exact-task-v2\0")
+    digest.update(b"hsopt-exact-task-v3\0")
+    digest.update(EVALUATION_CONTRACT_VERSION.encode())
+    digest.update(b"\0")
     digest.update(stage.encode())
     digest.update(kind.encode())
     for path in _source_files(kind, source):
@@ -160,7 +163,8 @@ def enqueue(
             if reference is not None:
                 shutil.copyfile(reference, temporary / "reference.json")
             metadata = {
-                "schema": 1,
+                "schema": 2,
+                "evaluation_contract_version": EVALUATION_CONTRACT_VERSION,
                 "task_id": task_id,
                 "stage": "candidate",
                 "kind": kind,
@@ -216,7 +220,8 @@ def enqueue_reference(
         try:
             source_name = _snapshot_source(kind, source, temporary)
             metadata = {
-                "schema": 1,
+                "schema": 2,
+                "evaluation_contract_version": EVALUATION_CONTRACT_VERSION,
                 "task_id": task_id,
                 "stage": "reference",
                 "kind": kind,

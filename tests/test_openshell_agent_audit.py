@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import json
+import subprocess
 import sys
 from pathlib import Path
 
@@ -8,9 +9,11 @@ import pytest
 
 import hsopt.openshell_agent as openshell_agent
 from hsopt.openshell_agent import (
+    _configure_research_network,
     _has_completed_candidate_edit,
     _run_logged,
     _terminate_sandbox_opencode,
+    _write_opencode_file_list_shim,
     agent_feedback,
     mutate,
     mutation_prompt,
@@ -207,7 +210,7 @@ def test_opencode_policy_only_allows_candidate_file_mutations() -> None:
     agent = opencode_config()["agent"]["hsopt-mutation"]
     permissions = agent["permission"]
 
-    assert agent["steps"] == 5
+    assert agent["steps"] == 8
     assert "exactly once" in agent["prompt"]
     assert "coefficient_desc" in agent["prompt"]
     assert "reverse_lexicographic" not in agent["prompt"]
@@ -218,8 +221,68 @@ def test_opencode_policy_only_allows_candidate_file_mutations() -> None:
         "candidate.py": "allow",
         "/sandbox/work/candidate.py": "allow",
     }
-    assert permissions["webfetch"] == "deny"
-    assert permissions["websearch"] == "deny"
+    assert permissions["skill"] == {"*": "deny", "hsopt": "allow"}
+    assert permissions["codesearch"] == "allow"
+    assert permissions["webfetch"] == "allow"
+    assert permissions["websearch"] == "allow"
+    assert permissions["bash"] == "deny"
+
+
+def test_research_network_is_optional_and_binary_scoped(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    calls: list[tuple[list[str], dict[str, object]]] = []
+
+    def record(command: list[str], **kwargs: object) -> subprocess.CompletedProcess[str]:
+        calls.append((command, kwargs))
+        return subprocess.CompletedProcess(command, 0, "configured", "")
+
+    monkeypatch.setattr(openshell_agent, "_run", record)
+
+    result = _configure_research_network("hsopt-deadbeef")
+
+    assert result["status"] == "configured"
+    assert result["required"] is False
+    command, kwargs = calls[0]
+    assert command[:4] == [
+        "openshell",
+        "policy",
+        "update",
+        "hsopt-deadbeef",
+    ]
+    assert "mcp.exa.ai:443" in command
+    assert "arxiv.org:443:read-only:rest:enforce" in command
+    assert "/usr/lib/node_modules/opencode-ai/bin/.opencode" in command
+    assert kwargs == {"check": False, "timeout": 75}
+
+
+def test_file_list_shim_supports_skill_discovery(tmp_path: Path) -> None:
+    shim = tmp_path / "rg"
+    worktree = tmp_path / "work"
+    skill_dir = worktree / ".opencode" / "skills" / "hsopt"
+    skill_dir.mkdir(parents=True)
+    (skill_dir / "SKILL.md").write_text("---\nname: hsopt\n---\n")
+    (worktree / "candidate.py").write_text("pass\n")
+    _write_opencode_file_list_shim(shim)
+
+    completed = subprocess.run(
+        [
+            str(shim),
+            "--no-config",
+            "--files",
+            "--hidden",
+            "--glob={*.md,**/SKILL.md}",
+            ".",
+        ],
+        cwd=worktree,
+        check=True,
+        text=True,
+        stdout=subprocess.PIPE,
+    )
+
+    files = {name.removeprefix("./") for name in completed.stdout.splitlines()}
+    assert ".opencode/skills/hsopt/SKILL.md" in files
+    assert "candidate.py" in files
 
 
 def test_mutation_prompt_requires_one_edit_then_terminal_text() -> None:
@@ -229,6 +292,8 @@ def test_mutation_prompt_requires_one_edit_then_terminal_text() -> None:
     assert "Read candidate.py at most once" in prompt
     assert "tool exactly once" in prompt
     assert "immediately return a final text" in prompt
+    assert "at most three research tool calls" in normalized
+    assert "Web research is optional" in prompt
     assert "support_desc" in prompt
     assert "preserve every Pauli term exactly once" in normalized
 

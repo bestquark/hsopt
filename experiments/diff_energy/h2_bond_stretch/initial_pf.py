@@ -4,7 +4,7 @@ Source: reaction.json
 Source SHA-256: 67fc570923800dc9f400e1cd65b09330e3d28a20eacd6941a9754df5ca438007
 Paper contract: reiher_wiebe_svore_2017.json
 Paper contract SHA-256: 8300ffe6936a1e5c531f82717ba6d6d083261b157e0f1a9bf8b109aa15963578
-Generator: examples/generate_initial_pf.py
+Generator: experiments/generate_initial_pf.py
 Paper: Reiher et al., PNAS 114, 7555-7560 (2017), DOI 10.1073/pnas.1619152114
 
 This file is measured unchanged as iteration 0. Scientific acceptance is based

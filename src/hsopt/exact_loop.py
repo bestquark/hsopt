@@ -15,6 +15,7 @@ from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any
 
+from .compiled_unitary import EVALUATION_CONTRACT_VERSION
 from .exact_queue import enqueue
 from .openshell_agent import mutate
 
@@ -64,16 +65,26 @@ def _exact_error(result: dict[str, Any]) -> float:
     raise RuntimeError("the exact evaluator result has no absolute energy error")
 
 
+def _objective_cost(result: dict[str, Any]) -> int:
+    """Return the confidence-adjusted objective, with legacy fallback."""
+
+    for key in ("confidence_adjusted_t_count", "score", "t_count"):
+        value = result.get(key)
+        if isinstance(value, (int, float)):
+            return int(value)
+    raise RuntimeError("the exact evaluator result has no T-count objective")
+
+
 def _accept_candidate(
     candidate: dict[str, Any],
     incumbent: dict[str, Any],
 ) -> tuple[bool, str]:
     """Apply a deterministic feasibility-first constrained objective.
 
-    Once a lane is chemically accurate, only an accurate strict T-count
-    reduction can replace its incumbent.  Before feasibility, exact-error
-    progress is retained so an initially inaccurate paper baseline can be
-    improved over multiple mutations.
+    Once a lane is chemically accurate, only an accurate strict reduction in
+    the confidence-adjusted QPE T cost can replace its incumbent. Before
+    feasibility, exact-error progress is retained so an initially inaccurate
+    paper baseline can be improved over multiple mutations.
     """
 
     if candidate.get("status") != "ok":
@@ -83,9 +94,11 @@ def _accept_candidate(
     if incumbent_passes:
         if not candidate_passes:
             return False, "chemical_accuracy_failed"
-        accepted = int(candidate["t_count"]) < int(incumbent["t_count"])
+        accepted = _objective_cost(candidate) < _objective_cost(incumbent)
         return accepted, (
-            "strict_t_gate_improvement" if accepted else "no_strict_t_gate_improvement"
+            "strict_confidence_adjusted_t_gate_improvement"
+            if accepted
+            else "no_strict_confidence_adjusted_t_gate_improvement"
         )
     if candidate_passes:
         return True, "chemical_accuracy_reached"
@@ -94,11 +107,10 @@ def _accept_candidate(
     incumbent_error = _exact_error(incumbent)
     if candidate_error < incumbent_error - REPLAY_ENERGY_ATOL_HARTREE:
         return True, "exact_error_improvement"
-    if (
-        abs(candidate_error - incumbent_error) <= REPLAY_ENERGY_ATOL_HARTREE
-        and int(candidate["t_count"]) < int(incumbent["t_count"])
-    ):
-        return True, "infeasible_tie_break_t_gate_improvement"
+    if abs(candidate_error - incumbent_error) <= REPLAY_ENERGY_ATOL_HARTREE and _objective_cost(
+        candidate
+    ) < _objective_cost(incumbent):
+        return True, "infeasible_tie_break_confidence_adjusted_t_gate_improvement"
     return False, "no_exact_error_improvement"
 
 
@@ -128,8 +140,7 @@ def _validate_replay(
     canonical_decision_path = iteration_dir / "canonical_cpu_decision.json"
     replay_path = iteration_dir / "replay.json"
     if not all(
-        path.is_file()
-        for path in (canonical_result_path, canonical_decision_path, replay_path)
+        path.is_file() for path in (canonical_result_path, canonical_decision_path, replay_path)
     ):
         return None
     canonical_result = _read_json(canonical_result_path)
@@ -137,10 +148,12 @@ def _validate_replay(
     replay = _read_json(replay_path)
     candidate_sha256 = _sha256(iteration_dir / "candidate.py")
     checks: dict[str, bool] = {
-        "candidate_sha256": candidate_sha256
-        == replay["canonical_candidate_sha256"],
+        "candidate_sha256": candidate_sha256 == replay["canonical_candidate_sha256"],
         "status": result.get("status") == canonical_result.get("status"),
         "t_count": result.get("t_count") == canonical_result.get("t_count"),
+        "qpe_repetitions": result.get("qpe_repetitions") == canonical_result.get("qpe_repetitions"),
+        "confidence_adjusted_t_count": result.get("confidence_adjusted_t_count")
+        == canonical_result.get("confidence_adjusted_t_count"),
         "score": result.get("score") == canonical_result.get("score"),
         "policy": result.get("policy") == canonical_result.get("policy"),
         "passes_chemical_accuracy": result.get("passes_chemical_accuracy")
@@ -148,9 +161,7 @@ def _validate_replay(
         "accepted": accepted == bool(canonical_decision.get("accepted")),
     }
     if "acceptance_reason" in canonical_decision:
-        checks["acceptance_reason"] = (
-            acceptance_reason == canonical_decision["acceptance_reason"]
-        )
+        checks["acceptance_reason"] = acceptance_reason == canonical_decision["acceptance_reason"]
     energy_differences: dict[str, float] = {}
     for key in (
         "exact_unitary_ground_energy_hartree",
@@ -221,7 +232,8 @@ def initialize_lane(
         )
     )
     manifest = {
-        "schema": 1,
+        "schema": 2,
+        "evaluation_contract_version": EVALUATION_CONTRACT_VERSION,
         "created_at": _now(),
         "kind": kind,
         "source": str(source),
@@ -240,7 +252,9 @@ def initialize_lane(
         "iterations_completed": 0,
         "pending_kind": "reference" if reference_task_id is not None else "baseline",
         "pending_iteration": None,
-        "pending_task_id": reference_task_id if reference_task_id is not None else queued["task_id"],
+        "pending_task_id": reference_task_id
+        if reference_task_id is not None
+        else queued["task_id"],
         "incumbent_score": None,
         "incumbent_task_id": None,
         "accepted_mutations": 0,
@@ -304,6 +318,8 @@ def reconcile_lane(lane_dir: Path) -> dict[str, Any]:
             "exact_unitary_"
         ):
             raise RuntimeError("the immutable exact-unitary reference failed")
+        if result.get("evaluation_contract_version") != manifest.get("evaluation_contract_version"):
+            raise RuntimeError("the immutable exact reference uses a different evaluator contract")
         reference_path = lane_dir / "exact_reference.json"
         shutil.copyfile(
             Path(manifest["queue_dir"]) / phase / task_id / "result.json",
@@ -335,6 +351,8 @@ def reconcile_lane(lane_dir: Path) -> dict[str, Any]:
     if state["pending_kind"] == "baseline":
         if result.get("status") != "ok":
             raise RuntimeError("the generated baseline exact evaluation failed")
+        if result.get("evaluation_contract_version") != manifest.get("evaluation_contract_version"):
+            raise RuntimeError("the baseline result uses a different evaluator contract")
         shutil.copyfile(
             Path(manifest["queue_dir"]) / phase / task_id / "result.json",
             lane_dir / "incumbent_result.json",
@@ -364,6 +382,8 @@ def reconcile_lane(lane_dir: Path) -> dict[str, Any]:
 
     iteration = int(state["pending_iteration"])
     iteration_dir = lane_dir / "iterations" / f"{iteration:04d}"
+    if result.get("evaluation_contract_version") != manifest.get("evaluation_contract_version"):
+        raise RuntimeError("the candidate result uses a different evaluator contract")
     _write_json(iteration_dir / "result.json", result)
     incumbent_result = _read_json(lane_dir / "incumbent_result.json")
     accepted, acceptance_reason = _accept_candidate(result, incumbent_result)
@@ -381,9 +401,7 @@ def reconcile_lane(lane_dir: Path) -> dict[str, Any]:
             "candidate_score": result.get("score"),
             "previous_incumbent_score": previous_score,
             "result_status": result.get("status"),
-            "passes_chemical_accuracy": result.get(
-                "passes_chemical_accuracy", False
-            ),
+            "passes_chemical_accuracy": result.get("passes_chemical_accuracy", False),
             "acceptance_reason": acceptance_reason,
             "task_id": task_id,
             "decided_at": _now(),

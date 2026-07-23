@@ -22,6 +22,7 @@ ENERGY_FIELDS = (
     "absolute_difference_error_hartree",
 )
 EXACT_METADATA_FIELDS = (
+    "evaluation_contract_version",
     "problem_sha256",
     "observable",
     "unitary_definition",
@@ -32,8 +33,12 @@ EXACT_METADATA_FIELDS = (
 )
 COMPILED_FIELDS = (
     "status",
+    "evaluation_contract_version",
     "observable",
     "policy",
+    "per_attempt_t_count",
+    "qpe_repetitions",
+    "confidence_adjusted_t_count",
     "t_count",
     "score",
     "passes_chemical_accuracy",
@@ -108,9 +113,7 @@ def _require_complete(root: Path, lanes: Mapping[str, Path]) -> None:
     for key, lane in lanes.items():
         manifest = _read_json(lane / "manifest.json")
         state = _read_json(lane / "state.json")
-        if int(state.get("iterations_completed", -1)) != int(
-            manifest["iterations_target"]
-        ):
+        if int(state.get("iterations_completed", -1)) != int(manifest["iterations_target"]):
             raise ParityAuditPending(f"lane is incomplete: {key}")
         if state.get("pending_kind") is not None or state.get("pending_task_id") is not None:
             raise ParityAuditPending(f"lane still has pending work: {key}")
@@ -166,9 +169,7 @@ def _timing_summary(pairs: list[dict[str, Any]]) -> dict[str, Any]:
             }
         )
     return {
-        "matched_timed_evaluations": sum(
-            int(row["matched_evaluations"]) for row in summaries
-        ),
+        "matched_timed_evaluations": sum(int(row["matched_evaluations"]) for row in summaries),
         "by_stage_and_qubits": summaries,
     }
 
@@ -211,13 +212,9 @@ def _compare_energies(
     for field in ENERGY_FIELDS:
         cpu_value = cpu.get(field)
         gpu_value = gpu.get(field)
-        if not isinstance(cpu_value, (int, float)) and not isinstance(
-            gpu_value, (int, float)
-        ):
+        if not isinstance(cpu_value, (int, float)) and not isinstance(gpu_value, (int, float)):
             continue
-        if not isinstance(cpu_value, (int, float)) or not isinstance(
-            gpu_value, (int, float)
-        ):
+        if not isinstance(cpu_value, (int, float)) or not isinstance(gpu_value, (int, float)):
             mismatches.append(
                 {
                     "record": key,
@@ -403,9 +400,7 @@ def audit_campaigns(
             energy_atol_hartree=energy_atol_hartree,
             mismatches=mismatches,
         )
-        timing_pairs.append(
-            {"stage": "baseline", "cpu": cpu_baseline, "gpu": gpu_baseline}
-        )
+        timing_pairs.append({"stage": "baseline", "cpu": cpu_baseline, "gpu": gpu_baseline})
         records_checked += 1
 
         iterations = int(cpu_manifest["iterations_target"])
@@ -454,9 +449,7 @@ def audit_campaigns(
                         "gpu": validation.get("status"),
                     }
                 )
-            timing_pairs.append(
-                {"stage": "candidate", "cpu": cpu_result, "gpu": gpu_result}
-            )
+            timing_pairs.append({"stage": "candidate", "cpu": cpu_result, "gpu": gpu_result})
             records_checked += 1
             iteration_records_checked += 1
 

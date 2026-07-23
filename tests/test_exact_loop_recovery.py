@@ -10,42 +10,68 @@ from hsopt.exact_loop import (
     propose_replay_lane,
     reconcile_lane,
 )
+from hsopt.compiled_unitary import EVALUATION_CONTRACT_VERSION
 
 
 REPO = Path(__file__).resolve().parents[1]
-ABSOLUTE = REPO / "examples" / "abs_energy" / "hamlib_h2_r0_7"
+ABSOLUTE = REPO / "experiments" / "abs_energy" / "hamlib_h2_r0_7"
 
 
-def _result(*, error: float, t_count: int, passes: bool) -> dict[str, object]:
+def _result(
+    *,
+    error: float,
+    t_count: int,
+    passes: bool,
+    confidence_adjusted_t_count: int | None = None,
+) -> dict[str, object]:
+    cost = confidence_adjusted_t_count or t_count
     return {
         "status": "ok",
+        "evaluation_contract_version": EVALUATION_CONTRACT_VERSION,
         "passes_chemical_accuracy": passes,
         "absolute_energy_error_hartree": error,
+        "per_attempt_t_count": t_count,
+        "qpe_repetitions": cost // t_count,
+        "confidence_adjusted_t_count": cost,
         "t_count": t_count,
-        "score": t_count if passes else None,
+        "score": cost if passes else None,
     }
 
 
 def test_infeasible_incumbent_uses_exact_error_until_accuracy_is_reached() -> None:
     baseline = _result(error=0.004, t_count=100, passes=False)
 
-    assert _accept_candidate(
-        _result(error=0.003, t_count=120, passes=False), baseline
-    ) == (True, "exact_error_improvement")
-    assert _accept_candidate(
-        _result(error=0.005, t_count=80, passes=False), baseline
-    ) == (False, "no_exact_error_improvement")
-    assert _accept_candidate(
-        _result(error=0.001, t_count=140, passes=True), baseline
-    ) == (True, "chemical_accuracy_reached")
+    assert _accept_candidate(_result(error=0.003, t_count=120, passes=False), baseline) == (
+        True,
+        "exact_error_improvement",
+    )
+    assert _accept_candidate(_result(error=0.005, t_count=80, passes=False), baseline) == (
+        False,
+        "no_exact_error_improvement",
+    )
+    assert _accept_candidate(_result(error=0.001, t_count=140, passes=True), baseline) == (
+        True,
+        "chemical_accuracy_reached",
+    )
 
     feasible = _result(error=0.001, t_count=140, passes=True)
+    assert _accept_candidate(_result(error=0.0011, t_count=130, passes=True), feasible) == (
+        True,
+        "strict_confidence_adjusted_t_gate_improvement",
+    )
     assert _accept_candidate(
-        _result(error=0.0011, t_count=130, passes=True), feasible
-    ) == (True, "strict_t_gate_improvement")
-    assert _accept_candidate(
-        _result(error=0.004, t_count=80, passes=False), feasible
-    ) == (False, "chemical_accuracy_failed")
+        _result(
+            error=0.0011,
+            t_count=100,
+            passes=True,
+            confidence_adjusted_t_count=200,
+        ),
+        feasible,
+    ) == (False, "no_strict_confidence_adjusted_t_gate_improvement")
+    assert _accept_candidate(_result(error=0.004, t_count=80, passes=False), feasible) == (
+        False,
+        "chemical_accuracy_failed",
+    )
 
 
 def test_reconcile_archives_an_interrupted_mutation_attempt(tmp_path: Path) -> None:
@@ -143,38 +169,35 @@ def test_gpu_lane_replays_the_exact_archived_cpu_candidate(tmp_path: Path) -> No
         encoding="utf-8",
     )
 
-    canonical = (
-        tmp_path / "cpu-campaign" / "lanes" / "hamlib121" / "fixture" / "run_01"
-    )
+    canonical = tmp_path / "cpu-campaign" / "lanes" / "hamlib121" / "fixture" / "run_01"
     iteration = canonical / "iterations" / "0001"
     iteration.mkdir(parents=True)
     candidate = (ABSOLUTE / "initial_pf.py").read_text(encoding="utf-8") + "\n# CPU trace\n"
     (iteration / "candidate.py").write_text(candidate, encoding="utf-8")
     canonical_result = {
         "status": "ok",
+        "evaluation_contract_version": EVALUATION_CONTRACT_VERSION,
         "score": 90,
+        "per_attempt_t_count": 90,
+        "qpe_repetitions": 1,
+        "confidence_adjusted_t_count": 90,
         "t_count": 90,
         "passes_chemical_accuracy": True,
         "policy": {},
     }
-    (iteration / "result.json").write_text(
-        json.dumps(canonical_result) + "\n", encoding="utf-8"
-    )
-    (iteration / "decision.json").write_text(
-        '{"iteration":1,"accepted":true}\n', encoding="utf-8"
-    )
-    (iteration / "mutation_result.json").write_text(
-        '{"status":"mutated"}\n', encoding="utf-8"
-    )
+    (iteration / "result.json").write_text(json.dumps(canonical_result) + "\n", encoding="utf-8")
+    (iteration / "decision.json").write_text('{"iteration":1,"accepted":true}\n', encoding="utf-8")
+    (iteration / "mutation_result.json").write_text('{"status":"mutated"}\n', encoding="utf-8")
 
     replayed = propose_replay_lane(lane_dir, canonical)
 
     replay_dir = lane_dir / "iterations" / "0001"
     assert replayed["status"] == "replay_proposed"
     assert (replay_dir / "candidate.py").read_text(encoding="utf-8") == candidate
-    assert json.loads((replay_dir / "replay.json").read_text())[
-        "canonical_candidate_sha256"
-    ] == replayed["canonical_candidate_sha256"]
+    assert (
+        json.loads((replay_dir / "replay.json").read_text())["canonical_candidate_sha256"]
+        == replayed["canonical_candidate_sha256"]
+    )
     assert (replay_dir / "canonical_cpu_decision.json").is_file()
     updated = json.loads(state_path.read_text(encoding="utf-8"))
     assert updated["pending_kind"] == "proposal"
@@ -190,9 +213,5 @@ def test_gpu_lane_replays_the_exact_archived_cpu_candidate(tmp_path: Path) -> No
     reconciled = reconcile_lane(lane_dir)
 
     assert reconciled["status"] == "accepted"
-    assert json.loads((replay_dir / "replay_validation.json").read_text())[
-        "status"
-    ] == "ok"
-    assert json.loads((replay_dir / "decision.json").read_text())[
-        "replay_validation"
-    ] == "ok"
+    assert json.loads((replay_dir / "replay_validation.json").read_text())["status"] == "ok"
+    assert json.loads((replay_dir / "decision.json").read_text())["replay_validation"] == "ok"

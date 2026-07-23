@@ -18,7 +18,7 @@ from hsopt.nvpark_queue import _system_memory_mib, submit_batch, submit_ready
 
 
 REPO = Path(__file__).resolve().parents[1]
-ABSOLUTE = REPO / "examples" / "abs_energy" / "hamlib_h2_r0_7"
+ABSOLUTE = REPO / "experiments" / "abs_energy" / "hamlib_h2_r0_7"
 
 
 def test_queue_deduplicates_snapshots_and_merges_results(tmp_path: Path) -> None:
@@ -46,7 +46,7 @@ def test_queue_deduplicates_snapshots_and_merges_results(tmp_path: Path) -> None
     assert merged["status"] == "merged"
     assert queue_status(tmp_path)["completed"] == 1
     result = json.loads((tmp_path / "completed" / first["task_id"] / "result.json").read_text())
-    assert result["observable"] == "compiled_unitary_ground_eigenphase"
+    assert result["observable"] == "compiled_unitary_lowest_hf_accessible_eigenphase"
     assert result["task_wall_seconds"] > 0.0
     assert result["execution_backend"] == "numpy"
     assert result["execution_accelerator"] == "unknown"

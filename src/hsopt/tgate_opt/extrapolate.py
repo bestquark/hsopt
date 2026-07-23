@@ -15,12 +15,12 @@ from scipy.stats import t as student_t
 from .common import REPO_ROOT
 
 
-DATA_ROOT = REPO_ROOT / "examples" / "pfs" / "problem_cache"
+DATA_ROOT = REPO_ROOT / "experiments" / "diff_energy" / "problem_cache"
 DEFAULT_FEATURES = (
     "log_active_orbitals",
     "log_total_pauli_rotation_terms",
 )
-DEFAULT_CAMPAIGN_ROOT = REPO_ROOT / "examples" / "pfs" / "remote_sleepy_runs_20260506_cupynumeric"
+DEFAULT_CAMPAIGN_ROOT = REPO_ROOT / "experiments" / "_runs" / "remote_sleepy_runs_20260506"
 DEFAULT_FEMOCO_FEATURES = {
     "molecule": "femoco",
     "display_name": "FeMoco CAS(54e,54o)",

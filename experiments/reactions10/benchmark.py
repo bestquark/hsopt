@@ -20,12 +20,11 @@ from types import ModuleType
 
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
-EXAMPLES_ROOT = REPO_ROOT / "examples"
-if str(EXAMPLES_ROOT) not in sys.path:
-    sys.path.insert(0, str(EXAMPLES_ROOT))
+if str(REPO_ROOT) not in sys.path:
+    sys.path.insert(0, str(REPO_ROOT))
 
-from pfs.chemistry import MoleculeSpec  # noqa: E402
-from pfs.reactions import evaluate as reaction_evaluate  # noqa: E402
+from experiments.diff_energy.reactions10_runtime import evaluate as reaction_evaluate  # noqa: E402
+from experiments.diff_energy.reactions10_runtime.chemistry import MoleculeSpec  # noqa: E402
 
 
 ARCHIVED_BENCHMARK_SHA256 = "09b713ebd784614ec774c73c22c0228b084d82bd9a3ea176589caf06918d965e"
@@ -522,8 +521,7 @@ def evaluate_policy(
         policy.set_active_species(species_key)
         config = policy.get_method_config()
         seed_material = (
-            "reaction-autoresearch-schedule-v1\0"
-            f"{campaign_id}\0{lane_id}\0{species_key}"
+            f"reaction-autoresearch-schedule-v1\0{campaign_id}\0{lane_id}\0{species_key}"
         ).encode()
         evaluator_seed = int.from_bytes(hashlib.sha256(seed_material).digest()[:8], "big")
         species_results[species_key] = reaction_evaluate.evaluate_species(

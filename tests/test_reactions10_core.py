@@ -14,7 +14,6 @@ import pytest
 
 
 REPO_ROOT = Path(__file__).resolve().parents[1]
-EXAMPLES_ROOT = REPO_ROOT / "examples"
 BENCHMARK_PATH = REPO_ROOT / "experiments" / "reactions10" / "benchmark.py"
 SEED_MANIFEST = REPO_ROOT / "experiments" / "reactions10" / "inputs" / "seed_manifest.json"
 
@@ -27,7 +26,7 @@ def _load_benchmark() -> ModuleType:
     old_path = list(sys.path)
     sys.modules[module_name] = module
     try:
-        sys.path.insert(0, str(EXAMPLES_ROOT))
+        sys.path.insert(0, str(REPO_ROOT))
         spec.loader.exec_module(module)
     finally:
         sys.path[:] = old_path

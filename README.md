@@ -1,293 +1,264 @@
-# hsopt
+# HSOpt
 
-Hamiltonian-simulation T-gate optimization with exact compiled-unitary
-eigenphase evaluation and isolated agent mutation loops.
+HSOpt uses an AI mutation loop to reduce the logical \(T\)-gate cost of
+product-formula quantum phase estimation while preserving a fixed energy
+accuracy target. Every candidate is evaluated by constructing and
+diagonalizing the compiled Clifford+\(T\) unitary; analytical product-formula
+bounds are not used as the acceptance test.
 
-On the clean exact workflow, the scientific source of truth is
-`src/hsopt/compiled_unitary.py`, `src/hsopt/exact_queue.py`, and
-`src/hsopt/exact_loop.py`. Each lane caches `U_exact = exp(+iHt)` once,
-evaluates the immutable generated paper baseline as iteration 0, and then runs
-50 OpenCode/Nemotron mutations. Analytical error bounds and Hartree--Fock state
-propagation are not acceptance metrics.
+The clean branch contains one benchmark tree, [`experiments/`](experiments/),
+and one plotting-source tree, [`plots/`](plots/). Raw campaigns, databases,
+Hamiltonian collections, caches, scheduler logs, and agent transcripts stay
+outside the Git checkout.
 
-Raw campaign workspaces stay outside the benchmark tree. Only checksummed,
-completion-gated exports and reports belong in `experiments/*/results/`.
+## Objective
 
-The portable paper runners and final-artifact gates are documented in
-[`experiments/`](experiments/README.md).
+For a fixed Hamiltonian \(H\), evolution time \(t\), electron number, and
+Hartree--Fock (HF) input, HSOpt caches the exact ground energy \(E^{\rm exact}\)
+once. A candidate policy may change only the product-formula and
+rotation-synthesis parameters used to compile \(U_{\rm PF}\).
 
-The older CPU/GPU/QPU constraint framework, GPU-memory experiments, generic
-telemetry APIs, broad protocol examples, and large run artifacts are preserved
-off `main` on branches listed in `BRANCHES.md`.
-
-## Experiment storage
-
-Set one absolute external data root before creating a campaign:
-
-```bash
-export HSOPT_DATA_ROOT=/absolute/path/to/hsopt-data
-```
-
-The standard layout is:
+The evaluator diagonalizes \(U_{\rm PF}\), unwraps its eigenphases into
+energies, and selects the lowest-energy peak with numerically resolved HF
+weight \(p_{\rm HF}\). If one QPE attempt costs \(T_{\rm raw}\), the number of
+independent attempts required to observe that peak with 95% confidence is
 
 ```text
-$HSOPT_DATA_ROOT/
-  paper/hamlib121/hamlib121_paper_YYYYMMDD_<commit>/run_01 ... run_05
-  paper/reactions10/reactions10_paper_YYYYMMDD_<commit>/
-  development/<benchmark>/<campaign-id>/
-  old_experiments/<benchmark>/<campaign-id>/
-  scratch/preflight/<campaign-id>/
+R95 = ceil(log(0.05) / log(1 - p_HF))
+T95 = R95 * T_raw
 ```
 
-Campaign IDs and their contents are immutable once work starts. Move whole
-inactive campaigns between `development`, `paper`, and `old_experiments`. Do
-not scatter individual iterations or logs across the home directory. Raw mutation traces,
-scheduler logs, caches, databases, and environments never belong in Git. A
-small validated final export or summary PDF may be copied to the corresponding
-`experiments/*/results/` directory after its completion gate passes.
+A molecular candidate is feasible when
+\(\lvert E^{\rm PF}-E^{\rm exact}\rvert\) is no larger than
+1 kcal mol\(^{-1}\). Among feasible candidates, HSOpt minimizes \(T_{95}\).
+Reports display this objective as **T95 (raw x R)**.
 
-## Expanded exact campaign
+For a reaction, each unique species is evaluated independently and the signed
+reaction energy is formed classically. The five-percent failure budget is
+shared equally across the unique species, giving at least 95% joint confidence
+by the union bound. Stoichiometric coefficients affect the energy difference
+but do not duplicate circuits. The reaction objective is the sum of the
+confidence-adjusted species costs and is reported as **T95 (raw total)**.
 
-The canonical exact campaign uses the 91 HamLib instances through 14 qubits,
-five independent lanes per instance, and the ten reactions with two lanes
-each. OpenCode proposes mutations only for the canonical CPU campaign. Its
-dense cuPyNumeric evaluator uses the `cpu` partition, 2 CPUs, and 64 GB RAM.
+## Repository layout
 
-The A100 campaign is an exact replay-validation campaign: it consumes the
-CPU campaign's archived candidates in the same order with `--no-mutations` and
-`--replay-campaign-root`. It runs on `polar4` with one 80 GB A100, 2 CPUs, and
-16 GB host RAM. Both placements use the same evaluator source and cuPyNumeric
-25.11; policy hashes, compiled T counts, and accept/reject trajectories must
-match, while floating-point energies are compared within an explicit numerical
-tolerance. A CPU run must use the `cpu` partition and request no GPU.
-
-The compiled PF unitary is accumulated with one reused matrix-sized workspace;
-that workspace is released before the unitary eigendecomposition. For the
-stationary benchmark formulas, diagonalizing one fully compiled step and
-multiplying its eigenphase by `n_steps` evaluates the exact repeated product
-`U_PF = U_step ** n_steps`; it is not an error estimate or propagation
-surrogate.
-
-## Final paper reports
-
-The strict exporters retain normalized product-formula settings, exact and
-estimated energies, accept/reject decisions, and a concise mutation summary.
-After all lanes complete, create the normalized export and then build the two
-reports for every scientific instance with:
-
-```bash
-uv run hsopt-export-exact \
-  --campaign-root /external/production-cpu91-v1 \
-  --family hamlib121 \
-  --output-dir /external/final/hamlib121-export
-
-uv run hsopt-reports --family hamlib121 \
-  --export-dir /external/final/hamlib121-export \
-  --output-dir experiments/hamlib121/results/final
-
-uv run hsopt-export-exact \
-  --campaign-root /external/production-cpu91-v1 \
-  --family reactions10 \
-  --output-dir /external/final/reactions10-export
-
-uv run hsopt-reports --family reactions10 \
-  --export-dir /external/final/reactions10-export \
-  --output-dir experiments/reactions10/results/final
+```text
+hsopt/
+├── experiments/
+│   ├── abs_energy/             Compact HamLib absolute-energy fixtures
+│   ├── diff_energy/            Energy-difference fixtures and reaction runtime
+│   ├── hamlib121/              HamLib paper protocol, runner, and final reports
+│   ├── reactions10/            Ten-reaction protocol, runner, and final reports
+│   ├── generate_initial_pf.py  Immutable iteration-0 policy generator
+│   └── paper_baselines/        Checked-in paper method contract
+├── plots/                      Publication-plot source code
+├── skills/hsopt/               Optimization-agent instructions
+├── src/hsopt/                  Evaluator, queue, supervisor, export, and reports
+└── tests/                      Scientific-contract and recovery tests
 ```
 
-The canonical supervisor accepts four `--final-*-export-dir` and
-`--final-*-report-dir` options to run this sequence automatically. The renderer
-verifies the complete checksum set and declared iteration shape, then
-atomically publishes exactly two PDFs per Hamiltonian or reaction. It uses
-LaTeX when available and a portable ReportLab engine otherwise.
+## Installation
 
-After both backends finish, certify the A100 replay against the canonical CPU
-campaign and retain the cross-backend timing comparison:
-
-```bash
-uv run hsopt-exact-parity \
-  --cpu-campaign-root /external/production-cpu91-v1 \
-  --gpu-campaign-root /external/production-gpu91-v2 \
-  --output /external/production-gpu91-v2/cross_backend_audit.json \
-  --wait --interval-seconds 60
-```
-
-The gate requires identical lane grids, initial and candidate policy hashes,
-compiled PyGridSynth records, T counts, policy settings, and acceptance
-trajectories. CPU/A100 energies must agree within `1e-10` Hartree. Its final
-JSON includes matched wall-time medians and CPU/GPU speedups by stage and
-qubit count.
-
-## Install the Agent Skills
-
-The agent skills and the benchmark runtime are separate prerequisites.
-Installing the skills teaches an agent the HSOpt workflow, but it does not
-clone `examples/pfs/` or install the Python dependencies. Conversely, cloning
-this repository does not register the skills with your agent. Complete both
-steps when you want the agent to run the local benchmarks.
-
-Install the hsopt agent skills directly from GitHub:
-
-```bash
-npx skills add bestquark/hsopt
-```
-
-For non-interactive setup that installs both bundled skills:
-
-```bash
-npx skills add bestquark/hsopt --skill '*' -y
-```
-
-For Claude Code specifically:
-
-```bash
-npx skills add bestquark/hsopt --agent claude-code --skill '*' -y
-```
-
-To inspect the available skills before installing:
-
-```bash
-npx skills add bestquark/hsopt --list
-```
-
-To update installed skills later:
-
-```bash
-npx skills update hsopt hsgepa -y
-```
-
-For local testing from inside this repo:
-
-```bash
-npx skills add . --list
-```
-
-## Clone the Benchmark Runtime
-
-Separately clone and sync the repository to run the Python CLIs and fixed
-benchmark evaluators:
+HSOpt requires Python 3.12 or newer and uses
+[`uv`](https://docs.astral.sh/uv/) for its environment:
 
 ```bash
 git clone https://github.com/bestquark/hsopt.git
 cd hsopt
+git switch clean
 uv sync
 ```
 
-For GEPA prompt optimization:
-
-```bash
-uv sync --extra gepa
-```
-
-For optional cuPyNumeric execution of the PFS evaluators on a Legate-capable
-local NVIDIA GPU or cluster:
+Install the optional cuPyNumeric/Legate dependencies on a supported Linux
+system:
 
 ```bash
 uv sync --extra cupynumeric
 ```
 
-## T-Gate Lanes
-
-The canonical benchmark tree is `examples/pfs/`. It contains fixed
-chemistry instances and editable lane-local policies:
-
-- `h2/`, `bh/`, `lih/`, `dmds/`: small runnable baselines.
-- `n2/`, `co/`, `nh3/`, `hcn/`: larger CAS(6e,5o) lanes seeded for campaigns.
-- `evaluate_energy.py`: T count with chemical accuracy on the lowest resolved
-  HF-reference spectral peak.
-- `evaluate_fidelity.py`: T count with final-state infidelity below the selected
-  epsilon budget.
-
-During an optimization run, edit only the active lane's `simple_pf.py` unless
-you are deliberately changing the benchmark framework.
-
-## Quick Commands
-
-List lanes:
+The optional GEPA prompt-optimization dependencies are installed with:
 
 ```bash
-uv run hsopt list
+uv sync --extra gepa
 ```
 
-Inspect a lane:
+## Run the compact checks
+
+Evaluate the checked-in HamLib fixture on NumPy:
 
 ```bash
-uv run hsopt status examples/pfs/h2
+uv run python experiments/abs_energy/hamlib_h2_r0_7/evaluate.py \
+  --backend numpy
 ```
 
-Print the direct evaluator command:
+Evaluate the checked-in bond-stretch energy difference:
 
 ```bash
-uv run hsopt evaluate examples/pfs/h2 --evaluator energy --print-only
-uv run hsopt evaluate examples/pfs/h2 --evaluator fidelity --epsilon 1e-3 --print-only
+uv run python experiments/diff_energy/h2_bond_stretch/evaluate.py \
+  --backend numpy
 ```
 
-Render the prompt for an agent run:
+Verify that an immutable iteration-0 policy still matches the checked-in paper
+contract:
 
 ```bash
-uv run hsopt prompt examples/pfs/h2 --evaluator energy
+uv run python experiments/generate_initial_pf.py \
+  experiments/abs_energy/hamlib_h2_r0_7/hamiltonian.json \
+  --output experiments/abs_energy/hamlib_h2_r0_7/initial_pf.py \
+  --check
 ```
 
-Run the evaluator locally on CPU, or on one local NVIDIA GPU through
-Legate/cuPyNumeric:
+These fixtures are development checks. Production HamLib and reactions10
+inputs are external datasets supplied to `hsopt-campaign`.
+
+## Campaign lifecycle
+
+Every optimization lane follows the same order:
+
+1. Build and cache the exact reference once.
+2. Evaluate the generated paper baseline unchanged as iteration 0.
+3. Run iterations 1--50 sequentially, retaining every proposal, evaluator
+   result, and accept/reject decision.
+4. Accept only feasible strict improvements in confidence-adjusted \(T\) cost.
+5. Export and report only after every expected lane is complete.
+
+The current dense production selection contains 91 Hamiltonians from the
+HamLib121 collection through 14 qubits, with five mutation lanes per
+Hamiltonian. It also contains ten reactions with two policy contracts each.
+This gives 475 lanes and 23,750 mutation evaluations, plus iteration 0 for
+every lane.
+
+Set an absolute data root before initializing a campaign:
 
 ```bash
-uv run hsopt evaluate examples/pfs/h2 --transport local --backend numpy
-uv run hsopt evaluate examples/pfs/h2 --transport local --backend cupynumeric
+export HSOPT_DATA_ROOT=/absolute/path/to/hsopt-data
 ```
-
-Create one isolated proposal with Codex or OpenCode. Mutation histories are
-required to live outside the checkout:
 
 ```bash
-uv run hsopt mutate examples/pfs/h2 --agent codex \
-  --run-dir "$HSOPT_DATA_ROOT/development/pfs/codex-001"
-
-NVIDIA_API_KEY=... uv run hsopt mutate examples/pfs/h2 --agent opencode \
-  --run-dir "$HSOPT_DATA_ROOT/development/pfs/nemotron-001"
+uv run hsopt-campaign initialize \
+  --hamlib-inputs "$HSOPT_DATA_ROOT/exact/inputs-v2/hamlib91" \
+  --reaction-inputs "$HSOPT_DATA_ROOT/exact/inputs-v1/reactions10" \
+  --seed-validation experiments/reactions10/inputs/seed_validation.json \
+  --generator experiments/generate_initial_pf.py \
+  --campaign-root "$HSOPT_DATA_ROOT/exact/production-cpu91-v1" \
+  --hamlib-replicates 5 \
+  --iterations 50
 ```
 
-OpenCode is pinned to `opencode-ai@1.4.11`; its default model is
-`nvidia/nvidia/nemotron-3-super-v3` through NVIDIA's OpenAI-compatible API.
-The key is read only from `NVIDIA_API_KEY`, and the agent is denied every tool
-except read/edit access to the isolated `simple_pf.py`.
+The canonical CPU campaign owns the stochastic OpenCode/Nemotron mutation
+trace. The A100 campaign must use the archived CPU candidates in the same order
+with `--no-mutations` and `--replay-campaign-root`; it must not run a second
+independent mutation pass.
 
-For a shared cluster checkout, `--transport slurm` submits the same evaluator
-as one blocking `sbatch --wait` job with one GPU and no scheduler polling. Use
-`--print-only` to inspect the exact SSH, Slurm, and Legate handoff before
-running it:
+Mutable campaign material belongs below the external data root:
+
+```text
+$HSOPT_DATA_ROOT/
+├── exact/                       Production inputs and campaigns
+├── development/                 Development campaigns
+├── old_experiments/             Preserved superseded campaigns
+└── scratch/                     Preflight and disposable runs
+```
+
+Campaign IDs are immutable after work begins. Keep candidate policies, exact
+references, SQLite databases, OpenCode/OpenShell logs, Slurm output, telemetry,
+and virtual environments outside the repository.
+
+## Main commands
+
+| Command | Purpose |
+|---|---|
+| `hsopt` / `hsopt-loop` | Initialize, reconcile, inspect, propose, or replay one sequential lane |
+| `hsopt-exact` | Enqueue exact references and candidates, prepare batches, run them, and merge results |
+| `hsopt-campaign` | Prepare external inputs and initialize the complete lane grid |
+| `hsopt-supervisor` | Persistently coordinate mutation, batching, recovery, export, and reports |
+| `hsopt-openshell` | Run the isolated OpenShell/OpenCode mutation adapter |
+| `hsopt-export-exact` | Produce a strict checksummed export from a completed campaign |
+| `hsopt-reports` | Compile summary and extended PDFs from a strict export |
+| `hsopt-exact-parity` | Certify the CPU campaign against its A100 replay |
+
+Run any command with `--help` for its complete interface.
+
+## Reports
+
+First produce a normalized, checksummed export:
 
 ```bash
-uv run hsopt evaluate examples/pfs/h2 --transport slurm --print-only \
-  --submit-host nvlogin --remote-repo-root /shared/hsopt \
-  --account ACCOUNT --partition PARTITION \
-  --remote-python /shared/hsopt/.venv/bin/python \
-  --remote-legate /shared/hsopt/.venv/bin/legate
+uv run hsopt-export-exact \
+  --campaign-root "$HSOPT_DATA_ROOT/exact/production-cpu91-v1" \
+  --family hamlib121 \
+  --output-dir "$HSOPT_DATA_ROOT/exact/final-hamlib-export"
 ```
 
-Seed a GEPA prompt-optimization run:
+Then compile the paper reports:
 
 ```bash
-HSOPT_RUNS=/absolute/path/outside/hsopt
-mkdir -p "$HSOPT_RUNS/hsgepa"
-uv run hsgepa dataset --smoke --output "$HSOPT_RUNS/hsgepa/dataset_smoke.json"
-uv run hsgepa optimize --smoke --run-root "$HSOPT_RUNS/hsgepa/smoke" \
-  --max-metric-calls 6 --no-parallel
+uv run hsopt-reports \
+  --family hamlib121 \
+  --export-dir "$HSOPT_DATA_ROOT/exact/final-hamlib-export" \
+  --output-dir experiments/hamlib121/results/final
 ```
 
-`hsgepa dataset`, `evaluate-prompt`, and `optimize` require explicit output or
-run paths. Keep those mutable workspaces outside the repository checkout.
+The reporting gate emits two PDFs per Hamiltonian or reaction:
 
-## Compatibility
+- a summary comparing the initial and final accepted policies;
+- an extended table containing the initial policy and every mutation,
+  acceptance decision, exact-reference error, product-formula settings, raw
+  \(T\) count, repetition factor, and confidence-adjusted \(T_{95}\) cost.
 
-Some PFS evaluator environment variables still use the `TROVOLUT_` prefix so
-existing campaign scripts and lane wrappers keep working. Lane discovery and
-the `hsopt` CLI do not require per-lane manifest files.
+LaTeX is used when available; ReportLab provides the portable renderer.
 
-The old Python CLI aliases `t-autoresearch` and `t-gepa` are still registered
-for existing scripts, but the primary commands and skills use `hsopt` and
-`hsgepa`.
+After the CPU and A100 campaigns finish, run the cross-backend audit:
+
+```bash
+uv run hsopt-exact-parity \
+  --cpu-campaign-root "$HSOPT_DATA_ROOT/exact/production-cpu91-v1" \
+  --gpu-campaign-root "$HSOPT_DATA_ROOT/exact/production-gpu91-v2" \
+  --output "$HSOPT_DATA_ROOT/exact/production-gpu91-v2/cross_backend_audit.json" \
+  --wait \
+  --interval-seconds 60
+```
+
+The audit checks the complete lane grid, source and policy hashes, compiled
+synthesis records, confidence-adjusted \(T\) counts, policy settings,
+acceptance trajectories, and energies. CPU and A100 energies are compared
+within the configured numerical tolerance rather than requiring bitwise
+floating-point identity.
+
+## Plotting
+
+Reusable code for publication figures belongs in [`plots/`](plots/). Plot
+scripts should consume checksummed final exports or compact derived tables,
+write generated figures to an explicit output directory, and keep raw campaign
+data outside Git. Operational telemetry dashboards remain with their campaign
+runners because they are part of execution rather than paper plotting.
+
+## Agent skill
+
+The repository contains the `$hsopt` agent skill, but cloning the Python
+runtime does not automatically install it into an agent environment. Install
+the skill separately with:
+
+```bash
+npx skills add bestquark/hsopt --skill hsopt -y
+```
+
+The skill defines the immutable evaluator contract, permitted mutation
+boundary, production ordering, and CPU/A100 replay rules.
+
+## Development
+
+Run formatting, lint, and the complete test suite before publishing changes:
+
+```bash
+uv run ruff format --check .
+uv run ruff check .
+uv run pytest -q
+```
+
+See [`experiments/README.md`](experiments/README.md) for experiment-storage
+rules and [`BRANCHES.md`](BRANCHES.md) for preserved historical branches.
 
 ## License
 
-MIT License - see `LICENSE` for details.
+MIT License. See [`LICENSE`](LICENSE).

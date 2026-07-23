@@ -16,9 +16,7 @@ from typing import Any
 
 
 DEFAULT_CONTRACT = (
-    Path(__file__).resolve().parent
-    / "paper_baselines"
-    / "reiher_wiebe_svore_2017.json"
+    Path(__file__).resolve().parent / "paper_baselines" / "reiher_wiebe_svore_2017.json"
 )
 
 
@@ -113,20 +111,14 @@ def seeded_reaction_baselines(
         species = str(item["species"])
         problem_path = (source.parent / str(item["problem"])).resolve()
         problem = json.loads(problem_path.read_text(encoding="utf-8"))
-        rotations_per_step = (
-            len(problem["terms"]) if order == 1 else 2 * len(problem["terms"]) - 1
-        )
-        synthesis_budget = float(
-            point["species"][species]["synthesis_error_budget_hartree"]
-        )
+        rotations_per_step = len(problem["terms"]) if order == 1 else 2 * len(problem["terms"]) - 1
+        synthesis_budget = float(point["species"][species]["synthesis_error_budget_hartree"])
         uniform_epsilon = max(
             1.0e-15,
             synthesis_budget / float(n_steps * rotations_per_step),
         )
         rows[str(problem["name"])] = {
-            "baseline_source": (
-                f"{paper_contract['baseline_id']}_reaction_{contract}"
-            ),
+            "baseline_source": (f"{paper_contract['baseline_id']}_reaction_{contract}"),
             "budget_source": "experiments/reactions10/inputs/seed_validation.json",
             "contract": contract,
             "formula_order": order,
@@ -135,9 +127,7 @@ def seeded_reaction_baselines(
             "reaction_key": reaction_key,
             "species": species,
             "synthesis_error_budget_hartree": synthesis_budget,
-            "term_order_strategy": str(
-                paper_contract["paper_method"]["term_order_strategy"]
-            ),
+            "term_order_strategy": str(paper_contract["paper_method"]["term_order_strategy"]),
             "uniform_epsilon": uniform_epsilon,
         }
     return rows
@@ -165,8 +155,7 @@ def render(
             paper_contract=paper_contract,
         )
         provenance = (
-            f"Paper reaction seed: {seed_validation.name}\n"
-            f"Paper reaction contract: {contract}\n"
+            f"Paper reaction seed: {seed_validation.name}\nPaper reaction contract: {contract}\n"
         )
     else:
         raise ValueError("--seed-validation and --contract must be provided together")
@@ -180,7 +169,7 @@ Source SHA-256: {source_sha}
 Paper contract: {paper_contract_path.name}
 Paper contract SHA-256: {contract_sha}
 {provenance}\
-Generator: examples/generate_initial_pf.py
+Generator: experiments/generate_initial_pf.py
 Paper: Reiher et al., PNAS 114, 7555-7560 (2017), DOI 10.1073/pnas.1619152114
 
 This file is measured unchanged as iteration 0. Scientific acceptance is based
