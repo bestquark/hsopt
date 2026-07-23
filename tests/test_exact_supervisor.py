@@ -225,6 +225,75 @@ def test_idle_replay_supervisor_forces_its_partial_gpu_batch(
     assert status["queue"]["batched_tasks"] == 1
 
 
+def test_replay_supervisor_enqueues_every_ready_canonical_lane(
+    tmp_path: Path,
+    monkeypatch,
+) -> None:
+    root, queue, first_lane = _campaign(tmp_path)
+    second_lane = root / "lanes" / "h2" / "run_02"
+    second = initialize_lane(
+        second_lane,
+        queue_dir=queue,
+        kind="absolute",
+        source=ABSOLUTE / "hamiltonian.json",
+        initial_policy=ABSOLUTE / "initial_pf.py",
+        iterations=2,
+        family="hamlib121",
+        instance="h2",
+        replicate="run_02",
+    )
+    campaign_path = root / "campaign.json"
+    campaign = json.loads(campaign_path.read_text(encoding="utf-8"))
+    campaign["lanes"].append(
+        {
+            "family": "hamlib121",
+            "instance": "h2",
+            "replicate": "run_02",
+            "lane_dir": str(second_lane.relative_to(root)),
+            "baseline_task_id": second["baseline_task_id"],
+        }
+    )
+    campaign_path.write_text(json.dumps(campaign) + "\n", encoding="utf-8")
+    for lane in (first_lane, second_lane):
+        state_path = lane / "state.json"
+        state = json.loads(state_path.read_text(encoding="utf-8"))
+        state.update(
+            {
+                "pending_kind": None,
+                "pending_task_id": None,
+                "incumbent_score": 100,
+            }
+        )
+        state_path.write_text(json.dumps(state) + "\n", encoding="utf-8")
+
+    proposed: list[Path] = []
+
+    def fake_propose_replay(lane_dir: Path, canonical_lane_dir: Path) -> dict[str, object]:
+        proposed.append(lane_dir)
+        return {
+            "status": "replay_proposed",
+            "iteration": 1,
+            "task_id": lane_dir.name,
+            "canonical_candidate_sha256": "a" * 64,
+        }
+
+    monkeypatch.setattr(
+        "hsopt.exact_supervisor.propose_replay_lane",
+        fake_propose_replay,
+    )
+
+    supervise_once(
+        root,
+        repo_dir=REPO,
+        mutations_enabled=False,
+        replay_campaign_root=tmp_path / "canonical",
+        max_active_jobs=0,
+        threshold=40,
+    )
+
+    assert proposed == [first_lane, second_lane]
+
+
 def test_lane_computes_reference_then_iteration_zero_before_any_mutation(
     tmp_path: Path,
 ) -> None:

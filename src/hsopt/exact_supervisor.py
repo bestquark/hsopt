@@ -566,7 +566,6 @@ def supervise_once(
                         "canonical_candidate_sha256"
                     ],
                 )
-                break
         if mutation is None:
             mutation = {"status": "waiting_canonical"}
     elif mutations_enabled and ready_lanes:
