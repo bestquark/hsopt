@@ -77,12 +77,6 @@ system:
 uv sync --extra cupynumeric
 ```
 
-The optional GEPA prompt-optimization dependencies are installed with:
-
-```bash
-uv sync --extra gepa
-```
-
 ## Run the compact checks
 
 Evaluate the checked-in HamLib fixture on NumPy:

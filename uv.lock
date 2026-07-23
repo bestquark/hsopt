@@ -289,15 +289,6 @@ wheels = [
 ]
 
 [[package]]
-name = "gepa"
-version = "0.1.1"
-source = { registry = "https://pypi.org/simple" }
-sdist = { url = "https://files.pythonhosted.org/packages/e4/62/10f5a8f24c075e3b64f952be73ba8e15f0055584bbcdf9ce48d754a36679/gepa-0.1.1.tar.gz", hash = "sha256:643fda01c23de4c9f01306e01305dd69facc29bcb34ad59e4cd07e6621d34aa1", size = 272251, upload-time = "2026-03-16T10:17:53.131Z" }
-wheels = [
-    { url = "https://files.pythonhosted.org/packages/dc/b7/8c72dedbb950d88a6f64588fcbc590d2a21e2b9f19b36aa6c5016c54ec75/gepa-0.1.1-py3-none-any.whl", hash = "sha256:71ead7c591eafcc727b83509cdc4182f20264800a6ddf8520d61419daeb47466", size = 244246, upload-time = "2026-03-16T10:17:51.922Z" },
-]
-
-[[package]]
 name = "h5py"
 version = "3.15.1"
 source = { registry = "https://pypi.org/simple" }
@@ -349,9 +340,6 @@ cupynumeric = [
     { name = "legate", marker = "sys_platform == 'linux'" },
     { name = "nvidia-cupynumeric" },
 ]
-gepa = [
-    { name = "gepa" },
-]
 
 [package.dev-dependencies]
 dev = [
@@ -361,7 +349,6 @@ dev = [
 
 [package.metadata]
 requires-dist = [
-    { name = "gepa", marker = "extra == 'gepa'" },
     { name = "h5py", specifier = ">=3.11,<4" },
     { name = "legate", marker = "sys_platform == 'linux' and extra == 'cupynumeric'", specifier = ">=25.10.0" },
     { name = "numpy", specifier = ">=1.26.4,<2" },
@@ -370,7 +357,7 @@ requires-dist = [
     { name = "reportlab", specifier = ">=4.4,<5" },
     { name = "scipy", specifier = ">=1.17.1,<1.18" },
 ]
-provides-extras = ["cupynumeric", "gepa"]
+provides-extras = ["cupynumeric"]
 
 [package.metadata.requires-dev]
 dev = [

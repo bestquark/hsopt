@@ -22,19 +22,13 @@ hsopt-nvpark = "hsopt.nvpark_queue:main"
 hsopt-openshell = "hsopt.openshell_agent:main"
 hsopt-campaign = "hsopt.campaign_setup:main"
 hsopt-supervisor = "hsopt.exact_supervisor:main"
-hsgepa = "hsopt.tgate_opt.t_gepa_cli:main"
 hsopt-reports = "hsopt.tgate_opt.reporting:main"
 t-autoresearch = "hsopt.tgate_opt.t_autoresearch_cli:main"
-t-gepa = "hsopt.tgate_opt.t_gepa_cli:main"
 
 [project.optional-dependencies]
 cupynumeric = [
   "legate>=25.10.0; sys_platform == 'linux'",
   "nvidia-cupynumeric>=25.10.0",
-]
-
-gepa = [
-  "gepa",
 ]
 
 [dependency-groups]
