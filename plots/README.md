@@ -1,16 +1,73 @@
-# Plots
+# Paper figures
 
-Publication-facing plotting source belongs in this directory.
+This directory has one entry-point script for each data figure currently
+included by the T-gates manuscript. The scripts preserve the paper's filenames
+and visual style while reading the new exact-unitary data contracts:
 
-Plot scripts should:
+| Script | Paper figure | Output PDF(s) |
+|---|---|---|
+| `plot_hamlib_coefficients.py` | Four representative coefficient distributions | `hamlib_hamiltonian_coefficient_histograms.pdf` |
+| `plot_hamlib_precision_energy.py` | Mixed precision and energy trajectories | `hamlib_pf_tolerance_angle_scatter.pdf`, `hamlib_pf_energy_error_trajectories.pdf` |
+| `plot_hamlib_tgate_reduction.py` | Aggregate $T_{95}$ reduction | `hamlib_pf_tgate_reduction_histogram.pdf`, `hamlib_pf_tgate_trajectories.pdf` |
+| `plot_reaction_comparison.py` | Ten-reaction seed-policy comparison | `reaction_cancellation_budget.pdf` |
+| `plot_hamlib_active_spaces.py` | HamLib active-space census | `hamlib_molecular_dataset_active_spaces.pdf` |
+| `plot_baseline_tolerance.py` | Initial tolerance versus Hamiltonian one-norm | `baseline_epsilon_vs_lambda.pdf` |
 
-- read checksummed final exports or compact derived tables;
-- write figures to an explicit caller-supplied output directory;
-- use concise LaTeX-rendered labels and publication-readable typography;
-- prefer vector PDF or SVG output for manuscripts;
-- keep raw campaign databases, caches, logs, and generated figures out of this
-  source directory.
+All result plots verify the strict export completion marker and every declared
+SHA-256 checksum before reading data. They never read a live campaign database.
+The current 91-instance manifest supplies stable dataset metadata, while the
+coefficient plot reads the immutable prepared Hamiltonian JSON files. Scripts
+refuse to write generated figures inside either immutable input tree.
 
-Operational telemetry renderers remain beside their campaign runners under
-`experiments/` because they are execution infrastructure rather than paper
-plots.
+## Usage
+
+Set paths to a completed absolute-energy export, difference-energy export,
+prepared HamLib input tree, and an external output directory:
+
+```bash
+export ABS_EXPORT=/path/to/final-abs-energy-export
+export DIFF_EXPORT=/path/to/final-diff-energy-export
+export HAMLIB_INPUTS=/path/to/prepared/abs_energy
+export FIGURE_OUTPUT=/path/to/paper-figures
+```
+
+Generate the four main-text figures:
+
+```bash
+uv run python plots/plot_hamlib_coefficients.py \
+  --hamlib-input-dir "$HAMLIB_INPUTS" \
+  --output-dir "$FIGURE_OUTPUT"
+
+uv run python plots/plot_hamlib_precision_energy.py \
+  --export-dir "$ABS_EXPORT" \
+  --output-dir "$FIGURE_OUTPUT"
+
+uv run python plots/plot_hamlib_tgate_reduction.py \
+  --export-dir "$ABS_EXPORT" \
+  --output-dir "$FIGURE_OUTPUT"
+
+uv run python plots/plot_reaction_comparison.py \
+  --export-dir "$DIFF_EXPORT" \
+  --output-dir "$FIGURE_OUTPUT"
+```
+
+Generate the two appendix figures:
+
+```bash
+uv run python plots/plot_hamlib_active_spaces.py \
+  --output-dir "$FIGURE_OUTPUT"
+
+uv run python plots/plot_baseline_tolerance.py \
+  --export-dir "$ABS_EXPORT" \
+  --output-dir "$FIGURE_OUTPUT"
+```
+
+Pass `--full-census /path/to/census.json` to
+`plot_hamlib_active_spaces.py` to place the current 91-instance selection over
+the full HamLib context. The accepted JSON format may contain either
+`active_space_counts_by_nqubits` or a lane list; a CSV with an `nqubits` or
+`n_qubits` column is also accepted.
+
+The plots use a real LaTeX installation for typography and deliberately do not
+fall back to Matplotlib mathtext. Generated PDFs, exports, raw campaigns,
+databases, and logs remain outside the Git checkout.
