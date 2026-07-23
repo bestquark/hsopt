@@ -50,14 +50,19 @@ small validated final export or summary PDF may be copied to the corresponding
 
 The canonical exact campaign uses the 91 HamLib instances through 14 qubits,
 five independent lanes per instance, and the ten reactions with two lanes
-each. Its dense cuPyNumeric evaluator runs on `polar4` with one 80 GB A100,
-2 CPUs, and 16 GB host RAM. The compiled PF unitary is accumulated with one
-reused matrix-sized workspace; that workspace is released before the unitary
-eigendecomposition.
+each. OpenCode proposes mutations only for the canonical CPU campaign. Its
+dense cuPyNumeric evaluator uses the `cpu` partition, 2 CPUs, and 64 GB RAM.
 
-The older 57-instance CPU campaign remains useful as an at-most-10-qubit parity
-pilot. Both placements use the same evaluator source and cuPyNumeric 25.11. A
-CPU run must use the `cpu` partition and request no GPU.
+The A100 campaign is an exact replay-validation campaign: it consumes the
+CPU campaign's archived candidates in the same order with `--no-mutations` and
+`--replay-campaign-root`. It runs on `polar4` with one 80 GB A100, 2 CPUs, and
+16 GB host RAM. Both placements use the same evaluator source and cuPyNumeric
+25.11; policy hashes, compiled T counts, and accept/reject trajectories must
+match, while floating-point energies are compared within an explicit numerical
+tolerance. A CPU run must use the `cpu` partition and request no GPU.
+
+The compiled PF unitary is accumulated with one reused matrix-sized workspace;
+that workspace is released before the unitary eigendecomposition.
 
 ## Final paper reports
 
@@ -68,7 +73,7 @@ reports for every scientific instance with:
 
 ```bash
 uv run hsopt-export-exact \
-  --campaign-root /external/production-gpu91-v1 \
+  --campaign-root /external/production-cpu91-v1 \
   --family hamlib121 \
   --output-dir /external/final/hamlib121-export
 
@@ -77,7 +82,7 @@ uv run hsopt-reports --family hamlib121 \
   --output-dir experiments/hamlib121/results/final
 
 uv run hsopt-export-exact \
-  --campaign-root /external/production-gpu91-v1 \
+  --campaign-root /external/production-cpu91-v1 \
   --family reactions10 \
   --output-dir /external/final/reactions10-export
 
