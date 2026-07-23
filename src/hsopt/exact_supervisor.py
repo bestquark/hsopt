@@ -472,12 +472,35 @@ def supervise_once(
 
     lane_metrics, ready_lanes = _lane_summary(lane_dirs)
 
+    def record_submitted_batch(
+        *,
+        batch_id: str,
+        job_id: str,
+        tasks: int,
+    ) -> None:
+        row = {
+            "batch_id": batch_id,
+            "job_id": job_id,
+            "state": "SUBMITTED",
+            "tasks": tasks,
+        }
+        for index, existing in enumerate(batch_rows):
+            if existing["batch_id"] == batch_id:
+                batch_rows[index] = row
+                return
+        batch_rows.append(row)
+
     for batch_dir in stranded_batches:
         if active_jobs >= max_active_jobs:
             break
         try:
             submitted = submit_batch(batch_dir, **submit_options)
             active_jobs += 1
+            record_submitted_batch(
+                batch_id=batch_dir.name,
+                job_id=submitted["job_id"],
+                tasks=_batch_task_count(batch_dir),
+            )
             _append_event(
                 campaign_root,
                 "batch_submitted",
@@ -495,44 +518,53 @@ def supervise_once(
                 error=_safe_error(exc),
             )
 
-    while active_jobs < max_active_jobs:
-        current_queue = queue_status(queue_dir)
-        pending = int(current_queue["pending"])
-        if pending == 0:
-            break
-        force_partial = pending < threshold and (
-            not ready_lanes
-            or (replay_campaign_root is not None and active_jobs == 0)
-        )
-        if pending < threshold and not force_partial:
-            break
-        try:
-            submitted = submit_ready(
-                queue_dir,
-                threshold=threshold,
-                force=force_partial,
-                **submit_options,
+    def submit_available(ready_lanes_now: list[Path]) -> None:
+        nonlocal active_jobs
+        while active_jobs < max_active_jobs:
+            current_queue = queue_status(queue_dir)
+            pending = int(current_queue["pending"])
+            if pending == 0:
+                break
+            force_partial = pending < threshold and (
+                not ready_lanes_now
+                or (replay_campaign_root is not None and active_jobs == 0)
             )
-        except Exception as exc:
+            if pending < threshold and not force_partial:
+                break
+            try:
+                submitted = submit_ready(
+                    queue_dir,
+                    threshold=threshold,
+                    force=force_partial,
+                    **submit_options,
+                )
+            except Exception as exc:
+                _append_event(
+                    campaign_root,
+                    "batch_submission_error",
+                    batch_id=None,
+                    error=_safe_error(exc),
+                )
+                break
+            if submitted.get("status") != "submitted":
+                break
+            active_jobs += 1
+            record_submitted_batch(
+                batch_id=submitted["batch_id"],
+                job_id=submitted["job_id"],
+                tasks=submitted["task_count"],
+            )
             _append_event(
                 campaign_root,
-                "batch_submission_error",
-                batch_id=None,
-                error=_safe_error(exc),
+                "batch_submitted",
+                batch_id=submitted["batch_id"],
+                job_id=submitted["job_id"],
+                tasks=submitted["task_count"],
+                forced_partial=force_partial,
+                resources=submitted["resources"],
             )
-            break
-        if submitted.get("status") != "submitted":
-            break
-        active_jobs += 1
-        _append_event(
-            campaign_root,
-            "batch_submitted",
-            batch_id=submitted["batch_id"],
-            job_id=submitted["job_id"],
-            tasks=submitted["task_count"],
-            forced_partial=force_partial,
-            resources=submitted["resources"],
-        )
+
+    submit_available(ready_lanes)
 
     mutation: dict[str, Any] | None = None
     mutations: list[dict[str, Any]] = []
@@ -596,7 +628,8 @@ def supervise_once(
                     queue_status=mutation.get("queue_status"),
                 )
 
-    lane_metrics, _ = _lane_summary(lane_dirs)
+    lane_metrics, ready_lanes = _lane_summary(lane_dirs)
+    submit_available(ready_lanes)
     status = {
         "schema": 1,
         "updated_at": _now(),

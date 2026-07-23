@@ -94,6 +94,103 @@ def test_mutation_workers_run_distinct_lanes_concurrently(monkeypatch) -> None:
     assert peak == 4
 
 
+def test_supervisor_submits_new_batch_immediately_after_mutation_wave(
+    tmp_path: Path,
+    monkeypatch,
+) -> None:
+    root, queue, lane = _campaign(tmp_path)
+    state_path = lane / "state.json"
+    state = json.loads(state_path.read_text(encoding="utf-8"))
+    state.update(
+        {
+            "pending_kind": None,
+            "pending_task_id": None,
+            "incumbent_score": 100,
+        }
+    )
+    state_path.write_text(json.dumps(state) + "\n", encoding="utf-8")
+    pending = 0
+    submitted_batches = 0
+    calls: list[str] = []
+
+    def fake_queue_status(queue_dir: Path) -> dict[str, object]:
+        return {
+            "queue_dir": str(queue_dir),
+            "pending": pending,
+            "completed": 0,
+            "failed": 0,
+            "batched_tasks": 15 * submitted_batches,
+            "batches": submitted_batches,
+        }
+
+    def fake_mutations(
+        lane_dirs: list[Path],
+        *,
+        workers: int,
+        timeout_seconds: int,
+    ) -> list[tuple[Path, dict[str, object]]]:
+        nonlocal pending
+        assert lane_dirs == [lane]
+        assert workers == 1
+        assert timeout_seconds == 123
+        calls.append("mutation")
+        pending = 15
+        return [
+            (
+                lane,
+                {
+                    "status": "proposed",
+                    "iteration": 1,
+                    "task_id": "task-after-mutation",
+                    "queue_status": "queued",
+                },
+            )
+        ]
+
+    def fake_submit_ready(queue_dir: Path, **kwargs: object) -> dict[str, object]:
+        nonlocal pending, submitted_batches
+        assert pending == 15
+        assert kwargs["threshold"] == 15
+        assert kwargs["force"] is False
+        calls.append("submit")
+        pending = 0
+        submitted_batches = 1
+        return {
+            "status": "submitted",
+            "batch_id": "post-mutation-batch",
+            "job_id": "999",
+            "task_count": 15,
+            "resources": {"partition": "cpu", "gpus": 0},
+        }
+
+    monkeypatch.setattr("hsopt.exact_supervisor.queue_status", fake_queue_status)
+    monkeypatch.setattr(
+        "hsopt.exact_supervisor._run_mutation_proposals",
+        fake_mutations,
+    )
+    monkeypatch.setattr("hsopt.exact_supervisor.submit_ready", fake_submit_ready)
+
+    status = supervise_once(
+        root,
+        repo_dir=REPO,
+        threshold=15,
+        max_active_jobs=1,
+        mutation_workers=1,
+        mutation_timeout_seconds=123,
+    )
+
+    assert calls == ["mutation", "submit"]
+    assert status["active_jobs"] == 1
+    assert status["batches"] == [
+        {
+            "batch_id": "post-mutation-batch",
+            "job_id": "999",
+            "state": "SUBMITTED",
+            "tasks": 15,
+        }
+    ]
+
+
 def test_supervisor_collects_and_reconciles_a_completed_baseline(
     tmp_path: Path,
     monkeypatch,
