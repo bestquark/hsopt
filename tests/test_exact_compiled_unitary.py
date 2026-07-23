@@ -10,8 +10,8 @@ import pytest
 
 from hsopt.compiled_unitary import (
     TARGET_STATE_DEFINITION,
+    _anchored_ground_state,
     _compile_rz,
-    _hf_projected_ground_state,
     evaluate_exact_reference,
     evaluate_molecule,
 )
@@ -79,7 +79,7 @@ def test_exact_reference_is_obtained_from_the_exact_unitary_once() -> None:
     assert result["target_state_definition"] == TARGET_STATE_DEFINITION
 
 
-def test_hf_projected_target_is_invariant_to_degenerate_eigenbasis_rotation() -> None:
+def test_anchored_target_is_invariant_to_degenerate_eigenbasis_rotation() -> None:
     problem = {"n_qubits": 4, "electrons": 1}
     indices = np.asarray([1, 2, 4, 8], dtype=np.int64)
     inverse_sqrt_two = 1.0 / np.sqrt(2.0)
@@ -93,7 +93,15 @@ def test_hf_projected_target_is_invariant_to_degenerate_eigenbasis_rotation() ->
         dtype=np.complex128,
     )
 
-    energy, target, probability, dimension = _hf_projected_ground_state(
+    (
+        energy,
+        target,
+        hf_ground_probability,
+        hf_target_probability,
+        dimension,
+        anchor_kind,
+        anchor_basis_index,
+    ) = _anchored_ground_state(
         problem,
         indices_host=indices,
         eigenvalues=np.asarray([0.0, 0.0, 2.0, 2.0]),
@@ -103,11 +111,43 @@ def test_hf_projected_target_is_invariant_to_degenerate_eigenbasis_rotation() ->
 
     assert energy == 0.0
     assert dimension == 2
-    assert probability == pytest.approx(1.0)
+    assert hf_ground_probability == pytest.approx(1.0)
+    assert hf_target_probability == pytest.approx(1.0)
+    assert anchor_kind == "hartree_fock"
+    assert anchor_basis_index == 8
     assert target == pytest.approx(np.asarray([0.0, 0.0, 0.0, 1.0]))
 
 
-def test_degenerate_exact_reference_serializes_unique_hf_ground_component(
+def test_anchored_target_falls_back_when_hf_has_no_ground_support() -> None:
+    problem = {"n_qubits": 4, "electrons": 1}
+    indices = np.asarray([1, 2, 4, 8], dtype=np.int64)
+
+    (
+        energy,
+        target,
+        hf_ground_probability,
+        hf_target_probability,
+        dimension,
+        anchor_kind,
+        anchor_basis_index,
+    ) = _anchored_ground_state(
+        problem,
+        indices_host=indices,
+        eigenvalues=np.asarray([0.0, 0.0, 2.0, 2.0]),
+        eigenvectors=np.eye(4, dtype=np.complex128),
+        xp=np,
+    )
+
+    assert energy == 0.0
+    assert dimension == 2
+    assert hf_ground_probability == pytest.approx(0.0)
+    assert hf_target_probability == pytest.approx(0.0)
+    assert anchor_kind == "lowest_resolved_fixed_electron_determinant"
+    assert anchor_basis_index == 1
+    assert target == pytest.approx(np.asarray([1.0, 0.0, 0.0, 0.0]))
+
+
+def test_degenerate_exact_reference_serializes_unique_anchored_ground_component(
     tmp_path: Path,
 ) -> None:
     problem_path = tmp_path / "degenerate.json"
@@ -135,6 +175,9 @@ def test_degenerate_exact_reference_serializes_unique_hf_ground_component(
 
     assert result["exact_ground_subspace_dimension"] == 2
     assert result["target_state_definition"] == TARGET_STATE_DEFINITION
+    assert result["target_anchor_kind"] == "hartree_fock"
+    assert result["target_anchor_basis_index"] == 8
+    assert result["hf_ground_subspace_probability"] == pytest.approx(1.0)
     assert result["qpe_success_probability_from_hf"] == pytest.approx(1.0)
     assert target[8] == pytest.approx(1.0)
     assert np.linalg.norm(np.delete(target, 8)) == pytest.approx(0.0)

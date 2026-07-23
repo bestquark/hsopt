@@ -27,7 +27,8 @@ import numpy as np
 
 CHEMICAL_ACCURACY_HARTREE = 1.0 / 627.5094740631
 EXACT_GROUND_SUBSPACE_ATOL_HARTREE = 1.0e-9
-TARGET_STATE_DEFINITION = "normalized_hf_projection_onto_exact_ground_eigenspace"
+TARGET_ANCHOR_MIN_PROBABILITY = 1.0e-12
+TARGET_STATE_DEFINITION = "normalized_anchor_projection_onto_exact_ground_eigenspace"
 _PAULIS = {
     "I": np.eye(2, dtype=np.complex128),
     "X": np.asarray([[0.0, 1.0], [1.0, 0.0]], dtype=np.complex128),
@@ -174,20 +175,23 @@ def _hartree_fock_basis_index(problem: Mapping[str, Any]) -> int:
     return sum(1 << (n_qubits - qubit - 1) for qubit in range(electrons))
 
 
-def _hf_projected_ground_state(
+def _anchored_ground_state(
     problem: Mapping[str, Any],
     *,
     indices_host: np.ndarray,
     eigenvalues: Any,
     eigenvectors: Any,
     xp: Any,
-) -> tuple[float, Any, float, int]:
-    """Return the unique ground component accessible from the HF state.
+) -> tuple[float, Any, float, float, int, str, int]:
+    """Return a deterministic exact-ground target and its diagnostics.
 
     A degenerate ground eigenspace has no unique eigenvector: different dense
     eigensolvers may return different orthonormal bases for the same subspace.
-    Projecting the fixed HF state onto the complete ground eigenspace produces
-    a basis-independent target for compiled-unitary eigenstate tracking.
+    Projecting a fixed computational-basis anchor onto the complete ground
+    eigenspace produces a basis-independent target for compiled-unitary
+    eigenstate tracking. The HF determinant is preferred; if it has no
+    resolvable ground support, the lowest-index fixed-electron determinant with
+    resolvable support is used instead.
     """
 
     eigenvalues_host = np.asarray(eigenvalues, dtype=np.float64)
@@ -201,19 +205,39 @@ def _hf_projected_ground_state(
     matches = np.flatnonzero(indices_host == _hartree_fock_basis_index(problem))
     if matches.size != 1:
         raise RuntimeError("Hartree--Fock determinant is absent from the fixed-electron sector")
-    hf_sector = xp.zeros(indices_host.size, dtype=xp.complex128)
-    hf_sector[int(matches[0])] = 1.0
+    hf_position = int(matches[0])
     ground_basis = eigenvectors[:, ground_columns.tolist()]
-    target = ground_basis @ (ground_basis.conj().T @ hf_sector)
-    hf_ground_probability = float(np.asarray(xp.sum(xp.abs(target) ** 2)))
-    if hf_ground_probability <= 1.0e-15:
-        raise RuntimeError("Hartree--Fock state has zero overlap with the exact ground eigenspace")
-    target /= math.sqrt(hf_ground_probability)
+    determinant_probabilities = np.asarray(
+        xp.sum(xp.abs(ground_basis) ** 2, axis=1),
+        dtype=np.float64,
+    )
+    hf_ground_probability = float(determinant_probabilities[hf_position])
+    if hf_ground_probability >= TARGET_ANCHOR_MIN_PROBABILITY:
+        anchor_position = hf_position
+        anchor_kind = "hartree_fock"
+    else:
+        resolved = np.flatnonzero(
+            determinant_probabilities >= TARGET_ANCHOR_MIN_PROBABILITY
+        )
+        if resolved.size == 0:
+            raise RuntimeError(
+                "exact ground eigenspace has no resolvable fixed-electron determinant anchor"
+            )
+        anchor_position = int(resolved[0])
+        anchor_kind = "lowest_resolved_fixed_electron_determinant"
+
+    anchor_probability = float(determinant_probabilities[anchor_position])
+    target = ground_basis @ ground_basis[anchor_position, :].conj()
+    target /= math.sqrt(anchor_probability)
+    hf_target_probability = float(np.asarray(xp.abs(target[hf_position]) ** 2))
     return (
         ground_energy,
         target,
         hf_ground_probability,
+        hf_target_probability,
         int(ground_columns.size),
+        anchor_kind,
+        int(indices_host[anchor_position]),
     )
 
 
@@ -513,7 +537,9 @@ def _reference_state(
     if reference.get("observable") != "exact_unitary_ground_eigenphase":
         raise ValueError("reference is not an exact-unitary ground-eigenphase result")
     if reference.get("target_state_definition") != TARGET_STATE_DEFINITION:
-        raise ValueError("reference does not use the HF-projected exact ground-eigenspace target")
+        raise ValueError(
+            "reference does not use the deterministic anchored exact-ground target"
+        )
     problem_path = Path(str(problem["_path"]))
     if reference.get("problem_sha256") != _sha256(problem_path):
         raise ValueError(f"exact reference does not match {problem_path}")
@@ -546,8 +572,11 @@ def evaluate_exact_reference(
         hamiltonian_energy,
         hamiltonian_target,
         hf_ground_probability,
+        hf_target_probability,
         ground_subspace_dimension,
-    ) = _hf_projected_ground_state(
+        target_anchor_kind,
+        target_anchor_basis_index,
+    ) = _anchored_ground_state(
         problem,
         indices_host=indices_host,
         eigenvalues=h_eigenvalues,
@@ -591,6 +620,9 @@ def evaluate_exact_reference(
         "exact_ground_subspace_dimension": ground_subspace_dimension,
         "exact_ground_subspace_atol_hartree": EXACT_GROUND_SUBSPACE_ATOL_HARTREE,
         "target_state_definition": TARGET_STATE_DEFINITION,
+        "target_anchor_min_probability": TARGET_ANCHOR_MIN_PROBABILITY,
+        "target_anchor_kind": target_anchor_kind,
+        "target_anchor_basis_index": target_anchor_basis_index,
         "target_time": float(problem["target_time"]),
         "hamiltonian_ground_energy_hartree": hamiltonian_energy,
         "exact_unitary_ground_energy_hartree": unitary_energy,
@@ -598,7 +630,8 @@ def evaluate_exact_reference(
         "selected_eigen_index": selected,
         "selected_eigenphase_radians": selected_phase,
         "selected_ground_state_overlap": float(np.asarray(ground_overlaps[selected])),
-        "qpe_success_probability_from_hf": hf_ground_probability,
+        "hf_ground_subspace_probability": hf_ground_probability,
+        "qpe_success_probability_from_hf": hf_target_probability,
         "max_eigenvalue_modulus_error": float(
             np.asarray(xp.max(xp.abs(xp.abs(eigenvalues) - 1.0)))
         ),
@@ -706,6 +739,8 @@ def evaluate_molecule(
         "exact_reference_problem_sha256": reference_result["problem_sha256"],
         "exact_ground_subspace_dimension": int(reference_result["exact_ground_subspace_dimension"]),
         "target_state_definition": reference_result["target_state_definition"],
+        "target_anchor_kind": reference_result["target_anchor_kind"],
+        "target_anchor_basis_index": int(reference_result["target_anchor_basis_index"]),
         "backend": backend_name,
         "n_qubits": int(problem["n_qubits"]),
         "electrons": int(problem["electrons"]),

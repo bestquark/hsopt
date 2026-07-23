@@ -452,10 +452,12 @@ Read and edit only candidate.py.
 
 The fixed evaluator compiles every Pauli rotation with PyGridSynth, constructs
 the actual compiled product-formula unitary, diagonalizes it, identifies the
-eigenstate connected to the normalized HF projection onto the complete exact
-ground eigenspace, and measures its exact eigenphase energy error. The score is
-the exact compiled T count only when the candidate is within chemical accuracy.
-HF overlap is diagnostic QPE success probability, not an energy average.
+eigenstate connected to a normalized deterministic-anchor projection onto the
+complete exact ground eigenspace, and measures its exact eigenphase energy
+error. The anchor is HF when it has ground support, otherwise the lowest
+resolved fixed-electron determinant. The score is the exact compiled T count
+only when the candidate is within chemical accuracy. HF overlap is diagnostic
+QPE success probability, not an energy average.
 
 Make one coherent deterministic mutation intended to lower T count while
 remaining accurate. Preserve get_method_config(problem) and
