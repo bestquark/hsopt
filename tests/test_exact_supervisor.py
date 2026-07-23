@@ -216,14 +216,19 @@ def test_iteration_zero_retains_an_inaccurate_paper_baseline(
         }
     )
     result_path.write_text(json.dumps(result) + "\n", encoding="utf-8")
+    state_path = lane / "state.json"
+    pre_reconcile = json.loads(state_path.read_text(encoding="utf-8"))
+    pre_reconcile["last_error"] = "an earlier transient reconciliation error"
+    state_path.write_text(json.dumps(pre_reconcile) + "\n", encoding="utf-8")
 
     baseline_event = reconcile_lane(lane)
 
     assert baseline_event["status"] == "baseline_ready"
     assert baseline_event["passes_chemical_accuracy"] is False
-    state = json.loads((lane / "state.json").read_text(encoding="utf-8"))
+    state = json.loads(state_path.read_text(encoding="utf-8"))
     assert state["pending_kind"] is None
     assert state["incumbent_score"] is None
+    assert state["last_error"] is None
     assert json.loads((lane / "baseline_result.json").read_text(encoding="utf-8"))[
         "passes_chemical_accuracy"
     ] is False

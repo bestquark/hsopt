@@ -339,6 +339,7 @@ def reconcile_lane(lane_dir: Path) -> dict[str, Any]:
                 "pending_task_id": None,
                 "incumbent_score": result.get("score"),
                 "incumbent_task_id": task_id,
+                "last_error": None,
                 "updated_at": _now(),
             }
         )
