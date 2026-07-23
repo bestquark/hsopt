@@ -1,13 +1,17 @@
 from __future__ import annotations
 
+import json
 import subprocess
 import sys
 from pathlib import Path
 
+import numpy as np
 import pytest
 
 from hsopt.compiled_unitary import (
+    TARGET_STATE_DEFINITION,
     _compile_rz,
+    _hf_projected_ground_state,
     evaluate_exact_reference,
     evaluate_molecule,
 )
@@ -71,6 +75,69 @@ def test_exact_reference_is_obtained_from_the_exact_unitary_once() -> None:
     )
     assert result["unitary_hamiltonian_consistency_error_hartree"] < 1.0e-12
     assert result["selected_ground_state_overlap"] == pytest.approx(1.0)
+    assert result["exact_ground_subspace_dimension"] == 1
+    assert result["target_state_definition"] == TARGET_STATE_DEFINITION
+
+
+def test_hf_projected_target_is_invariant_to_degenerate_eigenbasis_rotation() -> None:
+    problem = {"n_qubits": 4, "electrons": 1}
+    indices = np.asarray([1, 2, 4, 8], dtype=np.int64)
+    inverse_sqrt_two = 1.0 / np.sqrt(2.0)
+    eigenvectors = np.asarray(
+        [
+            [0.0, 0.0, 1.0, 0.0],
+            [inverse_sqrt_two, inverse_sqrt_two, 0.0, 0.0],
+            [0.0, 0.0, 0.0, 1.0],
+            [inverse_sqrt_two, -inverse_sqrt_two, 0.0, 0.0],
+        ],
+        dtype=np.complex128,
+    )
+
+    energy, target, probability, dimension = _hf_projected_ground_state(
+        problem,
+        indices_host=indices,
+        eigenvalues=np.asarray([0.0, 0.0, 2.0, 2.0]),
+        eigenvectors=eigenvectors,
+        xp=np,
+    )
+
+    assert energy == 0.0
+    assert dimension == 2
+    assert probability == pytest.approx(1.0)
+    assert target == pytest.approx(np.asarray([0.0, 0.0, 0.0, 1.0]))
+
+
+def test_degenerate_exact_reference_serializes_unique_hf_ground_component(
+    tmp_path: Path,
+) -> None:
+    problem_path = tmp_path / "degenerate.json"
+    problem_path.write_text(
+        json.dumps(
+            {
+                "name": "degenerate HF target",
+                "n_qubits": 4,
+                "electrons": 1,
+                "target_time": 0.2,
+                "identity_coefficient": 0.0,
+                "terms": [
+                    {"label": "ZIII", "coefficient": 1.0},
+                    {"label": "IIZI", "coefficient": 1.0},
+                ],
+            }
+        ),
+        encoding="utf-8",
+    )
+
+    result = evaluate_exact_reference(problem_path, backend="numpy")
+    target = np.asarray(
+        [complex(real, imaginary) for real, imaginary in result["exact_ground_state"]]
+    )
+
+    assert result["exact_ground_subspace_dimension"] == 2
+    assert result["target_state_definition"] == TARGET_STATE_DEFINITION
+    assert result["qpe_success_probability_from_hf"] == pytest.approx(1.0)
+    assert target[8] == pytest.approx(1.0)
+    assert np.linalg.norm(np.delete(target, 8)) == pytest.approx(0.0)
 
 
 def test_absolute_baseline_uses_cached_exact_reference_and_compiled_eigenphase(

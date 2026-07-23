@@ -26,6 +26,8 @@ import numpy as np
 
 
 CHEMICAL_ACCURACY_HARTREE = 1.0 / 627.5094740631
+EXACT_GROUND_SUBSPACE_ATOL_HARTREE = 1.0e-9
+TARGET_STATE_DEFINITION = "normalized_hf_projection_onto_exact_ground_eigenspace"
 _PAULIS = {
     "I": np.eye(2, dtype=np.complex128),
     "X": np.asarray([[0.0, 1.0], [1.0, 0.0]], dtype=np.complex128),
@@ -160,11 +162,59 @@ def _fixed_electron_hamiltonian(
 
 def _hartree_fock_state(problem: Mapping[str, Any], xp: Any) -> Any:
     n_qubits = int(problem["n_qubits"])
-    electrons = int(problem["electrons"])
-    basis_index = sum(1 << (n_qubits - qubit - 1) for qubit in range(electrons))
+    basis_index = _hartree_fock_basis_index(problem)
     state = xp.zeros(1 << n_qubits, dtype=xp.complex128)
     state[basis_index] = 1.0
     return state
+
+
+def _hartree_fock_basis_index(problem: Mapping[str, Any]) -> int:
+    n_qubits = int(problem["n_qubits"])
+    electrons = int(problem["electrons"])
+    return sum(1 << (n_qubits - qubit - 1) for qubit in range(electrons))
+
+
+def _hf_projected_ground_state(
+    problem: Mapping[str, Any],
+    *,
+    indices_host: np.ndarray,
+    eigenvalues: Any,
+    eigenvectors: Any,
+    xp: Any,
+) -> tuple[float, Any, float, int]:
+    """Return the unique ground component accessible from the HF state.
+
+    A degenerate ground eigenspace has no unique eigenvector: different dense
+    eigensolvers may return different orthonormal bases for the same subspace.
+    Projecting the fixed HF state onto the complete ground eigenspace produces
+    a basis-independent target for compiled-unitary eigenstate tracking.
+    """
+
+    eigenvalues_host = np.asarray(eigenvalues, dtype=np.float64)
+    ground_energy = float(eigenvalues_host[0])
+    ground_columns = np.flatnonzero(
+        np.abs(eigenvalues_host - ground_energy) <= EXACT_GROUND_SUBSPACE_ATOL_HARTREE
+    )
+    if ground_columns.size == 0:
+        raise RuntimeError("exact Hamiltonian diagonalization found no ground eigenspace")
+
+    matches = np.flatnonzero(indices_host == _hartree_fock_basis_index(problem))
+    if matches.size != 1:
+        raise RuntimeError("Hartree--Fock determinant is absent from the fixed-electron sector")
+    hf_sector = xp.zeros(indices_host.size, dtype=xp.complex128)
+    hf_sector[int(matches[0])] = 1.0
+    ground_basis = eigenvectors[:, ground_columns.tolist()]
+    target = ground_basis @ (ground_basis.conj().T @ hf_sector)
+    hf_ground_probability = float(np.asarray(xp.sum(xp.abs(target) ** 2)))
+    if hf_ground_probability <= 1.0e-15:
+        raise RuntimeError("Hartree--Fock state has zero overlap with the exact ground eigenspace")
+    target /= math.sqrt(hf_ground_probability)
+    return (
+        ground_energy,
+        target,
+        hf_ground_probability,
+        int(ground_columns.size),
+    )
 
 
 def _patch_pygridsynth() -> None:
@@ -462,6 +512,8 @@ def _reference_state(
 ) -> tuple[float, Any]:
     if reference.get("observable") != "exact_unitary_ground_eigenphase":
         raise ValueError("reference is not an exact-unitary ground-eigenphase result")
+    if reference.get("target_state_definition") != TARGET_STATE_DEFINITION:
+        raise ValueError("reference does not use the HF-projected exact ground-eigenspace target")
     problem_path = Path(str(problem["_path"]))
     if reference.get("problem_sha256") != _sha256(problem_path):
         raise ValueError(f"exact reference does not match {problem_path}")
@@ -490,30 +542,35 @@ def evaluate_exact_reference(
     sector_hamiltonian = xp.asarray(sector_host, dtype=xp.complex128)
     h_eigenvalues, h_eigenvectors = xp.linalg.eigh(sector_hamiltonian)
     _fence(backend_name)
-    hamiltonian_energy = float(np.asarray(h_eigenvalues[0]).real)
-    hamiltonian_ground = h_eigenvectors[:, 0]
+    (
+        hamiltonian_energy,
+        hamiltonian_target,
+        hf_ground_probability,
+        ground_subspace_dimension,
+    ) = _hf_projected_ground_state(
+        problem,
+        indices_host=indices_host,
+        eigenvalues=h_eigenvalues,
+        eigenvectors=h_eigenvectors,
+        xp=xp,
+    )
     phases = xp.exp(1.0j * h_eigenvalues * float(problem["target_time"]))
     exact_unitary = (h_eigenvectors * phases[None, :]) @ h_eigenvectors.conj().T
     _fence(backend_name)
     eigenvalues, eigenvectors = xp.linalg.eig(exact_unitary)
     _fence(backend_name)
     eigenvectors /= xp.linalg.norm(eigenvectors, axis=0, keepdims=True)
-    ground_overlaps = xp.abs(eigenvectors.conj().T @ hamiltonian_ground) ** 2
+    ground_overlaps = xp.abs(eigenvectors.conj().T @ hamiltonian_target) ** 2
     selected = int(np.asarray(xp.argmax(ground_overlaps)))
-    selected_state = eigenvectors[:, selected]
     selected_phase = float(np.asarray(xp.angle(eigenvalues[selected])))
     unitary_energy = _unwrap_energy(
         selected_phase,
         float(problem["target_time"]),
         hamiltonian_energy,
     )
-    full_selected_state = xp.zeros(1 << int(problem["n_qubits"]), dtype=xp.complex128)
+    full_target_state = xp.zeros(1 << int(problem["n_qubits"]), dtype=xp.complex128)
     indices = xp.asarray(indices_host, dtype=xp.int64)
-    full_selected_state[indices] = selected_state
-    hf_state = _hartree_fock_state(problem, xp)
-    hf_probability = float(
-        np.asarray(xp.abs(full_selected_state.conj().T @ hf_state) ** 2)
-    )
+    full_target_state[indices] = hamiltonian_target
     consistency_error = abs(unitary_energy - hamiltonian_energy)
     if consistency_error > 1.0e-9:
         raise RuntimeError(
@@ -531,6 +588,9 @@ def evaluate_exact_reference(
         "n_qubits": int(problem["n_qubits"]),
         "electrons": int(problem["electrons"]),
         "fixed_electron_sector_dimension": int(indices_host.size),
+        "exact_ground_subspace_dimension": ground_subspace_dimension,
+        "exact_ground_subspace_atol_hartree": EXACT_GROUND_SUBSPACE_ATOL_HARTREE,
+        "target_state_definition": TARGET_STATE_DEFINITION,
         "target_time": float(problem["target_time"]),
         "hamiltonian_ground_energy_hartree": hamiltonian_energy,
         "exact_unitary_ground_energy_hartree": unitary_energy,
@@ -538,11 +598,11 @@ def evaluate_exact_reference(
         "selected_eigen_index": selected,
         "selected_eigenphase_radians": selected_phase,
         "selected_ground_state_overlap": float(np.asarray(ground_overlaps[selected])),
-        "qpe_success_probability_from_hf": hf_probability,
+        "qpe_success_probability_from_hf": hf_ground_probability,
         "max_eigenvalue_modulus_error": float(
             np.asarray(xp.max(xp.abs(xp.abs(eigenvalues) - 1.0)))
         ),
-        "exact_ground_state": _serialize_state(full_selected_state),
+        "exact_ground_state": _serialize_state(full_target_state),
     }
 
 
@@ -644,6 +704,8 @@ def evaluate_molecule(
             str(Path(reference_path).resolve()) if reference_path is not None else None
         ),
         "exact_reference_problem_sha256": reference_result["problem_sha256"],
+        "exact_ground_subspace_dimension": int(reference_result["exact_ground_subspace_dimension"]),
+        "target_state_definition": reference_result["target_state_definition"],
         "backend": backend_name,
         "n_qubits": int(problem["n_qubits"]),
         "electrons": int(problem["electrons"]),

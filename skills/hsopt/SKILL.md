@@ -20,8 +20,11 @@ A production campaign has three strictly ordered stages:
 
 1. **Exact reference:** construct and diagonalize
    `U_exact = exp(+i H t)` once for each distinct Hamiltonian reference. Cache
-   `E_exact`, the selected fixed-electron eigenstate, source hashes, and
-   diagnostics in `exact_reference.json`.
+   `E_exact`, the normalized projection of the Hartree--Fock state onto the
+   complete fixed-electron ground eigenspace, source hashes, and diagnostics in
+   `exact_reference.json`. This projection is the unique QPE-accessible target
+   even when the ground energy is degenerate; never use an arbitrary
+   eigensolver basis vector from a degenerate subspace.
 2. **Iteration 0:** evaluate the immutable paper baseline against the cached
    exact reference. This is a measurement, not a mutation.
 3. **Iterations 1–50:** mutate the current external incumbent, evaluate the
@@ -60,15 +63,18 @@ target compiled-unitary eigenphase:
 
 ```text
 U_PF = product_i compiled(exp(+i alpha_i P_i))
-E_PF = unwrapped target eigenphase(U_PF) / t
+target = normalize(project_ground(H) |HF>)
+E_PF = unwrapped eigenphase of the U_PF eigenstate with maximum target overlap
 acceptance = abs(E_PF - E_exact) <= chemical accuracy
 score = compiled T count
 ```
 
 For a reaction, form the signed difference from independently compiled species
 eigenphase energies and compare it with the cached exact signed difference.
-Hartree--Fock overlap is a QPE success-probability diagnostic; propagation of
-the HF state and analytical error bounds are not the acceptance metric.
+The candidate unitary is still constructed and diagonalized in the full
+Hilbert space so Clifford+T synthesis leakage is retained. Hartree--Fock
+overlap is a QPE success-probability diagnostic; propagation of the HF state
+and analytical error bounds are not the acceptance metric.
 
 The dense implementation may operate in the fixed-electron sector where
 appropriate, but it must actually construct and diagonalize the exact or
