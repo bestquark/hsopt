@@ -4,10 +4,10 @@
 
 # HSOpt
 
-HSOpt uses an AI mutation loop to reduce the logical \(T\)-gate cost of
+HSOpt uses an AI mutation loop to reduce the logical $T$-gate cost of
 product-formula quantum phase estimation while preserving a fixed energy
 accuracy target. Every candidate is evaluated by constructing and
-diagonalizing the compiled Clifford+\(T\) unitary; analytical product-formula
+diagonalizing the compiled Clifford+$T$ unitary; analytical product-formula
 bounds are not used as the acceptance test.
 
 The clean branch contains one benchmark tree, [`experiments/`](experiments/),
@@ -17,24 +17,35 @@ outside the Git checkout.
 
 ## Objective
 
-For a fixed Hamiltonian \(H\), evolution time \(t\), electron number, and
-Hartree--Fock (HF) input, HSOpt caches the exact ground energy \(E^{\rm exact}\)
-once. A candidate policy may change only the product-formula and
-rotation-synthesis parameters used to compile \(U_{\rm PF}\).
+For a fixed Hamiltonian $H$, evolution time $t$, electron number, and
+Hartree--Fock (HF) input, HSOpt caches the exact ground energy
+$E^{\mathrm{exact}}$ once. A candidate policy may change only the
+product-formula and rotation-synthesis parameters used to compile
+$U_{\mathrm{PF}}$.
 
-The evaluator diagonalizes \(U_{\rm PF}\), unwraps its eigenphases into
+The evaluator diagonalizes $U_{\mathrm{PF}}$, unwraps its eigenphases into
 energies, and selects the lowest-energy peak with numerically resolved HF
-weight \(p_{\rm HF}\). If one QPE attempt costs \(T_{\rm raw}\), the number of
+weight $p_{\mathrm{HF}}$. If one QPE attempt costs $T_{\mathrm{raw}}$, the number of
 independent attempts required to observe that peak with 95% confidence is
 
-```text
-R95 = ceil(log(0.05) / log(1 - p_HF))
-T95 = R95 * T_raw
-```
+$$
+R_{95} =
+\begin{cases}
+1, & p_{\mathrm{HF}}=1, \\
+\left\lceil \dfrac{\log(0.05)}{\log\left(1-p_{\mathrm{HF}}\right)} \right\rceil,
+& 0<p_{\mathrm{HF}}<1,
+\end{cases}
+\qquad T_{95} = R_{95}T_{\mathrm{raw}}.
+$$
 
 A molecular candidate is feasible when
-\(\lvert E^{\rm PF}-E^{\rm exact}\rvert\) is no larger than
-1 kcal mol\(^{-1}\). Among feasible candidates, HSOpt minimizes \(T_{95}\).
+
+$$
+\left|E^{\mathrm{PF}}-E^{\mathrm{exact}}\right|
+\leq 1\ \mathrm{kcal}\,\mathrm{mol}^{-1}.
+$$
+
+Among feasible candidates, HSOpt minimizes $T_{95}$.
 Reports display this objective as **T95 (raw x R)**.
 
 For a reaction, each unique species is evaluated independently and the signed
@@ -117,7 +128,7 @@ Every optimization lane follows the same order:
 2. Evaluate the generated paper baseline unchanged as iteration 0.
 3. Run iterations 1--50 sequentially, retaining every proposal, evaluator
    result, and accept/reject decision.
-4. Accept only feasible strict improvements in confidence-adjusted \(T\) cost.
+4. Accept only feasible strict improvements in confidence-adjusted $T$ cost.
 5. Export and report only after every expected lane is complete.
 
 The current dense production selection contains exactly 91 HamLib
@@ -202,7 +213,7 @@ The reporting gate emits two PDFs per Hamiltonian or reaction:
 - a summary comparing the initial and final accepted policies;
 - an extended table containing the initial policy and every mutation,
   acceptance decision, exact-reference error, product-formula settings, raw
-  \(T\) count, repetition factor, and confidence-adjusted \(T_{95}\) cost.
+  $T$ count, repetition factor, and confidence-adjusted $T_{95}$ cost.
 
 LaTeX is used when available; ReportLab provides the portable renderer.
 
@@ -218,7 +229,7 @@ uv run hsopt-exact-parity \
 ```
 
 The audit checks the complete lane grid, source and policy hashes, compiled
-synthesis records, confidence-adjusted \(T\) counts, policy settings,
+synthesis records, confidence-adjusted $T$ counts, policy settings,
 acceptance trajectories, and energies. CPU and A100 energies are compared
 within the configured numerical tolerance rather than requiring bitwise
 floating-point identity.
@@ -246,6 +257,27 @@ npx skills add bestquark/hsopt --skill hsopt -y
 
 The skill defines the immutable evaluator contract, permitted mutation
 boundary, production ordering, and CPU/A100 replay rules.
+
+### OpenShell + OpenCode mutation agent
+
+[OpenShell](https://docs.nvidia.com/openshell/latest/about/installation) base
+sandboxes include [OpenCode](https://opencode.ai/docs/), so OpenCode does not
+need a second installation inside the sandbox. Install OpenShell on the host,
+verify its gateway, and configure the protected NVIDIA inference route once:
+
+```bash
+curl -LsSf https://raw.githubusercontent.com/NVIDIA/OpenShell/main/install.sh | sh
+openshell status
+export NVIDIA_API_KEY="your-key"
+uv run hsopt-openshell configure
+```
+
+The supervisor then creates one disposable sandbox per proposal, installs
+`skills/hsopt/SKILL.md` as the sandbox's `hsopt` skill, exposes only the
+isolated `candidate.py` mutation target plus bounded research tools, records
+the OpenCode/OpenShell action logs, and deletes the sandbox. OpenCode's
+[standalone installer](https://opencode.ai/docs/) is needed only when using a
+custom image that does not already include it.
 
 ## Development
 
