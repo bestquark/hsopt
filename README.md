@@ -1,3 +1,7 @@
+<p align="center">
+  <img src="docs/assets/hsopt-logo.png" alt="HSOpt logo" width="760">
+</p>
+
 # HSOpt
 
 HSOpt uses an AI mutation loop to reduce the logical \(T\)-gate cost of
