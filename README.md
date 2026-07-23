@@ -10,7 +10,7 @@ accuracy target. Every candidate is evaluated by constructing and
 diagonalizing the compiled Clifford+$T$ unitary; analytical product-formula
 bounds are not used as the acceptance test.
 
-The clean branch contains one benchmark tree, [`experiments/`](experiments/),
+The repository contains one benchmark tree, [`experiments/`](experiments/),
 and one plotting-source tree, [`plots/`](plots/). Raw campaigns, databases,
 Hamiltonian collections, caches, scheduler logs, and agent transcripts stay
 outside the Git checkout.
@@ -60,8 +60,8 @@ confidence-adjusted species costs and is reported as **T95 (raw total)**.
 ```text
 hsopt/
 ├── experiments/
-│   ├── abs_energy/             HamLib91 definition and compact fixture
-│   ├── diff_energy/            Ten-reaction definition and compact fixture
+│   ├── abs_energy/             91 visible HamLib Hamiltonian folders
+│   ├── diff_energy/            10 visible reaction-definition folders
 │   └── generate_initial_pf.py  Immutable initializer for both families
 ├── plots/                      Publication-plot source code
 ├── skills/hsopt/
@@ -80,7 +80,6 @@ HSOpt requires Python 3.12 or newer and uses
 ```bash
 git clone https://github.com/bestquark/hsopt.git
 cd hsopt
-git switch clean
 uv sync
 ```
 
@@ -96,14 +95,14 @@ uv sync --extra cupynumeric
 Evaluate the checked-in HamLib fixture on NumPy:
 
 ```bash
-uv run python experiments/abs_energy/hamlib_h2_r0_7/evaluate.py \
+uv run python tests/fixtures/abs_energy_h2/evaluate.py \
   --backend numpy
 ```
 
 Evaluate the checked-in bond-stretch energy difference:
 
 ```bash
-uv run python experiments/diff_energy/h2_bond_stretch/evaluate.py \
+uv run python tests/fixtures/diff_energy_h2_bond_stretch/evaluate.py \
   --backend numpy
 ```
 
@@ -112,13 +111,24 @@ contract:
 
 ```bash
 uv run python experiments/generate_initial_pf.py \
-  experiments/abs_energy/hamlib_h2_r0_7/hamiltonian.json \
-  --output experiments/abs_energy/hamlib_h2_r0_7/initial_pf.py \
+  tests/fixtures/abs_energy_h2/hamiltonian.json \
+  --output tests/fixtures/abs_energy_h2/initial_pf.py \
   --check
 ```
 
-These fixtures are development checks. Production absolute- and
-difference-energy inputs are external datasets supplied to `hsopt-campaign`.
+These fixtures are development checks and therefore live under `tests/`.
+Under `experiments/abs_energy/`, every production Hamiltonian has its own
+folder containing `instance.json`. Under `experiments/diff_energy/`, every
+production reaction has its own folder containing `definition.json`, including
+the checksummed external Hamiltonians it uses. Verify those visible folders
+against the compact source registries with:
+
+```bash
+uv run hsopt-layout --check
+```
+
+The large coefficient archives/caches and their materialized evaluator inputs
+remain external datasets supplied to `hsopt-campaign`.
 
 ## Campaign lifecycle
 
@@ -179,6 +189,7 @@ and virtual environments outside the repository.
 |---|---|
 | `hsopt` / `hsopt-loop` | Initialize, reconcile, inspect, propose, or replay one sequential lane |
 | `hsopt-exact` | Enqueue exact references and candidates, prepare batches, run them, and merge results |
+| `hsopt-layout` | Verify or regenerate the checked-in 91-Hamiltonian/10-reaction directory layout |
 | `hsopt-campaign` | Prepare external inputs and initialize the complete lane grid |
 | `hsopt-supervisor` | Persistently coordinate mutation, batching, recovery, export, and reports |
 | `hsopt-openshell` | Run the isolated OpenShell/OpenCode mutation adapter |

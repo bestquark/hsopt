@@ -1,0 +1,49 @@
+{
+  "contracts": [
+    "equal_share",
+    "reaction_aware"
+  ],
+  "evaluator": "hsopt.compiled_unitary.evaluate_difference",
+  "family": "diff_energy",
+  "initial_pf_generator": "experiments/generate_initial_pf.py",
+  "instance": "n2_h2_nh3",
+  "name": "N2 + 3 H2 -> 2 NH3",
+  "order": 7,
+  "product": "nh3",
+  "rationale": "Closed-shell Haber-Bosch stoichiometry requested by the user, evaluated as an active-space reaction-energy screen.",
+  "reactant": "n2+3h2",
+  "reaction_error_target_hartree": 0.0015936014376405157,
+  "schema": 1,
+  "terms": [
+    {
+      "coefficient": -1.0,
+      "external_hamiltonian_cache": {
+        "coefficients": "problem_cache/n2.npz",
+        "coefficients_sha256": "6e9ce8f51a6a0255d48f146841f6b48a1c8f9846cb5ff5ad6bb9d497bb3ea5b5",
+        "metadata": "problem_cache/n2.json",
+        "metadata_sha256": "38d0cd8306e1441c3cdc0ee9185957e25e19734593ca0853bba61d49542d454e"
+      },
+      "species": "n2"
+    },
+    {
+      "coefficient": -3.0,
+      "external_hamiltonian_cache": {
+        "coefficients": "problem_cache/h2.npz",
+        "coefficients_sha256": "c499c303111ae2503433f749f307cc282bd34416f1f3e67a3d300c03ea22b719",
+        "metadata": "problem_cache/h2.json",
+        "metadata_sha256": "e962e679f03486b5d54f6195cf99ac12748e67b966cb0e96c4d95e404df0c46e"
+      },
+      "species": "h2"
+    },
+    {
+      "coefficient": 2.0,
+      "external_hamiltonian_cache": {
+        "coefficients": "problem_cache/nh3.npz",
+        "coefficients_sha256": "2876ff1ecad8da5e562c8a05d81039167ae8d236a8c65fbf4a50a2d6462bbe48",
+        "metadata": "problem_cache/nh3.json",
+        "metadata_sha256": "5997d7de564cceca52772a80f4975745f2a3ac891fcadc81ddbefcedb6296660"
+      },
+      "species": "nh3"
+    }
+  ]
+}

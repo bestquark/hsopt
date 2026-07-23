@@ -1,0 +1,39 @@
+{
+  "contracts": [
+    "equal_share",
+    "reaction_aware"
+  ],
+  "evaluator": "hsopt.compiled_unitary.evaluate_difference",
+  "family": "diff_energy",
+  "initial_pf_generator": "experiments/generate_initial_pf.py",
+  "instance": "hcn_hnc",
+  "name": "HCN -> HNC",
+  "order": 1,
+  "product": "hnc",
+  "rationale": "Existing three-atom isomerization baseline with matched sto-3g/CAS(6e,5o) setup.",
+  "reactant": "hcn",
+  "reaction_error_target_hartree": 0.0015936014376405157,
+  "schema": 1,
+  "terms": [
+    {
+      "coefficient": -1.0,
+      "external_hamiltonian_cache": {
+        "coefficients": "problem_cache/hcn.npz",
+        "coefficients_sha256": "f87bc26c4271aaf376f2badc32e88ee3ccfa36b25659cb3a550e2311ce4ecaa5",
+        "metadata": "problem_cache/hcn.json",
+        "metadata_sha256": "8979324b7c5633d3e505208ef1744b3f98462d9e11d88a05feadddf519036a77"
+      },
+      "species": "hcn"
+    },
+    {
+      "coefficient": 1.0,
+      "external_hamiltonian_cache": {
+        "coefficients": "problem_cache/hnc.npz",
+        "coefficients_sha256": "282cdec4bd5586b78b8edcffc832bad063891b071032f6dcaff732e07c8f241d",
+        "metadata": "problem_cache/hnc.json",
+        "metadata_sha256": "d83bd200188ad0eba2908dfb0500f2982e2633b57864825d8477dfd927006fd9"
+      },
+      "species": "hnc"
+    }
+  ]
+}

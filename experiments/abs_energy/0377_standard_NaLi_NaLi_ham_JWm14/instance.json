@@ -1,0 +1,31 @@
+{
+  "dense_exact_fit": {
+    "estimated_sector_workspace_gib": 0.0004935860633850098,
+    "estimated_state_workspace_gib": 0.0009765625,
+    "fits": true,
+    "fixed_electron_sector_dimension": 91,
+    "reason": "fits_state_and_sector_dense_estimates"
+  },
+  "electrons": 12,
+  "evaluator": "hsopt.compiled_unitary.evaluate_molecule",
+  "family": "abs_energy",
+  "hamiltonian_one_norm": 195.06579818848607,
+  "initial_pf_generator": "experiments/generate_initial_pf.py",
+  "instance": "0377_standard_NaLi_NaLi_ham_JWm14",
+  "molecule": "NaLi",
+  "n_qubits": 14,
+  "nonidentity_terms": 1269,
+  "pauli_terms_including_identity": 1270,
+  "schema": 1,
+  "source": {
+    "active_space_key": "14",
+    "archive": "standard/NaLi.zip",
+    "archive_sha256": "606b5e4c2af29d05d57842454d72a4cc08bd35d4b75aae7e01bc35c1edfa2fca",
+    "collection": "standard",
+    "dataset": "/ham_JW-14",
+    "library": "HamLib",
+    "mapping": "JW",
+    "member": "NaLi.hdf5"
+  },
+  "target_time": 0.01610529720107145
+}

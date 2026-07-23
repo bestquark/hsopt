@@ -1,0 +1,31 @@
+{
+  "dense_exact_fit": {
+    "estimated_sector_workspace_gib": 2.1457672119140625e-06,
+    "estimated_state_workspace_gib": 9.5367431640625e-07,
+    "fits": true,
+    "fixed_electron_sector_dimension": 6,
+    "reason": "fits_state_and_sector_dense_estimates"
+  },
+  "electrons": 2,
+  "evaluator": "hsopt.compiled_unitary.evaluate_molecule",
+  "family": "abs_energy",
+  "hamiltonian_one_norm": 1.870764778408668,
+  "initial_pf_generator": "experiments/generate_initial_pf.py",
+  "instance": "0262_hydrogen_data_H2_ES_H2_linear_R1.1_sto-6g_ham_JW",
+  "molecule": "H2",
+  "n_qubits": 4,
+  "nonidentity_terms": 14,
+  "pauli_terms_including_identity": 15,
+  "schema": 1,
+  "source": {
+    "active_space_key": "nq4",
+    "archive": "hydrogen_data/H2_linear/ES_H2_linear_R1.1_sto-6g.zip",
+    "archive_sha256": "ea55fd8e54ae3465b00d39f662a73b197a46dc02624e1427584145de32608120",
+    "collection": "hydrogen_data",
+    "dataset": "/ham_JW",
+    "library": "HamLib",
+    "mapping": "JW",
+    "member": "ES_H2_linear_R1.1_sto-6g.hdf5"
+  },
+  "target_time": 1.679309280273136
+}

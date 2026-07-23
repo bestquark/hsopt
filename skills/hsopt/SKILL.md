@@ -107,6 +107,13 @@ compiled unitary used by the reported observable.
 - 50 mutations per lane, plus the separate iteration-0 baseline.
 - Total: 475 lanes and 23,750 mutation evaluations.
 
+Before preparing inputs, run `uv run hsopt-layout --check`. The 91
+`experiments/abs_energy/*/instance.json` files and ten
+`experiments/diff_energy/*/definition.json` files must match their compact
+registries and source checksums exactly. These checked-in definitions make the
+production set visible; coefficient-heavy Hamiltonians and generated
+`initial_pf.py` policies still belong in the external campaign data root.
+
 Run OpenShell and OpenCode/Nemotron on persistent Omni infrastructure.
 OpenCode receives only the incumbent policy and prior result, with deny-all
 permissions except the allowed candidate read/edit operations. Preserve:

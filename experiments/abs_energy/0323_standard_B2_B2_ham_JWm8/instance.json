@@ -1,0 +1,31 @@
+{
+  "dense_exact_fit": {
+    "estimated_sector_workspace_gib": 4.673004150390625e-05,
+    "estimated_state_workspace_gib": 1.52587890625e-05,
+    "fits": true,
+    "fixed_electron_sector_dimension": 28,
+    "reason": "fits_state_and_sector_dense_estimates"
+  },
+  "electrons": 6,
+  "evaluator": "hsopt.compiled_unitary.evaluate_molecule",
+  "family": "abs_energy",
+  "hamiltonian_one_norm": 54.45261764441247,
+  "initial_pf_generator": "experiments/generate_initial_pf.py",
+  "instance": "0323_standard_B2_B2_ham_JWm8",
+  "molecule": "B2",
+  "n_qubits": 8,
+  "nonidentity_terms": 104,
+  "pauli_terms_including_identity": 105,
+  "schema": 1,
+  "source": {
+    "active_space_key": "8",
+    "archive": "standard/B2.zip",
+    "archive_sha256": "8aaaa19b3cc9e5a39b2334573a22bbb2694b63c494eb404df142369599366e67",
+    "collection": "standard",
+    "dataset": "/ham_JW-8",
+    "library": "HamLib",
+    "mapping": "JW",
+    "member": "B2.hdf5"
+  },
+  "target_time": 0.05769406117636221
+}

@@ -314,7 +314,7 @@ def add_lane_args(parser: argparse.ArgumentParser) -> None:
     parser.add_argument(
         "target",
         nargs="?",
-        help="Optional legacy molecule folder; no legacy lanes ship on the clean branch.",
+        help="Optional legacy molecule folder; no legacy lanes ship on main.",
     )
     parser.add_argument("--family", default=DEFAULT_FAMILY)
     parser.add_argument("--molecule", default=DEFAULT_MOLECULE)

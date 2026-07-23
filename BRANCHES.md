@@ -2,8 +2,9 @@
 
 Use this split to keep `main` small and make future work explicit.
 
-- `main` / `clean`: exact compiled-unitary HSOpt with all compact fixtures and
-  paper protocols under `experiments/`.
+- `main`: exact compiled-unitary HSOpt with the visible 91-Hamiltonian and
+  ten-reaction paper protocols under `experiments/`. The former `clean` branch
+  was promoted to `main` and deleted.
 - `site`: tracked documentation-site source and the GitHub Pages deployment
   workflow removed from `main` during the 2026-07-15 cleanup.
 - `codex/safety-pre-cleanup-20260715`: exact tracked snapshot of the July 2026

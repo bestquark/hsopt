@@ -1,0 +1,49 @@
+{
+  "contracts": [
+    "equal_share",
+    "reaction_aware"
+  ],
+  "evaluator": "hsopt.compiled_unitary.evaluate_difference",
+  "family": "diff_energy",
+  "initial_pf_generator": "experiments/generate_initial_pf.py",
+  "instance": "h2_f2_hf",
+  "name": "H2 + F2 -> 2 HF",
+  "order": 9,
+  "product": "hf",
+  "rationale": "Closed-shell hydrogen-halogen analogue selected to keep the screen small and comparable to H2 + Cl2 -> 2 HCl.",
+  "reactant": "h2+f2",
+  "reaction_error_target_hartree": 0.0015936014376405157,
+  "schema": 1,
+  "terms": [
+    {
+      "coefficient": -1.0,
+      "external_hamiltonian_cache": {
+        "coefficients": "problem_cache/h2.npz",
+        "coefficients_sha256": "c499c303111ae2503433f749f307cc282bd34416f1f3e67a3d300c03ea22b719",
+        "metadata": "problem_cache/h2.json",
+        "metadata_sha256": "e962e679f03486b5d54f6195cf99ac12748e67b966cb0e96c4d95e404df0c46e"
+      },
+      "species": "h2"
+    },
+    {
+      "coefficient": -1.0,
+      "external_hamiltonian_cache": {
+        "coefficients": "problem_cache/f2.npz",
+        "coefficients_sha256": "951de64a33d6e8e5bb564ce179fa53743b8988dab617bf7cffa039c9bebcc2fc",
+        "metadata": "problem_cache/f2.json",
+        "metadata_sha256": "1b681a89fc91e2272e5785cf7f606a50e00214fa88a11f63e4bd6e9253af1629"
+      },
+      "species": "f2"
+    },
+    {
+      "coefficient": 2.0,
+      "external_hamiltonian_cache": {
+        "coefficients": "problem_cache/hf.npz",
+        "coefficients_sha256": "3bf60826026264644204ba9eb84410ec1778fdcc14bb90bd741bb0172f59aa07",
+        "metadata": "problem_cache/hf.json",
+        "metadata_sha256": "67c6194f395b37ad031e29c66b3d6513ac3a52b871e4f6f43f760e8c7f011953"
+      },
+      "species": "hf"
+    }
+  ]
+}

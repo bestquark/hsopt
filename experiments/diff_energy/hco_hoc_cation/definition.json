@@ -1,0 +1,39 @@
+{
+  "contracts": [
+    "equal_share",
+    "reaction_aware"
+  ],
+  "evaluator": "hsopt.compiled_unitary.evaluate_difference",
+  "family": "diff_energy",
+  "initial_pf_generator": "experiments/generate_initial_pf.py",
+  "instance": "hco_hoc_cation",
+  "name": "HCO+ -> HOC+",
+  "order": 2,
+  "product": "hoc_plus",
+  "rationale": "Linear proton-transfer/isomer pair, isoelectronic with HCN/HNC and same active-space size.",
+  "reactant": "hco_plus",
+  "reaction_error_target_hartree": 0.0015936014376405157,
+  "schema": 1,
+  "terms": [
+    {
+      "coefficient": -1.0,
+      "external_hamiltonian_cache": {
+        "coefficients": "problem_cache/hco_plus.npz",
+        "coefficients_sha256": "128fd756f9584fcab95201c44c18163cf20f609516b7d42eb2df08ffa592b167",
+        "metadata": "problem_cache/hco_plus.json",
+        "metadata_sha256": "f46d94306614a93729829a5ec36b2c4f44dfbb1fae914ddb8a64cef579be454b"
+      },
+      "species": "hco_plus"
+    },
+    {
+      "coefficient": 1.0,
+      "external_hamiltonian_cache": {
+        "coefficients": "problem_cache/hoc_plus.npz",
+        "coefficients_sha256": "d7d3c875a51cedd0180ef3f6e41ca0d73749ad3a570a514eb827d598e9a13c08",
+        "metadata": "problem_cache/hoc_plus.json",
+        "metadata_sha256": "6971abb4b5e095c2c3e8ea271b023526067ce7a38c22690ded645b15b860773f"
+      },
+      "species": "hoc_plus"
+    }
+  ]
+}

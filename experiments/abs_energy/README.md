@@ -20,5 +20,17 @@ Hamiltonian JSON files under an external input directory. Campaign
 initialization then runs `experiments/generate_initial_pf.py` once for each
 Hamiltonian and creates five mutation lanes that share its exact reference.
 
-`hamlib_h2_r0_7/` is only a compact local evaluator check; it is not an extra
-production family.
+The 91 directories beside `inputs/` are the visible production selection. Each
+contains one deterministic `instance.json` recording its HamLib archive and
+dataset, archive checksum, mapped qubit/electron/term counts, one-norm, target
+time, and dense-exact fit metadata. The large coefficient payload is not
+duplicated in Git.
+
+Verify or intentionally regenerate this directory view with:
+
+```bash
+uv run hsopt-layout --check
+uv run hsopt-layout --write
+```
+
+Compact executable evaluator fixtures live under `tests/fixtures/`.

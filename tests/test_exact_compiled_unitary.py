@@ -29,11 +29,12 @@ from hsopt.compiled_unitary import (
     load_policy,
     load_problem,
 )
+from hsopt.repository_layout import sync_layout
 
 
 REPO = Path(__file__).resolve().parents[1]
-ABSOLUTE = REPO / "experiments" / "abs_energy" / "hamlib_h2_r0_7"
-DIFFERENCE = REPO / "experiments" / "diff_energy" / "h2_bond_stretch"
+ABSOLUTE = REPO / "tests" / "fixtures" / "abs_energy_h2"
+DIFFERENCE = REPO / "tests" / "fixtures" / "diff_energy_h2_bond_stretch"
 GENERATOR = REPO / "experiments" / "generate_initial_pf.py"
 
 
@@ -61,6 +62,24 @@ def test_abs_energy_manifest_is_exactly_the_91_instance_dataset() -> None:
         10: 11,
         12: 25,
         14: 9,
+    }
+
+
+def test_checked_in_benchmark_layout_matches_the_91_and_10_registries() -> None:
+    result = sync_layout(
+        abs_manifest=REPO / "experiments/abs_energy/inputs/instances.csv",
+        abs_checksums=REPO / "experiments/abs_energy/inputs/hamlib_zip_sha256.txt",
+        reaction_manifest=REPO / "experiments/diff_energy/inputs/seed_manifest.json",
+        reaction_checksums=REPO / "experiments/diff_energy/inputs/problem_cache.sha256",
+        abs_root=REPO / "experiments/abs_energy",
+        diff_root=REPO / "experiments/diff_energy",
+        check=True,
+    )
+
+    assert result == {
+        "absolute_hamiltonians": 91,
+        "difference_reactions": 10,
+        "definition_files": 101,
     }
 
 

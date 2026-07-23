@@ -1,0 +1,39 @@
+{
+  "contracts": [
+    "equal_share",
+    "reaction_aware"
+  ],
+  "evaluator": "hsopt.compiled_unitary.evaluate_difference",
+  "family": "diff_energy",
+  "initial_pf_generator": "experiments/generate_initial_pf.py",
+  "instance": "h2co_hcoh",
+  "name": "H2CO -> HCOH",
+  "order": 4,
+  "product": "hcoh",
+  "rationale": "Same-formula carbonyl/enol-like rearrangement with shared C/O/H active chemistry.",
+  "reactant": "h2co",
+  "reaction_error_target_hartree": 0.0015936014376405157,
+  "schema": 1,
+  "terms": [
+    {
+      "coefficient": -1.0,
+      "external_hamiltonian_cache": {
+        "coefficients": "problem_cache/h2co.npz",
+        "coefficients_sha256": "8e6682cf0b2e8033b279e276934306776ed60a6856a6fd52acf27fea501e78db",
+        "metadata": "problem_cache/h2co.json",
+        "metadata_sha256": "b63a3bbfcae0c91afe90aeacce1bb7d72d54d737b33f2d9bb643557d12f76d1f"
+      },
+      "species": "h2co"
+    },
+    {
+      "coefficient": 1.0,
+      "external_hamiltonian_cache": {
+        "coefficients": "problem_cache/hcoh.npz",
+        "coefficients_sha256": "53b9fb130f26fff69718df5b7584e3e9fe9b657b07f3d811e8b504cdb8ba4347",
+        "metadata": "problem_cache/hcoh.json",
+        "metadata_sha256": "bd229e4d0512e81ce404f5b70660c41e62eac4d3db24f490a1a8e82f6b2b5ef5"
+      },
+      "species": "hcoh"
+    }
+  ]
+}

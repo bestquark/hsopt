@@ -1,7 +1,7 @@
 # Reaction seed inputs
 
-These two JSON files are the validated starting grid for the fixed ten-reaction
-paper campaign:
+These two JSON files are the compact validated registry for the fixed
+ten-reaction paper campaign:
 
 - `seed_manifest.json`: reaction identities, stoichiometry, and ordering.
 - `seed_validation.json`: the twenty validated iteration-0 policies.
@@ -11,6 +11,10 @@ about 6.8 MiB and are verified before use against
 `problem_cache.sha256`. Pass the `problem_cache/` directory itself explicitly
 when preparing a campaign; it must contain exactly the 42 declared files and
 no extras.
+
+The sibling reaction directories expose this registry as one
+`definition.json` per reaction, including the applicable cache checksums.
+`uv run hsopt-layout --check` proves that view is current.
 
 The checked-in inputs are checksummed as:
 

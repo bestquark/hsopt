@@ -21,11 +21,18 @@ seed budgets and checksums for the 21 external species-cache pairs.
 external reaction directories consumed by the fixed evaluator in
 `skills/hsopt/scripts/hsopt/compiled_unitary.py`.
 
+The ten directories beside `inputs/` make that production set visible on
+GitHub. Each `definition.json` records the signed reaction terms and the
+metadata/coefficients SHA-256 checksums for every external species
+Hamiltonian. Run `uv run hsopt-layout --check` to verify that all ten match the
+compact registry, or `uv run hsopt-layout --write` after an intentional
+registry change.
+
 Each reaction has two policy lanes, `equal_share` and `reaction_aware`, but
 both use the same exact signed reaction reference. During campaign
 initialization, `experiments/generate_initial_pf.py` generates the immutable
 iteration-0 `initial_pf.py` for every reaction/contract pair.
 
-`h2_bond_stretch/` is a compact local difference-evaluator check; it is not an
-extra production family. All generated ten-reaction inputs, mutation history,
-exports, and reports remain under the external `HSOPT_DATA_ROOT`.
+Compact executable evaluator fixtures live under `tests/fixtures/`. All
+generated ten-reaction inputs, mutation history, exports, and reports remain
+under the external `HSOPT_DATA_ROOT`.

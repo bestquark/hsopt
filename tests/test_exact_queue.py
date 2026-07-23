@@ -18,7 +18,7 @@ from hsopt.nvpark_queue import _system_memory_mib, submit_batch, submit_ready
 
 
 REPO = Path(__file__).resolve().parents[1]
-ABSOLUTE = REPO / "experiments" / "abs_energy" / "hamlib_h2_r0_7"
+ABSOLUTE = REPO / "tests" / "fixtures" / "abs_energy_h2"
 
 
 def test_queue_deduplicates_snapshots_and_merges_results(tmp_path: Path) -> None:
