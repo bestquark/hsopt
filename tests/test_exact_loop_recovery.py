@@ -4,6 +4,7 @@ import json
 from pathlib import Path
 
 from hsopt.exact_loop import (
+    LEGACY_INACCURATE_BASELINE_ERROR,
     _accept_candidate,
     initialize_lane,
     propose_replay_lane,
@@ -80,6 +81,36 @@ def test_reconcile_archives_an_interrupted_mutation_attempt(tmp_path: Path) -> N
     assert updated["last_error"] == "interrupted mutation attempt recovered"
     assert not interrupted.exists()
     assert (archived / "candidate.py").read_text(encoding="utf-8") == "interrupted\n"
+
+
+def test_reconcile_clears_the_retired_inaccurate_baseline_error(tmp_path: Path) -> None:
+    lane_dir = tmp_path / "lane"
+    initialize_lane(
+        lane_dir,
+        queue_dir=tmp_path / "queue",
+        kind="absolute",
+        source=ABSOLUTE / "hamiltonian.json",
+        initial_policy=ABSOLUTE / "initial_pf.py",
+    )
+    state_path = lane_dir / "state.json"
+    state = json.loads(state_path.read_text(encoding="utf-8"))
+    state.update(
+        {
+            "pending_kind": None,
+            "pending_task_id": None,
+            "last_error": LEGACY_INACCURATE_BASELINE_ERROR,
+        }
+    )
+    state_path.write_text(json.dumps(state), encoding="utf-8")
+    (lane_dir / "baseline_result.json").write_text(
+        json.dumps(_result(error=0.004, t_count=100, passes=False)) + "\n",
+        encoding="utf-8",
+    )
+
+    reconciled = reconcile_lane(lane_dir)
+
+    assert reconciled["status"] == "ready"
+    assert json.loads(state_path.read_text(encoding="utf-8"))["last_error"] is None
 
 
 def test_gpu_lane_replays_the_exact_archived_cpu_candidate(tmp_path: Path) -> None:

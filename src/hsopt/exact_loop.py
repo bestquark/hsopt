@@ -20,6 +20,9 @@ from .openshell_agent import mutate
 
 
 REPLAY_ENERGY_ATOL_HARTREE = 1.0e-10
+LEGACY_INACCURATE_BASELINE_ERROR = (
+    "RuntimeError: the generated baseline did not pass the exact accuracy contract"
+)
 
 
 def _now() -> str:
@@ -262,6 +265,13 @@ def reconcile_lane(lane_dir: Path) -> dict[str, Any]:
     state = _read_json(lane_dir / "state.json")
     task_id = state["pending_task_id"]
     if task_id is None:
+        if (
+            state.get("last_error") == LEGACY_INACCURATE_BASELINE_ERROR
+            and (lane_dir / "baseline_result.json").is_file()
+        ):
+            state["last_error"] = None
+            state["updated_at"] = _now()
+            _write_json(lane_dir / "state.json", state)
         if state["pending_kind"] == "mutation":
             iteration = int(state["pending_iteration"])
             archived = _archive_mutation_attempt(
