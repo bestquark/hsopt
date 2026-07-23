@@ -49,12 +49,9 @@ confidence-adjusted species costs and is reported as **T95 (raw total)**.
 ```text
 hsopt/
 ├── experiments/
-│   ├── abs_energy/             Compact HamLib absolute-energy fixtures
-│   ├── diff_energy/            Energy-difference fixtures and reaction runtime
-│   ├── hamlib121/              HamLib paper protocol, runner, and final reports
-│   ├── reactions10/            Ten-reaction protocol, runner, and final reports
-│   ├── generate_initial_pf.py  Immutable iteration-0 policy generator
-│   └── paper_baselines/        Checked-in paper method contract
+│   ├── abs_energy/             HamLib91 definition and compact fixture
+│   ├── diff_energy/            Ten-reaction definition and compact fixture
+│   └── generate_initial_pf.py  Immutable initializer for both families
 ├── plots/                      Publication-plot source code
 ├── skills/hsopt/               Optimization-agent instructions
 ├── src/hsopt/                  Evaluator, queue, supervisor, export, and reports
@@ -102,7 +99,7 @@ uv run python experiments/diff_energy/h2_bond_stretch/evaluate.py \
   --backend numpy
 ```
 
-Verify that an immutable iteration-0 policy still matches the checked-in paper
+Verify that an immutable iteration-0 policy still matches the embedded paper
 contract:
 
 ```bash
@@ -112,8 +109,8 @@ uv run python experiments/generate_initial_pf.py \
   --check
 ```
 
-These fixtures are development checks. Production HamLib and reactions10
-inputs are external datasets supplied to `hsopt-campaign`.
+These fixtures are development checks. Production absolute- and
+difference-energy inputs are external datasets supplied to `hsopt-campaign`.
 
 ## Campaign lifecycle
 
@@ -126,9 +123,9 @@ Every optimization lane follows the same order:
 4. Accept only feasible strict improvements in confidence-adjusted \(T\) cost.
 5. Export and report only after every expected lane is complete.
 
-The current dense production selection contains 91 Hamiltonians from the
-HamLib121 collection through 14 qubits, with five mutation lanes per
-Hamiltonian. It also contains ten reactions with two policy contracts each.
+The current dense production selection contains exactly 91 HamLib
+Hamiltonians through 14 qubits, with five mutation lanes per Hamiltonian. It
+also contains ten reactions with two policy contracts each.
 This gives 475 lanes and 23,750 mutation evaluations, plus iteration 0 for
 every lane.
 
@@ -140,9 +137,9 @@ export HSOPT_DATA_ROOT=/absolute/path/to/hsopt-data
 
 ```bash
 uv run hsopt-campaign initialize \
-  --hamlib-inputs "$HSOPT_DATA_ROOT/exact/inputs-v2/hamlib91" \
-  --reaction-inputs "$HSOPT_DATA_ROOT/exact/inputs-v1/reactions10" \
-  --seed-validation experiments/reactions10/inputs/seed_validation.json \
+  --hamlib-inputs "$HSOPT_DATA_ROOT/exact/inputs-v2/abs_energy" \
+  --reaction-inputs "$HSOPT_DATA_ROOT/exact/inputs-v1/diff_energy" \
+  --seed-validation experiments/diff_energy/inputs/seed_validation.json \
   --generator experiments/generate_initial_pf.py \
   --campaign-root "$HSOPT_DATA_ROOT/exact/production-cpu91-v1" \
   --hamlib-replicates 5 \
@@ -190,17 +187,17 @@ First produce a normalized, checksummed export:
 ```bash
 uv run hsopt-export-exact \
   --campaign-root "$HSOPT_DATA_ROOT/exact/production-cpu91-v1" \
-  --family hamlib121 \
-  --output-dir "$HSOPT_DATA_ROOT/exact/final-hamlib-export"
+  --family abs_energy \
+  --output-dir "$HSOPT_DATA_ROOT/exact/final-abs-energy-export"
 ```
 
 Then compile the paper reports:
 
 ```bash
 uv run hsopt-reports \
-  --family hamlib121 \
-  --export-dir "$HSOPT_DATA_ROOT/exact/final-hamlib-export" \
-  --output-dir experiments/hamlib121/results/final
+  --family abs_energy \
+  --export-dir "$HSOPT_DATA_ROOT/exact/final-abs-energy-export" \
+  --output-dir "$HSOPT_DATA_ROOT/exact/final-abs-energy-reports"
 ```
 
 The reporting gate emits two PDFs per Hamiltonian or reaction:

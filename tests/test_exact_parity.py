@@ -58,7 +58,7 @@ def _compiled(*, energy: float, seconds: float) -> dict[str, object]:
 
 
 def _campaign(root: Path, *, accelerator: str) -> Path:
-    lane_relative = Path("lanes/hamlib121/fixture/run_01")
+    lane_relative = Path("lanes/abs_energy/fixture/run_01")
     lane = root / lane_relative
     iteration = lane / "iterations" / "0001"
     iteration.mkdir(parents=True)
@@ -78,7 +78,7 @@ def _campaign(root: Path, *, accelerator: str) -> Path:
             "reactions": {"instances": 0, "replicates": 0},
             "lanes": [
                 {
-                    "family": "hamlib121",
+                    "family": "abs_energy",
                     "instance": "fixture",
                     "replicate": "run_01",
                     "lane_dir": lane_relative.as_posix(),
@@ -93,7 +93,7 @@ def _campaign(root: Path, *, accelerator: str) -> Path:
             "source_sha256": "d" * 64,
             "initial_policy_sha256": "e" * 64,
             "iterations_target": 1,
-            "family": "hamlib121",
+            "family": "abs_energy",
             "replicate": "run_01",
             "instance": "fixture",
         },

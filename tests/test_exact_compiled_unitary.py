@@ -1,8 +1,10 @@
 from __future__ import annotations
 
+import csv
 import json
 import subprocess
 import sys
+from collections import Counter
 from pathlib import Path
 
 import numpy as np
@@ -41,14 +43,25 @@ def test_experiments_tree_is_the_only_checked_in_benchmark_tree() -> None:
         path.name for path in experiments.iterdir() if path.is_dir() and path.name != "__pycache__"
     }
 
-    assert directories == {
-        "abs_energy",
-        "diff_energy",
-        "hamlib121",
-        "paper_baselines",
-        "reactions10",
-    }
+    assert directories == {"abs_energy", "diff_energy"}
     assert not (REPO / "examples").exists()
+
+
+def test_abs_energy_manifest_is_exactly_the_91_instance_dataset() -> None:
+    manifest = REPO / "experiments" / "abs_energy" / "inputs" / "instances.csv"
+    with manifest.open(encoding="utf-8", newline="") as stream:
+        rows = list(csv.DictReader(stream))
+
+    assert len(rows) == 91
+    assert len({row["lane_id"] for row in rows}) == 91
+    assert Counter(int(row["nqubits"]) for row in rows) == {
+        4: 20,
+        6: 2,
+        8: 24,
+        10: 11,
+        12: 25,
+        14: 9,
+    }
 
 
 @pytest.mark.parametrize(

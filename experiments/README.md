@@ -1,45 +1,26 @@
 # Experiments
 
-This is the repository's only benchmark tree. It contains compact runnable
-fixtures, portable paper experiment definitions, and completion-gated paper
-artifacts. It does not contain live campaign workspaces.
+The checked-in benchmark surface has exactly two families:
 
-- `abs_energy/` contains compact HamLib absolute-energy fixtures.
-- `diff_energy/` contains compact molecular and reaction energy-difference
-  fixtures plus the portable reactions10 runtime.
-- `hamlib121/` defines five independent autoresearch runs over the fixed
-  121-Hamiltonian benchmark.
-- `reactions10/` defines the ten-reaction equal-share versus reaction-aware
-  error-allocation comparison.
-- `generate_initial_pf.py` and `paper_baselines/` define the immutable
-  iteration-0 initializer.
+- `abs_energy/`: the canonical 91-instance HamLib selection through 14
+  qubits, plus one compact runnable fixture and the source/checksum manifests
+  used to prepare external inputs.
+- `diff_energy/`: ten reaction-energy definitions, their validated seed
+  inputs, the portable reaction runtime, and one compact bond-stretch fixture.
 
-Campaign databases, mutation directories, scheduler logs, telemetry, agent
-transcripts, virtual environments, and intermediate checkpoints stay in
-external storage. Only a reusable runner and compact, validated final results
-belong here.
+`generate_initial_pf.py` is the single immutable iteration-0 policy generator
+for both families. It embeds the Reiher--Wiebe--Svore--Wecker--Troyer baseline
+contract, so there is no second baseline-definition folder to keep in sync.
 
-Final report trees contain two vector PDFs per scientific instance, plus a
-machine-readable report manifest and checksums. These PDFs are derived only
-from the strict portable export: bounded mutation summaries are included, but
-prompts, standard output/error, database files, and absolute paths are not.
+Production Hamiltonians, generated per-instance `initial_pf.py` files, exact
+references, mutation lanes, scheduler logs, agent transcripts, exports, and
+reports live below an external `HSOPT_DATA_ROOT`, never in this checkout.
 
-## External workspace convention
-
-Every runner receives an explicit campaign root below one absolute
-`HSOPT_DATA_ROOT`; runners must refuse roots inside the Git checkout. Use these
-categories consistently:
+The external campaign layout mirrors the two families:
 
 ```text
-$HSOPT_DATA_ROOT/paper/hamlib121/<campaign-id>/run_01 ... run_05
-$HSOPT_DATA_ROOT/paper/reactions10/<campaign-id>
-$HSOPT_DATA_ROOT/development/<benchmark>/<campaign-id>
-$HSOPT_DATA_ROOT/old_experiments/<benchmark>/<campaign-id>
-$HSOPT_DATA_ROOT/scratch/preflight/<campaign-id>
+$HSOPT_DATA_ROOT/exact/inputs-v2/abs_energy/
+$HSOPT_DATA_ROOT/exact/inputs-v1/diff_energy/
+$HSOPT_DATA_ROOT/exact/production-cpu91-v1/lanes/{abs_energy,diff_energy}/
+$HSOPT_DATA_ROOT/exact/production-gpu91-v2/lanes/{abs_energy,diff_energy}/
 ```
-
-Use `<family>_YYYYMMDD_<source-commit>` for a paper campaign ID. Keep failed and
-superseded campaigns intact, then move the whole directory to `old_experiments`; never
-reuse its ID for a fresh run. Git ignores emergency checkout-local roots such
-as `hsopt-data/`, `.hsopt-runs/`, and `experiments/_runs/`, but external storage
-is the normal location.

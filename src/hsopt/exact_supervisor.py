@@ -286,8 +286,8 @@ def _finalize_campaign(
     """Create both checksummed exports and both report trees exactly once."""
 
     pairs = (
-        ("hamlib121", hamlib_export_dir, hamlib_report_dir),
-        ("reactions10", reactions_export_dir, reactions_report_dir),
+        ("abs_energy", hamlib_export_dir, hamlib_report_dir),
+        ("diff_energy", reactions_export_dir, reactions_report_dir),
     )
     records: dict[str, Any] = {}
     for family, export_dir, report_dir in pairs:

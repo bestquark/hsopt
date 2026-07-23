@@ -6,7 +6,7 @@ from pathlib import Path
 
 
 REPO_ROOT = Path(__file__).resolve().parents[1]
-INPUT_ROOT = REPO_ROOT / "experiments" / "reactions10" / "inputs"
+INPUT_ROOT = REPO_ROOT / "experiments" / "diff_energy" / "inputs"
 SEED_MANIFEST = INPUT_ROOT / "seed_manifest.json"
 SEED_VALIDATION = INPUT_ROOT / "seed_validation.json"
 CACHE_CHECKSUMS = INPUT_ROOT / "problem_cache.sha256"
@@ -53,9 +53,9 @@ def _sha256(path: Path) -> str:
     return hashlib.sha256(path.read_bytes()).hexdigest()
 
 
-def test_seed_inputs_are_the_preserved_omni_payload() -> None:
+def test_seed_inputs_are_normalized_and_validated() -> None:
     assert _sha256(SEED_MANIFEST) == (
-        "7cd26b6d25117cbebcec93cd9b800c4ab473925adee895d147ddc3e135f45094"
+        "9fe91f88d3af88295d4d23ac5a6612d5a7e3eec97cc0c234a3c602001e708b1b"
     )
     assert _sha256(SEED_VALIDATION) == (
         "e2bee43bbf79fd5cfa8877c0be166a115443528ca39f2c53ec596b6239555fcc"
@@ -63,6 +63,7 @@ def test_seed_inputs_are_the_preserved_omni_payload() -> None:
 
     manifest = json.loads(SEED_MANIFEST.read_text(encoding="utf-8"))
     validation = json.loads(SEED_VALIDATION.read_text(encoding="utf-8"))
+    assert manifest["initial_pf_generator"] == "experiments/generate_initial_pf.py"
     assert manifest["reaction_keys"] == REACTION_KEYS
     assert set(manifest["reactions"]) == set(REACTION_KEYS)
     assert manifest["reaction_target_mha"] / 1000.0 == CHEMICAL_ACCURACY_HARTREE

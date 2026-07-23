@@ -14,7 +14,7 @@ from pathlib import Path
 from typing import Any, Iterable, Mapping
 
 
-FAMILIES = ("hamlib121", "reactions10")
+FAMILIES = ("abs_energy", "diff_energy")
 SAFE_COMPONENT = frozenset("abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789._-")
 
 
@@ -417,7 +417,7 @@ def export_family(campaign_root: Path, family: str, output_dir: Path) -> dict[st
                 replicate=replicate,
                 iterations=iterations,
             )
-            if family == "hamlib121":
+            if family == "abs_energy":
                 summaries.append(
                     _hamlib_summary_row(
                         instance=instance,
@@ -493,7 +493,7 @@ def export_family(campaign_root: Path, family: str, output_dir: Path) -> dict[st
                 f"family lane grid is incomplete: found {len(lanes)}, expected {expected_lanes}"
             )
 
-        if family == "hamlib121":
+        if family == "abs_energy":
             _write_csv(
                 temporary / "candidate_log.csv",
                 candidates,

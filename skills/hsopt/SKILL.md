@@ -40,9 +40,8 @@ instance; two reaction policies share one exact reaction reference.
 ## Baseline and mutation boundaries
 
 Generate `initial_pf.py` only with `experiments/generate_initial_pf.py`. The
-generator must load
-`experiments/paper_baselines/reiher_wiebe_svore_2017.json`; do not infer a policy
-or invent a paper attribution.
+generator embeds the fixed paper contract; do not infer a policy or invent a
+paper attribution.
 
 The checked-in paper contract records:
 
@@ -101,9 +100,9 @@ compiled unitary used by the reported observable.
 
 ## Production topology
 
-- HamLib121 exact subset: 91 instances (20 at 4, 2 at 6, 24 at 8, 11 at
+- `abs_energy`: 91 HamLib instances (20 at 4, 2 at 6, 24 at 8, 11 at
   10, 25 at 12, and 9 at 14 qubits) × 5 independent mutation lanes.
-- reactions10: 10 reactions × 2 policy lanes.
+- `diff_energy`: 10 reactions × 2 policy lanes.
 - 50 mutations per lane, plus the separate iteration-0 baseline.
 - Total: 475 lanes and 23,750 mutation evaluations.
 
@@ -171,9 +170,9 @@ Initialize a fresh external campaign:
 
 ```bash
 uv run hsopt-campaign initialize \
-  --hamlib-inputs "$HSOPT_DATA_ROOT/exact/inputs-v2/hamlib91" \
-  --reaction-inputs "$HSOPT_DATA_ROOT/exact/inputs-v1/reactions10" \
-  --seed-validation experiments/reactions10/inputs/seed_validation.json \
+  --hamlib-inputs "$HSOPT_DATA_ROOT/exact/inputs-v2/abs_energy" \
+  --reaction-inputs "$HSOPT_DATA_ROOT/exact/inputs-v1/diff_energy" \
+  --seed-validation experiments/diff_energy/inputs/seed_validation.json \
   --generator experiments/generate_initial_pf.py \
   --campaign-root "$HSOPT_DATA_ROOT/exact/production-cpu91-v1" \
   --hamlib-replicates 5 --iterations 50
@@ -199,9 +198,9 @@ run the replay supervisor with:
 
 ```bash
 uv run hsopt-campaign initialize \
-  --hamlib-inputs "$HSOPT_DATA_ROOT/exact/inputs-v2/hamlib91" \
-  --reaction-inputs "$HSOPT_DATA_ROOT/exact/inputs-v1/reactions10" \
-  --seed-validation experiments/reactions10/inputs/seed_validation.json \
+  --hamlib-inputs "$HSOPT_DATA_ROOT/exact/inputs-v2/abs_energy" \
+  --reaction-inputs "$HSOPT_DATA_ROOT/exact/inputs-v1/diff_energy" \
+  --seed-validation experiments/diff_energy/inputs/seed_validation.json \
   --generator experiments/generate_initial_pf.py \
   --campaign-root "$HSOPT_DATA_ROOT/exact/production-gpu91-v2" \
   --hamlib-replicates 5 --iterations 50
@@ -225,21 +224,21 @@ After all lanes finish, generate both strict summaries:
 ```bash
 uv run hsopt-export-exact \
   --campaign-root "$HSOPT_DATA_ROOT/exact/production-cpu91-v1" \
-  --family hamlib121 \
-  --output-dir /path/to/final-hamlib-export
+  --family abs_energy \
+  --output-dir /path/to/final-abs-energy-export
 
-uv run hsopt-reports --family hamlib121 \
-  --export-dir /path/to/final-hamlib-export \
-  --output-dir experiments/hamlib121/results/final
+uv run hsopt-reports --family abs_energy \
+  --export-dir /path/to/final-abs-energy-export \
+  --output-dir /path/to/final-abs-energy-reports
 
 uv run hsopt-export-exact \
   --campaign-root "$HSOPT_DATA_ROOT/exact/production-cpu91-v1" \
-  --family reactions10 \
-  --output-dir /path/to/final-reactions-export
+  --family diff_energy \
+  --output-dir /path/to/final-diff-energy-export
 
-uv run hsopt-reports --family reactions10 \
-  --export-dir /path/to/final-reactions-export \
-  --output-dir experiments/reactions10/results/final
+uv run hsopt-reports --family diff_energy \
+  --export-dir /path/to/final-diff-energy-export \
+  --output-dir /path/to/final-diff-energy-reports
 ```
 
 Configure the four `--final-*-export-dir` and `--final-*-report-dir` supervisor

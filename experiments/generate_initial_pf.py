@@ -1,9 +1,8 @@
 """Generate the immutable iteration-0 product-formula policy.
 
-The structural method comes from the checked-in Reiher--Wiebe--Svore--Wecker--
-Troyer paper contract.  Benchmark-specific numerical choices that the paper
-does not fix are recorded separately in that contract; this generator does not
-derive or optimize them from the Hamiltonian under evaluation.
+The structural method and explicit benchmark instantiation below are based on
+Reiher--Wiebe--Svore--Wecker--Troyer. This generator is the single source of
+truth: it does not derive or optimize the baseline from the evaluated problem.
 """
 
 from __future__ import annotations
@@ -15,13 +14,50 @@ from pathlib import Path
 from typing import Any
 
 
-DEFAULT_CONTRACT = (
-    Path(__file__).resolve().parent / "paper_baselines" / "reiher_wiebe_svore_2017.json"
-)
+PAPER_CONTRACT: dict[str, Any] = {
+    "schema": 1,
+    "baseline_id": "reiher_wiebe_svore_wecker_troyer_2017_pf2",
+    "citation": {
+        "authors": [
+            "Markus Reiher",
+            "Nathan Wiebe",
+            "Krysta M. Svore",
+            "Dave Wecker",
+            "Matthias Troyer",
+        ],
+        "title": "Elucidating Reaction Mechanisms on Quantum Computers",
+        "journal": "Proceedings of the National Academy of Sciences",
+        "year": 2017,
+        "doi": "10.1073/pnas.1619152114",
+        "arxiv": "1605.03590",
+    },
+    "paper_method": {
+        "formula_order": 2,
+        "formula_name": "symmetric_second_order_trotter_suzuki",
+        "term_order_strategy": "lexicographic",
+        "rotation_synthesis": "clifford_plus_t",
+        "error_allocation": "uniform_per_scheduled_rotation",
+    },
+    "benchmark_instantiation": {
+        "n_steps": 512,
+        "total_synthesis_error_budget_hartree": 0.0005312004792135052,
+        "zero_angle_threshold": 0.0,
+    },
+    "scope_note": (
+        "The paper fixes the symmetric second-order formula and uses "
+        "lexicographic ordering, while its Trotter number is molecule-specific "
+        "and empirically estimated. This benchmark therefore records n_steps "
+        "and its synthesis budget explicitly instead of attributing those two "
+        "numerical values to the paper."
+    ),
+}
+PAPER_CONTRACT_SHA256 = hashlib.sha256(
+    json.dumps(PAPER_CONTRACT, sort_keys=True, separators=(",", ":")).encode()
+).hexdigest()
 
 
-def load_contract(path: Path) -> dict[str, Any]:
-    contract = json.loads(path.read_text(encoding="utf-8"))
+def load_contract() -> dict[str, Any]:
+    contract = PAPER_CONTRACT
     paper_method = contract["paper_method"]
     benchmark = contract["benchmark_instantiation"]
     if int(paper_method["formula_order"]) != 2:
@@ -119,7 +155,7 @@ def seeded_reaction_baselines(
         )
         rows[str(problem["name"])] = {
             "baseline_source": (f"{paper_contract['baseline_id']}_reaction_{contract}"),
-            "budget_source": "experiments/reactions10/inputs/seed_validation.json",
+            "budget_source": "experiments/diff_energy/inputs/seed_validation.json",
             "contract": contract,
             "formula_order": order,
             "n_steps": n_steps,
@@ -136,11 +172,10 @@ def seeded_reaction_baselines(
 def render(
     source: Path,
     *,
-    paper_contract_path: Path = DEFAULT_CONTRACT,
     seed_validation: Path | None = None,
     contract: str | None = None,
 ) -> str:
-    paper_contract = load_contract(paper_contract_path)
+    paper_contract = load_contract()
     if seed_validation is None and contract is None:
         rows = {
             problem["name"]: baseline(problem, paper_contract=paper_contract)
@@ -161,13 +196,12 @@ def render(
         raise ValueError("--seed-validation and --contract must be provided together")
     encoded = format_baselines(rows)
     source_sha = hashlib.sha256(source.read_bytes()).hexdigest()
-    contract_sha = hashlib.sha256(paper_contract_path.read_bytes()).hexdigest()
     return f'''"""Generated standard PF initializer. Do not edit by hand.
 
 Source: {source.name}
 Source SHA-256: {source_sha}
-Paper contract: {paper_contract_path.name}
-Paper contract SHA-256: {contract_sha}
+Paper contract: embedded Reiher--Wiebe--Svore--Wecker--Troyer baseline
+Paper contract SHA-256: {PAPER_CONTRACT_SHA256}
 {provenance}\
 Generator: experiments/generate_initial_pf.py
 Paper: Reiher et al., PNAS 114, 7555-7560 (2017), DOI 10.1073/pnas.1619152114
@@ -216,14 +250,12 @@ def main() -> int:
     parser = argparse.ArgumentParser()
     parser.add_argument("source", type=Path)
     parser.add_argument("--output", type=Path, required=True)
-    parser.add_argument("--paper-contract", type=Path, default=DEFAULT_CONTRACT)
     parser.add_argument("--seed-validation", type=Path)
     parser.add_argument("--contract", choices=("equal_share", "reaction_aware"))
     parser.add_argument("--check", action="store_true")
     args = parser.parse_args()
     expected = render(
         args.source.resolve(),
-        paper_contract_path=args.paper_contract.resolve(),
         seed_validation=args.seed_validation.resolve() if args.seed_validation else None,
         contract=args.contract,
     )

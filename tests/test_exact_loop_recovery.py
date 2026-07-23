@@ -140,7 +140,7 @@ def test_reconcile_clears_the_retired_inaccurate_baseline_error(tmp_path: Path) 
 
 
 def test_gpu_lane_replays_the_exact_archived_cpu_candidate(tmp_path: Path) -> None:
-    lane_dir = tmp_path / "gpu-campaign" / "lanes" / "hamlib121" / "fixture" / "run_01"
+    lane_dir = tmp_path / "gpu-campaign" / "lanes" / "abs_energy" / "fixture" / "run_01"
     initialize_lane(
         lane_dir,
         queue_dir=tmp_path / "gpu-campaign" / "queue",
@@ -148,7 +148,7 @@ def test_gpu_lane_replays_the_exact_archived_cpu_candidate(tmp_path: Path) -> No
         source=ABSOLUTE / "hamiltonian.json",
         initial_policy=ABSOLUTE / "initial_pf.py",
         iterations=2,
-        family="hamlib121",
+        family="abs_energy",
         instance="fixture",
         replicate="run_01",
     )
@@ -169,7 +169,7 @@ def test_gpu_lane_replays_the_exact_archived_cpu_candidate(tmp_path: Path) -> No
         encoding="utf-8",
     )
 
-    canonical = tmp_path / "cpu-campaign" / "lanes" / "hamlib121" / "fixture" / "run_01"
+    canonical = tmp_path / "cpu-campaign" / "lanes" / "abs_energy" / "fixture" / "run_01"
     iteration = canonical / "iterations" / "0001"
     iteration.mkdir(parents=True)
     candidate = (ABSOLUTE / "initial_pf.py").read_text(encoding="utf-8") + "\n# CPU trace\n"

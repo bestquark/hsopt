@@ -1,9 +1,6 @@
 from __future__ import annotations
 
 import json
-import os
-import subprocess
-import sys
 from pathlib import Path
 
 import pytest
@@ -140,84 +137,3 @@ def test_slurm_transport_blocks_without_scheduler_polling(tmp_path: Path) -> Non
     assert "sacct" not in combined
     assert "--gres=gpu:1" in submission.command[-1]
     assert "TROVOLUT_PFS_ARRAY_BACKEND=cupynumeric" in submission.stdin
-
-
-@pytest.mark.parametrize(
-    "wrapper",
-    [
-        Path("experiments/hamlib121/runner/scripts/opencode_codex_compat.py"),
-        Path("experiments/reactions10/runner/opencode_codex_compat.py"),
-    ],
-)
-def test_paper_opencode_wrapper_preserves_raw_events_and_requires_an_edit(
-    tmp_path: Path, wrapper: Path
-) -> None:
-    fake_bin = tmp_path / "bin"
-    fake_bin.mkdir()
-    fake_npx = fake_bin / "npx"
-    fake_npx.write_text(
-        """#!/usr/bin/env python3
-import json
-import pathlib
-import sys
-
-if sys.argv[-1] == "--version":
-    print("1.4.11")
-    raise SystemExit(0)
-work = pathlib.Path(sys.argv[sys.argv.index("--dir") + 1])
-policy = work / "simple_pf.py"
-policy.write_text(policy.read_text() + "\\n# fake OpenCode edit\\n")
-events = [
-    {"type": "step_start", "sessionID": "ses_fake", "part": {}},
-    {"type": "tool_use", "sessionID": "ses_fake", "part": {"tool": "edit", "state": {"status": "completed"}}},
-    {"type": "text", "sessionID": "ses_fake", "part": {"text": "Updated the policy."}},
-    {"type": "step_finish", "sessionID": "ses_fake", "part": {"tokens": {"input": 3, "output": 2, "cache": {"read": 1}}}},
-]
-for event in events:
-    print(json.dumps(event), flush=True)
-""",
-        encoding="utf-8",
-    )
-    fake_npx.chmod(0o755)
-    work_dir = tmp_path / "work"
-    work_dir.mkdir()
-    (work_dir / "simple_pf.py").write_text("VALUE = 1\n", encoding="utf-8")
-    last_message = tmp_path / "last_message.txt"
-    completed = subprocess.run(
-        [
-            sys.executable,
-            str(wrapper.resolve()),
-            "exec",
-            "--json",
-            "-s",
-            "workspace-write",
-            "-C",
-            str(work_dir),
-            "-m",
-            NEMOTRON_MODEL,
-            "-o",
-            str(last_message),
-            "Edit simple_pf.py",
-        ],
-        cwd=wrapper.resolve().parents[0],
-        env={
-            **os.environ,
-            "PATH": f"{fake_bin}{os.pathsep}{os.environ.get('PATH', '')}",
-            "NVIDIA_API_KEY": "test-only-not-a-real-key",
-            "HSOPT_MUTATION_STATE_DIR": str(tmp_path / "state"),
-        },
-        text=True,
-        capture_output=True,
-        check=False,
-    )
-    assert completed.returncode == 0, completed.stderr
-    events = [json.loads(line) for line in completed.stdout.splitlines()]
-    assert events[-1]["type"] == "turn.completed"
-    assert any(event["type"] == "opencode.event" for event in events)
-    assert events[-1]["usage"] == {
-        "cache_read_tokens": 1,
-        "input_tokens": 3,
-        "output_tokens": 2,
-    }
-    assert "fake OpenCode edit" in (work_dir / "simple_pf.py").read_text(encoding="utf-8")
-    assert last_message.read_text(encoding="utf-8") == "Updated the policy.\n"

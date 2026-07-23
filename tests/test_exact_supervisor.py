@@ -32,7 +32,7 @@ def _campaign(tmp_path: Path) -> tuple[Path, Path, Path]:
         source=ABSOLUTE / "hamiltonian.json",
         initial_policy=ABSOLUTE / "initial_pf.py",
         iterations=2,
-        family="hamlib121",
+        family="abs_energy",
         instance="h2",
         replicate="run_01",
     )
@@ -43,7 +43,7 @@ def _campaign(tmp_path: Path) -> tuple[Path, Path, Path]:
                 "queue_dir": str(queue.resolve()),
                 "lanes": [
                     {
-                        "family": "hamlib121",
+                        "family": "abs_energy",
                         "instance": "h2",
                         "replicate": "run_01",
                         "lane_dir": str(lane.relative_to(root)),
@@ -358,7 +358,7 @@ def test_replay_supervisor_enqueues_every_ready_canonical_lane(
         source=ABSOLUTE / "hamiltonian.json",
         initial_policy=ABSOLUTE / "initial_pf.py",
         iterations=2,
-        family="hamlib121",
+        family="abs_energy",
         instance="h2",
         replicate="run_02",
     )
@@ -366,7 +366,7 @@ def test_replay_supervisor_enqueues_every_ready_canonical_lane(
     campaign = json.loads(campaign_path.read_text(encoding="utf-8"))
     campaign["lanes"].append(
         {
-            "family": "hamlib121",
+            "family": "abs_energy",
             "instance": "h2",
             "replicate": "run_02",
             "lane_dir": str(second_lane.relative_to(root)),
@@ -521,12 +521,13 @@ def test_campaign_shares_one_reference_before_all_replicate_baselines(
     (hamlib_inputs / "manifest.json").write_text(
         json.dumps(
             {
+                "family": "abs_energy",
                 "instances": [
                     {
                         "instance": "h2",
                         "problem": str((ABSOLUTE / "hamiltonian.json").resolve()),
                     }
-                ]
+                ],
             }
         )
         + "\n"
@@ -535,12 +536,13 @@ def test_campaign_shares_one_reference_before_all_replicate_baselines(
     (reaction_inputs / "manifest.json").write_text(
         json.dumps(
             {
+                "family": "diff_energy",
                 "instances": [
                     {
                         "instance": "stretch",
                         "reaction": str(reaction_source.resolve()),
                     }
-                ]
+                ],
             }
         )
         + "\n"
@@ -561,11 +563,18 @@ def test_campaign_shares_one_reference_before_all_replicate_baselines(
         campaign_root=tmp_path / "campaign",
         hamlib_replicates=5,
         iterations=50,
+        expected_hamlib_instances=1,
+        expected_reaction_instances=1,
     )
 
     assert len(campaign["lanes"]) == 7
     assert len({row["reference_task_id"] for row in campaign["lanes"]}) == 2
     assert all(row["baseline_task_id"] is None for row in campaign["lanes"])
+    assert (tmp_path / "campaign/policies/abs_energy/h2/initial_pf.py").is_file()
+    assert (tmp_path / "campaign/policies/diff_energy/stretch/equal_share/initial_pf.py").is_file()
+    assert (
+        tmp_path / "campaign/policies/diff_energy/stretch/reaction_aware/initial_pf.py"
+    ).is_file()
     queue = Path(campaign["queue_dir"])
     assert len(list((queue / "pending").iterdir())) == 2
     for row in campaign["lanes"]:
@@ -603,7 +612,7 @@ def test_finalizer_runs_both_requested_export_and_report_pairs_once(
         reactions_report_dir=tmp_path / "reports/reactions",
     )
 
-    assert [family for family, _ in exports] == ["hamlib121", "reactions10"]
-    assert [family for family, _, _ in reports] == ["hamlib121", "reactions10"]
+    assert [family for family, _ in exports] == ["abs_energy", "diff_energy"]
+    assert [family for family, _, _ in reports] == ["abs_energy", "diff_energy"]
     assert result["status"] == "complete"
     assert (campaign / "supervisor/finalization.json").is_file()

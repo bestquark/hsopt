@@ -265,7 +265,7 @@
     }
   },
   "reuse_direct_results": null,
-  "script": "/Users/lmantilla/Desktop/Internship/hsopt/examples/pfs/reactions/simple_pf.py",
+  "initial_pf_generator": "experiments/generate_initial_pf.py",
   "synthesis_budgets_mha": [
     0.32,
     0.64,

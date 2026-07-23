@@ -24,6 +24,10 @@ from .exact_queue import enqueue_reference
 
 HAMLIB_BASE_URL = "https://portal.nersc.gov/cfs/m888/dcamps/hamlib/chemistry/electronic"
 PAULI_TOKEN = re.compile(r"([IXYZ])(\d+)")
+ABS_ENERGY_FAMILY = "abs_energy"
+DIFF_ENERGY_FAMILY = "diff_energy"
+HAMLIB91_INSTANCES = 91
+REACTION_INSTANCES = 10
 
 
 def _now() -> str:
@@ -148,6 +152,11 @@ def prepare_hamlib(
     output_root = _require_empty(output_root)
     rows = list(csv.DictReader(active_manifest.read_text(encoding="utf-8").splitlines()))
     selected = [row for row in rows if int(row["nqubits"]) <= max_qubits]
+    if max_qubits == 14 and len(selected) != HAMLIB91_INSTANCES:
+        raise ValueError(
+            f"canonical HamLib <=14-qubit selection must contain "
+            f"{HAMLIB91_INSTANCES} instances, found {len(selected)}"
+        )
     checksums = _checksum_manifest(checksum_manifest)
     verified_archives: dict[str, str] = {}
     records = []
@@ -219,7 +228,7 @@ def prepare_hamlib(
         )
     manifest = {
         "schema": 1,
-        "family": "hamlib121",
+        "family": ABS_ENERGY_FAMILY,
         "selection": f"canonical active manifest rows with nqubits <= {max_qubits}",
         "source_rows": len(rows),
         "selected_instances": len(selected),
@@ -350,7 +359,7 @@ def prepare_reactions(
         )
     manifest = {
         "schema": 1,
-        "family": "reactions10",
+        "family": DIFF_ENERGY_FAMILY,
         "selected_instances": len(records),
         "contracts": ["equal_share", "reaction_aware"],
         "seed_manifest": str(seed_manifest.resolve()),
@@ -390,6 +399,8 @@ def initialize_campaign(
     campaign_root: Path,
     hamlib_replicates: int = 5,
     iterations: int = 50,
+    expected_hamlib_instances: int = HAMLIB91_INSTANCES,
+    expected_reaction_instances: int = REACTION_INSTANCES,
 ) -> dict[str, Any]:
     """Create lanes that first share immutable exact-unitary reference tasks."""
 
@@ -399,16 +410,28 @@ def initialize_campaign(
     policies_root = campaign_root / "policies"
     hamlib_manifest = json.loads((hamlib_inputs / "manifest.json").read_text(encoding="utf-8"))
     reaction_manifest = json.loads((reaction_inputs / "manifest.json").read_text(encoding="utf-8"))
+    if hamlib_manifest.get("family") != ABS_ENERGY_FAMILY:
+        raise ValueError("HamLib input manifest must use family 'abs_energy'")
+    if len(hamlib_manifest.get("instances", [])) != expected_hamlib_instances:
+        raise ValueError(
+            f"abs_energy requires exactly {expected_hamlib_instances} HamLib instances"
+        )
+    if reaction_manifest.get("family") != DIFF_ENERGY_FAMILY:
+        raise ValueError("reaction input manifest must use family 'diff_energy'")
+    if len(reaction_manifest.get("instances", [])) != expected_reaction_instances:
+        raise ValueError(
+            f"diff_energy requires exactly {expected_reaction_instances} reaction instances"
+        )
     lanes = []
     for record in hamlib_manifest["instances"]:
         instance = str(record["instance"])
         source = hamlib_inputs / str(record["problem"])
         reference = enqueue_reference(queue_dir, kind="absolute", source=source)
-        policy = policies_root / "hamlib121" / instance / "initial_pf.py"
+        policy = policies_root / ABS_ENERGY_FAMILY / instance / "initial_pf.py"
         _generate_policy(generator=generator, source=source, output=policy)
         for replicate_index in range(1, hamlib_replicates + 1):
             replicate = f"run_{replicate_index:02d}"
-            lane_dir = lanes_root / "hamlib121" / instance / replicate
+            lane_dir = lanes_root / ABS_ENERGY_FAMILY / instance / replicate
             initialized = initialize_lane(
                 lane_dir,
                 queue_dir=queue_dir,
@@ -416,14 +439,14 @@ def initialize_campaign(
                 source=source,
                 initial_policy=policy,
                 iterations=iterations,
-                family="hamlib121",
+                family=ABS_ENERGY_FAMILY,
                 replicate=replicate,
                 instance=instance,
                 reference_task_id=reference["task_id"],
             )
             lanes.append(
                 {
-                    "family": "hamlib121",
+                    "family": ABS_ENERGY_FAMILY,
                     "instance": instance,
                     "replicate": replicate,
                     "lane_dir": str(lane_dir.relative_to(campaign_root)),
@@ -436,7 +459,7 @@ def initialize_campaign(
         source = reaction_inputs / str(record["reaction"])
         reference = enqueue_reference(queue_dir, kind="difference", source=source)
         for contract in ("equal_share", "reaction_aware"):
-            policy = policies_root / "reactions10" / instance / contract / "initial_pf.py"
+            policy = policies_root / DIFF_ENERGY_FAMILY / instance / contract / "initial_pf.py"
             _generate_policy(
                 generator=generator,
                 source=source,
@@ -444,7 +467,7 @@ def initialize_campaign(
                 seed_validation=seed_validation,
                 contract=contract,
             )
-            lane_dir = lanes_root / "reactions10" / instance / contract
+            lane_dir = lanes_root / DIFF_ENERGY_FAMILY / instance / contract
             initialized = initialize_lane(
                 lane_dir,
                 queue_dir=queue_dir,
@@ -452,14 +475,14 @@ def initialize_campaign(
                 source=source,
                 initial_policy=policy,
                 iterations=iterations,
-                family="reactions10",
+                family=DIFF_ENERGY_FAMILY,
                 replicate=contract,
                 instance=instance,
                 reference_task_id=reference["task_id"],
             )
             lanes.append(
                 {
-                    "family": "reactions10",
+                    "family": DIFF_ENERGY_FAMILY,
                     "instance": instance,
                     "replicate": contract,
                     "lane_dir": str(lane_dir.relative_to(campaign_root)),

@@ -27,11 +27,10 @@ are not acceptance metrics.
 
 ## Immutable baseline
 
-`experiments/generate_initial_pf.py` is the sole generator of `initial_pf.py`. It
-loads the checked-in contract
-`experiments/paper_baselines/reiher_wiebe_svore_2017.json`, which records the
-Reiher--Wiebe--Svore--Wecker--Troyer citation and the distinction between the
-paper method and benchmark-specific numerical choices.
+`experiments/generate_initial_pf.py` is the sole generator of `initial_pf.py`.
+It embeds the Reiher--Wiebe--Svore--Wecker--Troyer citation, paper method, and
+explicit benchmark-specific numerical choices, so there is no second baseline
+file that can drift from the generator.
 
 Never invent or hand-edit an initializer. Never mutate `initial_pf.py`, and do
 not create an in-tree `optimized_pf.py`. A lane's mutable `candidate.py` and
@@ -84,10 +83,9 @@ benchmark framework:
 - `src/hsopt/exact_queue.py`
 - `src/hsopt/exact_loop.py`
 - `experiments/generate_initial_pf.py`
-- `experiments/paper_baselines/reiher_wiebe_svore_2017.json`
 
 Campaign histories belong outside the checkout. After every lane completes,
-run `hsopt-export-exact` for `hamlib121` and `reactions10`, then run
+run `hsopt-export-exact` for `abs_energy` and `diff_energy`, then run
 `hsopt-reports` on both checksummed exports. The canonical CPU supervisor is
 configured with all four final export/report paths so this completion gate runs
 automatically and idempotently.

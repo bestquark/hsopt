@@ -144,10 +144,10 @@ def test_completed_hamlib_campaign_exports_dynamic_strict_report_tables(
             "terms": [{"label": "ZIII", "coefficient": 1.0}],
         },
     )
-    lane_relative = Path("lanes/hamlib121/fixture/run_01")
+    lane_relative = Path("lanes/abs_energy/fixture/run_01")
     _complete_lane(
         campaign / lane_relative,
-        family="hamlib121",
+        family="abs_energy",
         instance="fixture",
         replicate="run_01",
         kind="absolute",
@@ -161,7 +161,7 @@ def test_completed_hamlib_campaign_exports_dynamic_strict_report_tables(
             "schema": 1,
             "lanes": [
                 {
-                    "family": "hamlib121",
+                    "family": "abs_energy",
                     "instance": "fixture",
                     "replicate": "run_01",
                     "lane_dir": lane_relative.as_posix(),
@@ -171,7 +171,7 @@ def test_completed_hamlib_campaign_exports_dynamic_strict_report_tables(
     )
 
     output = tmp_path / "hamlib-export"
-    exported = export_family(campaign, "hamlib121", output)
+    exported = export_family(campaign, "abs_energy", output)
     verify_strict_export(output)
     candidates, summaries = _validate_hamlib(output)
 
@@ -183,7 +183,7 @@ def test_completed_hamlib_campaign_exports_dynamic_strict_report_tables(
     assert "T95 (raw x R)" in _hamlib_extended("fixture", summaries, candidates)
     assert (output / "records/fixture/run_01/iterations/0001/agent_actions.jsonl").exists() is False
     reports = tmp_path / "hamlib-reports"
-    generate_reports("hamlib121", output, reports, engine="reportlab")
+    generate_reports("abs_energy", output, reports, engine="reportlab")
     assert (reports / "hamiltonians/fixture/summary.pdf").read_bytes().startswith(b"%PDF-")
     assert (reports / "hamiltonians/fixture/extended_log.pdf").read_bytes().startswith(b"%PDF-")
 
@@ -194,10 +194,10 @@ def test_completed_reaction_campaign_exports_both_contracts(tmp_path: Path) -> N
     _write_json(source, {"name": "Fixture reaction", "terms": []})
     rows = []
     for contract in ("equal_share", "reaction_aware"):
-        lane_relative = Path("lanes/reactions10/fixture") / contract
+        lane_relative = Path("lanes/diff_energy/fixture") / contract
         _complete_lane(
             campaign / lane_relative,
-            family="reactions10",
+            family="diff_energy",
             instance="fixture",
             replicate=contract,
             kind="difference",
@@ -207,7 +207,7 @@ def test_completed_reaction_campaign_exports_both_contracts(tmp_path: Path) -> N
         )
         rows.append(
             {
-                "family": "reactions10",
+                "family": "diff_energy",
                 "instance": "fixture",
                 "replicate": contract,
                 "lane_dir": lane_relative.as_posix(),
@@ -216,7 +216,7 @@ def test_completed_reaction_campaign_exports_both_contracts(tmp_path: Path) -> N
     _write_json(campaign / "campaign.json", {"schema": 1, "lanes": rows})
 
     output = tmp_path / "reaction-export"
-    export_family(campaign, "reactions10", output)
+    export_family(campaign, "diff_energy", output)
     verify_strict_export(output)
     candidates, pooled = _validate_reactions(output)
 
@@ -226,6 +226,6 @@ def test_completed_reaction_campaign_exports_both_contracts(tmp_path: Path) -> N
     assert "T95 (raw total)" in _reaction_summary("fixture", reaction_rows, pooled["fixture"])
     assert "T95 (raw total)" in _reaction_extended("fixture", reaction_rows, pooled["fixture"])
     reports = tmp_path / "reaction-reports"
-    generate_reports("reactions10", output, reports, engine="reportlab")
+    generate_reports("diff_energy", output, reports, engine="reportlab")
     assert (reports / "reactions/fixture/summary.pdf").read_bytes().startswith(b"%PDF-")
     assert (reports / "reactions/fixture/extended_log.pdf").read_bytes().startswith(b"%PDF-")

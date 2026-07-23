@@ -23,7 +23,7 @@ from pathlib import Path
 from typing import Any, Iterable, Mapping, Sequence
 
 
-HAMLIB_LANES = 121
+HAMLIB_LANES = 91
 HAMLIB_RUNS = 5
 HAMLIB_ITERATIONS = 50
 REACTIONS = 10
@@ -308,7 +308,7 @@ def _hamlib_summary(lane_id: str, rows: Sequence[Mapping[str, str]]) -> str:
             table_rows,
         )
     )
-    return _document(f"HamLib121 summary: {lane_id}", body)
+    return _document(f"HamLib91 summary: {lane_id}", body)
 
 
 def _hamlib_extended(
@@ -393,7 +393,7 @@ def _hamlib_extended(
         ),
         mutation_rows,
     )
-    return _document(f"HamLib121 extended log: {lane_id}", body)
+    return _document(f"HamLib91 extended log: {lane_id}", body)
 
 
 def _species_signature(raw: object) -> str:
@@ -894,16 +894,16 @@ def _export_shape(export_dir: Path, family: str) -> dict[str, Any]:
     if not path.is_file():
         return {
             "family": family,
-            "instance_count": HAMLIB_LANES if family == "hamlib121" else REACTIONS,
+            "instance_count": HAMLIB_LANES if family == "abs_energy" else REACTIONS,
             "lane_count": (
                 HAMLIB_LANES * HAMLIB_RUNS
-                if family == "hamlib121"
+                if family == "abs_energy"
                 else REACTIONS * REACTION_CONTRACTS
             ),
-            "iterations": (HAMLIB_ITERATIONS if family == "hamlib121" else REACTION_ITERATIONS),
+            "iterations": (HAMLIB_ITERATIONS if family == "abs_energy" else REACTION_ITERATIONS),
             "replicates": (
                 [f"run_{index:02d}" for index in range(1, HAMLIB_RUNS + 1)]
-                if family == "hamlib121"
+                if family == "abs_energy"
                 else ["equal_share", "reaction_aware"]
             ),
         }
@@ -919,7 +919,7 @@ def _export_shape(export_dir: Path, family: str) -> dict[str, Any]:
 def _validate_hamlib(export_dir: Path) -> tuple[list[dict[str, str]], list[dict[str, str]]]:
     candidates = _read_csv(export_dir / "candidate_log.csv")
     summaries = _read_csv(export_dir / "lane_run_summary.csv")
-    shape = _export_shape(export_dir, "hamlib121")
+    shape = _export_shape(export_dir, "abs_energy")
     expected_candidates = int(shape["lane_count"]) * int(shape["iterations"])
     if len(candidates) != expected_candidates:
         raise ReportValidationError(
@@ -954,7 +954,7 @@ def _validate_reactions(
     reaction_summary = json.loads(
         (export_dir / "reaction_summary.json").read_text(encoding="utf-8")
     )
-    shape = _export_shape(export_dir, "reactions10")
+    shape = _export_shape(export_dir, "diff_energy")
     expected_candidates = int(shape["lane_count"]) * (int(shape["iterations"]) + 1)
     if (
         summary.get("status") != "complete"
@@ -1055,7 +1055,7 @@ def generate_reports(
         )
         if selected_engine == "latex" and latex_path is None:
             raise ReportValidationError(f"LaTeX engine is unavailable: {latexmk}")
-        if family == "hamlib121":
+        if family == "abs_energy":
             candidates, summaries = _validate_hamlib(export_dir)
             shape = _export_shape(export_dir, family)
             lane_ids = sorted({row["lane_id"] for row in summaries})
@@ -1072,7 +1072,7 @@ def generate_reports(
                 for name, title, tex, content in (
                     (
                         "summary.pdf",
-                        f"HamLib121 summary: {lane_id}",
+                        f"HamLib91 summary: {lane_id}",
                         _hamlib_summary(lane_id, lane_summaries),
                         _hamlib_reportlab_content(
                             lane_id,
@@ -1083,7 +1083,7 @@ def generate_reports(
                     ),
                     (
                         "extended_log.pdf",
-                        f"HamLib121 extended log: {lane_id}",
+                        f"HamLib91 extended log: {lane_id}",
                         _hamlib_extended(lane_id, lane_summaries, lane_candidates),
                         _hamlib_reportlab_content(
                             lane_id,
@@ -1099,7 +1099,7 @@ def generate_reports(
                     else:
                         _compile_reportlab_pdf(title, *content, destination)
                     pdfs.append(destination)
-        elif family == "reactions10":
+        elif family == "diff_energy":
             candidates, pooled = _validate_reactions(export_dir)
             shape = _export_shape(export_dir, family)
             for reaction_key in sorted(pooled):
@@ -1110,7 +1110,7 @@ def generate_reports(
                 for name, title, tex, content in (
                     (
                         "summary.pdf",
-                        f"Reactions10 summary: {reaction_key}",
+                        f"Reaction-energy summary: {reaction_key}",
                         _reaction_summary(reaction_key, rows, pooled[reaction_key]),
                         _reaction_reportlab_content(
                             reaction_key,
@@ -1121,7 +1121,7 @@ def generate_reports(
                     ),
                     (
                         "extended_log.pdf",
-                        f"Reactions10 extended log: {reaction_key}",
+                        f"Reaction-energy extended log: {reaction_key}",
                         _reaction_extended(reaction_key, rows, pooled[reaction_key]),
                         _reaction_reportlab_content(
                             reaction_key,
@@ -1161,7 +1161,7 @@ def main() -> None:
     parser = argparse.ArgumentParser(
         description="Build completion-gated PDF reports from a strict paper export."
     )
-    parser.add_argument("--family", choices=("hamlib121", "reactions10"), required=True)
+    parser.add_argument("--family", choices=("abs_energy", "diff_energy"), required=True)
     parser.add_argument("--export-dir", type=Path, required=True)
     parser.add_argument("--output-dir", type=Path, required=True)
     parser.add_argument("--latexmk", default="latexmk")
