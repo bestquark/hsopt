@@ -373,7 +373,9 @@ def opencode_config() -> dict[str, Any]:
                     "Perform exactly one candidate.py policy mutation. Read the "
                     "file at most once, call one edit or write tool exactly once, "
                     "then immediately return a final text response without calling "
-                    "another tool."
+                    "another tool. The only supported term_order_strategy values "
+                    "are input, lexicographic, coefficient_desc, coefficient_asc, "
+                    "support_desc, and custom."
                 ),
                 "permission": {
                     "*": "deny",
@@ -421,7 +423,10 @@ choose_synthesis_epsilon(term, alpha, step_index, config). Do not change any
 Hamiltonian, evaluator, source data, or benchmark definition. Do not fabricate
 an evaluation result. Read candidate.py at most once. Call one edit or write
 tool exactly once. After that tool succeeds, immediately return a final text
-response without reading or rewriting the file.
+response without reading or rewriting the file. If changing term_order_strategy,
+use only input, lexicographic, coefficient_desc, coefficient_asc, support_desc,
+or custom. A custom order_product_formula_terms implementation must preserve
+every Pauli term exactly once.
 """
     if feedback is None:
         return prompt
