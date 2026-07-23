@@ -172,6 +172,62 @@ def test_submit_ready_uses_threshold_as_the_batch_size(
     assert queue_status(tmp_path)["batched_tasks"] == 15
 
 
+def test_prepare_batch_balances_difference_tasks_when_absolute_work_is_available(
+    tmp_path: Path,
+) -> None:
+    pending = tmp_path / "pending"
+    pending.mkdir()
+    for prefix, kind, count in (
+        ("000-difference", "difference", 12),
+        ("999-absolute", "absolute", 20),
+    ):
+        for index in range(count):
+            task = pending / f"{prefix}-{index:02d}"
+            task.mkdir()
+            (task / "task.json").write_text(
+                json.dumps({"batch_attempts": 0, "kind": kind}) + "\n",
+                encoding="utf-8",
+            )
+
+    prepared = prepare_batch(
+        tmp_path,
+        limit=15,
+        max_difference_tasks=3,
+    )
+    manifest = json.loads(
+        (Path(prepared["batch_dir"]) / "batch.json").read_text(encoding="utf-8")
+    )
+
+    assert prepared["task_count"] == 15
+    assert manifest["task_kinds"] == {"absolute": 12, "difference": 3}
+
+
+def test_prepare_batch_fills_from_differences_when_no_absolute_work_remains(
+    tmp_path: Path,
+) -> None:
+    pending = tmp_path / "pending"
+    pending.mkdir()
+    for index in range(20):
+        task = pending / f"difference-{index:02d}"
+        task.mkdir()
+        (task / "task.json").write_text(
+            json.dumps({"batch_attempts": 0, "kind": "difference"}) + "\n",
+            encoding="utf-8",
+        )
+
+    prepared = prepare_batch(
+        tmp_path,
+        limit=15,
+        max_difference_tasks=3,
+    )
+    manifest = json.loads(
+        (Path(prepared["batch_dir"]) / "batch.json").read_text(encoding="utf-8")
+    )
+
+    assert prepared["task_count"] == 15
+    assert manifest["task_kinds"] == {"difference": 15}
+
+
 def test_nvpark_cupynumeric_submission_uses_cpu_partition_without_a_gpu(
     tmp_path: Path,
     monkeypatch,

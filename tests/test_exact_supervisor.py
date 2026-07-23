@@ -174,6 +174,7 @@ def test_supervisor_submits_new_batch_immediately_when_mutation_completes(
         nonlocal pending, submitted_batches
         assert pending == 15
         assert kwargs["threshold"] == 15
+        assert kwargs["max_difference_tasks"] == 3
         assert kwargs["force"] is False
         calls.append("submit")
         pending = 0

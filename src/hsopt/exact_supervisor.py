@@ -333,6 +333,7 @@ def supervise_once(
     threshold: int = 15,
     max_active_jobs: int = 4,
     mutation_workers: int = 1,
+    max_difference_tasks_per_batch: int = 3,
     mutation_timeout_seconds: int = 900,
     max_batch_attempts: int = 3,
     mutations_enabled: bool = True,
@@ -552,6 +553,7 @@ def supervise_once(
                 submitted = submit_ready(
                     queue_dir,
                     threshold=threshold,
+                    max_difference_tasks=max_difference_tasks_per_batch,
                     force=force_partial,
                     **submit_options,
                 )
@@ -668,6 +670,7 @@ def supervise_once(
             "threshold": threshold,
             "max_active_jobs": max_active_jobs,
             "mutation_workers": mutation_workers,
+            "max_difference_tasks_per_batch": max_difference_tasks_per_batch,
             "mutation_timeout_seconds": mutation_timeout_seconds,
             "max_batch_attempts": max_batch_attempts,
             "mutations_enabled": mutations_enabled,
@@ -754,6 +757,7 @@ def _parser() -> argparse.ArgumentParser:
     parser.add_argument("--threshold", type=int, default=15)
     parser.add_argument("--max-active-jobs", type=int, default=4)
     parser.add_argument("--mutation-workers", type=int, default=1)
+    parser.add_argument("--max-difference-tasks-per-batch", type=int, default=3)
     parser.add_argument("--mutation-timeout-seconds", type=int, default=900)
     parser.add_argument("--max-batch-attempts", type=int, default=3)
     parser.add_argument("--no-mutations", action="store_true")
@@ -792,11 +796,12 @@ def main() -> int:
         args.threshold <= 0
         or args.max_active_jobs <= 0
         or args.mutation_workers <= 0
+        or args.max_difference_tasks_per_batch <= 0
         or args.max_batch_attempts <= 0
     ):
         raise ValueError(
-            "threshold, max-active-jobs, mutation-workers, and max-batch-attempts "
-            "must be positive"
+            "threshold, max-active-jobs, mutation-workers, "
+            "max-difference-tasks-per-batch, and max-batch-attempts must be positive"
         )
     final_paths = (
         args.final_hamlib_export_dir,
@@ -813,6 +818,7 @@ def main() -> int:
         "threshold": args.threshold,
         "max_active_jobs": args.max_active_jobs,
         "mutation_workers": args.mutation_workers,
+        "max_difference_tasks_per_batch": args.max_difference_tasks_per_batch,
         "mutation_timeout_seconds": args.mutation_timeout_seconds,
         "max_batch_attempts": args.max_batch_attempts,
         "mutations_enabled": not args.no_mutations,

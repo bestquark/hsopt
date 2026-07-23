@@ -162,7 +162,8 @@ Run one idempotent CPU supervisor cycle:
 uv run hsopt-supervisor \
   --campaign-root "$HSOPT_DATA_ROOT/exact/production-cpu-v2" \
   --repo-dir "$PWD" --once \
-  --threshold 15 --max-active-jobs 4 --mutation-workers 8 \
+  --threshold 15 --max-active-jobs 4 --mutation-workers 16 \
+  --max-difference-tasks-per-batch 3 \
   --mutation-timeout-seconds 300 \
   --partition cpu --qos normal --cpus 2 --memory 16G --walltime 12:00:00 \
   --backend cupynumeric --accelerator cpu \
@@ -178,6 +179,7 @@ uv run hsopt-supervisor \
   --campaign-root "$HSOPT_DATA_ROOT/exact/production-gpu-v3" \
   --repo-dir "$PWD" \
   --threshold 15 --max-active-jobs 2 \
+  --max-difference-tasks-per-batch 3 \
   --partition polar4 --qos normal --cpus 2 --memory 16G --walltime 03:00:00 \
   --backend cupynumeric --accelerator gpu \
   --runtime-python /path/to/pinned/cupynumeric-gpu-25.11/bin/python \

@@ -287,6 +287,7 @@ def submit_ready(
     *,
     repo_dir: Path,
     threshold: int = 15,
+    max_difference_tasks: int | None = None,
     force: bool = False,
     **submit_options: Any,
 ) -> dict[str, Any]:
@@ -300,7 +301,11 @@ def submit_ready(
             "threshold": threshold,
             "needed": threshold - status["pending"],
         }
-    prepared = prepare_batch(queue_dir, limit=threshold)
+    prepared = prepare_batch(
+        queue_dir,
+        limit=threshold,
+        max_difference_tasks=max_difference_tasks,
+    )
     submitted = submit_batch(
         Path(prepared["batch_dir"]),
         repo_dir=repo_dir,
