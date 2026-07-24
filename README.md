@@ -247,15 +247,18 @@ uv run hsopt-campaign initialize \
   --reaction-inputs "$HSOPT_DATA_ROOT/exact/inputs-v1/diff_energy" \
   --calibration-root "$HSOPT_DATA_ROOT/exact/baseline-bound-v1/results" \
   --generator experiments/generate_initial_pf.py \
-  --campaign-root "$HSOPT_DATA_ROOT/exact/production-cpu91-v1" \
+  --campaign-root "$HSOPT_DATA_ROOT/exact/production-gpu91-v1" \
   --hamlib-replicates 5 \
   --iterations 50
 ```
 
-The canonical CPU campaign owns the stochastic OpenCode/Nemotron mutation
-trace. The A100 campaign must use the archived CPU candidates in the same order
-with `--no-mutations` and `--replay-campaign-root`; it must not run a second
-independent mutation pass.
+The canonical campaign runs compiled-unitary construction and dense
+eigendecomposition through cuPyNumeric on one A100 per Slurm job. PyGridSynth
+uses the job's CPU cores before the compiled rotations are applied on the GPU.
+This A100 campaign owns the single stochastic OpenCode/Nemotron mutation trace.
+An optional CPU validation campaign must use the archived A100 candidates in
+the same order with `--no-mutations` and `--replay-campaign-root`; it must not
+run a second independent mutation pass.
 
 Mutable campaign material belongs below the external data root:
 
@@ -285,7 +288,7 @@ and virtual environments outside the repository.
 | `hsopt-openshell` | Run the isolated OpenShell/OpenCode mutation adapter |
 | `hsopt-export-exact` | Produce a strict checksummed export from a completed campaign |
 | `hsopt-reports` | Compile summary and extended PDFs from a strict export |
-| `hsopt-exact-parity` | Certify the CPU campaign against its A100 replay |
+| `hsopt-exact-parity` | Certify cross-backend CPU/A100 replay parity |
 
 Run any command with `--help` for its complete interface.
 
@@ -295,7 +298,7 @@ First produce a normalized, checksummed export:
 
 ```bash
 uv run hsopt-export-exact \
-  --campaign-root "$HSOPT_DATA_ROOT/exact/production-cpu91-v1" \
+  --campaign-root "$HSOPT_DATA_ROOT/exact/production-gpu91-v1" \
   --family abs_energy \
   --output-dir "$HSOPT_DATA_ROOT/exact/final-abs-energy-export"
 ```
@@ -318,13 +321,14 @@ The reporting gate emits two PDFs per Hamiltonian or reaction:
 
 LaTeX is used when available; ReportLab provides the portable renderer.
 
-After the CPU and A100 campaigns finish, run the cross-backend audit:
+After the A100 campaign and optional CPU replay finish, run the cross-backend
+audit:
 
 ```bash
 uv run hsopt-exact-parity \
-  --cpu-campaign-root "$HSOPT_DATA_ROOT/exact/production-cpu91-v1" \
-  --gpu-campaign-root "$HSOPT_DATA_ROOT/exact/production-gpu91-v2" \
-  --output "$HSOPT_DATA_ROOT/exact/production-gpu91-v2/cross_backend_audit.json" \
+  --cpu-campaign-root "$HSOPT_DATA_ROOT/exact/production-cpu91-replay-v1" \
+  --gpu-campaign-root "$HSOPT_DATA_ROOT/exact/production-gpu91-v1" \
+  --output "$HSOPT_DATA_ROOT/exact/production-gpu91-v1/cross_backend_audit.json" \
   --wait \
   --interval-seconds 60
 ```
@@ -359,7 +363,7 @@ npx skills add bestquark/hsopt --skill hsopt -y
 ```
 
 The skill defines the immutable evaluator contract, permitted mutation
-boundary, production ordering, and CPU/A100 replay rules.
+boundary, production ordering, and A100/CPU replay rules.
 
 ### OpenShell + OpenCode mutation agent
 

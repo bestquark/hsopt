@@ -61,27 +61,23 @@ campaign.
   iterations per lane.
 - Total: 475 lanes and 23,750 mutation evaluations, excluding iteration 0.
 
-Dense exact work uses cuPyNumeric on NVPark for both placements. PyGridSynth
-remains CPU-side. Both placements evaluate the same uploaded source snapshot
-and batch tasks sequentially so only one dense task is resident at a time:
+The canonical mutation campaign uses cuPyNumeric on one A100 in the `polar4`
+partition with `normal` QoS, two CPU cores, 16 GB system memory, and a 60000
+MiB Legate framebuffer. PyGridSynth remains CPU-side within that allocation;
+cuPyNumeric uses the A100 for compiled-unitary construction and dense
+eigendecomposition. Batch tasks run sequentially so only one dense task is
+resident on a GPU at a time.
 
-- Canonical mutation campaign: `cpu` partition, `normal` QoS, zero GPUs,
-  2 Slurm CPUs, 64 GB system memory, and the pinned cuPyNumeric 25.11 CPU
-  build with Legate configured as one CPU worker plus runtime utility work.
-- A100 validation/replay campaign: `polar4` partition, `normal` QoS, one GPU,
-  2 CPUs, and 16 GB system memory.
+The A100 campaign owns the single stochastic OpenCode mutation trace. Any CPU
+validation campaign must use `--no-mutations` and replay the exact archived
+A100 candidate files in order; never run a second independent agent pass.
+Candidate hashes, per-attempt and confidence-adjusted T counts, and
+accept/reject trajectories are required to match. CPU and GPU eigensolvers may
+differ in the last floating-point bits, so compare energy observables at the
+campaign's explicit numerical tolerance rather than claiming bitwise equality.
 
-The CPU campaign owns the stochastic OpenCode mutation trace. The A100
-campaign must use `--no-mutations` and replay the exact archived CPU candidate
-files in order; never run a second independent agent pass. Candidate hashes,
-per-attempt and confidence-adjusted T counts, and accept/reject trajectory are
-required to match; record and stop on any validation discrepancy. CPU and GPU
-eigensolvers may differ in the last floating-point bits, so compare energy
-observables at the campaign's explicit numerical tolerance rather than
-claiming bitwise equality.
-
-Do not increase CPUs or RAM merely to improve scheduling priority. A CPU run
-must use the `cpu` partition and request no GPU resource.
+Do not increase CPUs, GPUs, or RAM merely to improve scheduling priority. A CPU
+validation run must use the `cpu` partition and request no GPU resource.
 
 OpenShell and OpenCode/Nemotron run persistently on Omni. Preserve raw
 OpenCode/OpenShell logs plus redacted tool-action and metrics summaries.
@@ -100,6 +96,6 @@ benchmark framework:
 
 Campaign histories belong outside the checkout. After every lane completes,
 run `hsopt-export-exact` for `abs_energy` and `diff_energy`, then run
-`hsopt-reports` on both checksummed exports. The canonical CPU supervisor is
+`hsopt-reports` on both checksummed exports. The canonical A100 supervisor is
 configured with all four final export/report paths so this completion gate runs
 automatically and idempotently.

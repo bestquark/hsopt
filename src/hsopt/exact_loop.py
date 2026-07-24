@@ -443,7 +443,7 @@ def reconcile_lane(lane_dir: Path) -> dict[str, Any]:
             {
                 "pending_kind": "replay_validation_failed",
                 "pending_task_id": None,
-                "last_error": "CPU/A100 replay validation mismatch",
+                "last_error": "cross-backend replay validation mismatch",
                 "updated_at": _now(),
             }
         )

@@ -86,8 +86,9 @@ Once a lane is feasible, accept only a strict T95 reduction that remains within
   ten reactions times two lanes: 475 lanes and 23,750 mutations.
 - Candidate histories, evaluator results, OpenCode/OpenShell transcripts,
   tool metrics, and sandbox rejections remain in the external campaign root.
-- Only the CPU campaign creates mutations. The A100 campaign replays the exact
-  archived candidates and is audited for parity.
+- The canonical A100 campaign creates the single mutation trace. Any CPU
+  validation campaign replays those exact archived candidates without invoking
+  the agent and is audited for numerical parity.
 
 For repository layout, read `references/layout.md`. For campaign initialization,
 Slurm resources, supervisor operation, export, and parity commands, use the

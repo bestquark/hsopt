@@ -171,6 +171,20 @@ def test_parity_audit_surfaces_candidate_hash_mismatch(tmp_path: Path) -> None:
     )
 
 
+def test_parity_audit_accepts_cpu_replay_of_canonical_gpu_campaign(tmp_path: Path) -> None:
+    cpu = tmp_path / "cpu"
+    gpu = tmp_path / "gpu"
+    cpu_lane = _campaign(cpu, accelerator="cpu")
+    gpu_lane = _campaign(gpu, accelerator="gpu")
+    (gpu_lane / "iterations/0001/replay_validation.json").unlink()
+    _write_json(cpu_lane / "iterations/0001/replay_validation.json", {"status": "ok"})
+
+    result = audit_campaigns(cpu, gpu)
+
+    assert result["status"] == "ok"
+    assert result["mismatch_count"] == 0
+
+
 def test_parity_audit_waits_for_both_completion_markers(tmp_path: Path) -> None:
     cpu = tmp_path / "cpu"
     gpu = tmp_path / "gpu"

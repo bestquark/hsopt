@@ -1,4 +1,4 @@
-"""Certify a completed CPU campaign against its exact A100 replay."""
+"""Certify completed CPU and A100 campaigns regardless of replay direction."""
 
 from __future__ import annotations
 
@@ -440,13 +440,25 @@ def audit_campaigns(
                             "gpu": gpu_decision.get(field),
                         }
                     )
-            validation = _read_json(gpu_iteration / "replay_validation.json")
-            if validation.get("status") != "ok":
+            validation_paths = {
+                "cpu": cpu_iteration / "replay_validation.json",
+                "gpu": gpu_iteration / "replay_validation.json",
+            }
+            validations = {
+                side: _read_json(path)
+                for side, path in validation_paths.items()
+                if path.is_file()
+            }
+            valid_replay = any(
+                validation.get("status") == "ok" for validation in validations.values()
+            )
+            if not valid_replay:
                 mismatches.append(
                     {
                         "record": f"{lane_key}/{relative}/replay_validation",
                         "field": "status",
-                        "gpu": validation.get("status"),
+                        "cpu": validations.get("cpu", {}).get("status"),
+                        "gpu": validations.get("gpu", {}).get("status"),
                     }
                 )
             timing_pairs.append({"stage": "candidate", "cpu": cpu_result, "gpu": gpu_result})
