@@ -14,9 +14,10 @@ campaign:
 9. H₂ + F₂ → 2 HF
 10. CO + 3 H₂ → CH₄ + H₂O
 
-`inputs/seed_manifest.json` is the authoritative reaction ordering and
-stoichiometry registry. `inputs/` also contains the validated per-contract
-seed budgets and checksums for the 21 external species-cache pairs.
+`inputs/reactions.json` is the authoritative reaction ordering and
+stoichiometry registry. `inputs/problem_metadata.json` records compact
+scientific metadata for the 21 external species, while
+`inputs/problem_cache.sha256` pins their external JSON/NPZ Hamiltonian caches.
 `hsopt-campaign prepare-reactions` converts those checksummed caches into ten
 external reaction directories consumed by the fixed evaluator in
 `skills/hsopt/scripts/hsopt/compiled_unitary.py`.
@@ -28,10 +29,13 @@ Hamiltonian. Run `uv run hsopt-layout --check` to verify that all ten match the
 compact registry, or `uv run hsopt-layout --write` after an intentional
 registry change.
 
-Each reaction has two policy lanes, `equal_share` and `reaction_aware`, but
-both use the same exact signed reaction reference. During campaign
-initialization, `experiments/generate_initial_pf.py` generates the immutable
-iteration-0 `initial_pf.py` for every reaction/contract pair.
+Each reaction has two policy-lane labels, `equal_share` and `reaction_aware`.
+Both start from the same calibrated baseline and use the same exact signed
+reaction reference. The species are calibrated once each; the signed exact
+reaction reference is assembled from those cached species values without
+another eigensolve. During campaign initialization,
+`experiments/generate_initial_pf.py` generates the immutable iteration-0
+`initial_pf.py` for every reaction/contract pair.
 
 Compact executable evaluator fixtures live under `tests/fixtures/`. All
 generated ten-reaction inputs, mutation history, exports, and reports remain

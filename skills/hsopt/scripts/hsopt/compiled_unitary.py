@@ -807,14 +807,15 @@ def evaluate_exact_reference(
     }
 
 
-def evaluate_exact_difference_reference(
+def assemble_exact_difference_reference(
     reaction_path: Path,
+    species_references: Mapping[str, Mapping[str, Any]],
     *,
-    backend: str = "cupynumeric",
+    backend: str,
 ) -> dict[str, Any]:
-    """Compute immutable exact-unitary references for a signed energy difference."""
+    """Assemble a reaction reference from already-computed species references."""
 
-    evaluation_started = time.perf_counter()
+    assembly_started = time.perf_counter()
     reaction_path = reaction_path.resolve()
     reaction = json.loads(reaction_path.read_text(encoding="utf-8"))
     species_results: dict[str, dict[str, Any]] = {}
@@ -823,18 +824,23 @@ def evaluate_exact_difference_reference(
     for item in reaction["terms"]:
         species = str(item["species"])
         coefficient = float(item["coefficient"])
+        if species not in species_references:
+            raise ValueError(f"exact reference is missing reaction species {species!r}")
         problem_path = (reaction_path.parent / str(item["problem"])).resolve()
-        result = evaluate_exact_reference(problem_path, backend=backend)
+        problem = load_problem(problem_path)
+        result = dict(species_references[species])
+        unitary_energy = _reference_energy(problem, result)
+        hamiltonian_energy = float(result["hamiltonian_ground_energy_hartree"])
         species_results[species] = result
-        unitary_difference += coefficient * result["exact_unitary_ground_energy_hartree"]
-        hamiltonian_difference += coefficient * result["hamiltonian_ground_energy_hartree"]
+        unitary_difference += coefficient * unitary_energy
+        hamiltonian_difference += coefficient * hamiltonian_energy
     consistency_error = abs(unitary_difference - hamiltonian_difference)
     if consistency_error > 1.0e-9:
         raise RuntimeError(
             "exact-unitary signed difference does not reproduce the Hamiltonian "
             f"difference: {consistency_error}"
         )
-    evaluation_wall_seconds = time.perf_counter() - evaluation_started
+    assembly_seconds = time.perf_counter() - assembly_started
     return {
         "status": "ok",
         "evaluation_contract_version": EVALUATION_CONTRACT_VERSION,
@@ -848,14 +854,50 @@ def evaluate_exact_difference_reference(
         "exact_unitary_difference_hartree": unitary_difference,
         "unitary_hamiltonian_consistency_error_hartree": consistency_error,
         "species": species_results,
-        "evaluation_wall_seconds": evaluation_wall_seconds,
+        "evaluation_wall_seconds": assembly_seconds,
         "timing_seconds": {
-            "species_total": sum(
+            "species_exact_reference_total": sum(
                 float(result["evaluation_wall_seconds"]) for result in species_results.values()
             ),
-            "total": evaluation_wall_seconds,
+            "assembly": assembly_seconds,
+            "total": assembly_seconds,
         },
+        "reference_provenance": "precomputed_unique_hamiltonian_references",
     }
+
+
+def evaluate_exact_difference_reference(
+    reaction_path: Path,
+    *,
+    backend: str = "cupynumeric",
+) -> dict[str, Any]:
+    """Compute immutable exact-unitary references for a signed energy difference."""
+
+    evaluation_started = time.perf_counter()
+    reaction_path = reaction_path.resolve()
+    reaction = json.loads(reaction_path.read_text(encoding="utf-8"))
+    species_results: dict[str, dict[str, Any]] = {}
+    for item in reaction["terms"]:
+        species = str(item["species"])
+        if species not in species_results:
+            problem_path = (reaction_path.parent / str(item["problem"])).resolve()
+            species_results[species] = evaluate_exact_reference(
+                problem_path,
+                backend=backend,
+            )
+    assembled = assemble_exact_difference_reference(
+        reaction_path,
+        species_results,
+        backend=backend,
+    )
+    evaluation_wall_seconds = time.perf_counter() - evaluation_started
+    assembled["evaluation_wall_seconds"] = evaluation_wall_seconds
+    assembled["timing_seconds"]["assembly"] = evaluation_wall_seconds - float(
+        assembled["timing_seconds"]["species_exact_reference_total"]
+    )
+    assembled["timing_seconds"]["total"] = evaluation_wall_seconds
+    assembled["reference_provenance"] = "computed_by_reaction_reference_evaluator"
+    return assembled
 
 
 def evaluate_molecule(

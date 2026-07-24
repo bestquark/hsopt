@@ -9,7 +9,7 @@
   },
   "n_qubits": 4,
   "electrons": 2,
-  "target_time": 1.5867870732618043,
+  "target_time": 1.0,
   "identity_coefficient": -0.17523454715185072,
   "terms": [
     {"label": "IIIZ", "coefficient": -0.19574485761443816},

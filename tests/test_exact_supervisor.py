@@ -7,6 +7,7 @@ from threading import Lock
 from pathlib import Path
 
 from hsopt.campaign_setup import initialize_campaign
+from hsopt.compiled_unitary import evaluate_exact_reference
 from hsopt.exact_loop import initialize_lane, reconcile_lane
 from hsopt.exact_queue import enqueue_reference, merge_batch, prepare_batch, run_batch
 from hsopt.exact_supervisor import (
@@ -510,7 +511,7 @@ def test_iteration_zero_retains_an_inaccurate_paper_baseline(
     )
 
 
-def test_campaign_shares_one_reference_before_all_replicate_baselines(
+def test_campaign_reuses_one_calibrated_reference_for_all_replicate_baselines(
     tmp_path: Path,
     monkeypatch,
 ) -> None:
@@ -547,18 +548,38 @@ def test_campaign_shares_one_reference_before_all_replicate_baselines(
         )
         + "\n"
     )
-    seed_validation = tmp_path / "seed-validation.json"
-    seed_validation.write_text("[]\n")
 
     def fake_generate_policy(*, output: Path, **kwargs: object) -> None:
         output.parent.mkdir(parents=True, exist_ok=True)
         shutil.copyfile(ABSOLUTE / "initial_pf.py", output)
 
+    problem_references = {
+        str((ABSOLUTE / "hamiltonian.json").resolve()): evaluate_exact_reference(
+            ABSOLUTE / "hamiltonian.json",
+            backend="numpy",
+        )
+    }
+    reaction = json.loads(reaction_source.read_text(encoding="utf-8"))
+    for item in reaction["terms"]:
+        problem = (reaction_source.parent / str(item["problem"])).resolve()
+        problem_references[str(problem)] = evaluate_exact_reference(
+            problem,
+            backend="numpy",
+        )
+
     monkeypatch.setattr("hsopt.campaign_setup._generate_policy", fake_generate_policy)
+    monkeypatch.setattr(
+        "hsopt.campaign_setup._calibration_catalog",
+        lambda _root: {},
+    )
+    monkeypatch.setattr(
+        "hsopt.campaign_setup._calibrated_exact_reference",
+        lambda source, _catalog: problem_references[str(source.resolve())],
+    )
     campaign = initialize_campaign(
         hamlib_inputs=hamlib_inputs,
         reaction_inputs=reaction_inputs,
-        seed_validation=seed_validation,
+        calibration_root=tmp_path / "calibrations",
         generator=REPO / "experiments" / "generate_initial_pf.py",
         campaign_root=tmp_path / "campaign",
         hamlib_replicates=5,
@@ -568,8 +589,9 @@ def test_campaign_shares_one_reference_before_all_replicate_baselines(
     )
 
     assert len(campaign["lanes"]) == 7
-    assert len({row["reference_task_id"] for row in campaign["lanes"]}) == 2
-    assert all(row["baseline_task_id"] is None for row in campaign["lanes"])
+    assert all(row["reference_task_id"] is None for row in campaign["lanes"])
+    assert len({row["reference_sha256"] for row in campaign["lanes"]}) == 2
+    assert all(row["baseline_task_id"] is not None for row in campaign["lanes"])
     assert (tmp_path / "campaign/policies/abs_energy/h2/initial_pf.py").is_file()
     assert (tmp_path / "campaign/policies/diff_energy/stretch/equal_share/initial_pf.py").is_file()
     assert (
@@ -579,8 +601,9 @@ def test_campaign_shares_one_reference_before_all_replicate_baselines(
     assert len(list((queue / "pending").iterdir())) == 2
     for row in campaign["lanes"]:
         state = json.loads((tmp_path / "campaign" / row["lane_dir"] / "state.json").read_text())
-        assert state["pending_kind"] == "reference"
+        assert state["pending_kind"] == "baseline"
         assert state["iterations_completed"] == 0
+        assert (tmp_path / "campaign" / row["lane_dir"] / "exact_reference.json").is_file()
 
 
 def test_finalizer_runs_both_requested_export_and_report_pairs_once(

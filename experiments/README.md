@@ -11,8 +11,11 @@ The checked-in benchmark surface has exactly two families:
   external Hamiltonian cache it consumes.
 
 `generate_initial_pf.py` is the single immutable iteration-0 policy generator
-for both families. It embeds the Reiher--Wiebe--Svore--Wecker--Troyer baseline
-contract, so there is no second baseline-definition folder to keep in sync.
+for both families. It verifies sealed per-Hamiltonian calibration records and
+embeds the Reiher--Wiebe--Svore--Wecker--Troyer PF2 baseline: lexicographic
+Strang ordering, empirically calibrated $\beta(H)$, $t=1$, the resulting
+step count and $\Delta t$, and a directly synthesized uniform rotation
+tolerance. There is no second baseline-definition folder to keep in sync.
 
 Run `uv run hsopt-layout --check` to prove that the 91 + 10 visible directories
 match their compact registries and source checksums exactly. Run
@@ -20,7 +23,7 @@ match their compact registries and source checksums exactly. Run
 regenerate the deterministic definition files.
 
 The coefficient-heavy production Hamiltonians, generated per-instance
-`initial_pf.py` files, exact references, mutation lanes, scheduler logs, agent
+calibrations, `initial_pf.py` files, exact references, mutation lanes, scheduler logs, agent
 transcripts, exports, and reports live below an external `HSOPT_DATA_ROOT`,
 never in this checkout. Compact executable development fixtures live under
 `tests/fixtures/`, not inside either production family.

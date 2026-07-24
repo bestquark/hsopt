@@ -206,6 +206,7 @@ def initialize_lane(
     replicate: str | None = None,
     instance: str | None = None,
     reference_task_id: str | None = None,
+    exact_reference_path: Path | None = None,
 ) -> dict[str, Any]:
     """Create one reproducible lane, waiting for its shared exact reference first."""
 
@@ -215,12 +216,34 @@ def initialize_lane(
     queue_dir = queue_dir.resolve()
     source = source.resolve()
     initial_policy = initial_policy.resolve()
+    if reference_task_id is not None and exact_reference_path is not None:
+        raise ValueError("provide reference_task_id or exact_reference_path, not both")
+    if exact_reference_path is not None:
+        exact_reference_path = exact_reference_path.resolve()
+        reference = _read_json(exact_reference_path)
+        if reference.get("evaluation_contract_version") != EVALUATION_CONTRACT_VERSION:
+            raise ValueError("precomputed exact reference uses a different evaluator contract")
+        if kind == "absolute":
+            if reference.get("observable") != "exact_unitary_ground_eigenphase":
+                raise ValueError("absolute lane requires a ground-eigenphase reference")
+            if reference.get("problem_sha256") != _sha256(source):
+                raise ValueError("precomputed exact reference does not match lane source")
+        elif kind == "difference":
+            if reference.get("observable") != "exact_unitary_signed_energy_difference":
+                raise ValueError("difference lane requires a signed-difference reference")
+            if reference.get("reaction_sha256") != _sha256(source):
+                raise ValueError("precomputed exact reference does not match lane source")
+        else:
+            raise ValueError(f"unknown evaluation kind {kind!r}")
     if lane_dir.exists() and any(lane_dir.iterdir()):
         raise RuntimeError(f"lane directory must be empty: {lane_dir}")
     lane_dir.mkdir(parents=True, exist_ok=True)
     (lane_dir / "iterations").mkdir()
     shutil.copyfile(initial_policy, lane_dir / "initial_pf.py")
     shutil.copyfile(initial_policy, lane_dir / "incumbent.py")
+    lane_reference = lane_dir / "exact_reference.json"
+    if exact_reference_path is not None:
+        shutil.copyfile(exact_reference_path, lane_reference)
     queued = (
         None
         if reference_task_id is not None
@@ -229,6 +252,7 @@ def initialize_lane(
             kind=kind,
             source=source,
             policy=lane_dir / "initial_pf.py",
+            reference=lane_reference if exact_reference_path is not None else None,
         )
     )
     manifest = {
@@ -246,6 +270,12 @@ def initialize_lane(
         "replicate": replicate,
         "instance": instance,
         "exact_reference_task_id": reference_task_id,
+        "exact_reference_source": (
+            str(exact_reference_path) if exact_reference_path is not None else None
+        ),
+        "exact_reference_sha256": (
+            _sha256(exact_reference_path) if exact_reference_path is not None else None
+        ),
     }
     state = {
         "schema": 1,
@@ -268,6 +298,7 @@ def initialize_lane(
         "reference_task_id": reference_task_id,
         "baseline_task_id": queued["task_id"] if queued is not None else None,
         "queue_status": queued["status"] if queued is not None else "waiting_reference",
+        "reference_reused": exact_reference_path is not None,
     }
 
 
@@ -631,6 +662,7 @@ def _parser() -> argparse.ArgumentParser:
     init.add_argument("--replicate")
     init.add_argument("--instance")
     init.add_argument("--reference-task-id")
+    init.add_argument("--exact-reference", type=Path)
 
     for command in ("reconcile", "status"):
         subparser = subparsers.add_parser(command)
@@ -659,6 +691,7 @@ def main() -> int:
             replicate=args.replicate,
             instance=args.instance,
             reference_task_id=args.reference_task_id,
+            exact_reference_path=args.exact_reference,
         )
     elif args.command == "reconcile":
         result = reconcile_lane(args.lane_dir)

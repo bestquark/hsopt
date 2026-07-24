@@ -29,6 +29,7 @@ from hsopt.compiled_unitary import (
     load_policy,
     load_problem,
 )
+from hsopt.paper_baseline import calibrate_problem
 from hsopt.repository_layout import sync_layout
 
 
@@ -69,8 +70,9 @@ def test_checked_in_benchmark_layout_matches_the_91_and_10_registries() -> None:
     result = sync_layout(
         abs_manifest=REPO / "experiments/abs_energy/inputs/instances.csv",
         abs_checksums=REPO / "experiments/abs_energy/inputs/hamlib_zip_sha256.txt",
-        reaction_manifest=REPO / "experiments/diff_energy/inputs/seed_manifest.json",
+        reaction_manifest=REPO / "experiments/diff_energy/inputs/reactions.json",
         reaction_checksums=REPO / "experiments/diff_energy/inputs/problem_cache.sha256",
+        reaction_metadata=REPO / "experiments/diff_energy/inputs/problem_metadata.json",
         abs_root=REPO / "experiments/abs_energy",
         diff_root=REPO / "experiments/diff_energy",
         check=True,
@@ -91,8 +93,28 @@ def test_checked_in_benchmark_layout_matches_the_91_and_10_registries() -> None:
     ],
 )
 def test_initial_policy_is_exactly_generated_from_paper_baseline(
-    source: Path, output: Path
+    source: Path, output: Path, tmp_path: Path
 ) -> None:
+    payload = json.loads(source.read_text(encoding="utf-8"))
+    if "n_qubits" in payload:
+        problem_paths = [source]
+    else:
+        problem_paths = [
+            (source.parent / str(item["problem"])).resolve() for item in payload["terms"]
+        ]
+    calibration_root = tmp_path / "calibrations"
+    calibration_root.mkdir()
+    for index, problem_path in enumerate(problem_paths):
+        calibration = calibrate_problem(
+            problem_path,
+            backend="numpy",
+            mode="empirical_exact",
+            target_time=1.0,
+        )
+        (calibration_root / f"{index:03d}.json").write_text(
+            json.dumps(calibration, indent=2, sort_keys=True) + "\n",
+            encoding="utf-8",
+        )
     subprocess.run(
         [
             sys.executable,
@@ -100,6 +122,8 @@ def test_initial_policy_is_exactly_generated_from_paper_baseline(
             str(source),
             "--output",
             str(output),
+            "--calibration-root",
+            str(calibration_root),
             "--check",
         ],
         check=True,
@@ -370,12 +394,12 @@ def test_absolute_baseline_uses_cached_exact_reference_and_compiled_eigenphase(
     assert result["evaluation_contract_version"] == EVALUATION_CONTRACT_VERSION
     assert result["observable"] == "compiled_unitary_lowest_hf_accessible_eigenphase"
     assert result["exact_ground_energy_hartree"] == pytest.approx(-1.144979079498297)
-    assert result["compiled_pf_energy_hartree"] == pytest.approx(-1.1449932429897123)
+    assert result["compiled_pf_energy_hartree"] == pytest.approx(-1.1444310142762317)
     assert result["passes_chemical_accuracy"] is True
     assert result["formula_order"] == 2
-    assert result["n_steps"] == 512
+    assert result["n_steps"] == 2
     assert result["policy"]["term_order_strategy"] == "lexicographic"
-    assert result["t_count"] == 1_072_128
+    assert result["t_count"] == 3_068
     assert result["per_attempt_t_count"] == result["t_count"]
     assert result["qpe_repetitions"] == 1
     assert result["qpe_target_confidence"] == QPE_TARGET_CONFIDENCE
@@ -386,7 +410,7 @@ def test_absolute_baseline_uses_cached_exact_reference_and_compiled_eigenphase(
     assert result["timing_seconds"]["compiled_unitary_build"] > 0.0
     assert result["timing_seconds"]["compiled_unitary_eigensolve"] > 0.0
     assert result["rotation_fence_interval"] == 32
-    assert result["qpe_success_probability_from_hf"] == pytest.approx(0.9890367894564321)
+    assert result["qpe_success_probability_from_hf"] == pytest.approx(0.9884325016034219)
     assert all("gate_string" not in row for row in result["unique_compilations"])
     assert all(len(row["gate_string_sha256"]) == 64 for row in result["unique_compilations"])
 

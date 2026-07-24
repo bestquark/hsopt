@@ -16,6 +16,10 @@
   "schema": 1,
   "terms": [
     {
+      "active_electrons": 6,
+      "active_orbitals": 5,
+      "basis": "sto-3g",
+      "cas_label": "CAS(6e,5o)",
       "coefficient": -1.0,
       "external_hamiltonian_cache": {
         "coefficients": "problem_cache/hcn.npz",
@@ -23,9 +27,17 @@
         "metadata": "problem_cache/hcn.json",
         "metadata_sha256": "8979324b7c5633d3e505208ef1744b3f98462d9e11d88a05feadddf519036a77"
       },
-      "species": "hcn"
+      "n_qubits": 10,
+      "nonidentity_terms": 435,
+      "problem_name": "Reaction seed hcn",
+      "species": "hcn",
+      "target_time": 1.0
     },
     {
+      "active_electrons": 6,
+      "active_orbitals": 5,
+      "basis": "sto-3g",
+      "cas_label": "CAS(6e,5o)",
       "coefficient": 1.0,
       "external_hamiltonian_cache": {
         "coefficients": "problem_cache/hnc.npz",
@@ -33,7 +45,11 @@
         "metadata": "problem_cache/hnc.json",
         "metadata_sha256": "d83bd200188ad0eba2908dfb0500f2982e2633b57864825d8477dfd927006fd9"
       },
-      "species": "hnc"
+      "n_qubits": 10,
+      "nonidentity_terms": 435,
+      "problem_name": "Reaction seed hnc",
+      "species": "hnc",
+      "target_time": 1.0
     }
   ]
 }

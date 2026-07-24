@@ -1,19 +1,5 @@
 {
-  "direct_budgets_mha": [
-    0.025,
-    0.05,
-    0.1,
-    0.2,
-    0.4,
-    0.8,
-    1.6,
-    3.2,
-    6.4,
-    12.8,
-    25.6
-  ],
-  "experiment": "pf_reaction_error_cancellation_candidates",
-  "n_steps": 512,
+  "schema": 1,
   "reaction_keys": [
     "hcn_hnc",
     "hco_hoc_cation",
@@ -26,7 +12,7 @@
     "h2_f2_hf",
     "co_h2_ch4_h2o"
   ],
-  "reaction_target_mha": 1.5936014376405157,
+  "reaction_target_hartree": 0.0015936014376405157,
   "reactions": {
     "acetylene_vinylidene": {
       "label": "HCCH -> H2CC",
@@ -263,15 +249,5 @@
         }
       ]
     }
-  },
-  "reuse_direct_results": null,
-  "initial_pf_generator": "experiments/generate_initial_pf.py",
-  "synthesis_budgets_mha": [
-    0.32,
-    0.64,
-    1.6,
-    3.2,
-    6.4,
-    12.8
-  ]
+  }
 }

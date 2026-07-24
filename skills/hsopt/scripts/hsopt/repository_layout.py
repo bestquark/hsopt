@@ -5,7 +5,6 @@ from __future__ import annotations
 import argparse
 import csv
 import json
-import math
 from pathlib import Path, PurePosixPath
 from typing import Any
 
@@ -82,7 +81,7 @@ def absolute_definitions(
             "pauli_terms_including_identity": pauli_terms,
             "nonidentity_terms": pauli_terms - 1,
             "hamiltonian_one_norm": one_norm,
-            "target_time": math.pi / one_norm,
+            "target_time": 1.0,
             "source": {
                 "library": "HamLib",
                 "collection": str(row["collection"]),
@@ -109,11 +108,14 @@ def absolute_definitions(
 def reaction_definitions(
     manifest_path: Path,
     checksum_path: Path,
+    metadata_path: Path,
 ) -> dict[str, dict[str, Any]]:
     """Build one deterministic definition for every selected reaction."""
 
     manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
     checksums = _checksum_manifest(checksum_path)
+    metadata_payload = json.loads(metadata_path.read_text(encoding="utf-8"))
+    species_metadata = metadata_payload["species"]
     reaction_keys = [str(value) for value in manifest["reaction_keys"]]
     if len(reaction_keys) != DIFF_INSTANCE_COUNT or len(set(reaction_keys)) != len(reaction_keys):
         raise ValueError(
@@ -129,10 +131,23 @@ def reaction_definitions(
             coefficients = f"problem_cache/{species}.npz"
             if metadata not in checksums or coefficients not in checksums:
                 raise ValueError(f"{reaction_key}: missing cache checksums for {species}")
+            if species not in species_metadata:
+                raise ValueError(f"{reaction_key}: missing compact metadata for {species}")
+            compact = species_metadata[species]
+            if compact["metadata_sha256"] != checksums[metadata]:
+                raise ValueError(f"{reaction_key}: stale compact metadata for {species}")
             terms.append(
                 {
                     "species": species,
+                    "problem_name": f"Reaction seed {species}",
                     "coefficient": float(term["coefficient"]),
+                    "n_qubits": int(compact["n_qubits"]),
+                    "active_electrons": int(compact["active_electrons"]),
+                    "active_orbitals": int(compact["active_orbitals"]),
+                    "basis": str(compact["basis"]),
+                    "cas_label": str(compact["cas_label"]),
+                    "nonidentity_terms": int(compact["nonidentity_terms"]),
+                    "target_time": float(compact["target_time"]),
                     "external_hamiltonian_cache": {
                         "metadata": metadata,
                         "metadata_sha256": checksums[metadata],
@@ -152,7 +167,7 @@ def reaction_definitions(
             "rationale": str(source["rationale"]),
             "terms": terms,
             "contracts": ["equal_share", "reaction_aware"],
-            "reaction_error_target_hartree": float(manifest["reaction_target_mha"]) / 1000.0,
+            "reaction_error_target_hartree": float(manifest["reaction_target_hartree"]),
             "initial_pf_generator": "experiments/generate_initial_pf.py",
             "evaluator": "hsopt.compiled_unitary.evaluate_difference",
         }
@@ -165,6 +180,7 @@ def expected_layout(
     abs_checksums: Path,
     reaction_manifest: Path,
     reaction_checksums: Path,
+    reaction_metadata: Path,
     abs_root: Path,
     diff_root: Path,
 ) -> dict[Path, str]:
@@ -174,6 +190,7 @@ def expected_layout(
     for instance, payload in reaction_definitions(
         reaction_manifest,
         reaction_checksums,
+        reaction_metadata,
     ).items():
         expected[diff_root / instance / DIFF_DESCRIPTOR] = _json_text(payload)
     return expected
@@ -193,6 +210,7 @@ def sync_layout(
     abs_checksums: Path,
     reaction_manifest: Path,
     reaction_checksums: Path,
+    reaction_metadata: Path,
     abs_root: Path,
     diff_root: Path,
     check: bool,
@@ -204,6 +222,7 @@ def sync_layout(
         abs_checksums=abs_checksums,
         reaction_manifest=reaction_manifest,
         reaction_checksums=reaction_checksums,
+        reaction_metadata=reaction_metadata,
         abs_root=abs_root,
         diff_root=diff_root,
     )
@@ -259,12 +278,17 @@ def _parser() -> argparse.ArgumentParser:
     parser.add_argument(
         "--reaction-manifest",
         type=Path,
-        default=repo_root / "experiments/diff_energy/inputs/seed_manifest.json",
+        default=repo_root / "experiments/diff_energy/inputs/reactions.json",
     )
     parser.add_argument(
         "--reaction-checksums",
         type=Path,
         default=repo_root / "experiments/diff_energy/inputs/problem_cache.sha256",
+    )
+    parser.add_argument(
+        "--reaction-metadata",
+        type=Path,
+        default=repo_root / "experiments/diff_energy/inputs/problem_metadata.json",
     )
     parser.add_argument(
         "--abs-root",
@@ -289,6 +313,7 @@ def main() -> int:
         abs_checksums=args.abs_checksums.resolve(),
         reaction_manifest=args.reaction_manifest.resolve(),
         reaction_checksums=args.reaction_checksums.resolve(),
+        reaction_metadata=args.reaction_metadata.resolve(),
         abs_root=args.abs_root.resolve(),
         diff_root=args.diff_root.resolve(),
         check=args.check,

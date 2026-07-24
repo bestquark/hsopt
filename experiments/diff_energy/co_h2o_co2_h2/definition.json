@@ -16,6 +16,10 @@
   "schema": 1,
   "terms": [
     {
+      "active_electrons": 6,
+      "active_orbitals": 5,
+      "basis": "sto-3g",
+      "cas_label": "CAS(6e,5o)",
       "coefficient": -1.0,
       "external_hamiltonian_cache": {
         "coefficients": "problem_cache/co.npz",
@@ -23,9 +27,17 @@
         "metadata": "problem_cache/co.json",
         "metadata_sha256": "9ae0ee52cca2a0f3c12688b8bd1e21afcaa120e38e2621fc29c666494106a3a2"
       },
-      "species": "co"
+      "n_qubits": 10,
+      "nonidentity_terms": 435,
+      "problem_name": "Reaction seed co",
+      "species": "co",
+      "target_time": 1.0
     },
     {
+      "active_electrons": 6,
+      "active_orbitals": 5,
+      "basis": "sto-3g",
+      "cas_label": "CAS(6e,5o)",
       "coefficient": -1.0,
       "external_hamiltonian_cache": {
         "coefficients": "problem_cache/h2o.npz",
@@ -33,9 +45,17 @@
         "metadata": "problem_cache/h2o.json",
         "metadata_sha256": "f9df9982cb6105a60a62cbd1cdde31bd67f863597912269a5024a8e81c169646"
       },
-      "species": "h2o"
+      "n_qubits": 10,
+      "nonidentity_terms": 259,
+      "problem_name": "Reaction seed h2o",
+      "species": "h2o",
+      "target_time": 1.0
     },
     {
+      "active_electrons": 6,
+      "active_orbitals": 5,
+      "basis": "sto-3g",
+      "cas_label": "CAS(6e,5o)",
       "coefficient": 1.0,
       "external_hamiltonian_cache": {
         "coefficients": "problem_cache/co2.npz",
@@ -43,9 +63,17 @@
         "metadata": "problem_cache/co2.json",
         "metadata_sha256": "1f37bcc6a1b80303e3390fc96fe4efe5a1cf23f6feb937c0240e5f00df1e0f0d"
       },
-      "species": "co2"
+      "n_qubits": 10,
+      "nonidentity_terms": 195,
+      "problem_name": "Reaction seed co2",
+      "species": "co2",
+      "target_time": 1.0
     },
     {
+      "active_electrons": 2,
+      "active_orbitals": 2,
+      "basis": "sto-3g",
+      "cas_label": "CAS(2e,2o)",
       "coefficient": 1.0,
       "external_hamiltonian_cache": {
         "coefficients": "problem_cache/h2.npz",
@@ -53,7 +81,11 @@
         "metadata": "problem_cache/h2.json",
         "metadata_sha256": "e962e679f03486b5d54f6195cf99ac12748e67b966cb0e96c4d95e404df0c46e"
       },
-      "species": "h2"
+      "n_qubits": 4,
+      "nonidentity_terms": 14,
+      "problem_name": "Reaction seed h2",
+      "species": "h2",
+      "target_time": 1.0
     }
   ]
 }

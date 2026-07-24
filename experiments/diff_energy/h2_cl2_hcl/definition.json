@@ -16,6 +16,10 @@
   "schema": 1,
   "terms": [
     {
+      "active_electrons": 2,
+      "active_orbitals": 2,
+      "basis": "sto-3g",
+      "cas_label": "CAS(2e,2o)",
       "coefficient": -1.0,
       "external_hamiltonian_cache": {
         "coefficients": "problem_cache/h2.npz",
@@ -23,9 +27,17 @@
         "metadata": "problem_cache/h2.json",
         "metadata_sha256": "e962e679f03486b5d54f6195cf99ac12748e67b966cb0e96c4d95e404df0c46e"
       },
-      "species": "h2"
+      "n_qubits": 4,
+      "nonidentity_terms": 14,
+      "problem_name": "Reaction seed h2",
+      "species": "h2",
+      "target_time": 1.0
     },
     {
+      "active_electrons": 8,
+      "active_orbitals": 5,
+      "basis": "sto-3g",
+      "cas_label": "CAS(8e,5o)",
       "coefficient": -1.0,
       "external_hamiltonian_cache": {
         "coefficients": "problem_cache/cl2.npz",
@@ -33,9 +45,17 @@
         "metadata": "problem_cache/cl2.json",
         "metadata_sha256": "470c97819f034d12933db8d4b355d0d95329baf412be1630237d4b50bf234c71"
       },
-      "species": "cl2"
+      "n_qubits": 10,
+      "nonidentity_terms": 435,
+      "problem_name": "Reaction seed cl2",
+      "species": "cl2",
+      "target_time": 1.0
     },
     {
+      "active_electrons": 8,
+      "active_orbitals": 5,
+      "basis": "sto-3g",
+      "cas_label": "CAS(8e,5o)",
       "coefficient": 2.0,
       "external_hamiltonian_cache": {
         "coefficients": "problem_cache/hcl.npz",
@@ -43,7 +63,11 @@
         "metadata": "problem_cache/hcl.json",
         "metadata_sha256": "c6f1c703702d909c908d39c467b1a155b173265c7d3be9a256a4a4e06b63190d"
       },
-      "species": "hcl"
+      "n_qubits": 10,
+      "nonidentity_terms": 275,
+      "problem_name": "Reaction seed hcl",
+      "species": "hcl",
+      "target_time": 1.0
     }
   ]
 }

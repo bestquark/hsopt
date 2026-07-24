@@ -1,8 +1,9 @@
-"""Generate the immutable iteration-0 product-formula policy.
+"""Generate an immutable iteration-0 policy from calibrated paper data.
 
-The structural method and explicit benchmark instantiation below are based on
-Reiher--Wiebe--Svore--Wecker--Troyer. This generator is the single source of
-truth: it does not derive or optimize the baseline from the evaluated problem.
+Heavy beta(H) calibration is deliberately separate from this renderer so that
+it can run once per unique Hamiltonian on CPU nodes.  This command verifies the
+calibration checksum and source-Hamiltonian checksum before embedding the
+fixed PF2/Strang policy in ``initial_pf.py``.
 """
 
 from __future__ import annotations
@@ -11,12 +12,23 @@ import argparse
 import hashlib
 import json
 from pathlib import Path
-from typing import Any
+from typing import Any, Mapping
+
+from hsopt.paper_baseline import (
+    BENCHMARK_TOTAL_ERROR_HARTREE,
+    PAPER_BETA_REFERENCE_ERROR_HARTREE,
+    PAPER_ERROR_CONSTRAINT,
+    PAPER_FORMULA_ORDER,
+    PAPER_PHASE_ESTIMATION_ALPHA,
+    PAPER_TERM_ORDER,
+    optimize_direct_error_allocation,
+    verify_calibration,
+)
 
 
 PAPER_CONTRACT: dict[str, Any] = {
-    "schema": 1,
-    "baseline_id": "reiher_wiebe_svore_wecker_troyer_2017_pf2",
+    "schema": 4,
+    "baseline_id": "reiher_wiebe_svore_wecker_troyer_2017_empirical_pf2",
     "citation": {
         "authors": [
             "Markus Reiher",
@@ -32,23 +44,28 @@ PAPER_CONTRACT: dict[str, Any] = {
         "arxiv": "1605.03590",
     },
     "paper_method": {
-        "formula_order": 2,
+        "formula_order": PAPER_FORMULA_ORDER,
         "formula_name": "symmetric_second_order_trotter_suzuki",
-        "term_order_strategy": "lexicographic",
-        "rotation_synthesis": "clifford_plus_t",
-        "error_allocation": "uniform_per_scheduled_rotation",
+        "step_structure": "forward_half_except_center_full_then_reverse_half",
+        "term_order_strategy": PAPER_TERM_ORDER,
+        "rotation_synthesis": "clifford_plus_t_pygridsynth",
+        "beta_reference_error_hartree": PAPER_BETA_REFERENCE_ERROR_HARTREE,
+        "phase_estimation_alpha": PAPER_PHASE_ESTIMATION_ALPHA,
+        "error_constraint": PAPER_ERROR_CONSTRAINT,
+        "synthesis_energy_bound": "(2M - 1) * Delta_synth / step_time",
     },
-    "benchmark_instantiation": {
-        "n_steps": 512,
-        "total_synthesis_error_budget_hartree": 0.0005312004792135052,
-        "zero_angle_threshold": 0.0,
+    "benchmark_adaptation": {
+        "total_error_target_hartree": BENCHMARK_TOTAL_ERROR_HARTREE,
+        "total_error_target": "1 kcal/mol",
+        "target_time_hartree_inverse": 1.0,
+        "allocation_cost": "direct PyGridSynth T counts; no gamma/delta fit",
     },
     "scope_note": (
-        "The paper fixes the symmetric second-order formula and uses "
-        "lexicographic ordering, while its Trotter number is molecule-specific "
-        "and empirically estimated. This benchmark therefore records n_steps "
-        "and its synthesis budget explicitly instead of attributing those two "
-        "numerical values to the paper."
+        "The default beta(H) is an empirical exact-energy calibration, as used "
+        "for the paper's tractable small-molecule observations. It is an "
+        "evaluation-oracle baseline, not a scalable unknown-energy procedure. "
+        "The optional Hamiltonian-bound calibration carries a different mode "
+        "and provenance in the generated policy."
     ),
 }
 PAPER_CONTRACT_SHA256 = hashlib.sha256(
@@ -56,155 +73,213 @@ PAPER_CONTRACT_SHA256 = hashlib.sha256(
 ).hexdigest()
 
 
-def load_contract() -> dict[str, Any]:
-    contract = PAPER_CONTRACT
-    paper_method = contract["paper_method"]
-    benchmark = contract["benchmark_instantiation"]
-    if int(paper_method["formula_order"]) != 2:
-        raise ValueError("the Reiher et al. contract must use symmetric PF2")
-    if str(paper_method["term_order_strategy"]) != "lexicographic":
-        raise ValueError("the Reiher et al. contract must use lexicographic ordering")
-    if int(benchmark["n_steps"]) <= 0:
-        raise ValueError("the baseline n_steps must be positive")
-    if float(benchmark["total_synthesis_error_budget_hartree"]) <= 0.0:
-        raise ValueError("the baseline synthesis budget must be positive")
-    return contract
+def _sha256(path: Path) -> str:
+    return hashlib.sha256(path.resolve().read_bytes()).hexdigest()
 
 
-def baseline(
-    problem: dict[str, Any],
-    *,
-    paper_contract: dict[str, Any],
-) -> dict[str, Any]:
-    paper_method = paper_contract["paper_method"]
-    benchmark = paper_contract["benchmark_instantiation"]
-    order = int(paper_method["formula_order"])
-    n_steps = int(benchmark["n_steps"])
-    term_count = len(problem["terms"])
-    rotations_per_step = term_count if order == 1 else 2 * term_count - 1
-    total_rotations = n_steps * rotations_per_step
-    synthesis_budget = float(benchmark["total_synthesis_error_budget_hartree"])
-    return {
-        "baseline_source": str(paper_contract["baseline_id"]),
-        "formula_order": order,
-        "n_steps": n_steps,
-        "nonidentity_terms": term_count,
-        "scheduled_rotations": total_rotations,
-        "synthesis_error_budget_hartree": synthesis_budget,
-        "term_order_strategy": str(paper_method["term_order_strategy"]),
-        "uniform_epsilon": synthesis_budget / total_rotations,
-    }
-
-
-def load_problems(source: Path) -> list[dict[str, Any]]:
+def _problem_paths(
+    source: Path,
+) -> list[tuple[str | None, float | None, Path, dict[str, Any]]]:
     payload = json.loads(source.read_text(encoding="utf-8"))
-    if "terms" in payload and "n_qubits" in payload:
-        return [payload]
-    problems = []
+    if "n_qubits" in payload and "terms" in payload:
+        return [(None, None, source, payload)]
+    rows: list[tuple[str | None, float | None, Path, dict[str, Any]]] = []
     for item in payload["terms"]:
-        path = (source.parent / str(item["problem"])).resolve()
-        problems.append(json.loads(path.read_text(encoding="utf-8")))
-    return problems
+        problem_path = (source.parent / str(item["problem"])).resolve()
+        problem = json.loads(problem_path.read_text(encoding="utf-8"))
+        rows.append(
+            (
+                str(item["species"]),
+                float(item["coefficient"]),
+                problem_path,
+                problem,
+            )
+        )
+    if not rows:
+        raise ValueError(f"{source}: reaction has no Hamiltonians")
+    return rows
 
 
-def format_baselines(rows: dict[str, dict[str, Any]]) -> str:
+def _read_calibration(path: Path) -> dict[str, Any]:
+    payload = json.loads(path.read_text(encoding="utf-8"))
+    verify_calibration(payload)
+    return payload
+
+
+def _calibration_catalog(root: Path) -> dict[str, tuple[Path, dict[str, Any]]]:
+    catalog: dict[str, tuple[Path, dict[str, Any]]] = {}
+    for path in sorted(root.rglob("*.json")):
+        try:
+            payload = json.loads(path.read_text(encoding="utf-8"))
+            verify_calibration(payload)
+        except (KeyError, TypeError, ValueError, json.JSONDecodeError):
+            continue
+        problem_sha256 = str(payload["problem_sha256"])
+        if problem_sha256 in catalog:
+            prior_path, prior = catalog[problem_sha256]
+            if str(prior["calibration_sha256"]) != str(payload["calibration_sha256"]):
+                raise ValueError(
+                    f"conflicting calibrations for {problem_sha256}: {prior_path} and {path}"
+                )
+            continue
+        catalog[problem_sha256] = (path, payload)
+    if not catalog:
+        raise ValueError(f"no sealed paper-baseline calibrations found under {root}")
+    return catalog
+
+
+def _policy_row(
+    *,
+    problem_path: Path,
+    problem: Mapping[str, Any],
+    calibration_path: Path,
+    calibration: Mapping[str, Any],
+    species: str | None,
+    reaction_coefficient: float | None,
+    reaction_species_count: int,
+) -> tuple[str, dict[str, Any]]:
+    verify_calibration(calibration, problem_path=problem_path)
+    if reaction_coefficient is None:
+        policy = dict(calibration["instantiated_policy"])
+    else:
+        if reaction_species_count <= 0 or reaction_coefficient == 0.0:
+            raise ValueError("reaction calibration requires nonzero signed terms")
+        species_error_target = BENCHMARK_TOTAL_ERROR_HARTREE / (
+            reaction_species_count * abs(reaction_coefficient)
+        )
+        policy, _search = optimize_direct_error_allocation(
+            problem,
+            reference_trotter_number_beta=float(
+                calibration["reference"]["reference_trotter_number_beta"]
+            ),
+            reference_error_hartree=float(calibration["reference"]["reference_error_hartree"]),
+            total_error_hartree=species_error_target,
+        )
+        policy["reaction_coefficient"] = reaction_coefficient
+        policy["reaction_species_count"] = reaction_species_count
+        policy["reaction_error_allocation"] = (
+            "equal_absolute_contribution_under_triangle_inequality"
+        )
+        policy["reaction_total_error_target_hartree"] = BENCHMARK_TOTAL_ERROR_HARTREE
+    if not math_isclose(float(problem["target_time"]), float(policy["target_time"])):
+        raise ValueError(
+            f"{problem_path}: source target_time={problem['target_time']} differs from "
+            f"calibrated target_time={policy['target_time']}"
+        )
+    name = str(problem["name"])
+    policy.update(
+        {
+            "baseline_source": str(PAPER_CONTRACT["baseline_id"]),
+            "calibration_mode": str(calibration["calibration_mode"]),
+            "calibration_sha256": str(calibration["calibration_sha256"]),
+            "problem_sha256": str(calibration["problem_sha256"]),
+            "reference_trotter_number_beta": float(
+                calibration["reference"]["reference_trotter_number_beta"]
+            ),
+            "reference_beta_error_hartree": float(
+                calibration["reference"]["reference_error_hartree"]
+            ),
+        }
+    )
+    if species is not None:
+        policy["species"] = species
+    return name, policy
+
+
+def math_isclose(left: float, right: float) -> bool:
+    return abs(left - right) <= 1.0e-15 * max(1.0, abs(left), abs(right))
+
+
+def load_baselines(
+    source: Path,
+    *,
+    calibration_path: Path | None,
+    calibration_root: Path | None,
+) -> tuple[dict[str, dict[str, Any]], list[Path]]:
+    problems = _problem_paths(source)
+    if calibration_path is not None:
+        if len(problems) != 1:
+            raise ValueError("--calibration can only be used with one Hamiltonian")
+        direct = _read_calibration(calibration_path)
+        catalog = {str(direct["problem_sha256"]): (calibration_path, direct)}
+    elif calibration_root is not None:
+        catalog = _calibration_catalog(calibration_root)
+    else:
+        raise ValueError("provide --calibration or --calibration-root")
+
+    rows: dict[str, dict[str, Any]] = {}
+    used: list[Path] = []
+    reaction_species_count = sum(species is not None for species, *_rest in problems)
+    for species, reaction_coefficient, problem_path, problem in problems:
+        digest = _sha256(problem_path)
+        if digest not in catalog:
+            raise ValueError(f"no calibration for {problem_path} (SHA-256 {digest})")
+        resolved_calibration, calibration = catalog[digest]
+        name, row = _policy_row(
+            problem_path=problem_path,
+            problem=problem,
+            calibration_path=resolved_calibration,
+            calibration=calibration,
+            species=species,
+            reaction_coefficient=reaction_coefficient,
+            reaction_species_count=reaction_species_count,
+        )
+        if name in rows:
+            raise ValueError(f"duplicate evaluator-visible problem name {name!r}")
+        rows[name] = row
+        used.append(resolved_calibration)
+    return rows, used
+
+
+def format_baselines(rows: Mapping[str, Mapping[str, Any]]) -> str:
     lines = ["{"]
-    items = sorted(rows.items())
-    for name, row in items:
+    for name, row in sorted(rows.items()):
         lines.append(f"    {json.dumps(name)}: {{")
         for key, value in sorted(row.items()):
             literal = json.dumps(value) if isinstance(value, str) else repr(value)
             lines.append(f"        {json.dumps(key)}: {literal},")
-        suffix = "," if len(items) > 1 else ""
-        lines.append(f"    }}{suffix}")
+        lines.append("    },")
     lines.append("}")
     return "\n".join(lines)
-
-
-def seeded_reaction_baselines(
-    source: Path,
-    seed_validation: Path,
-    contract: str,
-    *,
-    paper_contract: dict[str, Any],
-) -> dict[str, dict[str, Any]]:
-    """Instantiate one fixed reaction budget policy on the paper PF structure."""
-
-    if contract not in {"equal_share", "reaction_aware"}:
-        raise ValueError("reaction contract must be equal_share or reaction_aware")
-    reaction = json.loads(source.read_text(encoding="utf-8"))
-    validation_rows = json.loads(seed_validation.read_text(encoding="utf-8"))
-    reaction_key = str(reaction["reaction_key"])
-    matches = [row for row in validation_rows if row.get("reaction_key") == reaction_key]
-    if len(matches) != 1:
-        raise ValueError(f"expected one paper seed for {reaction_key}, found {len(matches)}")
-    seed = matches[0]
-    point = seed["policies"][contract]["full_space_point"]
-    order = int(paper_contract["paper_method"]["formula_order"])
-    n_steps = int(paper_contract["benchmark_instantiation"]["n_steps"])
-    rows: dict[str, dict[str, Any]] = {}
-    for item in reaction["terms"]:
-        species = str(item["species"])
-        problem_path = (source.parent / str(item["problem"])).resolve()
-        problem = json.loads(problem_path.read_text(encoding="utf-8"))
-        rotations_per_step = len(problem["terms"]) if order == 1 else 2 * len(problem["terms"]) - 1
-        synthesis_budget = float(point["species"][species]["synthesis_error_budget_hartree"])
-        uniform_epsilon = max(
-            1.0e-15,
-            synthesis_budget / float(n_steps * rotations_per_step),
-        )
-        rows[str(problem["name"])] = {
-            "baseline_source": (f"{paper_contract['baseline_id']}_reaction_{contract}"),
-            "budget_source": "experiments/diff_energy/inputs/seed_validation.json",
-            "contract": contract,
-            "formula_order": order,
-            "n_steps": n_steps,
-            "nonidentity_terms": len(problem["terms"]),
-            "reaction_key": reaction_key,
-            "species": species,
-            "synthesis_error_budget_hartree": synthesis_budget,
-            "term_order_strategy": str(paper_contract["paper_method"]["term_order_strategy"]),
-            "uniform_epsilon": uniform_epsilon,
-        }
-    return rows
 
 
 def render(
     source: Path,
     *,
-    seed_validation: Path | None = None,
-    contract: str | None = None,
+    calibration_path: Path | None = None,
+    calibration_root: Path | None = None,
 ) -> str:
-    paper_contract = load_contract()
-    if seed_validation is None and contract is None:
-        rows = {
-            problem["name"]: baseline(problem, paper_contract=paper_contract)
-            for problem in load_problems(source)
-        }
-        provenance = ""
-    elif seed_validation is not None and contract is not None:
-        rows = seeded_reaction_baselines(
-            source,
-            seed_validation,
-            contract,
-            paper_contract=paper_contract,
-        )
-        provenance = (
-            f"Paper reaction seed: {seed_validation.name}\nPaper reaction contract: {contract}\n"
-        )
-    else:
-        raise ValueError("--seed-validation and --contract must be provided together")
+    rows, _calibration_paths = load_baselines(
+        source,
+        calibration_path=calibration_path,
+        calibration_root=calibration_root,
+    )
     encoded = format_baselines(rows)
-    source_sha = hashlib.sha256(source.read_bytes()).hexdigest()
-    return f'''"""Generated standard PF initializer. Do not edit by hand.
+    source_sha = _sha256(source)
+    calibration_lines = "\n".join(
+        f"Calibration scientific SHA-256: {rows[name]['calibration_sha256']}"
+        for name in sorted(rows)
+    )
+    scope_note = str(PAPER_CONTRACT["scope_note"])
+    return f'''"""Generated calibrated paper PF initializer. Do not edit by hand.
 
 Source: {source.name}
 Source SHA-256: {source_sha}
-Paper contract: embedded Reiher--Wiebe--Svore--Wecker--Troyer baseline
 Paper contract SHA-256: {PAPER_CONTRACT_SHA256}
-{provenance}\
+{calibration_lines}
 Generator: experiments/generate_initial_pf.py
 Paper: Reiher et al., PNAS 114, 7555-7560 (2017), DOI 10.1073/pnas.1619152114
+
+Paper structure: PF2/Strang, lexicographic order, molecule-specific beta(H),
+the paper's Trotter/QPE/synthesis error relation, and uniform Clifford+T
+rotation tolerance.
+
+Benchmark adaptation: beta is referenced to 0.1 mHa; the full error target is
+1 kcal/mol; allocation cost uses direct PyGridSynth T counts instead of the
+paper's gamma/delta synthesis fit. Reaction initializers conservatively give
+each signed species term an equal absolute share of the reaction-error target.
+
+{scope_note}
 
 This file is measured unchanged as iteration 0. Scientific acceptance is based
 exclusively on exact diagonalization of the compiled PF unitary against the
@@ -233,7 +308,7 @@ def get_method_config(problem=None) -> ProductFormulaConfig:
     return ProductFormulaConfig(
         formula_order=int(row["formula_order"]),
         n_steps=int(row["n_steps"]),
-        zero_angle_threshold=0.0,
+        zero_angle_threshold=float(row["zero_angle_threshold"]),
         uniform_epsilon=float(row["uniform_epsilon"]),
         term_order_strategy=str(row["term_order_strategy"]),
         baseline_source=str(row["baseline_source"]),
@@ -246,24 +321,32 @@ def choose_synthesis_epsilon(term, alpha, step_index, config) -> float:
 '''
 
 
-def main() -> int:
-    parser = argparse.ArgumentParser()
+def _parser() -> argparse.ArgumentParser:
+    parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("source", type=Path)
     parser.add_argument("--output", type=Path, required=True)
-    parser.add_argument("--seed-validation", type=Path)
-    parser.add_argument("--contract", choices=("equal_share", "reaction_aware"))
+    calibration = parser.add_mutually_exclusive_group(required=True)
+    calibration.add_argument("--calibration", type=Path)
+    calibration.add_argument("--calibration-root", type=Path)
     parser.add_argument("--check", action="store_true")
-    args = parser.parse_args()
+    return parser
+
+
+def main() -> int:
+    args = _parser().parse_args()
     expected = render(
         args.source.resolve(),
-        seed_validation=args.seed_validation.resolve() if args.seed_validation else None,
-        contract=args.contract,
+        calibration_path=args.calibration.resolve() if args.calibration else None,
+        calibration_root=args.calibration_root.resolve() if args.calibration_root else None,
     )
     if args.check:
         if not args.output.is_file() or args.output.read_text(encoding="utf-8") != expected:
             raise SystemExit(f"generated baseline is stale: {args.output}")
         return 0
-    args.output.write_text(expected, encoding="utf-8")
+    args.output.parent.mkdir(parents=True, exist_ok=True)
+    temporary = args.output.with_suffix(args.output.suffix + ".tmp")
+    temporary.write_text(expected, encoding="utf-8")
+    temporary.replace(args.output)
     return 0
 
 

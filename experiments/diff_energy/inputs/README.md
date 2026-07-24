@@ -1,10 +1,11 @@
-# Reaction seed inputs
+# Reaction inputs
 
-These two JSON files are the compact validated registry for the fixed
-ten-reaction paper campaign:
+Two compact JSON files define the fixed ten-reaction campaign:
 
-- `seed_manifest.json`: reaction identities, stoichiometry, and ordering.
-- `seed_validation.json`: the twenty validated iteration-0 policies.
+- `reactions.json`: reaction identities, stoichiometry, ordering, and the
+  $1$ kcal/mol signed-energy target.
+- `problem_metadata.json`: basis, active-space, term-count, qubit-count, and
+  $t=1$ metadata for each unique species Hamiltonian.
 
 The 21 JSON/NPZ Hamiltonian-cache pairs are intentionally external. They total
 about 6.8 MiB and are verified before use against
@@ -16,14 +17,7 @@ The sibling reaction directories expose this registry as one
 `definition.json` per reaction, including the applicable cache checksums.
 `uv run hsopt-layout --check` proves that view is current.
 
-The checked-in inputs are checksummed as:
-
-- normalized seed manifest: `9fe91f88d3af88295d4d23ac5a6612d5a7e3eec97cc0c234a3c602001e708b1b`
-- seed validation: `e2bee43bbf79fd5cfa8877c0be166a115443528ca39f2c53ec596b6239555fcc`
-- external cache manifest: `cf521d0a98c7b9cb3478ef28349200f4ab98b171a79a915edca6459349f9c22f`
-
-The seed manifest is normalized only to replace its old machine-local script
-path with the repository-relative `experiments/generate_initial_pf.py`.
-
-The July Omni iteration-13/14 checkpoint is preserved outside the repository
-for audit only. It is incomplete and is not a paper result.
+No old fixed-step or prevalidated initializer is authoritative. The empirical
+paper baseline is recalibrated from every prepared Hamiltonian and rendered by
+`experiments/generate_initial_pf.py`; its large calibration outputs stay in the
+external campaign data root.

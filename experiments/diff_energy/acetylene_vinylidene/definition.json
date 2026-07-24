@@ -16,6 +16,10 @@
   "schema": 1,
   "terms": [
     {
+      "active_electrons": 6,
+      "active_orbitals": 5,
+      "basis": "sto-3g",
+      "cas_label": "CAS(6e,5o)",
       "coefficient": -1.0,
       "external_hamiltonian_cache": {
         "coefficients": "problem_cache/acetylene.npz",
@@ -23,9 +27,17 @@
         "metadata": "problem_cache/acetylene.json",
         "metadata_sha256": "bcd2c3cd0ba7f72e372111e035f833c9af7d3ff9751a30600a9588a6c35f1d46"
       },
-      "species": "acetylene"
+      "n_qubits": 10,
+      "nonidentity_terms": 195,
+      "problem_name": "Reaction seed acetylene",
+      "species": "acetylene",
+      "target_time": 1.0
     },
     {
+      "active_electrons": 6,
+      "active_orbitals": 5,
+      "basis": "sto-3g",
+      "cas_label": "CAS(6e,5o)",
       "coefficient": 1.0,
       "external_hamiltonian_cache": {
         "coefficients": "problem_cache/vinylidene.npz",
@@ -33,7 +45,11 @@
         "metadata": "problem_cache/vinylidene.json",
         "metadata_sha256": "263c1d51c56f2719e591aa910ff3c820ffed6d6d2e46bc6dc8b7d455715b32e5"
       },
-      "species": "vinylidene"
+      "n_qubits": 10,
+      "nonidentity_terms": 251,
+      "problem_name": "Reaction seed vinylidene",
+      "species": "vinylidene",
+      "target_time": 1.0
     }
   ]
 }

@@ -13,10 +13,12 @@ submission or Slurm diagnosis.
 
 Every production lane must follow these stages:
 
-1. Construct and diagonalize `U_exact = exp(+i H t)` once for each distinct
-   Hamiltonian reference and cache the resulting exact eigenphase energy and
-   state. Five HamLib replicas share one reference per instance; the two
-   policies for a reaction share one reaction reference.
+1. Run empirical paper-baseline calibration once for each distinct
+   Hamiltonian. It constructs and diagonalizes `U_exact = exp(+i H t)`, caches
+   the resulting exact eigenphase energy and deterministic target state, and
+   measures the Hamiltonian-dependent PF2 Trotter number. Five HamLib replicas
+   reuse one reference per instance; reaction references are assembled from
+   the already-calibrated species without another eigensolve.
 2. Measure the generated paper policy unchanged as iteration 0 against that
    cached reference.
 3. Permit OpenCode mutations only after iteration 0 passes. Mutations are
@@ -29,9 +31,13 @@ are not acceptance metrics.
 ## Immutable baseline
 
 `experiments/generate_initial_pf.py` is the sole generator of `initial_pf.py`.
-It embeds the Reiher--Wiebe--Svore--Wecker--Troyer citation, paper method, and
-explicit benchmark-specific numerical choices, so there is no second baseline
-file that can drift from the generator.
+It requires sealed calibration data and embeds the
+Reiher--Wiebe--Svore--Wecker--Troyer citation, lexicographic PF2/Strang
+structure, empirical `beta(H)` referenced to 0.1 mHa, `t=1`, the resulting
+step count and step time, and the direct PyGridSynth tolerance selected under
+the paper's Trotter/QPE/rotation-error relation with a 1 kcal/mol total target.
+The optional Hamiltonian-only double-commutator bound has explicit provenance
+and is not the campaign baseline.
 
 Never invent or hand-edit an initializer. Never mutate `initial_pf.py`, and do
 not create an in-tree `optimized_pf.py`. A lane's mutable `candidate.py` and
@@ -83,6 +89,8 @@ benchmark framework:
 - `skills/hsopt/scripts/hsopt/compiled_unitary.py`
 - `skills/hsopt/scripts/hsopt/exact_queue.py`
 - `skills/hsopt/scripts/hsopt/exact_loop.py`
+- `skills/hsopt/scripts/hsopt/paper_baseline.py`
+- `skills/hsopt/scripts/hsopt/paper_baseline_batch.py`
 - `experiments/generate_initial_pf.py`
 
 Campaign histories belong outside the checkout. After every lane completes,

@@ -7,7 +7,6 @@ import csv
 import hashlib
 import io
 import json
-import math
 import re
 import subprocess
 import sys
@@ -18,8 +17,9 @@ from typing import Any
 
 import numpy as np
 
+from .compiled_unitary import assemble_exact_difference_reference
 from .exact_loop import initialize_lane
-from .exact_queue import enqueue_reference
+from .paper_baseline import verify_calibration
 
 
 HAMLIB_BASE_URL = "https://portal.nersc.gov/cfs/m888/dcamps/hamlib/chemistry/electronic"
@@ -51,6 +51,89 @@ def _require_empty(path: Path) -> Path:
         raise RuntimeError(f"output directory must be empty: {path}")
     path.mkdir(parents=True, exist_ok=True)
     return path
+
+
+def _calibration_catalog(root: Path) -> dict[str, dict[str, Any]]:
+    """Index sealed calibrations by the exact source-Hamiltonian checksum."""
+
+    root = root.resolve()
+    catalog: dict[str, dict[str, Any]] = {}
+    for path in sorted(root.rglob("*.json")):
+        try:
+            payload = json.loads(path.read_text(encoding="utf-8"))
+            verify_calibration(payload)
+        except (KeyError, TypeError, ValueError, json.JSONDecodeError):
+            continue
+        problem_sha256 = str(payload["problem_sha256"])
+        if problem_sha256 in catalog:
+            if str(catalog[problem_sha256]["calibration_sha256"]) != str(
+                payload["calibration_sha256"]
+            ):
+                raise ValueError(f"conflicting sealed calibrations for {problem_sha256}")
+            continue
+        catalog[problem_sha256] = payload
+    if not catalog:
+        raise ValueError(f"no sealed calibrations found under {root}")
+    return catalog
+
+
+def _calibrated_exact_reference(
+    source: Path,
+    catalog: dict[str, dict[str, Any]],
+) -> dict[str, Any]:
+    """Return the one exact reference computed by empirical beta calibration."""
+
+    digest = _sha256(source)
+    if digest not in catalog:
+        raise ValueError(f"no calibration for {source} (SHA-256 {digest})")
+    calibration = catalog[digest]
+    verify_calibration(calibration, problem_path=source)
+    if calibration.get("calibration_mode") != "empirical_exact":
+        raise ValueError(
+            f"{source}: campaign initialization currently requires empirical_exact "
+            "calibration because the evaluator needs a cached exact reference"
+        )
+    reference = calibration.get("exact_reference")
+    if not isinstance(reference, dict):
+        raise ValueError(f"{source}: calibration has no reusable exact reference")
+    return reference
+
+
+def _write_absolute_reference(
+    *,
+    source: Path,
+    output: Path,
+    catalog: dict[str, dict[str, Any]],
+) -> Path:
+    _write_json(output, _calibrated_exact_reference(source, catalog))
+    return output
+
+
+def _write_reaction_reference(
+    *,
+    source: Path,
+    output: Path,
+    catalog: dict[str, dict[str, Any]],
+) -> Path:
+    reaction = json.loads(source.read_text(encoding="utf-8"))
+    species_references: dict[str, dict[str, Any]] = {}
+    backends: set[str] = set()
+    for item in reaction["terms"]:
+        species = str(item["species"])
+        problem = (source.parent / str(item["problem"])).resolve()
+        reference = _calibrated_exact_reference(problem, catalog)
+        species_references[species] = reference
+        backends.add(str(reference["backend"]))
+    backend = next(iter(backends)) if len(backends) == 1 else "mixed_precomputed"
+    _write_json(
+        output,
+        assemble_exact_difference_reference(
+            source,
+            species_references,
+            backend=backend,
+        ),
+    )
+    return output
 
 
 def _checksum_manifest(path: Path) -> dict[str, str]:
@@ -208,7 +291,7 @@ def prepare_hamlib(
             },
             "n_qubits": int(row["nqubits"]),
             "electrons": int(row["electrons"]),
-            "target_time": math.pi / one_norm,
+            "target_time": 1.0,
             "identity_coefficient": identity,
             "terms": terms,
         }
@@ -261,8 +344,7 @@ def _verify_reaction_cache(cache_root: Path, checksums: dict[str, str]) -> None:
 
 def prepare_reactions(
     *,
-    seed_manifest: Path,
-    seed_validation: Path,
+    reaction_manifest: Path,
     cache_checksums: Path,
     cache_root: Path,
     output_root: Path,
@@ -272,12 +354,10 @@ def prepare_reactions(
     output_root = _require_empty(output_root)
     checksums = _checksum_manifest(cache_checksums)
     _verify_reaction_cache(cache_root, checksums)
-    seed = json.loads(seed_manifest.read_text(encoding="utf-8"))
-    validation = json.loads(seed_validation.read_text(encoding="utf-8"))
-    validation_by_key = {str(row["reaction_key"]): row for row in validation}
+    registry = json.loads(reaction_manifest.read_text(encoding="utf-8"))
     records = []
-    for reaction_key in seed["reaction_keys"]:
-        definition = seed["reactions"][reaction_key]
+    for reaction_key in registry["reaction_keys"]:
+        definition = registry["reactions"][reaction_key]
         reaction_dir = output_root / reaction_key
         reaction_terms = []
         for item in definition["terms"]:
@@ -305,7 +385,7 @@ def prepare_reactions(
                 },
                 "n_qubits": int(metadata["n_qubits"]),
                 "electrons": int(metadata["active_electrons"]),
-                "target_time": float(metadata["target_time"]),
+                "target_time": 1.0,
                 "identity_coefficient": float(metadata["identity_coefficient"]),
                 "terms": [
                     {"label": label, "coefficient": coefficient}
@@ -328,33 +408,11 @@ def prepare_reactions(
         }
         reaction_path = reaction_dir / "reaction.json"
         _write_json(reaction_path, reaction)
-        paper_seed = validation_by_key[reaction_key]
-        seed_path = reaction_dir / "paper_seed.json"
-        _write_json(
-            seed_path,
-            {
-                "reaction_key": reaction_key,
-                "formula_order": int(paper_seed["formula_order"]),
-                "n_steps": int(paper_seed["n_steps"]),
-                "contracts": {
-                    contract: {
-                        "species_synthesis_error_budget_hartree": {
-                            species: float(values["synthesis_error_budget_hartree"])
-                            for species, values in paper_seed["policies"][contract][
-                                "full_space_point"
-                            ]["species"].items()
-                        }
-                    }
-                    for contract in ("equal_share", "reaction_aware")
-                },
-            },
-        )
         records.append(
             {
                 "instance": reaction_key,
                 "reaction": str(reaction_path.relative_to(output_root)),
                 "reaction_sha256": _sha256(reaction_path),
-                "paper_seed": str(seed_path.relative_to(output_root)),
             }
         )
     manifest = {
@@ -362,10 +420,8 @@ def prepare_reactions(
         "family": DIFF_ENERGY_FAMILY,
         "selected_instances": len(records),
         "contracts": ["equal_share", "reaction_aware"],
-        "seed_manifest": str(seed_manifest.resolve()),
-        "seed_manifest_sha256": _sha256(seed_manifest),
-        "seed_validation": str(seed_validation.resolve()),
-        "seed_validation_sha256": _sha256(seed_validation),
+        "reaction_manifest": str(reaction_manifest.resolve()),
+        "reaction_manifest_sha256": _sha256(reaction_manifest),
         "cache_checksums": str(cache_checksums.resolve()),
         "cache_checksums_sha256": _sha256(cache_checksums),
         "created_at": _now(),
@@ -380,13 +436,18 @@ def _generate_policy(
     generator: Path,
     source: Path,
     output: Path,
-    seed_validation: Path | None = None,
-    contract: str | None = None,
+    calibration_root: Path,
 ) -> None:
     output.parent.mkdir(parents=True, exist_ok=True)
-    command = [sys.executable, str(generator), str(source), "--output", str(output)]
-    if seed_validation is not None and contract is not None:
-        command.extend(["--seed-validation", str(seed_validation), "--contract", contract])
+    command = [
+        sys.executable,
+        str(generator),
+        str(source),
+        "--output",
+        str(output),
+        "--calibration-root",
+        str(calibration_root),
+    ]
     subprocess.run(command, check=True)
 
 
@@ -394,7 +455,7 @@ def initialize_campaign(
     *,
     hamlib_inputs: Path,
     reaction_inputs: Path,
-    seed_validation: Path,
+    calibration_root: Path,
     generator: Path,
     campaign_root: Path,
     hamlib_replicates: int = 5,
@@ -402,12 +463,14 @@ def initialize_campaign(
     expected_hamlib_instances: int = HAMLIB91_INSTANCES,
     expected_reaction_instances: int = REACTION_INSTANCES,
 ) -> dict[str, Any]:
-    """Create lanes that first share immutable exact-unitary reference tasks."""
+    """Create lanes from calibration-cached immutable exact-unitary references."""
 
     campaign_root = _require_empty(campaign_root)
     queue_dir = campaign_root / "queue"
     lanes_root = campaign_root / "lanes"
     policies_root = campaign_root / "policies"
+    references_root = campaign_root / "references"
+    calibration_catalog = _calibration_catalog(calibration_root)
     hamlib_manifest = json.loads((hamlib_inputs / "manifest.json").read_text(encoding="utf-8"))
     reaction_manifest = json.loads((reaction_inputs / "manifest.json").read_text(encoding="utf-8"))
     if hamlib_manifest.get("family") != ABS_ENERGY_FAMILY:
@@ -426,9 +489,18 @@ def initialize_campaign(
     for record in hamlib_manifest["instances"]:
         instance = str(record["instance"])
         source = hamlib_inputs / str(record["problem"])
-        reference = enqueue_reference(queue_dir, kind="absolute", source=source)
+        reference_path = _write_absolute_reference(
+            source=source,
+            output=references_root / ABS_ENERGY_FAMILY / f"{instance}.json",
+            catalog=calibration_catalog,
+        )
         policy = policies_root / ABS_ENERGY_FAMILY / instance / "initial_pf.py"
-        _generate_policy(generator=generator, source=source, output=policy)
+        _generate_policy(
+            generator=generator,
+            source=source,
+            output=policy,
+            calibration_root=calibration_root,
+        )
         for replicate_index in range(1, hamlib_replicates + 1):
             replicate = f"run_{replicate_index:02d}"
             lane_dir = lanes_root / ABS_ENERGY_FAMILY / instance / replicate
@@ -442,7 +514,7 @@ def initialize_campaign(
                 family=ABS_ENERGY_FAMILY,
                 replicate=replicate,
                 instance=instance,
-                reference_task_id=reference["task_id"],
+                exact_reference_path=reference_path,
             )
             lanes.append(
                 {
@@ -450,22 +522,26 @@ def initialize_campaign(
                     "instance": instance,
                     "replicate": replicate,
                     "lane_dir": str(lane_dir.relative_to(campaign_root)),
-                    "reference_task_id": reference["task_id"],
+                    "reference_task_id": None,
+                    "reference_sha256": _sha256(reference_path),
                     "baseline_task_id": initialized["baseline_task_id"],
                 }
             )
     for record in reaction_manifest["instances"]:
         instance = str(record["instance"])
         source = reaction_inputs / str(record["reaction"])
-        reference = enqueue_reference(queue_dir, kind="difference", source=source)
+        reference_path = _write_reaction_reference(
+            source=source,
+            output=references_root / DIFF_ENERGY_FAMILY / f"{instance}.json",
+            catalog=calibration_catalog,
+        )
         for contract in ("equal_share", "reaction_aware"):
             policy = policies_root / DIFF_ENERGY_FAMILY / instance / contract / "initial_pf.py"
             _generate_policy(
                 generator=generator,
                 source=source,
                 output=policy,
-                seed_validation=seed_validation,
-                contract=contract,
+                calibration_root=calibration_root,
             )
             lane_dir = lanes_root / DIFF_ENERGY_FAMILY / instance / contract
             initialized = initialize_lane(
@@ -478,7 +554,7 @@ def initialize_campaign(
                 family=DIFF_ENERGY_FAMILY,
                 replicate=contract,
                 instance=instance,
-                reference_task_id=reference["task_id"],
+                exact_reference_path=reference_path,
             )
             lanes.append(
                 {
@@ -486,7 +562,8 @@ def initialize_campaign(
                     "instance": instance,
                     "replicate": contract,
                     "lane_dir": str(lane_dir.relative_to(campaign_root)),
-                    "reference_task_id": reference["task_id"],
+                    "reference_task_id": None,
+                    "reference_sha256": _sha256(reference_path),
                     "baseline_task_id": initialized["baseline_task_id"],
                 }
             )
@@ -505,6 +582,7 @@ def initialize_campaign(
             "contracts": ["equal_share", "reaction_aware"],
             "input_manifest_sha256": _sha256(reaction_inputs / "manifest.json"),
         },
+        "calibration_root": str(calibration_root.resolve()),
         "generator": str(generator.resolve()),
         "generator_sha256": _sha256(generator),
         "lanes": lanes,
@@ -525,8 +603,7 @@ def _parser() -> argparse.ArgumentParser:
     hamlib.add_argument("--max-qubits", type=int, default=14)
 
     reactions = commands.add_parser("prepare-reactions")
-    reactions.add_argument("--seed-manifest", type=Path, required=True)
-    reactions.add_argument("--seed-validation", type=Path, required=True)
+    reactions.add_argument("--reaction-manifest", type=Path, required=True)
     reactions.add_argument("--cache-checksums", type=Path, required=True)
     reactions.add_argument("--cache-root", type=Path, required=True)
     reactions.add_argument("--output-root", type=Path, required=True)
@@ -534,7 +611,7 @@ def _parser() -> argparse.ArgumentParser:
     initialize = commands.add_parser("initialize")
     initialize.add_argument("--hamlib-inputs", type=Path, required=True)
     initialize.add_argument("--reaction-inputs", type=Path, required=True)
-    initialize.add_argument("--seed-validation", type=Path, required=True)
+    initialize.add_argument("--calibration-root", type=Path, required=True)
     initialize.add_argument("--generator", type=Path, required=True)
     initialize.add_argument("--campaign-root", type=Path, required=True)
     initialize.add_argument("--hamlib-replicates", type=int, default=5)

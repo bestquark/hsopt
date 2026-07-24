@@ -1,14 +1,13 @@
 from __future__ import annotations
 
-import hashlib
 import json
 from pathlib import Path
 
 
 REPO_ROOT = Path(__file__).resolve().parents[1]
 INPUT_ROOT = REPO_ROOT / "experiments" / "diff_energy" / "inputs"
-SEED_MANIFEST = INPUT_ROOT / "seed_manifest.json"
-SEED_VALIDATION = INPUT_ROOT / "seed_validation.json"
+REACTION_MANIFEST = INPUT_ROOT / "reactions.json"
+PROBLEM_METADATA = INPUT_ROOT / "problem_metadata.json"
 CACHE_CHECKSUMS = INPUT_ROOT / "problem_cache.sha256"
 
 REACTION_KEYS = [
@@ -49,37 +48,21 @@ SPECIES = {
 CHEMICAL_ACCURACY_HARTREE = 1.0 / 627.5094740631
 
 
-def _sha256(path: Path) -> str:
-    return hashlib.sha256(path.read_bytes()).hexdigest()
-
-
-def test_seed_inputs_are_normalized_and_validated() -> None:
-    assert _sha256(SEED_MANIFEST) == (
-        "9fe91f88d3af88295d4d23ac5a6612d5a7e3eec97cc0c234a3c602001e708b1b"
-    )
-    assert _sha256(SEED_VALIDATION) == (
-        "e2bee43bbf79fd5cfa8877c0be166a115443528ca39f2c53ec596b6239555fcc"
-    )
-
-    manifest = json.loads(SEED_MANIFEST.read_text(encoding="utf-8"))
-    validation = json.loads(SEED_VALIDATION.read_text(encoding="utf-8"))
-    assert manifest["initial_pf_generator"] == "experiments/generate_initial_pf.py"
+def test_reaction_inputs_are_minimal_and_baseline_free() -> None:
+    manifest = json.loads(REACTION_MANIFEST.read_text(encoding="utf-8"))
+    metadata = json.loads(PROBLEM_METADATA.read_text(encoding="utf-8"))
+    assert manifest["schema"] == 1
+    assert set(manifest) == {
+        "schema",
+        "reaction_keys",
+        "reaction_target_hartree",
+        "reactions",
+    }
     assert manifest["reaction_keys"] == REACTION_KEYS
     assert set(manifest["reactions"]) == set(REACTION_KEYS)
-    assert manifest["reaction_target_mha"] / 1000.0 == CHEMICAL_ACCURACY_HARTREE
-    assert [row["reaction_key"] for row in validation] == REACTION_KEYS
-    assert len(validation) == 10
-
-    for row in validation:
-        assert row["reaction_error_target_hartree"] == CHEMICAL_ACCURACY_HARTREE
-        assert row["reaction_error_target_mha"] / 1000.0 == CHEMICAL_ACCURACY_HARTREE
-        assert row["formula_order"] == 1
-        assert row["n_steps"] == 512
-        assert row["validation_passes"] is True
-        assert set(row["policies"]) == {"equal_share", "reaction_aware"}
-        assert all(
-            policy["full_space_constraint_passes"] is True for policy in row["policies"].values()
-        )
+    assert manifest["reaction_target_hartree"] == CHEMICAL_ACCURACY_HARTREE
+    assert set(metadata["species"]) == SPECIES
+    assert all(float(row["target_time"]) == 1.0 for row in metadata["species"].values())
 
 
 def test_external_cache_manifest_is_exact_and_minimal() -> None:
