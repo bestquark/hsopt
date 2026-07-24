@@ -71,3 +71,42 @@ the full HamLib context. The accepted JSON format may contain either
 The plots use a real LaTeX installation for typography and deliberately do not
 fall back to Matplotlib mathtext. Generated PDFs, exports, raw campaigns,
 databases, and logs remain outside the Git checkout.
+
+## Independent iteration-0 T95 census
+
+`compute_iteration0_t95.py` measures the plotted baseline costs outside the
+autoresearch loops. It first verifies that the five absolute-energy lanes (or
+two reaction lanes) have identical source, `initial_pf.py`, and exact-reference
+hashes. It then snapshots one task per physical benchmark and runs that task
+through the same fixed `hsopt.exact_queue` evaluator used at autoresearch
+iteration 0. It neither reads nor changes an incumbent or candidate policy.
+
+Prepare and submit the canonical 91 + 10 census as four balanced, single-A100
+jobs:
+
+```bash
+uv run python plots/compute_iteration0_t95.py launch \
+  --campaign-root "$HSOPT_DATA_ROOT/exact/production-cpu91-bound-eq34-v1" \
+  --census-root "$HSOPT_DATA_ROOT/exact/iteration0-t95-census-v1" \
+  --repo-dir "$PWD" \
+  --jobs 4 \
+  --partition polar4 \
+  --backend cupynumeric \
+  --accelerator gpu
+```
+
+The dense-eigensolve proxy is used only to balance the 101 immutable tasks
+across jobs; it never enters the score. Collecting is idempotent, and export
+refuses partial data:
+
+```bash
+uv run python plots/compute_iteration0_t95.py status \
+  --census-root "$HSOPT_DATA_ROOT/exact/iteration0-t95-census-v1" \
+  --remote
+
+uv run python plots/compute_iteration0_t95.py collect \
+  --census-root "$HSOPT_DATA_ROOT/exact/iteration0-t95-census-v1"
+
+uv run python plots/compute_iteration0_t95.py export \
+  --census-root "$HSOPT_DATA_ROOT/exact/iteration0-t95-census-v1"
+```
