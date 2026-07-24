@@ -13,6 +13,7 @@ from hsopt.openshell_agent import (
     _has_completed_candidate_edit,
     _run_logged,
     _terminate_sandbox_opencode,
+    _validate_agent_action_contract,
     _write_opencode_file_list_shim,
     agent_feedback,
     mutate,
@@ -215,9 +216,9 @@ def test_opencode_policy_only_allows_candidate_file_mutations() -> None:
     assert "coefficient_desc" in agent["prompt"]
     assert "reverse_lexicographic" not in agent["prompt"]
     assert permissions["*"] == "allow"
-    assert permissions["edit"] == {
+    assert permissions["edit"] == "allow"
+    assert permissions["external_directory"] == {
         "*": "deny",
-        "candidate.py": "allow",
         "/sandbox/work/candidate.py": "allow",
     }
     assert permissions["read"] == {
@@ -231,10 +232,64 @@ def test_opencode_policy_only_allows_candidate_file_mutations() -> None:
     assert permissions["websearch"] == "allow"
     assert permissions["bash"] == "deny"
     assert permissions["batch"] == "deny"
-    assert permissions["external_directory"] == "deny"
     assert permissions["task"] == "deny"
     assert permissions["todoread"] == "deny"
     assert permissions["todowrite"] == "deny"
+
+
+def test_action_contract_requires_one_candidate_only_mutation(tmp_path: Path) -> None:
+    valid = tmp_path / "valid.jsonl"
+    valid.write_text(
+        "\n".join(
+            json.dumps(event)
+            for event in (
+                {
+                    "type": "tool_use",
+                    "part": {
+                        "callID": "read",
+                        "tool": "read",
+                        "state": {
+                            "status": "completed",
+                            "input": {"filePath": "/sandbox/work/candidate.py"},
+                        },
+                    },
+                },
+                {
+                    "type": "tool_use",
+                    "part": {
+                        "callID": "edit",
+                        "tool": "edit",
+                        "state": {
+                            "status": "completed",
+                            "input": {"filePath": "/sandbox/work/candidate.py"},
+                        },
+                    },
+                },
+            )
+        )
+        + "\n"
+    )
+    _validate_agent_action_contract(valid)
+
+    invalid = tmp_path / "invalid.jsonl"
+    invalid.write_text(
+        json.dumps(
+            {
+                "type": "tool_use",
+                "part": {
+                    "callID": "edit",
+                    "tool": "edit",
+                    "state": {
+                        "status": "completed",
+                        "input": {"filePath": "/sandbox/work/hsopt.SKILL.md"},
+                    },
+                },
+            }
+        )
+        + "\n"
+    )
+    with pytest.raises(RuntimeError, match="outside candidate.py"):
+        _validate_agent_action_contract(invalid)
 
 
 def test_research_network_is_optional_and_binary_scoped(

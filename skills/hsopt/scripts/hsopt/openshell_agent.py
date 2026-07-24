@@ -282,6 +282,48 @@ def _has_completed_candidate_edit(path: Path) -> bool:
     )
 
 
+def _validate_agent_action_contract(path: Path) -> None:
+    """Reject a sandbox turn that did anything outside the one-file contract."""
+
+    _, actions = summarize_opencode_events(path)
+    allowed_tools = {
+        "read",
+        "edit",
+        "write",
+        "apply_patch",
+        "patch",
+        "skill",
+        *ONLINE_TOOLS,
+    }
+    mutation_tools = {"edit", "write", "apply_patch", "patch"}
+    mutation_actions = []
+    read_actions = []
+    research_actions = []
+    for action in actions:
+        tool = str(action["tool"])
+        if tool not in allowed_tools:
+            raise RuntimeError(f"OpenCode attempted forbidden tool {tool!r}")
+        if tool == "read":
+            read_actions.append(action)
+            if action["target"] != "candidate.py":
+                raise RuntimeError("OpenCode attempted to read outside candidate.py")
+        if tool in mutation_tools:
+            mutation_actions.append(action)
+            if action["target"] != "candidate.py":
+                raise RuntimeError("OpenCode attempted to mutate outside candidate.py")
+        if tool in ONLINE_TOOLS or tool == "skill":
+            research_actions.append(action)
+    completed_mutations = [
+        action for action in mutation_actions if action["status"] == "completed"
+    ]
+    if len(read_actions) > 1:
+        raise RuntimeError("OpenCode read candidate.py more than once")
+    if len(mutation_actions) != 1 or len(completed_mutations) != 1:
+        raise RuntimeError("OpenCode must complete exactly one candidate.py mutation")
+    if len(research_actions) > 3:
+        raise RuntimeError("OpenCode exceeded the three-call research limit")
+
+
 _OCSF_RE = re.compile(r"\bOCSF\s+(?P<class>[A-Z]+):(?P<activity>[A-Z_]+)")
 
 
@@ -476,16 +518,19 @@ def opencode_config() -> dict[str, Any]:
                     "coefficient_asc, support_desc, and custom."
                 ),
                 "permission": {
-                    # OpenCode applies an explicit global deny before its
-                    # tool-specific path rules, so it cannot be overridden by
-                    # the candidate.py allow entries below. File mutation is
-                    # still confined by edit (which also gates write/patch),
-                    # while every non-research built-in is denied explicitly.
+                    # OpenCode 1.2.18 currently rejects granular edit allows
+                    # after merging the agent policy. The disposable sandbox
+                    # therefore permits its edit primitive, then enforces the
+                    # one-file contract against the raw action log before any
+                    # candidate is accepted or returned to the host.
                     "*": "allow",
                     "bash": "deny",
                     "batch": "deny",
                     "doom_loop": "deny",
-                    "external_directory": "deny",
+                    "external_directory": {
+                        "*": "deny",
+                        "/sandbox/work/candidate.py": "allow",
+                    },
                     "glob": "deny",
                     "grep": "deny",
                     "list": "deny",
@@ -497,11 +542,7 @@ def opencode_config() -> dict[str, Any]:
                         "/sandbox/work/candidate.py": "allow",
                     },
                     # OpenCode's edit permission gates edit, write, and patch.
-                    "edit": {
-                        "*": "deny",
-                        "candidate.py": "allow",
-                        "/sandbox/work/candidate.py": "allow",
-                    },
+                    "edit": "allow",
                     "skill": {
                         "*": "deny",
                         "hsopt": "allow",
@@ -874,6 +915,7 @@ def _mutate_once(
                 timeout=45,
             )
 
+    _validate_agent_action_contract(run_dir / "opencode.jsonl")
     _validate_candidate(candidate)
     if candidate.read_bytes() == (run_dir / "candidate.before.py").read_bytes():
         raise RuntimeError("OpenCode completed without changing candidate.py")
