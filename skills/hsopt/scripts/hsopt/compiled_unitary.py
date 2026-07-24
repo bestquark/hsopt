@@ -47,8 +47,26 @@ _PAULIS = {
 _H = _PAULIS["X"] + _PAULIS["Z"]
 _H /= math.sqrt(2.0)
 _S_DAGGER = np.asarray([[1.0, 0.0], [0.0, -1.0j]], dtype=np.complex128)
+
+
+def _safe_policy_import(
+    name: str,
+    globals: Mapping[str, Any] | None = None,
+    locals: Mapping[str, Any] | None = None,
+    fromlist: Sequence[str] = (),
+    level: int = 0,
+) -> Any:
+    """Support only the explicitly allowed ``import math`` policy statement."""
+
+    _ = (globals, locals)
+    if name != "math" or fromlist or level != 0:
+        raise ImportError("ProductFormula policies may import only math")
+    return math
+
+
 _SAFE_POLICY_BUILTINS = {
     "__build_class__": __build_class__,
+    "__import__": _safe_policy_import,
     "abs": abs,
     "all": all,
     "any": any,
@@ -129,6 +147,14 @@ def validate_policy_source(path: Path) -> ast.Module:
         if isinstance(node, ast.Expr) and isinstance(node.value, ast.Constant):
             if isinstance(node.value.value, str):
                 continue
+        if isinstance(node, ast.Import):
+            if (
+                len(node.names) == 1
+                and node.names[0].name == "math"
+                and node.names[0].asname in {None, "math"}
+            ):
+                continue
+            raise ValueError(f"{path.name} may import only math")
         if isinstance(node, (ast.Assign, ast.AnnAssign)):
             if any(isinstance(child, (ast.Call, ast.Attribute)) for child in ast.walk(node)):
                 raise ValueError(f"{path.name} top-level constants must be literal data")
@@ -147,7 +173,6 @@ def validate_policy_source(path: Path) -> ast.Module:
         ast.Await,
         ast.Delete,
         ast.Global,
-        ast.Import,
         ast.ImportFrom,
         ast.AsyncFor,
         ast.AsyncWith,
@@ -671,9 +696,7 @@ def _product_formula_schedule(
     """Instantiate the candidate and validate its stationary rotation schedule."""
 
     candidate_problem = {
-        key: value
-        for key, value in problem.items()
-        if key not in {"_path", "terms"}
+        key: value for key, value in problem.items() if key not in {"_path", "terms"}
     }
     candidate_problem["terms"] = [dict(term) for term in problem["terms"]]
     product_formula = policy.ProductFormula(candidate_problem)

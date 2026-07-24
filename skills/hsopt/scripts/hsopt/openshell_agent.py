@@ -298,29 +298,20 @@ def _validate_agent_action_contract(path: Path) -> None:
     }
     mutation_tools = {"edit", "write", "apply_patch", "patch"}
     mutation_actions = []
-    read_actions = []
-    research_actions = []
     for action in actions:
         tool = str(action["tool"])
         if tool not in allowed_tools:
             raise RuntimeError(f"OpenCode attempted forbidden tool {tool!r}")
         if tool == "read":
-            read_actions.append(action)
             if action["target"] != "candidate.py":
                 raise RuntimeError("OpenCode attempted to read outside candidate.py")
         if tool in mutation_tools:
             mutation_actions.append(action)
             if action["target"] != "candidate.py":
                 raise RuntimeError("OpenCode attempted to mutate outside candidate.py")
-        if tool in ONLINE_TOOLS or tool == "skill":
-            research_actions.append(action)
     completed_mutations = [action for action in mutation_actions if action["status"] == "completed"]
-    if len(read_actions) > 1:
-        raise RuntimeError("OpenCode read candidate.py more than once")
     if len(mutation_actions) != 1 or len(completed_mutations) != 1:
         raise RuntimeError("OpenCode must complete exactly one candidate.py mutation")
-    if len(research_actions) > 3:
-        raise RuntimeError("OpenCode exceeded the three-call research limit")
 
 
 _OCSF_RE = re.compile(r"\bOCSF\s+(?P<class>[A-Z]+):(?P<activity>[A-Z_]+)")
@@ -503,16 +494,16 @@ def opencode_config() -> dict[str, Any]:
                 "model": OPENCODE_MODEL,
                 "temperature": 1.0,
                 "top_p": 0.95,
-                # Leave room for optional research before the single candidate
-                # read/edit while still bounding the model/tool loop.
+                # Leave room for optional research and candidate reads before
+                # the single edit while still bounding the model/tool loop.
                 "steps": 8,
                 "prompt": (
                     "Perform exactly one candidate.py policy mutation. Before "
                     "editing, you may optionally use skill, websearch, webfetch, "
-                    "or codesearch for at most three research calls total. Read "
-                    "candidate.py at most once, call one edit or write tool exactly "
-                    "once, then immediately return a final text response without "
-                    "calling another tool. ProductFormula.build_step() is the "
+                    "or codesearch for product-formula research. Read candidate.py "
+                    "as needed, call one edit or write tool exactly once, then "
+                    "immediately return a final text response without calling "
+                    "another tool. ProductFormula.build_step() is the "
                     "authoritative recurrence and may return any deterministic "
                     "stationary Pauli-rotation schedule."
                 ),
@@ -564,10 +555,10 @@ def mutation_prompt(feedback: dict[str, Any] | None = None) -> str:
 Read and edit only candidate.py.
 
 You may optionally use an installed skill or browse/search for product-formula
-and synthesis ideas before editing. Use at most three research tool calls in
-total. Web research is optional, and search content is inspiration rather than
-an evaluator result or permission to change the benchmark. If an optional
-research tool is unavailable, continue with the mutation instead of retrying it.
+and synthesis ideas before editing. Web research is optional, and search
+content is inspiration rather than an evaluator result or permission to change
+the benchmark. If an optional research tool is unavailable, continue with the
+mutation instead of retrying it.
 
 The fixed evaluator compiles every Pauli rotation with PyGridSynth, constructs
 the actual compiled product-formula unitary, diagonalizes it, and selects the
@@ -589,9 +580,9 @@ declared order. synthesis_epsilon() selects the PyGridSynth tolerance for each
 returned rotation.
 
 Do not change any Hamiltonian, evaluator, source data, or benchmark definition.
-Do not fabricate an evaluation result. Read candidate.py at most once. Call one
-edit or write tool exactly once. After that tool succeeds, immediately return a
-final text response without reading or rewriting the file.
+Do not fabricate an evaluation result. Read candidate.py as needed. Call one
+edit or write tool exactly once. After that tool succeeds, immediately return
+a final text response without rewriting the file.
 """
     if feedback is None:
         return prompt

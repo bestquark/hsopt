@@ -237,7 +237,9 @@ def test_opencode_policy_only_allows_candidate_file_mutations() -> None:
     assert permissions["todowrite"] == "deny"
 
 
-def test_action_contract_requires_one_candidate_only_mutation(tmp_path: Path) -> None:
+def test_action_contract_allows_repeated_reads_and_research_before_one_mutation(
+    tmp_path: Path,
+) -> None:
     valid = tmp_path / "valid.jsonl"
     valid.write_text(
         "\n".join(
@@ -254,6 +256,31 @@ def test_action_contract_requires_one_candidate_only_mutation(tmp_path: Path) ->
                         },
                     },
                 },
+                {
+                    "type": "tool_use",
+                    "part": {
+                        "callID": "read-again",
+                        "tool": "read",
+                        "state": {
+                            "status": "completed",
+                            "input": {"filePath": "/sandbox/work/candidate.py"},
+                        },
+                    },
+                },
+                *(
+                    {
+                        "type": "tool_use",
+                        "part": {
+                            "callID": f"research-{index}",
+                            "tool": "websearch",
+                            "state": {
+                                "status": "completed",
+                                "input": {"query": f"product formula idea {index}"},
+                            },
+                        },
+                    }
+                    for index in range(5)
+                ),
                 {
                     "type": "tool_use",
                     "part": {
@@ -353,10 +380,9 @@ def test_mutation_prompt_requires_one_edit_then_terminal_text() -> None:
     prompt = mutation_prompt()
     normalized = " ".join(prompt.split())
 
-    assert "Read candidate.py at most once" in prompt
+    assert "Read candidate.py as needed" in prompt
     assert "tool exactly once" in prompt
     assert "immediately return a final text" in normalized
-    assert "at most three research tool calls" in normalized
     assert "Web research is optional" in prompt
     assert "higher-order stationary composition" in normalized
     assert "Do not change any Hamiltonian" in normalized

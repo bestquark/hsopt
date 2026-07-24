@@ -73,7 +73,9 @@ target. The rotation schedule returned by `build_step()` is authoritative:
 the evaluator can apply it with ideal rotations or compile the same schedule
 with PyGridSynth. Do not force a declared formula order; infer PF1/PF2 from the
 actual schedule and record arbitrary recurrences as custom. The verbose bound
-derivation remains in the sealed calibration JSON.
+derivation remains in the sealed calibration JSON. Candidate policies may use
+the restricted `import math` module; other imports and external capabilities
+remain unavailable.
 
 Do not create or mutate an in-tree `optimized_pf.py`. External lane
 directories contain `candidate.py`, `incumbent.py`, exact results, decisions,
@@ -144,7 +146,8 @@ external.
 
 Run OpenShell and OpenCode/Nemotron on persistent Omni infrastructure.
 OpenCode receives only the incumbent policy and prior result, with deny-all
-permissions except the allowed candidate read/edit operations. Preserve:
+permissions except the allowed candidate read/edit operations. It may read
+`candidate.py` as needed but must complete exactly one mutation. Preserve:
 
 - raw `opencode.jsonl` and `openshell.log`;
 - redacted `agent_actions.jsonl`;

@@ -842,10 +842,46 @@ def test_product_formula_can_define_a_custom_recurrence_without_declared_order(
     assert metrics["term_order_strategy"] == "custom"
 
 
+def test_product_formula_can_import_math(tmp_path: Path) -> None:
+    candidate = tmp_path / "candidate.py"
+    candidate.write_text(
+        """import math
+
+class ProductFormula:
+    def __init__(self, problem):
+        self.epsilon = math.exp(-14.0)
+
+    def repetitions(self):
+        return 1
+
+    def build_step(self, terms, step_time):
+        first = terms[0]
+        angle = math.copysign(abs(float(first["coefficient"]) * step_time), step_time)
+        return [(first, angle)]
+
+    def synthesis_epsilon(self, term, angle):
+        return self.epsilon * math.exp(-abs(angle))
+""",
+        encoding="utf-8",
+    )
+
+    problem = load_problem(ABSOLUTE / "hamiltonian.json")
+    policy = load_policy(candidate)
+    formula, rotations, metrics = _product_formula_schedule(problem, policy)
+
+    assert formula.epsilon == pytest.approx(math.exp(-14.0))
+    assert len(rotations) == 1
+    assert metrics["formula_order"] is None
+    assert formula.synthesis_epsilon(*rotations[0]) == pytest.approx(
+        math.exp(-14.0 - abs(rotations[0][1]))
+    )
+
+
 @pytest.mark.parametrize(
     "source",
     [
         "import os\nclass ProductFormula: pass\n",
+        "from math import exp\nclass ProductFormula: pass\n",
         """class ProductFormula:
     def __init__(self, problem):
         self.problem = problem
