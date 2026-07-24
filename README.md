@@ -81,12 +81,13 @@ schedule checksum, so a stale human-written label cannot affect evaluation.
 The full Eq. (19)/(34) derivation, checksums, error allocation, and cached exact
 energy remain in sealed campaign metadata outside the agent-editable file.
 
-Every experiment folder has a thin `evaluate.py`. Because coefficient-heavy
-Hamiltonians and exact references remain external, invoke it with those sealed
-paths explicitly:
+Each experiment family has one explicit evaluator entry point. Because
+coefficient-heavy Hamiltonians and exact references remain external, invoke it
+with the selected experiment directory and those sealed paths explicitly:
 
 ```bash
-uv run python experiments/abs_energy/<instance>/evaluate.py \
+uv run python experiments/abs_energy/evaluate.py \
+  experiments/abs_energy/<instance> \
   --problem /path/to/hamiltonian.json \
   --exact-reference /path/to/exact-reference.json \
   --policy-file experiments/abs_energy/<instance>/initial_pf.py \
@@ -98,8 +99,8 @@ uv run python experiments/abs_energy/<instance>/evaluate.py \
 ```text
 hsopt/
 ├── experiments/
-│   ├── abs_energy/             91 folders: definition + initial_pf.py + evaluate.py
-│   ├── diff_energy/            10 folders: definition + initial_pf.py + evaluate.py
+│   ├── abs_energy/             91 policies + one explicit family evaluator
+│   ├── diff_energy/            10 policies + one explicit family evaluator
 │   └── generate_initial_pf.py  Immutable initializer for both families
 ├── plots/                      Publication-plot source code
 ├── skills/hsopt/

@@ -522,6 +522,8 @@ def propose_lane(lane_dir: Path, *, timeout_seconds: int = 900) -> dict[str, Any
             lane_dir / "incumbent.py",
             lane_dir / "incumbent_result.json",
             iteration_dir,
+            kind=str(manifest["kind"]),
+            source=Path(manifest["source"]),
             timeout_seconds=timeout_seconds,
         )
     except Exception as exc:

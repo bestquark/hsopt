@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import argparse
+import hashlib
 import json
 import os
 import re
@@ -12,7 +13,7 @@ import time
 import uuid
 from collections import Counter
 from datetime import UTC, datetime
-from pathlib import Path
+from pathlib import Path, PurePosixPath
 from typing import Any, Sequence
 
 from .compiled_unitary import validate_policy_source
@@ -25,6 +26,9 @@ OPENCODE_MODEL = "openshell/nemotron-3-super-v3"
 OPENCODE_AGENT = "hsopt-mutation"
 ONLINE_TOOLS = frozenset({"webfetch", "websearch", "codesearch"})
 HSOPT_SKILL_PATH = Path(__file__).resolve().parents[2] / "SKILL.md"
+EVALUATOR_SOURCE_PATH = Path(__file__).resolve().with_name("compiled_unitary.py")
+SANDBOX_CONTEXT_ROOT = PurePosixPath("/sandbox/work")
+READABLE_CONTEXT_FILES = frozenset({"candidate.py", "evaluate.py", "problem.json", "reaction.json"})
 OPENCODE_NETWORK_BINARIES = (
     "/usr/lib/node_modules/opencode-ai/bin/.opencode",
     "/usr/local/lib/node_modules/opencode-ai/bin/.opencode",
@@ -157,6 +161,56 @@ def _write_json(path: Path, payload: Any) -> None:
     temporary.replace(path)
 
 
+def _sha256(path: Path) -> str:
+    return hashlib.sha256(path.read_bytes()).hexdigest()
+
+
+def _safe_sandbox_relative_path(raw_path: str) -> PurePosixPath:
+    """Validate one reaction-relative JSON path before exposing it in the sandbox."""
+
+    path = PurePosixPath(raw_path)
+    if (
+        path.is_absolute()
+        or path.suffix != ".json"
+        or any(part in {"", ".", ".."} for part in path.parts)
+    ):
+        raise ValueError(f"unsafe reaction problem path: {raw_path!r}")
+    return path
+
+
+def sandbox_context_files(
+    *,
+    kind: str,
+    source: Path,
+) -> list[tuple[Path, PurePosixPath]]:
+    """Return the exact evaluator and benchmark files exposed read-only to OpenCode."""
+
+    source = source.resolve()
+    if not source.is_file():
+        raise FileNotFoundError(source)
+    if not EVALUATOR_SOURCE_PATH.is_file():
+        raise FileNotFoundError(EVALUATOR_SOURCE_PATH)
+    files = [(EVALUATOR_SOURCE_PATH, PurePosixPath("evaluate.py"))]
+    if kind == "absolute":
+        files.append((source, PurePosixPath("problem.json")))
+    elif kind == "difference":
+        reaction = json.loads(source.read_text(encoding="utf-8"))
+        files.append((source, PurePosixPath("reaction.json")))
+        seen: set[PurePosixPath] = set()
+        for item in reaction["terms"]:
+            relative = _safe_sandbox_relative_path(str(item["problem"]))
+            if relative in seen:
+                continue
+            problem = (source.parent / Path(*relative.parts)).resolve()
+            if not problem.is_file():
+                raise FileNotFoundError(problem)
+            files.append((problem, relative))
+            seen.add(relative)
+    else:
+        raise ValueError("kind must be 'absolute' or 'difference'")
+    return files
+
+
 def _safe_tool_target(tool: str, payload: Any) -> str | None:
     """Keep an audit-useful target without copying prompts or file contents."""
 
@@ -167,7 +221,15 @@ def _safe_tool_target(tool: str, payload: Any) -> str | None:
         if not isinstance(value, str) or not value:
             continue
         if key in {"filePath", "path"}:
-            return Path(value).name
+            normalized = value.replace("\\", "/")
+            sandbox_prefix = f"{SANDBOX_CONTEXT_ROOT.as_posix()}/"
+            if normalized.startswith(sandbox_prefix):
+                return normalized.removeprefix(sandbox_prefix)
+            if normalized.startswith("./"):
+                return normalized.removeprefix("./")
+            if not normalized.startswith("/"):
+                return normalized
+            return f"outside:{PurePosixPath(normalized).name}"
         return value[:200]
     if tool == "edit":
         return "candidate.py"
@@ -303,8 +365,14 @@ def _validate_agent_action_contract(path: Path) -> None:
         if tool not in allowed_tools:
             raise RuntimeError(f"OpenCode attempted forbidden tool {tool!r}")
         if tool == "read":
-            if action["target"] != "candidate.py":
-                raise RuntimeError("OpenCode attempted to read outside candidate.py")
+            target = str(action["target"])
+            safe_json = (
+                target.endswith(".json")
+                and not target.startswith(("outside:", "/", "../"))
+                and all(part not in {"", ".", ".."} for part in PurePosixPath(target).parts)
+            )
+            if target not in READABLE_CONTEXT_FILES and not safe_json:
+                raise RuntimeError("OpenCode attempted to read outside the mutation context")
         if tool in mutation_tools:
             mutation_actions.append(action)
             if action["target"] != "candidate.py":
@@ -494,14 +562,16 @@ def opencode_config() -> dict[str, Any]:
                 "model": OPENCODE_MODEL,
                 "temperature": 1.0,
                 "top_p": 0.95,
-                # Leave room for optional research and candidate reads before
-                # the single edit while still bounding the model/tool loop.
-                "steps": 8,
+                # Leave room for repeated context reads and optional research
+                # before the single edit while still bounding the model/tool loop.
+                "steps": 20,
                 "prompt": (
                     "Perform exactly one candidate.py policy mutation. Before "
                     "editing, you may optionally use skill, websearch, webfetch, "
-                    "or codesearch for product-formula research. Read candidate.py "
-                    "as needed, call one edit or write tool exactly once, then "
+                    "or codesearch for product-formula research. Read candidate.py, "
+                    "the read-only evaluate.py implementation, and the read-only "
+                    "benchmark JSON files as needed. Call one edit or write tool "
+                    "exactly once, then "
                     "immediately return a final text response without calling "
                     "another tool. ProductFormula.build_step() is the "
                     "authoritative recurrence and may return any deterministic "
@@ -530,6 +600,15 @@ def opencode_config() -> dict[str, Any]:
                         "*": "deny",
                         "candidate.py": "allow",
                         "/sandbox/work/candidate.py": "allow",
+                        "evaluate.py": "allow",
+                        "/sandbox/work/evaluate.py": "allow",
+                        "problem.json": "allow",
+                        "/sandbox/work/problem.json": "allow",
+                        "reaction.json": "allow",
+                        "/sandbox/work/reaction.json": "allow",
+                        "*.json": "allow",
+                        "**/*.json": "allow",
+                        "/sandbox/work/**/*.json": "allow",
                     },
                     # OpenCode's edit permission gates edit, write, and patch.
                     "edit": "allow",
@@ -552,7 +631,16 @@ def opencode_config() -> dict[str, Any]:
 def mutation_prompt(feedback: dict[str, Any] | None = None) -> str:
     prompt = """You are proposing one HSOpt product-formula policy mutation.
 
-Read and edit only candidate.py.
+The working directory contains:
+
+- candidate.py: the only editable file;
+- evaluate.py: the exact fixed evaluator implementation used for scoring;
+- problem.json for an absolute-energy lane, or reaction.json plus its referenced
+  Hamiltonian JSON files for a difference-energy lane.
+
+Read those files as needed so the mutation can use the concrete Hamiltonian
+coefficients, Pauli labels, term metadata, and evaluator interface. The
+evaluator and JSON inputs are read-only. Edit only candidate.py.
 
 You may optionally use an installed skill or browse/search for product-formula
 and synthesis ideas before editing. Web research is optional, and search
@@ -577,34 +665,13 @@ formula: it may implement PF1, PF2/Strang, a higher-order stationary
 composition, grouping, or another deterministic recurrence. The evaluator
 infers standard PF1/PF2 labels from the returned rotations; it never trusts a
 declared order. synthesis_epsilon() selects the PyGridSynth tolerance for each
-returned rotation.
-
-The ProductFormula runtime interface is:
-
-- ProductFormula(problem) receives a fresh plain dict. Its guaranteed fields
-  are name (str), n_qubits (int), electrons (int), target_time (float),
-  identity_coefficient (float), and terms (list of term dicts). Treat this
-  benchmark description as read-only.
-- Every term is a plain dict with label (an n_qubits-character I/X/Y/Z Pauli
-  string), coefficient (finite float), support_size (number of non-I
-  characters), and x_count, y_count, and z_count (ints).
-- repetitions() returns a positive integer n_steps. The evaluator sets
-  step_time = problem["target_time"] / n_steps.
-- build_step(terms, step_time) receives fresh copies of those term dicts and
-  returns a nonempty list or tuple of (term, angle) pairs for one stationary
-  step. term may be one of the supplied term dicts or its label string. angle
-  is the finite real alpha in exp(+i * alpha * P); for an ordinary first-order
-  occurrence it is term["coefficient"] * step_time. The evaluator resolves
-  every returned label against the trusted Hamiltonian and repeats this exact
-  one-step schedule n_steps times.
-- synthesis_epsilon(term, angle) receives a fresh trusted term dict and the
-  exact returned alpha for each scheduled rotation. It must return a finite
-  PyGridSynth operator-norm tolerance strictly between 0 and 1.
+returned rotation. Inspect evaluate.py for the exact accepted types, angle
+convention, schedule validation, and synthesis-tolerance constraints.
 
 Do not change any Hamiltonian, evaluator, source data, or benchmark definition.
-Do not fabricate an evaluation result. Read candidate.py as needed. Call one
-edit or write tool exactly once. After that tool succeeds, immediately return
-a final text response without rewriting the file.
+Do not fabricate an evaluation result. Read the available context as needed.
+Call one edit or write tool exactly once. After that tool succeeds, immediately
+return a final text response without rewriting the file.
 """
     if feedback is None:
         return prompt
@@ -719,6 +786,8 @@ def _mutate_once(
     feedback_file: Path,
     run_dir: Path,
     *,
+    kind: str,
+    source: Path,
     timeout_seconds: int = 900,
     keep_sandbox: bool = False,
 ) -> dict[str, Any]:
@@ -727,6 +796,7 @@ def _mutate_once(
     policy_file = policy_file.resolve()
     feedback_file = feedback_file.resolve()
     run_dir = run_dir.resolve()
+    context_files = sandbox_context_files(kind=kind, source=source)
     if run_dir.exists() and any(run_dir.iterdir()):
         raise RuntimeError(f"run directory must be empty: {run_dir}")
     run_dir.mkdir(parents=True, exist_ok=True)
@@ -743,6 +813,23 @@ def _mutate_once(
         encoding="utf-8",
     )
     (run_dir / "prompt.md").write_text(prompt, encoding="utf-8")
+    _write_json(
+        run_dir / "sandbox_context.json",
+        {
+            "schema": 1,
+            "kind": kind,
+            "files": [
+                {
+                    "sandbox_path": relative.as_posix(),
+                    "sha256": _sha256(local),
+                    "role": "fixed_evaluator"
+                    if relative == PurePosixPath("evaluate.py")
+                    else "benchmark_input",
+                }
+                for local, relative in context_files
+            ],
+        },
+    )
     if not HSOPT_SKILL_PATH.is_file():
         raise RuntimeError(f"OpenCode hsopt skill is unavailable: {HSOPT_SKILL_PATH}")
     sandbox_skill = run_dir / "hsopt.SKILL.md"
@@ -791,6 +878,13 @@ def _mutate_once(
                 "-p",
                 "/sandbox/work/.opencode/skills/hsopt",
                 "/sandbox/work/.local/bin",
+                *sorted(
+                    {
+                        f"/sandbox/work/{relative.parent.as_posix()}"
+                        for _, relative in context_files
+                        if relative.parent != PurePosixPath(".")
+                    }
+                ),
             ],
             timeout=45,
         )
@@ -805,6 +899,35 @@ def _mutate_once(
             ],
             timeout=timeout_seconds,
         )
+        for local, relative in context_files:
+            remote = f"/sandbox/work/{relative.as_posix()}"
+            _run(
+                [
+                    "openshell",
+                    "sandbox",
+                    "upload",
+                    sandbox_name,
+                    str(local),
+                    remote,
+                ],
+                timeout=timeout_seconds,
+            )
+            _run(
+                [
+                    "openshell",
+                    "sandbox",
+                    "exec",
+                    "--name",
+                    sandbox_name,
+                    "--timeout",
+                    "30",
+                    "--",
+                    "chmod",
+                    "0444",
+                    remote,
+                ],
+                timeout=45,
+            )
         _run(
             [
                 "openshell",
@@ -948,6 +1071,8 @@ def mutate(
     feedback_file: Path,
     run_dir: Path,
     *,
+    kind: str,
+    source: Path,
     timeout_seconds: int = 900,
     keep_sandbox: bool = False,
 ) -> dict[str, Any]:
@@ -961,6 +1086,8 @@ def mutate(
             policy_file,
             feedback_file,
             run_dir,
+            kind=kind,
+            source=source,
             timeout_seconds=timeout_seconds,
             keep_sandbox=keep_sandbox,
         )
@@ -1007,6 +1134,8 @@ def _parser() -> argparse.ArgumentParser:
     mutate_parser.add_argument("--policy-file", type=Path, required=True)
     mutate_parser.add_argument("--feedback-file", type=Path, required=True)
     mutate_parser.add_argument("--run-dir", type=Path, required=True)
+    mutate_parser.add_argument("--kind", choices=("absolute", "difference"), required=True)
+    mutate_parser.add_argument("--source", type=Path, required=True)
     mutate_parser.add_argument("--timeout-seconds", type=int, default=900)
     mutate_parser.add_argument("--keep-sandbox", action="store_true")
     return parser
@@ -1021,6 +1150,8 @@ def main() -> int:
             args.policy_file,
             args.feedback_file,
             args.run_dir,
+            kind=args.kind,
+            source=args.source,
             timeout_seconds=args.timeout_seconds,
             keep_sandbox=args.keep_sandbox,
         )

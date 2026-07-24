@@ -97,9 +97,17 @@ def test_checked_in_benchmark_layout_matches_the_91_and_10_registries() -> None:
         "absolute_hamiltonians": 91,
         "difference_reactions": 10,
         "definition_files": 101,
-        "evaluator_files": 101,
+        "evaluator_files": 2,
         "initial_policies": 101,
     }
+    for family in ("abs_energy", "diff_energy"):
+        root = REPO / "experiments" / family
+        evaluator = root / "evaluate.py"
+        assert evaluator.is_file()
+        assert not list(root.glob("*/evaluate.py"))
+        source = evaluator.read_text(encoding="utf-8")
+        assert "from hsopt.compiled_unitary import" in source
+        assert "hsopt.experiment_evaluator" not in source
 
 
 def test_directory_evaluator_uses_its_sealed_hamiltonian_identity(tmp_path: Path) -> None:

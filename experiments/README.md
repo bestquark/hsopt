@@ -4,10 +4,12 @@ The checked-in benchmark surface has exactly two families:
 
 - `abs_energy/`: the canonical 91-instance HamLib selection through 14
   qubits. Each selected Hamiltonian has a visible directory containing an
-  `instance.json` definition and generated `initial_pf.py`, alongside the
-  source/checksum manifests used to prepare external inputs.
+  `instance.json` definition and generated `initial_pf.py`. The family-level
+  `abs_energy/evaluate.py` contains its explicit fixed evaluator entry point,
+  alongside the source/checksum manifests used to prepare external inputs.
 - `diff_energy/`: ten visible reaction directories. Each contains a
-  `definition.json` plus generated `initial_pf.py`.
+  `definition.json` plus generated `initial_pf.py`. Its explicit fixed
+  evaluator entry point is `diff_energy/evaluate.py`.
 
 `generate_initial_pf.py` is the single immutable iteration-0 policy generator
 for both families. It verifies sealed per-Hamiltonian calibration records and

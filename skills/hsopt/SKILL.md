@@ -117,9 +117,10 @@ strictly between zero and one.
 
 Do not create or mutate an in-tree `optimized_pf.py`. External lane
 directories contain `candidate.py`, `incumbent.py`, exact results, decisions,
-and audit logs. Every checked-in experiment directory also contains a thin
-`evaluate.py` that selects that directory's fixed identity while requiring the
-coefficient-bearing Hamiltonian/reaction and cached exact reference explicitly.
+and audit logs. The checked-in experiment tree has one explicit evaluator entry
+point at each family root: `experiments/abs_energy/evaluate.py` and
+`experiments/diff_energy/evaluate.py`. Each requires the coefficient-bearing
+Hamiltonian/reaction and cached exact reference explicitly.
 
 Do not modify Hamiltonians, geometries, basis sets, active spaces, target
 times, localization, electron sectors, or evaluator semantics during a run.
@@ -183,9 +184,11 @@ coefficient-heavy Hamiltonians and sealed calibration/reference records remain
 external.
 
 Run OpenShell and OpenCode/Nemotron on persistent Omni infrastructure.
-OpenCode receives only the incumbent policy and prior result, with deny-all
-permissions except the allowed candidate read/edit operations. It may read
-`candidate.py` as needed but must complete exactly one mutation. Preserve:
+OpenCode receives the incumbent policy, prior result, the exact fixed evaluator
+source, and that lane's coefficient-bearing Hamiltonian inputs. Only
+`candidate.py` is writable. It may repeatedly read `candidate.py`,
+`evaluate.py`, and the benchmark JSON context as needed but must complete
+exactly one mutation. Preserve:
 
 - raw `opencode.jsonl` and `openshell.log`;
 - redacted `agent_actions.jsonl`;

@@ -19,6 +19,7 @@ from hsopt.openshell_agent import (
     mutate,
     mutation_prompt,
     opencode_config,
+    sandbox_context_files,
     summarize_opencode_events,
     summarize_openshell_log,
 )
@@ -211,7 +212,7 @@ def test_opencode_policy_only_allows_candidate_file_mutations() -> None:
     agent = opencode_config()["agent"]["hsopt-mutation"]
     permissions = agent["permission"]
 
-    assert agent["steps"] == 8
+    assert agent["steps"] == 20
     assert "exactly once" in agent["prompt"]
     assert "ProductFormula.build_step()" in agent["prompt"]
     assert "reverse_lexicographic" not in agent["prompt"]
@@ -225,6 +226,15 @@ def test_opencode_policy_only_allows_candidate_file_mutations() -> None:
         "*": "deny",
         "candidate.py": "allow",
         "/sandbox/work/candidate.py": "allow",
+        "evaluate.py": "allow",
+        "/sandbox/work/evaluate.py": "allow",
+        "problem.json": "allow",
+        "/sandbox/work/problem.json": "allow",
+        "reaction.json": "allow",
+        "/sandbox/work/reaction.json": "allow",
+        "*.json": "allow",
+        "**/*.json": "allow",
+        "/sandbox/work/**/*.json": "allow",
     }
     assert permissions["skill"] == {"*": "deny", "hsopt": "allow"}
     assert permissions["codesearch"] == "allow"
@@ -264,6 +274,28 @@ def test_action_contract_allows_repeated_reads_and_research_before_one_mutation(
                         "state": {
                             "status": "completed",
                             "input": {"filePath": "/sandbox/work/candidate.py"},
+                        },
+                    },
+                },
+                {
+                    "type": "tool_use",
+                    "part": {
+                        "callID": "read-evaluator",
+                        "tool": "read",
+                        "state": {
+                            "status": "completed",
+                            "input": {"filePath": "/sandbox/work/evaluate.py"},
+                        },
+                    },
+                },
+                {
+                    "type": "tool_use",
+                    "part": {
+                        "callID": "read-problem",
+                        "tool": "read",
+                        "state": {
+                            "status": "completed",
+                            "input": {"filePath": "/sandbox/work/hamiltonians/h2_r0_7.json"},
                         },
                     },
                 },
@@ -317,6 +349,40 @@ def test_action_contract_allows_repeated_reads_and_research_before_one_mutation(
     )
     with pytest.raises(RuntimeError, match="outside candidate.py"):
         _validate_agent_action_contract(invalid)
+
+    outside_read = tmp_path / "outside-read.jsonl"
+    outside_read.write_text(
+        "\n".join(
+            json.dumps(event)
+            for event in (
+                {
+                    "type": "tool_use",
+                    "part": {
+                        "callID": "read-outside",
+                        "tool": "read",
+                        "state": {
+                            "status": "completed",
+                            "input": {"filePath": "/etc/problem.json"},
+                        },
+                    },
+                },
+                {
+                    "type": "tool_use",
+                    "part": {
+                        "callID": "edit",
+                        "tool": "edit",
+                        "state": {
+                            "status": "completed",
+                            "input": {"filePath": "/sandbox/work/candidate.py"},
+                        },
+                    },
+                },
+            )
+        )
+        + "\n"
+    )
+    with pytest.raises(RuntimeError, match="outside the mutation context"):
+        _validate_agent_action_contract(outside_read)
 
 
 def test_research_network_is_optional_and_binary_scoped(
@@ -380,19 +446,38 @@ def test_mutation_prompt_requires_one_edit_then_terminal_text() -> None:
     prompt = mutation_prompt()
     normalized = " ".join(prompt.split())
 
-    assert "Read candidate.py as needed" in prompt
+    assert "candidate.py: the only editable file" in prompt
+    assert "evaluate.py: the exact fixed evaluator implementation" in prompt
+    assert "problem.json for an absolute-energy lane" in prompt
+    assert "reaction.json plus its referenced Hamiltonian JSON files" in normalized
     assert "tool exactly once" in prompt
     assert "immediately return a final text" in normalized
     assert "Web research is optional" in prompt
     assert "higher-order stationary composition" in normalized
     assert "Do not change any Hamiltonian" in normalized
-    assert "identity_coefficient (float)" in normalized
-    assert "support_size (number of non-I characters)" in normalized
-    assert "x_count, y_count, and z_count (ints)" in normalized
-    assert 'step_time = problem["target_time"] / n_steps' in normalized
-    assert "(term, angle) pairs for one stationary step" in normalized
-    assert "exp(+i * alpha * P)" in normalized
-    assert "operator-norm tolerance strictly between 0 and 1" in normalized
+    assert "Inspect evaluate.py for the exact accepted types" in normalized
+
+
+def test_sandbox_context_exposes_exact_evaluator_and_benchmark_inputs() -> None:
+    repo = Path(__file__).resolve().parents[1]
+    absolute = repo / "tests/fixtures/abs_energy_h2/hamiltonian.json"
+    reaction = repo / "tests/fixtures/diff_energy_h2_bond_stretch/reaction.json"
+
+    absolute_context = sandbox_context_files(kind="absolute", source=absolute)
+    assert [relative.as_posix() for _, relative in absolute_context] == [
+        "evaluate.py",
+        "problem.json",
+    ]
+    assert absolute_context[1][0] == absolute.resolve()
+
+    reaction_context = sandbox_context_files(kind="difference", source=reaction)
+    assert [relative.as_posix() for _, relative in reaction_context] == [
+        "evaluate.py",
+        "reaction.json",
+        "hamiltonians/h2_r0_7.json",
+        "hamiltonians/h2_r0_8.json",
+    ]
+    assert all(local.is_file() for local, _ in reaction_context)
 
 
 def test_sandbox_cleanup_terminates_opencode_without_matching_itself(
@@ -431,7 +516,13 @@ def test_mutation_failure_is_durable(
     run_dir = tmp_path / "iteration"
 
     with pytest.raises(RuntimeError, match="did not mutate"):
-        mutate(tmp_path / "policy.py", tmp_path / "feedback.json", run_dir)
+        mutate(
+            tmp_path / "policy.py",
+            tmp_path / "feedback.json",
+            run_dir,
+            kind="absolute",
+            source=tmp_path / "problem.json",
+        )
 
     outcome = json.loads((run_dir / "mutation_result.json").read_text())
     assert outcome["status"] == "failed"

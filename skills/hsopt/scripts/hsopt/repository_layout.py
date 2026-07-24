@@ -1,4 +1,4 @@
-"""Materialize the checked-in per-instance benchmark directory layout."""
+"""Materialize the checked-in benchmark definitions and validate family evaluators."""
 
 from __future__ import annotations
 
@@ -18,26 +18,6 @@ INITIAL_POLICY = "initial_pf.py"
 EVALUATOR = "evaluate.py"
 ABS_INSTANCE_COUNT = 91
 DIFF_INSTANCE_COUNT = 10
-ABS_EVALUATOR = '''"""Evaluate this directory's sealed absolute-energy experiment."""
-
-from pathlib import Path
-
-from hsopt.experiment_evaluator import evaluate_absolute_directory
-
-
-if __name__ == "__main__":
-    raise SystemExit(evaluate_absolute_directory(Path(__file__).resolve().parent))
-'''
-DIFF_EVALUATOR = '''"""Evaluate this directory's sealed signed-energy experiment."""
-
-from pathlib import Path
-
-from hsopt.experiment_evaluator import evaluate_difference_directory
-
-
-if __name__ == "__main__":
-    raise SystemExit(evaluate_difference_directory(Path(__file__).resolve().parent))
-'''
 
 
 def _json_text(payload: Any) -> str:
@@ -210,14 +190,12 @@ def expected_layout(
     expected: dict[Path, str] = {}
     for instance, payload in absolute_definitions(abs_manifest, abs_checksums).items():
         expected[abs_root / instance / ABS_DESCRIPTOR] = _json_text(payload)
-        expected[abs_root / instance / EVALUATOR] = ABS_EVALUATOR
     for instance, payload in reaction_definitions(
         reaction_manifest,
         reaction_checksums,
         reaction_metadata,
     ).items():
         expected[diff_root / instance / DIFF_DESCRIPTOR] = _json_text(payload)
-        expected[diff_root / instance / EVALUATOR] = DIFF_EVALUATOR
     return expected
 
 
@@ -303,11 +281,18 @@ def sync_layout(
     expected_diff = {
         path.parent.name for path in expected if path.parent.parent.resolve() == diff_root.resolve()
     }
+    family_evaluators = [abs_root / EVALUATOR, diff_root / EVALUATOR]
     if check:
         mismatches = [
             str(path)
             for path, content in expected.items()
             if not path.is_file() or path.read_text(encoding="utf-8") != content
+        ]
+        missing_evaluators = [str(path) for path in family_evaluators if not path.is_file()]
+        stale_instance_evaluators = [
+            str(path)
+            for root in (abs_root, diff_root)
+            for path in sorted(root.glob(f"*/{EVALUATOR}"))
         ]
         actual_abs = _instance_directories(abs_root)
         actual_diff = _instance_directories(diff_root)
@@ -329,10 +314,18 @@ def sync_layout(
                 )
             except (KeyError, TypeError, ValueError, SyntaxError) as exc:
                 invalid_policies.append(str(exc))
-        if mismatches or actual_abs != expected_abs or actual_diff != expected_diff:
+        if (
+            mismatches
+            or missing_evaluators
+            or stale_instance_evaluators
+            or actual_abs != expected_abs
+            or actual_diff != expected_diff
+        ):
             raise ValueError(
                 "repository benchmark layout is stale: "
                 f"mismatched_files={mismatches}, "
+                f"missing_family_evaluators={missing_evaluators}, "
+                f"stale_instance_evaluators={stale_instance_evaluators}, "
                 f"invalid_initial_policies={invalid_policies}, "
                 f"unexpected_abs={sorted(actual_abs - expected_abs)}, "
                 f"missing_abs={sorted(expected_abs - actual_abs)}, "
@@ -356,7 +349,7 @@ def sync_layout(
         "definition_files": sum(
             path.name in {ABS_DESCRIPTOR, DIFF_DESCRIPTOR} for path in expected
         ),
-        "evaluator_files": sum(path.name == EVALUATOR for path in expected),
+        "evaluator_files": sum(path.is_file() for path in family_evaluators),
         "initial_policies": len(expected_abs) + len(expected_diff),
     }
 
