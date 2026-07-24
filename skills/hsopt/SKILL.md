@@ -155,15 +155,15 @@ partition: cpu
 qos: normal
 nodes: 1
 gpus: 0
-cpus: 2
+cpus: 8
 memory: 64G
 Legate system memory: 61000 MiB
 ```
 
-Use the pinned cuPyNumeric/Legate 25.11 CPU build and configure one Legate CPU
-worker; the second Slurm CPU is available to the runtime. The 64 GB allocation
-supports the dense 14-qubit eigensolver's unitary, eigenvectors, and temporary
-workspace.
+Use the pinned cuPyNumeric/Legate 25.11 CPU build and configure seven Legate
+CPU workers; the eighth Slurm CPU is available to the runtime. This gives the
+64 GB dense-unitary allocation a conventional 8 GB/core shape while supporting
+the 14-qubit eigensolver's unitary, eigenvectors, and temporary workspace.
 
 The A100 validation/replay allocation uses `polar4`, `normal`, one 80 GB A100,
 2 CPUs, 16 GB of host memory, and a 60000 MiB Legate framebuffer. It runs the
@@ -240,7 +240,7 @@ uv run hsopt-supervisor \
   --threshold 15 --max-active-jobs 4 --mutation-workers 16 \
   --max-difference-tasks-per-batch 3 \
   --mutation-timeout-seconds 300 \
-  --partition cpu --qos normal --cpus 2 --memory 64G --walltime 24:00:00 \
+  --partition cpu --qos normal --cpus 8 --memory 64G --walltime 24:00:00 \
   --backend cupynumeric --accelerator cpu \
   --runtime-python /path/to/pinned/cupynumeric-cpu-25.11/bin/python
 ```
