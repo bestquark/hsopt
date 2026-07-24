@@ -138,9 +138,7 @@ def run_batch(
     shard_index: int,
     shard_count: int,
     max_steps: int,
-    bound_samples: int,
-    bound_seed: int,
-    bound_confidence: float,
+    include_exact_reference: bool,
 ) -> dict[str, Any]:
     """Run one deterministic shard, safely skipping sealed outputs."""
 
@@ -181,6 +179,7 @@ def run_batch(
                     == reference_error_hartree
                     and float(prior["instantiated_policy"]["total_error_target_hartree"])
                     == total_error_hartree
+                    and bool(prior.get("exact_reference")) == include_exact_reference
                 ):
                     skipped += 1
                     print(
@@ -202,9 +201,7 @@ def run_batch(
                 reference_error_hartree=reference_error_hartree,
                 total_error_hartree=total_error_hartree,
                 max_steps=max_steps,
-                bound_samples=bound_samples,
-                bound_seed=bound_seed,
-                bound_confidence=bound_confidence,
+                include_exact_reference=include_exact_reference,
             )
             result["dataset_key"] = key
             result["dataset_family"] = str(record["family"])
@@ -248,6 +245,7 @@ def run_batch(
         "target_time": target_time,
         "reference_error_hartree": reference_error_hartree,
         "total_error_hartree": total_error_hartree,
+        "includes_exact_reference": include_exact_reference,
         "shard_index": shard_index,
         "shard_count": shard_count,
         "assigned_problems": len(records),
@@ -263,7 +261,13 @@ def run_batch(
     return summary
 
 
-def audit_batch(manifest_path: Path, output_dir: Path) -> dict[str, Any]:
+def audit_batch(
+    manifest_path: Path,
+    output_dir: Path,
+    *,
+    expected_mode: str = "hamiltonian_bound",
+    require_exact_reference: bool = True,
+) -> dict[str, Any]:
     """Require one sealed source-matching result for every manifest row."""
 
     from hsopt.paper_baseline import verify_calibration
@@ -286,6 +290,10 @@ def audit_batch(manifest_path: Path, output_dir: Path) -> dict[str, Any]:
                 payload,
                 problem_path=Path(str(record["problem"])).resolve(),
             )
+            if str(payload["calibration_mode"]) != expected_mode:
+                raise ValueError(f"expected {expected_mode}, found {payload['calibration_mode']}")
+            if require_exact_reference and not isinstance(payload.get("exact_reference"), dict):
+                raise ValueError("production calibration is missing its exact reference")
         except (KeyError, TypeError, ValueError, json.JSONDecodeError) as exc:
             invalid.append(f"{label}: {exc}")
             continue
@@ -298,6 +306,8 @@ def audit_batch(manifest_path: Path, output_dir: Path) -> dict[str, Any]:
         "missing": missing,
         "invalid": invalid,
         "complete": not missing and not invalid,
+        "expected_mode": expected_mode,
+        "requires_exact_reference": require_exact_reference,
         "by_mode": {
             mode: sum(result["calibration_mode"] == mode for result in results)
             for mode in ("empirical_exact", "hamiltonian_bound")
@@ -407,7 +417,7 @@ def _parser() -> argparse.ArgumentParser:
     run.add_argument(
         "--mode",
         choices=("empirical_exact", "hamiltonian_bound"),
-        default="empirical_exact",
+        default="hamiltonian_bound",
     )
     run.add_argument("--target-time", type=float, default=1.0)
     run.add_argument(
@@ -423,9 +433,11 @@ def _parser() -> argparse.ArgumentParser:
     run.add_argument("--shard-index", type=int, default=0)
     run.add_argument("--shard-count", type=int, default=1)
     run.add_argument("--max-steps", type=int, default=1 << 20)
-    run.add_argument("--bound-samples", type=int, default=1_000_000)
-    run.add_argument("--bound-seed", type=int, default=1619152114)
-    run.add_argument("--bound-confidence", type=float, default=0.99)
+    run.add_argument(
+        "--without-exact-reference",
+        action="store_true",
+        help="prepare policies only; outputs cannot initialize a production campaign",
+    )
 
     audit = commands.add_parser("audit")
     audit.add_argument("manifest", type=Path)
@@ -459,9 +471,7 @@ def main() -> int:
             shard_index=args.shard_index,
             shard_count=args.shard_count,
             max_steps=args.max_steps,
-            bound_samples=args.bound_samples,
-            bound_seed=args.bound_seed,
-            bound_confidence=args.bound_confidence,
+            include_exact_reference=not args.without_exact_reference,
         )
     elif args.command == "audit":
         result = audit_batch(args.manifest, args.output_dir)

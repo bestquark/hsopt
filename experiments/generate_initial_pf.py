@@ -1,9 +1,9 @@
-"""Generate an immutable iteration-0 policy from calibrated paper data.
+"""Generate an immutable iteration-0 policy from paper-bound data.
 
-Heavy beta(H) calibration is deliberately separate from this renderer so that
-it can run once per unique Hamiltonian on CPU nodes.  This command verifies the
-calibration checksum and source-Hamiltonian checksum before embedding the
-fixed PF2/Strang policy in ``initial_pf.py``.
+The Hamiltonian-dependent beta(H) comes from the exact Pauli evaluation of the
+Reiher et al. supplement's Eq. (19) coefficient bound. This command verifies
+the sealed result and source-Hamiltonian checksum before embedding the fixed
+PF2/Strang policy in ``initial_pf.py``.
 """
 
 from __future__ import annotations
@@ -27,8 +27,8 @@ from hsopt.paper_baseline import (
 
 
 PAPER_CONTRACT: dict[str, Any] = {
-    "schema": 4,
-    "baseline_id": "reiher_wiebe_svore_wecker_troyer_2017_empirical_pf2",
+    "schema": 5,
+    "baseline_id": "reiher_wiebe_svore_wecker_troyer_2017_eq19_bound_pf2",
     "citation": {
         "authors": [
             "Markus Reiher",
@@ -50,6 +50,7 @@ PAPER_CONTRACT: dict[str, Any] = {
         "term_order_strategy": PAPER_TERM_ORDER,
         "rotation_synthesis": "clifford_plus_t_pygridsynth",
         "beta_reference_error_hartree": PAPER_BETA_REFERENCE_ERROR_HARTREE,
+        "beta_selection": "exact Eq. (19) Pauli double-commutator coefficient bound",
         "phase_estimation_alpha": PAPER_PHASE_ESTIMATION_ALPHA,
         "error_constraint": PAPER_ERROR_CONSTRAINT,
         "synthesis_energy_bound": "(2M - 1) * Delta_synth / step_time",
@@ -61,11 +62,10 @@ PAPER_CONTRACT: dict[str, Any] = {
         "allocation_cost": "direct PyGridSynth T counts; no gamma/delta fit",
     },
     "scope_note": (
-        "The default beta(H) is an empirical exact-energy calibration, as used "
-        "for the paper's tractable small-molecule observations. It is an "
-        "evaluation-oracle baseline, not a scalable unknown-energy procedure. "
-        "The optional Hamiltonian-bound calibration carries a different mode "
-        "and provenance in the generated policy."
+        "beta(H) is obtained from the paper's rigorous Eq. (19) "
+        "double-commutator coefficient bound for this Pauli decomposition. "
+        "The separately cached exact energy is used only by the evaluator and "
+        "does not enter beta, the Trotter step count, or the synthesis tolerance."
     ),
 }
 PAPER_CONTRACT_SHA256 = hashlib.sha256(
@@ -103,6 +103,8 @@ def _problem_paths(
 def _read_calibration(path: Path) -> dict[str, Any]:
     payload = json.loads(path.read_text(encoding="utf-8"))
     verify_calibration(payload)
+    if payload["calibration_mode"] != "hamiltonian_bound":
+        raise ValueError(f"{path}: expected canonical hamiltonian_bound calibration")
     return payload
 
 
@@ -112,6 +114,8 @@ def _calibration_catalog(root: Path) -> dict[str, tuple[Path, dict[str, Any]]]:
         try:
             payload = json.loads(path.read_text(encoding="utf-8"))
             verify_calibration(payload)
+            if payload["calibration_mode"] != "hamiltonian_bound":
+                continue
         except (KeyError, TypeError, ValueError, json.JSONDecodeError):
             continue
         problem_sha256 = str(payload["problem_sha256"])
@@ -139,6 +143,8 @@ def _policy_row(
     reaction_species_count: int,
 ) -> tuple[str, dict[str, Any]]:
     verify_calibration(calibration, problem_path=problem_path)
+    if calibration["calibration_mode"] != "hamiltonian_bound":
+        raise ValueError(f"{calibration_path}: not a Hamiltonian-bound baseline")
     if reaction_coefficient is None:
         policy = dict(calibration["instantiated_policy"])
     else:
@@ -178,6 +184,12 @@ def _policy_row(
             ),
             "reference_beta_error_hartree": float(
                 calibration["reference"]["reference_error_hartree"]
+            ),
+            "bound_method": str(calibration["reference"]["bound_method"]),
+            "bound_equation": str(calibration["reference"]["bound_equation"]),
+            "bound_term_count": int(calibration["reference"]["bound_term_count"]),
+            "double_commutator_sum_upper": float(
+                calibration["reference"]["double_commutator_sum_upper"]
             ),
         }
     )
@@ -270,7 +282,7 @@ Paper contract SHA-256: {PAPER_CONTRACT_SHA256}
 Generator: experiments/generate_initial_pf.py
 Paper: Reiher et al., PNAS 114, 7555-7560 (2017), DOI 10.1073/pnas.1619152114
 
-Paper structure: PF2/Strang, lexicographic order, molecule-specific beta(H),
+Paper structure: PF2/Strang, lexicographic order, Eq. (19) bound beta(H),
 the paper's Trotter/QPE/synthesis error relation, and uniform Clifford+T
 rotation tolerance.
 

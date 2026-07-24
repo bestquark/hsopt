@@ -7,10 +7,12 @@ The paper uses two different accuracy quantities that must not be conflated:
 * This benchmark uses ``1 kcal/mol`` as its total absolute-energy accuracy
   target.
 
-The default calibration is empirical and intentionally oracular: it computes
-the exact ground energy once, then finds the PF2 step count whose unsynthesized
-eigenphase reaches the paper's reference error.  The optional Hamiltonian-only
-mode estimates the paper's double-commutator bound without using E0.
+The production baseline computes the paper's Eq. (19) double-commutator
+coefficient bound exactly for the Pauli decomposition and obtains beta(H)
+without using E0.  It separately computes the exact reference once because
+the fixed evaluator needs that reference to score iteration 0 and later
+autoresearch proposals.  The exact energy never enters the bound-derived
+step count.
 """
 
 from __future__ import annotations
@@ -19,7 +21,6 @@ import argparse
 import hashlib
 import json
 import math
-import statistics
 import time
 from pathlib import Path
 from typing import Any, Mapping, Sequence
@@ -48,10 +49,8 @@ PAPER_ERROR_CONSTRAINT = "epsilon_TS + sqrt(epsilon_QPE^2 + epsilon_Rot^2) <= ep
 PAPER_TROTTER_SELECTION = (
     "empirical_exact_ground_branch_at_0.1_mHa_then_beta_sqrt_reference_over_allocated_trotter_error"
 )
-HAMILTONIAN_BOUND_SELECTION = (
-    "paper_double_commutator_bound_from_pauli_coefficients_without_exact_energy"
-)
-CALIBRATION_SCHEMA = 2
+HAMILTONIAN_BOUND_SELECTION = "paper_eq19_exact_pauli_double_commutator_bound_without_exact_energy"
+CALIBRATION_SCHEMA = 3
 ALLOCATION_GRID = (0.1, 0.3, 0.5, 0.7, 0.9)
 
 
@@ -76,10 +75,12 @@ def _calibration_signature(payload: Mapping[str, Any]) -> dict[str, Any]:
             "reference_trotter_number_beta",
             "exact_ground_energy_hartree",
             "double_commutator_sum_upper",
+            "double_commutator_sum_float",
             "bound_method",
-            "bound_samples",
-            "bound_seed",
-            "bound_confidence",
+            "bound_equation",
+            "bound_term_count",
+            "bound_ordered_triple_space",
+            "bound_roundoff_guard_relative",
         )
         if key in reference
     }
@@ -146,7 +147,21 @@ def verify_calibration(
             raise ValueError("empirical calibration exact-reference energy mismatch")
     elif mode == "hamiltonian_bound":
         if exact_reference is not None:
-            raise ValueError("Hamiltonian-only calibration must not contain an exact reference")
+            if not isinstance(exact_reference, Mapping):
+                raise ValueError("Hamiltonian-bound exact reference is malformed")
+            if exact_reference.get("observable") != "exact_unitary_ground_eigenphase":
+                raise ValueError("Hamiltonian-bound calibration has the wrong exact observable")
+            if exact_reference.get("problem_sha256") != payload.get("problem_sha256"):
+                raise ValueError(
+                    "Hamiltonian-bound calibration exact reference has the wrong problem hash"
+                )
+        reference = payload.get("reference")
+        if not isinstance(reference, Mapping):
+            raise ValueError("Hamiltonian-bound calibration is missing its reference data")
+        if reference.get("bound_method") != "exact_vectorized_pauli_sum":
+            raise ValueError("Hamiltonian-bound calibration is not the exact Eq. (19) sum")
+        if reference.get("exact_ground_energy_hartree") is not None:
+            raise ValueError("Hamiltonian-bound beta must not depend on an exact energy")
     else:
         raise ValueError("unknown paper-baseline calibration mode")
 
@@ -341,12 +356,15 @@ def _double_commutator_bound(
     problem: Mapping[str, Any],
     *,
     reference_error_hartree: float,
-    samples: int,
-    seed: int,
-    confidence: float,
-    exhaustive_triples: int,
 ) -> dict[str, Any]:
-    """Estimate the supplement's Eq. 19 using only Pauli-term metadata."""
+    """Compute the supplement's Eq. (19) bound exactly for Pauli terms.
+
+    For Pauli strings, ``[P_beta, P_alpha_prime]`` is nonzero exactly when
+    those strings anticommute.  The outer commutator is nonzero exactly when
+    ``P_alpha`` anticommutes with one, but not both, of those strings.  This
+    lets us sum the paper's ordered triples with matrix-vector products rather
+    than materializing ``M**3`` triples or estimating them by Monte Carlo.
+    """
 
     terms = sorted(problem["terms"], key=lambda term: str(term["label"]))
     coefficients = np.asarray(
@@ -356,72 +374,49 @@ def _double_commutator_bound(
     count = len(terms)
     anticommuting = _pauli_anticommutation_matrix([str(term["label"]) for term in terms])
 
-    def values(
-        alpha: np.ndarray,
-        beta: np.ndarray,
-        alpha_prime: np.ndarray,
-    ) -> np.ndarray:
-        ordering = ((alpha > beta) & (alpha_prime > beta)).astype(np.int8) + (
-            (beta > alpha) & (alpha_prime > alpha)
-        ).astype(np.int8)
-        inner_nonzero = anticommuting[beta, alpha_prime]
-        outer_nonzero = np.logical_xor(
-            anticommuting[alpha, beta],
-            anticommuting[alpha, alpha_prime],
-        )
-        return (
-            4.0
-            * coefficients[alpha]
-            * coefficients[beta]
-            * coefficients[alpha_prime]
-            * ordering
-            * inner_nonzero
-            * outer_nonzero
-        )
+    long_coefficients = coefficients.astype(np.longdouble)
+    contributions: list[np.longdouble] = []
+    for beta in range(count):
+        beta_coefficient = long_coefficients[beta]
 
-    triple_count = count**3
-    if triple_count <= exhaustive_triples:
-        total = 0.0
-        for alpha_value in range(count):
-            alpha = np.full(count * count, alpha_value, dtype=np.int64)
-            beta = np.repeat(np.arange(count, dtype=np.int64), count)
-            alpha_prime = np.tile(np.arange(count, dtype=np.int64), count)
-            total += float(values(alpha, beta, alpha_prime).sum())
-        estimate = total
-        standard_error = 0.0
-        upper = total
-        method = "exhaustive"
-        sample_count = triple_count
-    else:
-        if samples < 2:
-            raise ValueError("Hamiltonian-bound Monte Carlo requires at least two samples")
-        if not 0.5 < confidence < 1.0:
-            raise ValueError("bound confidence must lie strictly between 0.5 and 1")
-        rng = np.random.default_rng(seed)
-        running_sum = 0.0
-        running_square_sum = 0.0
-        remaining = int(samples)
-        while remaining:
-            size = min(remaining, 1_000_000)
-            alpha = rng.integers(0, count, size=size, dtype=np.int64)
-            beta = rng.integers(0, count, size=size, dtype=np.int64)
-            alpha_prime = rng.integers(0, count, size=size, dtype=np.int64)
-            chunk = values(alpha, beta, alpha_prime)
-            running_sum += float(chunk.sum())
-            running_square_sum += float(np.square(chunk).sum())
-            remaining -= size
-        mean = running_sum / samples
-        variance = max(
-            0.0,
-            (running_square_sum - samples * mean * mean) / (samples - 1),
-        )
-        standard_error_of_mean = math.sqrt(variance / samples)
-        z_score = statistics.NormalDist().inv_cdf(confidence)
-        estimate = triple_count * mean
-        standard_error = triple_count * standard_error_of_mean
-        upper = max(0.0, estimate + z_score * standard_error)
-        method = "uniform_monte_carlo_upper_confidence_estimate"
-        sample_count = int(samples)
+        # First Eq. (19) ordering term:
+        # delta_{alpha>beta} delta_{alpha_prime>beta}.
+        tail_coefficients = long_coefficients[beta + 1 :]
+        if tail_coefficients.size:
+            inner_weights = tail_coefficients * anticommuting[beta, beta + 1 :]
+            outer_nonzero = np.logical_xor(
+                anticommuting[beta + 1 :, beta, None],
+                anticommuting[beta + 1 :, beta + 1 :],
+            )
+            contributions.append(
+                np.longdouble(4.0)
+                * beta_coefficient
+                * np.dot(tail_coefficients, outer_nonzero @ inner_weights)
+            )
+
+        # Second Eq. (19) ordering term:
+        # delta_{beta>alpha} delta_{alpha_prime,alpha}.
+        if beta:
+            leading_coefficients = long_coefficients[:beta]
+            contributions.append(
+                np.longdouble(4.0)
+                * beta_coefficient
+                * np.dot(
+                    leading_coefficients * leading_coefficients,
+                    anticommuting[:beta, beta],
+                )
+            )
+
+    coefficient_sum = np.sum(np.asarray(contributions, dtype=np.longdouble))
+    # The scientific bound is already highly conservative.  Inflate the
+    # nonnegative floating-point sum by one part in 1e12, then round upward
+    # once more when converting to JSON's binary64 representation.
+    roundoff_guard_relative = np.longdouble("1e-12")
+    guarded = max(
+        np.longdouble(0.0),
+        coefficient_sum * (np.longdouble(1.0) + roundoff_guard_relative),
+    )
+    upper = math.nextafter(float(guarded), math.inf) if guarded > 0.0 else 0.0
 
     target_time = float(problem["target_time"])
     if upper <= 0.0:
@@ -436,12 +431,12 @@ def _double_commutator_bound(
         "reference_step_count": reference_steps,
         "reference_step_time": target_time / reference_steps,
         "reference_trotter_number_beta": float(beta),
-        "bound_method": method,
-        "bound_samples": sample_count,
-        "bound_seed": int(seed),
-        "bound_confidence": float(confidence),
-        "double_commutator_sum_estimate": float(estimate),
-        "double_commutator_sum_standard_error": float(standard_error),
+        "bound_method": "exact_vectorized_pauli_sum",
+        "bound_equation": "Reiher_et_al_PNAS_2017_supplement_Eq_19",
+        "bound_term_count": count,
+        "bound_ordered_triple_space": count**3,
+        "bound_roundoff_guard_relative": float(roundoff_guard_relative),
+        "double_commutator_sum_float": float(coefficient_sum),
         "double_commutator_sum_upper": float(upper),
         "exact_ground_energy_hartree": None,
     }
@@ -623,15 +618,12 @@ def calibrate_problem(
     problem_path: Path,
     *,
     backend: str,
-    mode: str = "empirical_exact",
+    mode: str = "hamiltonian_bound",
+    include_exact_reference: bool = True,
     target_time: float = 1.0,
     reference_error_hartree: float = PAPER_BETA_REFERENCE_ERROR_HARTREE,
     total_error_hartree: float = BENCHMARK_TOTAL_ERROR_HARTREE,
     max_steps: int = 1 << 20,
-    bound_samples: int = 1_000_000,
-    bound_seed: int = 1619152114,
-    bound_confidence: float = 0.99,
-    exhaustive_bound_triples: int = 5_000_000,
 ) -> dict[str, Any]:
     """Calibrate beta(H), allocate errors, and instantiate one immutable PF2."""
 
@@ -654,10 +646,16 @@ def calibrate_problem(
         raise ValueError("paper baseline error targets must be positive")
     backend_name, xp = array_backend(backend)
 
-    beta_started = time.perf_counter()
     exact_reference: dict[str, Any] | None = None
-    if mode == "empirical_exact":
+    exact_started = time.perf_counter()
+    if include_exact_reference:
         exact_reference = evaluate_exact_reference(path, backend=backend_name)
+    exact_reference_seconds = time.perf_counter() - exact_started
+
+    beta_started = time.perf_counter()
+    if mode == "empirical_exact":
+        if exact_reference is None:
+            raise ValueError("empirical_exact mode requires an exact reference")
         reference = _empirical_reference_beta(
             problem,
             exact_reference=exact_reference,
@@ -670,10 +668,6 @@ def calibrate_problem(
         reference = _double_commutator_bound(
             problem,
             reference_error_hartree=reference_error_hartree,
-            samples=bound_samples,
-            seed=bound_seed,
-            confidence=bound_confidence,
-            exhaustive_triples=exhaustive_bound_triples,
         )
     else:
         raise ValueError("mode must be 'empirical_exact' or 'hamiltonian_bound'")
@@ -717,6 +711,7 @@ def calibrate_problem(
         "instantiated_policy": policy,
         "allocation_search": allocation_search,
         "timing_seconds": {
+            "exact_reference": exact_reference_seconds,
             "beta_calibration": beta_seconds,
             "direct_allocation_search": allocation_seconds,
             "total": time.perf_counter() - started,
@@ -743,7 +738,15 @@ def main() -> int:
     parser.add_argument(
         "--mode",
         choices=("empirical_exact", "hamiltonian_bound"),
-        default="empirical_exact",
+        default="hamiltonian_bound",
+    )
+    parser.add_argument(
+        "--without-exact-reference",
+        action="store_true",
+        help=(
+            "derive the initial PF without E0; this output cannot initialize an "
+            "autoresearch campaign until an exact evaluator reference is supplied"
+        ),
     )
     parser.add_argument("--target-time", type=float, default=1.0)
     parser.add_argument(
@@ -757,22 +760,17 @@ def main() -> int:
         default=BENCHMARK_TOTAL_ERROR_HARTREE,
     )
     parser.add_argument("--max-steps", type=int, default=1 << 20)
-    parser.add_argument("--bound-samples", type=int, default=1_000_000)
-    parser.add_argument("--bound-seed", type=int, default=1619152114)
-    parser.add_argument("--bound-confidence", type=float, default=0.99)
     parser.add_argument("--check", action="store_true")
     args = parser.parse_args()
     result = calibrate_problem(
         args.problem,
         backend=args.backend,
         mode=args.mode,
+        include_exact_reference=not args.without_exact_reference,
         target_time=args.target_time,
         reference_error_hartree=args.reference_error_hartree,
         total_error_hartree=args.total_error_hartree,
         max_steps=args.max_steps,
-        bound_samples=args.bound_samples,
-        bound_seed=args.bound_seed,
-        bound_confidence=args.bound_confidence,
     )
     encoded = json.dumps(result, indent=2, sort_keys=True) + "\n"
     if args.check:

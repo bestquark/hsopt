@@ -140,11 +140,12 @@ remain external datasets supplied to `hsopt-campaign`.
 
 Every optimization lane follows the same order:
 
-1. Calibrate the paper baseline once per unique Hamiltonian. The empirical
-   calibration constructs $U_{\mathrm{exact}}$, caches its exact reference,
-   measures the molecule-specific $\beta(H)$ at the paper's $0.1$ mHa
-   reference error, and directly allocates a $1$ kcal/mol Trotter/QPE/
-   synthesis budget using PyGridSynth T counts.
+1. Prepare the paper baseline once per unique Hamiltonian. Compute the
+   supplement's Eq. (19) Pauli double-commutator coefficient bound exactly,
+   derive $\beta(H)$ at the paper's $0.1$ mHa reference error without using
+   $E_{\mathrm{exact}}$, and directly allocate a $1$ kcal/mol Trotter/QPE/
+   synthesis budget using PyGridSynth T counts. Separately compute and cache
+   $U_{\mathrm{exact}}$ once for evaluator reuse.
 2. Evaluate the generated paper baseline unchanged as iteration 0.
 3. Run iterations 1--50 sequentially, retaining every proposal, evaluator
    result, and accept/reject decision.
@@ -170,32 +171,33 @@ shards, and require a complete sealed result set:
 uv run hsopt-paper-baseline-batch build-manifest \
   --abs-inputs "$HSOPT_DATA_ROOT/exact/inputs-v2/abs_energy" \
   --reaction-inputs "$HSOPT_DATA_ROOT/exact/inputs-v1/diff_energy" \
-  --output "$HSOPT_DATA_ROOT/exact/calibration-v1/manifest.json"
+  --output "$HSOPT_DATA_ROOT/exact/baseline-bound-v1/manifest.json"
 
 for shard in 0 1 2 3; do
   uv run hsopt-paper-baseline-batch run \
-    "$HSOPT_DATA_ROOT/exact/calibration-v1/manifest.json" \
-    --output-dir "$HSOPT_DATA_ROOT/exact/calibration-v1/results" \
-    --backend numpy --mode empirical_exact \
+    "$HSOPT_DATA_ROOT/exact/baseline-bound-v1/manifest.json" \
+    --output-dir "$HSOPT_DATA_ROOT/exact/baseline-bound-v1/results" \
+    --backend numpy --mode hamiltonian_bound \
     --shard-index "$shard" --shard-count 4
 done
 
 uv run hsopt-paper-baseline-batch audit \
-  "$HSOPT_DATA_ROOT/exact/calibration-v1/manifest.json" \
-  --output-dir "$HSOPT_DATA_ROOT/exact/calibration-v1/results"
+  "$HSOPT_DATA_ROOT/exact/baseline-bound-v1/manifest.json" \
+  --output-dir "$HSOPT_DATA_ROOT/exact/baseline-bound-v1/results"
 
 uv run hsopt-paper-baseline-batch generate \
-  "$HSOPT_DATA_ROOT/exact/calibration-v1/manifest.json" \
-  --calibration-dir "$HSOPT_DATA_ROOT/exact/calibration-v1/results" \
-  --output-dir "$HSOPT_DATA_ROOT/exact/calibration-v1/initial-policies" \
+  "$HSOPT_DATA_ROOT/exact/baseline-bound-v1/manifest.json" \
+  --calibration-dir "$HSOPT_DATA_ROOT/exact/baseline-bound-v1/results" \
+  --output-dir "$HSOPT_DATA_ROOT/exact/baseline-bound-v1/initial-policies" \
   --generator experiments/generate_initial_pf.py
 ```
 
 On NVPark, run each shard as a separate job on the `cpu` partition with no
-GPU request. The command is resumable: a sealed source-matching calibration is
-verified and skipped. The optional `--mode hamiltonian_bound` computes the
-paper's double-commutator coefficient bound without $E_0$, but it is not the
-baseline used for this campaign.
+GPU request. The command is resumable: a sealed source-matching result is
+verified and skipped. `hamiltonian_bound` is the canonical baseline: it
+computes the complete Eq. (19) Pauli coefficient sum, not a Monte Carlo
+estimate. The same pass caches one exact reference solely for evaluator reuse;
+that energy does not enter $\beta(H)$.
 The final command refuses incomplete calibration sets and writes a checksummed
 index for the 91 absolute-energy and 10 reaction initializers.
 
@@ -203,7 +205,7 @@ index for the 91 absolute-energy and 10 reaction initializers.
 uv run hsopt-campaign initialize \
   --hamlib-inputs "$HSOPT_DATA_ROOT/exact/inputs-v2/abs_energy" \
   --reaction-inputs "$HSOPT_DATA_ROOT/exact/inputs-v1/diff_energy" \
-  --calibration-root "$HSOPT_DATA_ROOT/exact/calibration-v1/results" \
+  --calibration-root "$HSOPT_DATA_ROOT/exact/baseline-bound-v1/results" \
   --generator experiments/generate_initial_pf.py \
   --campaign-root "$HSOPT_DATA_ROOT/exact/production-cpu91-v1" \
   --hamlib-replicates 5 \
@@ -236,7 +238,7 @@ and virtual environments outside the repository.
 | `hsopt` / `hsopt-loop` | Initialize, reconcile, inspect, propose, or replay one sequential lane |
 | `hsopt-exact` | Enqueue exact references and candidates, prepare batches, run them, and merge results |
 | `hsopt-layout` | Verify or regenerate the checked-in 91-Hamiltonian/10-reaction directory layout |
-| `hsopt-paper-baseline` | Calibrate one empirical or Hamiltonian-bound PF2 baseline |
+| `hsopt-paper-baseline` | Prepare one Eq. (19) bound-derived PF2 baseline and exact reference |
 | `hsopt-paper-baseline-batch` | Build, run, and audit resumable calibration shards |
 | `hsopt-campaign` | Prepare external inputs and initialize the complete lane grid |
 | `hsopt-supervisor` | Persistently coordinate mutation, batching, recovery, export, and reports |

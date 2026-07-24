@@ -13,12 +13,13 @@ submission or Slurm diagnosis.
 
 Every production lane must follow these stages:
 
-1. Run empirical paper-baseline calibration once for each distinct
-   Hamiltonian. It constructs and diagonalizes `U_exact = exp(+i H t)`, caches
-   the resulting exact eigenphase energy and deterministic target state, and
-   measures the Hamiltonian-dependent PF2 Trotter number. Five HamLib replicas
-   reuse one reference per instance; reaction references are assembled from
-   the already-calibrated species without another eigensolve.
+1. Prepare the paper baseline once for each distinct Hamiltonian. Compute the
+   supplement's Eq. (19) double-commutator coefficient sum exactly for the
+   Pauli decomposition and derive the Hamiltonian-dependent PF2 Trotter number
+   without using `E_exact`. Separately construct and diagonalize
+   `U_exact = exp(+i H t)` exactly once for evaluator reuse. Five HamLib
+   replicas share one reference per instance; reaction references are
+   assembled from the prepared species without another eigensolve.
 2. Measure the generated paper policy unchanged as iteration 0 against that
    cached reference.
 3. Permit OpenCode mutations only after iteration 0 passes. Mutations are
@@ -33,11 +34,12 @@ are not acceptance metrics.
 `experiments/generate_initial_pf.py` is the sole generator of `initial_pf.py`.
 It requires sealed calibration data and embeds the
 Reiher--Wiebe--Svore--Wecker--Troyer citation, lexicographic PF2/Strang
-structure, empirical `beta(H)` referenced to 0.1 mHa, `t=1`, the resulting
-step count and step time, and the direct PyGridSynth tolerance selected under
-the paper's Trotter/QPE/rotation-error relation with a 1 kcal/mol total target.
-The optional Hamiltonian-only double-commutator bound has explicit provenance
-and is not the campaign baseline.
+structure, Eq. (19) bound-derived `beta(H)` referenced to 0.1 mHa, `t=1`, the
+resulting step count and step time, and the direct PyGridSynth tolerance
+selected under the paper's Trotter/QPE/rotation-error relation with a
+1 kcal/mol total target.
+The exact reference is an evaluation oracle only; it must not affect
+`beta(H)`, the step count, or the synthesis tolerance.
 
 Never invent or hand-edit an initializer. Never mutate `initial_pf.py`, and do
 not create an in-tree `optimized_pf.py`. A lane's mutable `candidate.py` and

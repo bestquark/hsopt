@@ -13,9 +13,11 @@ The checked-in benchmark surface has exactly two families:
 `generate_initial_pf.py` is the single immutable iteration-0 policy generator
 for both families. It verifies sealed per-Hamiltonian calibration records and
 embeds the Reiher--Wiebe--Svore--Wecker--Troyer PF2 baseline: lexicographic
-Strang ordering, empirically calibrated $\beta(H)$, $t=1$, the resulting
-step count and $\Delta t$, and a directly synthesized uniform rotation
-tolerance. There is no second baseline-definition folder to keep in sync.
+Strang ordering, Eq. (19) double-commutator-bound $\beta(H)$, $t=1$, the
+resulting step count and $\Delta t$, and a directly synthesized uniform
+rotation tolerance. The exact energy is cached separately for evaluation and
+does not enter this initializer. There is no second baseline-definition folder
+to keep in sync.
 
 Run `uv run hsopt-layout --check` to prove that the 91 + 10 visible directories
 match their compact registries and source checksums exactly. Run

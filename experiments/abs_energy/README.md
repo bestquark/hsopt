@@ -17,7 +17,7 @@ the canonical dense evaluator through 14 qubits:
 `inputs/hamlib_zip_sha256.txt` pins the upstream HamLib archives. Running
 `hsopt-campaign prepare-hamlib --max-qubits 14` materializes the 91 compact
 Hamiltonian JSON files under an external input directory. Campaign
-calibration first computes one sealed empirical $\beta(H)$ and exact
+baseline preparation first computes one sealed Eq. (19) bound $\beta(H)$ and exact
 reference per Hamiltonian on CPU nodes. Campaign initialization then runs
 `experiments/generate_initial_pf.py` once for each Hamiltonian and creates five
 mutation lanes that reuse that same exact reference.

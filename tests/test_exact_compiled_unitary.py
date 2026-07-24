@@ -29,7 +29,7 @@ from hsopt.compiled_unitary import (
     load_policy,
     load_problem,
 )
-from hsopt.paper_baseline import calibrate_problem
+from hsopt.paper_baseline import _double_commutator_bound, calibrate_problem
 from hsopt.repository_layout import sync_layout
 
 
@@ -108,7 +108,7 @@ def test_initial_policy_is_exactly_generated_from_paper_baseline(
         calibration = calibrate_problem(
             problem_path,
             backend="numpy",
-            mode="empirical_exact",
+            mode="hamiltonian_bound",
             target_time=1.0,
         )
         (calibration_root / f"{index:03d}.json").write_text(
@@ -132,6 +132,67 @@ def test_initial_policy_is_exactly_generated_from_paper_baseline(
     assert "DOI 10.1073/pnas.1619152114" in generated
     assert "separately cached U_exact reference" in generated
     assert not (output.parent / "optimized_pf.py").exists()
+
+
+def test_eq19_pauli_bound_matches_direct_ordered_triple_sum() -> None:
+    problem = {
+        "target_time": 1.0,
+        "terms": [
+            {"label": "XI", "coefficient": 0.25},
+            {"label": "IZ", "coefficient": -0.5},
+            {"label": "XX", "coefficient": 0.75},
+            {"label": "YY", "coefficient": -0.125},
+        ],
+    }
+    terms = sorted(problem["terms"], key=lambda term: str(term["label"]))
+
+    def anticommutes(left: str, right: str) -> bool:
+        mismatches = sum(a != b and a != "I" and b != "I" for a, b in zip(left, right, strict=True))
+        return bool(mismatches % 2)
+
+    expected_terms: list[float] = []
+    for alpha, left in enumerate(terms):
+        for beta, middle in enumerate(terms):
+            for alpha_prime, right in enumerate(terms):
+                ordering = int(alpha > beta and alpha_prime > beta) + int(
+                    beta > alpha and alpha_prime == alpha
+                )
+                inner = anticommutes(str(middle["label"]), str(right["label"]))
+                outer = anticommutes(str(left["label"]), str(middle["label"])) != anticommutes(
+                    str(left["label"]), str(right["label"])
+                )
+                if ordering and inner and outer:
+                    expected_terms.append(
+                        4.0
+                        * abs(float(left["coefficient"]))
+                        * abs(float(middle["coefficient"]))
+                        * abs(float(right["coefficient"]))
+                        * ordering
+                    )
+    expected = sum(expected_terms)
+    result = _double_commutator_bound(
+        problem,
+        reference_error_hartree=1.0e-4,
+    )
+
+    assert result["bound_method"] == "exact_vectorized_pauli_sum"
+    assert result["double_commutator_sum_float"] == pytest.approx(expected)
+    assert result["double_commutator_sum_upper"] >= expected
+    assert result["reference_trotter_number_beta"] == pytest.approx(
+        np.sqrt(result["double_commutator_sum_upper"] / 1.0e-4)
+    )
+
+
+def test_bound_beta_is_independent_of_the_cached_exact_reference() -> None:
+    calibration = calibrate_problem(
+        ABSOLUTE / "hamiltonian.json",
+        backend="numpy",
+    )
+
+    assert calibration["calibration_mode"] == "hamiltonian_bound"
+    assert calibration["reference"]["exact_ground_energy_hartree"] is None
+    assert calibration["exact_reference"]["observable"] == "exact_unitary_ground_eigenphase"
+    assert calibration["timing_seconds"]["exact_reference"] >= 0.0
 
 
 def test_pygridsynth_compilation_is_reproducible_and_within_tolerance() -> None:
@@ -394,12 +455,12 @@ def test_absolute_baseline_uses_cached_exact_reference_and_compiled_eigenphase(
     assert result["evaluation_contract_version"] == EVALUATION_CONTRACT_VERSION
     assert result["observable"] == "compiled_unitary_lowest_hf_accessible_eigenphase"
     assert result["exact_ground_energy_hartree"] == pytest.approx(-1.144979079498297)
-    assert result["compiled_pf_energy_hartree"] == pytest.approx(-1.1444310142762317)
+    assert result["compiled_pf_energy_hartree"] == pytest.approx(-1.1449578985211235)
     assert result["passes_chemical_accuracy"] is True
     assert result["formula_order"] == 2
-    assert result["n_steps"] == 2
+    assert result["n_steps"] == 30
     assert result["policy"]["term_order_strategy"] == "lexicographic"
-    assert result["t_count"] == 3_068
+    assert result["t_count"] == 53_220
     assert result["per_attempt_t_count"] == result["t_count"]
     assert result["qpe_repetitions"] == 1
     assert result["qpe_target_confidence"] == QPE_TARGET_CONFIDENCE
@@ -410,7 +471,7 @@ def test_absolute_baseline_uses_cached_exact_reference_and_compiled_eigenphase(
     assert result["timing_seconds"]["compiled_unitary_build"] > 0.0
     assert result["timing_seconds"]["compiled_unitary_eigensolve"] > 0.0
     assert result["rotation_fence_interval"] == 32
-    assert result["qpe_success_probability_from_hf"] == pytest.approx(0.9884325016034219)
+    assert result["qpe_success_probability_from_hf"] == pytest.approx(0.9890347908295765)
     assert all("gate_string" not in row for row in result["unique_compilations"])
     assert all(len(row["gate_string_sha256"]) == 64 for row in result["unique_compilations"])
 

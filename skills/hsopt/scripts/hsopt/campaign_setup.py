@@ -81,17 +81,17 @@ def _calibrated_exact_reference(
     source: Path,
     catalog: dict[str, dict[str, Any]],
 ) -> dict[str, Any]:
-    """Return the one exact reference computed by empirical beta calibration."""
+    """Return the exact reference stored beside the bound-derived baseline."""
 
     digest = _sha256(source)
     if digest not in catalog:
         raise ValueError(f"no calibration for {source} (SHA-256 {digest})")
     calibration = catalog[digest]
     verify_calibration(calibration, problem_path=source)
-    if calibration.get("calibration_mode") != "empirical_exact":
+    if calibration.get("calibration_mode") != "hamiltonian_bound":
         raise ValueError(
-            f"{source}: campaign initialization currently requires empirical_exact "
-            "calibration because the evaluator needs a cached exact reference"
+            f"{source}: campaign initialization requires the canonical "
+            "hamiltonian_bound baseline calibration"
         )
     reference = calibration.get("exact_reference")
     if not isinstance(reference, dict):

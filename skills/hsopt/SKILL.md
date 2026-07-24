@@ -19,17 +19,16 @@ runtime's dependencies and CLI entry points are available.
 
 A production campaign has three strictly ordered stages:
 
-1. **Paper calibration and exact reference:** run
-   `hsopt-paper-baseline-batch` once for each unique Hamiltonian. The empirical
-   mode constructs and diagonalizes `U_exact = exp(+i H t)`, caches `E_exact`
-   and a normalized deterministic-anchor projection onto the complete
-   fixed-electron ground eigenspace, then follows that branch while calibrating
-   the molecule-specific PF2 Trotter number at the paper's 0.1 mHa reference
-   error. Prefer the Hartree--Fock determinant as the anchor; if its ground
-   support is below the fixed threshold, use the lowest-index fixed-electron
-   determinant with resolvable ground support. This projection is
-   basis-independent even when the ground energy is degenerate; never use an
-   arbitrary eigensolver basis vector from a degenerate subspace.
+1. **Paper bound and exact reference:** run `hsopt-paper-baseline-batch` once
+   for each unique Hamiltonian. Compute the supplement's Eq. (19)
+   double-commutator coefficient sum exactly for the Pauli decomposition and
+   derive the molecule-specific PF2 Trotter number at the paper's 0.1 mHa
+   reference error without using `E_exact`. Separately construct and
+   diagonalize `U_exact = exp(+i H t)` once, caching `E_exact` and a normalized
+   deterministic-anchor projection onto the complete fixed-electron ground
+   eigenspace for the evaluator. Prefer the Hartree--Fock determinant as the
+   anchor; if its ground support is below the fixed threshold, use the
+   lowest-index fixed-electron determinant with resolvable ground support.
 2. **Iteration 0:** evaluate the immutable paper baseline against the cached
    exact reference. This is a measurement, not a mutation.
 3. **Iterations 1–50:** mutate the current external incumbent, evaluate the
@@ -37,7 +36,7 @@ A production campaign has three strictly ordered stages:
    feasible strict T-count improvement.
 
 Never let campaign initialization or a candidate recompute `U_exact`: reuse
-the exact reference embedded in the sealed empirical calibration. Never start
+the exact reference embedded beside the sealed bound result. Never start
 mutations before iteration 0 succeeds. Five HamLib replicates share one exact
 reference per instance; reaction references are assembled from the
 already-calibrated species and shared by both policy lanes.
@@ -53,15 +52,16 @@ The checked-in paper contract records:
 - the Reiher, Wiebe, Svore, Wecker, and Troyer PNAS 2017 citation;
 - symmetric second-order Trotter--Suzuki structure, never a PF1/PF2 choice;
 - lexicographic term ordering;
-- empirical `beta(H)` referenced to the paper's 0.1 mHa calibration error;
+- Eq. (19) double-commutator-bound `beta(H)` referenced to 0.1 mHa;
 - `t=1`, the resulting integer step count and step time;
 - direct PyGridSynth T counts used to select a uniform synthesis tolerance
   under the paper's Trotter/QPE/rotation error relation, with a 1 kcal/mol
   benchmark target and no fitted gamma/delta constants.
 
-The optional `hamiltonian_bound` calibration estimates the paper's
-double-commutator coefficient bound without using `E_exact`. Keep its mode and
-provenance explicit; the current campaign baseline is `empirical_exact`.
+The current campaign baseline is `hamiltonian_bound`. It evaluates the full
+nonnegative Eq. (19) Pauli sum deterministically; it does not substitute a
+Monte Carlo estimate. The exact reference stored in the same sealed record is
+used only for later evaluation and cannot influence the initial policy.
 
 `initial_pf.py` is immutable. Do not create or mutate an in-tree
 `optimized_pf.py`. External lane directories contain `candidate.py`,
@@ -194,22 +194,22 @@ and jointly compute each unique Hamiltonian exactly once:
 uv run hsopt-paper-baseline-batch build-manifest \
   --abs-inputs "$HSOPT_DATA_ROOT/exact/inputs-v2/abs_energy" \
   --reaction-inputs "$HSOPT_DATA_ROOT/exact/inputs-v1/diff_energy" \
-  --output "$HSOPT_DATA_ROOT/exact/calibration-v1/manifest.json"
+  --output "$HSOPT_DATA_ROOT/exact/baseline-bound-v1/manifest.json"
 
 uv run hsopt-paper-baseline-batch run \
-  "$HSOPT_DATA_ROOT/exact/calibration-v1/manifest.json" \
-  --output-dir "$HSOPT_DATA_ROOT/exact/calibration-v1/results" \
-  --backend numpy --mode empirical_exact \
+  "$HSOPT_DATA_ROOT/exact/baseline-bound-v1/manifest.json" \
+  --output-dir "$HSOPT_DATA_ROOT/exact/baseline-bound-v1/results" \
+  --backend numpy --mode hamiltonian_bound \
   --shard-index 0 --shard-count 4
 
 uv run hsopt-paper-baseline-batch audit \
-  "$HSOPT_DATA_ROOT/exact/calibration-v1/manifest.json" \
-  --output-dir "$HSOPT_DATA_ROOT/exact/calibration-v1/results"
+  "$HSOPT_DATA_ROOT/exact/baseline-bound-v1/manifest.json" \
+  --output-dir "$HSOPT_DATA_ROOT/exact/baseline-bound-v1/results"
 
 uv run hsopt-paper-baseline-batch generate \
-  "$HSOPT_DATA_ROOT/exact/calibration-v1/manifest.json" \
-  --calibration-dir "$HSOPT_DATA_ROOT/exact/calibration-v1/results" \
-  --output-dir "$HSOPT_DATA_ROOT/exact/calibration-v1/initial-policies" \
+  "$HSOPT_DATA_ROOT/exact/baseline-bound-v1/manifest.json" \
+  --calibration-dir "$HSOPT_DATA_ROOT/exact/baseline-bound-v1/results" \
+  --output-dir "$HSOPT_DATA_ROOT/exact/baseline-bound-v1/initial-policies" \
   --generator experiments/generate_initial_pf.py
 ```
 
@@ -219,7 +219,7 @@ Initialize a fresh external campaign only after all four shards pass audit:
 uv run hsopt-campaign initialize \
   --hamlib-inputs "$HSOPT_DATA_ROOT/exact/inputs-v2/abs_energy" \
   --reaction-inputs "$HSOPT_DATA_ROOT/exact/inputs-v1/diff_energy" \
-  --calibration-root "$HSOPT_DATA_ROOT/exact/calibration-v1/results" \
+  --calibration-root "$HSOPT_DATA_ROOT/exact/baseline-bound-v1/results" \
   --generator experiments/generate_initial_pf.py \
   --campaign-root "$HSOPT_DATA_ROOT/exact/production-cpu91-v1" \
   --hamlib-replicates 5 --iterations 50
@@ -247,7 +247,7 @@ run the replay supervisor with:
 uv run hsopt-campaign initialize \
   --hamlib-inputs "$HSOPT_DATA_ROOT/exact/inputs-v2/abs_energy" \
   --reaction-inputs "$HSOPT_DATA_ROOT/exact/inputs-v1/diff_energy" \
-  --calibration-root "$HSOPT_DATA_ROOT/exact/calibration-v1/results" \
+  --calibration-root "$HSOPT_DATA_ROOT/exact/baseline-bound-v1/results" \
   --generator experiments/generate_initial_pf.py \
   --campaign-root "$HSOPT_DATA_ROOT/exact/production-gpu91-v2" \
   --hamlib-replicates 5 --iterations 50
