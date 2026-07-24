@@ -25,17 +25,17 @@ $U_{\mathrm{PF}}$.
 
 The evaluator diagonalizes $U_{\mathrm{PF}}$, unwraps its eigenphases into
 energies, and selects the lowest-energy peak with numerically resolved HF
-weight $p_{\mathrm{HF}}$. If one QPE attempt costs $T_{\mathrm{raw}}$, the number of
+weight $p_{\mathrm{HF}}$. If $p_{\mathrm{HF}}=1$, one QPE attempt is
+sufficient, so $R_{95}=1$. For $0<p_{\mathrm{HF}}<1$, the number of
 independent attempts required to observe that peak with 95% confidence is
 
 ```math
 R_{95} =
-\begin{cases}
-1, & p_{\mathrm{HF}}=1, \\
-\left\lceil \dfrac{\log(0.05)}{\log\left(1-p_{\mathrm{HF}}\right)} \right\rceil,
-& 0<p_{\mathrm{HF}}<1,
-\end{cases}
-\qquad T_{95} = R_{95}T_{\mathrm{raw}}.
+\left\lceil
+\frac{\log(0.05)}{\log\left(1-p_{\mathrm{HF}}\right)}
+\right\rceil,
+\qquad
+T_{95}=R_{95}T_{\mathrm{raw}}.
 ```
 
 A molecular candidate is feasible when
