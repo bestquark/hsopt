@@ -73,10 +73,9 @@ Mutation loop:
 1. Edit only `{repo_relative(lane.editable_script)}` unless the user explicitly changes scope.
 2. Inspect the editable product-formula API before editing. Prefer one coherent
    Hamiltonian-aware mutation:
-   - structured synthesis precision in `choose_synthesis_epsilon(term, alpha, step_index, config)`
-   - term ordering/grouping when the method exposes `term_order_strategy`,
-     `order_product_formula_terms`, or an equivalent local hook
-   - PF order/step-count changes only when the error budget indicates PF error is limiting
+   - structured synthesis precision in `ProductFormula.synthesis_epsilon(term, angle)`
+   - term ordering, grouping, or recurrence changes in `ProductFormula.build_step`
+   - repetition changes in `ProductFormula.repetitions`
 3. Score it with:
    `{eval_command}`
 4. Read the JSON result before choosing the next mutation.
@@ -85,15 +84,14 @@ Mutation loop:
 6. Keep campaign history in the external run directory used by the caller. The simplified `pfs/` tree contains only benchmark definitions and fixed evaluators.
 
 Product-formula search guidance:
-- `choose_synthesis_epsilon` usually receives Hamiltonian term metadata such as
+- `synthesis_epsilon` receives Hamiltonian term metadata such as
   Pauli label, coefficient, support size, and Pauli-family counts, plus the
-  actual per-application rotation coefficient `alpha`. Use those fields to
+  actual per-application rotation angle. Use those fields to
   allocate looser precision to low-impact rotations and tighter precision where
   accuracy is likely to matter.
-- The ordering and synthesis tolerances are search variables, not a fixed menu.
-  The policy may use any deterministic ordering, a recorded seeded-random
-  schedule, randomized Trotterization, qDRIFT, or a custom explicit schedule
-  when the lane exposes the corresponding hook.
+- The rotation schedule returned by `build_step` defines the formula. The
+  policy may use any deterministic ordering, higher-order composition,
+  grouping, or custom explicit stationary schedule.
 - Do not drop terms, change Hamiltonian coefficients, or edit evaluator code.
   Record every seed and keep the policy small enough to audit and reproduce.
 """

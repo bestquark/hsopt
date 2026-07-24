@@ -8,15 +8,13 @@ backend, normally cuPyNumeric on an NVIDIA GPU.
 
 from __future__ import annotations
 
+import ast
 import hashlib
-import importlib.util
 import json
 import math
-import sys
 import time
 import warnings
 from collections import Counter
-from dataclasses import asdict, is_dataclass
 from functools import lru_cache
 from pathlib import Path
 from types import ModuleType
@@ -39,6 +37,7 @@ DENSE_EVALUATOR_MAX_QUBITS = 15
 ROTATION_CHUNK_TARGET_BYTES = 1024**3
 DEFERRED_ROTATION_TARGET_BYTES = 8 * 1024**3
 MAX_ROTATIONS_BETWEEN_FENCES = 32
+MAX_POLICY_ROTATIONS_PER_TERM = 16
 _PAULIS = {
     "I": np.eye(2, dtype=np.complex128),
     "X": np.asarray([[0.0, 1.0], [1.0, 0.0]], dtype=np.complex128),
@@ -48,6 +47,30 @@ _PAULIS = {
 _H = _PAULIS["X"] + _PAULIS["Z"]
 _H /= math.sqrt(2.0)
 _S_DAGGER = np.asarray([[1.0, 0.0], [0.0, -1.0j]], dtype=np.complex128)
+_SAFE_POLICY_BUILTINS = {
+    "__build_class__": __build_class__,
+    "abs": abs,
+    "all": all,
+    "any": any,
+    "bool": bool,
+    "dict": dict,
+    "enumerate": enumerate,
+    "float": float,
+    "int": int,
+    "len": len,
+    "list": list,
+    "max": max,
+    "min": min,
+    "object": object,
+    "range": range,
+    "reversed": reversed,
+    "round": round,
+    "sorted": sorted,
+    "str": str,
+    "sum": sum,
+    "tuple": tuple,
+    "zip": zip,
+}
 
 
 def array_backend(name: str) -> tuple[str, Any]:
@@ -89,20 +112,108 @@ def _rotation_fence_interval(dimension: int) -> int:
     )
 
 
-def load_policy(path: Path) -> ModuleType:
-    """Load one isolated product-formula policy module."""
+def validate_policy_source(path: Path) -> ast.Module:
+    """Validate the pure-Python policy language before executing a candidate."""
 
     path = path.resolve()
+    tree = ast.parse(path.read_text(encoding="utf-8"), filename=str(path))
+    product_formula_classes = [
+        node
+        for node in tree.body
+        if isinstance(node, ast.ClassDef) and node.name == "ProductFormula"
+    ]
+    if len(product_formula_classes) != 1:
+        raise ValueError(f"{path.name} must define exactly one ProductFormula class")
+
+    for node in tree.body:
+        if isinstance(node, ast.Expr) and isinstance(node.value, ast.Constant):
+            if isinstance(node.value.value, str):
+                continue
+        if isinstance(node, (ast.Assign, ast.AnnAssign)):
+            if any(isinstance(child, (ast.Call, ast.Attribute)) for child in ast.walk(node)):
+                raise ValueError(f"{path.name} top-level constants must be literal data")
+            continue
+        if isinstance(node, ast.ClassDef) and node.name == "ProductFormula":
+            if node.bases or node.keywords or node.decorator_list:
+                raise ValueError("ProductFormula cannot inherit from or decorate another class")
+            continue
+        raise ValueError(
+            f"{path.name} may contain only a docstring, literal constants, "
+            "and the ProductFormula class"
+        )
+
+    forbidden_nodes = (
+        ast.AsyncFunctionDef,
+        ast.Await,
+        ast.Delete,
+        ast.Global,
+        ast.Import,
+        ast.ImportFrom,
+        ast.AsyncFor,
+        ast.AsyncWith,
+        ast.Nonlocal,
+        ast.Yield,
+        ast.YieldFrom,
+    )
+    forbidden_names = {
+        "__import__",
+        "breakpoint",
+        "compile",
+        "delattr",
+        "dir",
+        "eval",
+        "exec",
+        "getattr",
+        "globals",
+        "help",
+        "input",
+        "locals",
+        "open",
+        "setattr",
+        "super",
+        "type",
+        "vars",
+    }
+    for node in ast.walk(tree):
+        if isinstance(node, forbidden_nodes):
+            raise ValueError(f"{path.name} contains unsupported syntax: {type(node).__name__}")
+        if isinstance(node, ast.Name) and node.id in forbidden_names:
+            raise ValueError(f"{path.name} uses forbidden name {node.id!r}")
+        if isinstance(node, ast.Name) and node.id.startswith("__"):
+            raise ValueError(f"{path.name} cannot access interpreter internals")
+        if isinstance(node, ast.Attribute) and node.attr.startswith("_"):
+            raise ValueError(f"{path.name} cannot access private attributes")
+
+    policy_class = product_formula_classes[0]
+    methods = {node.name for node in policy_class.body if isinstance(node, ast.FunctionDef)}
+    required = {"__init__", "repetitions", "build_step", "synthesis_epsilon"}
+    missing = sorted(required - methods)
+    if missing:
+        raise ValueError(f"ProductFormula is missing required methods: {missing}")
+    return tree
+
+
+def load_policy(path: Path) -> ModuleType:
+    """Load one isolated ProductFormula policy with restricted builtins."""
+
+    path = path.resolve()
+    tree = validate_policy_source(path)
     name = f"_hsopt_policy_{hashlib.sha256(path.read_bytes()).hexdigest()[:16]}"
-    spec = importlib.util.spec_from_file_location(name, path)
-    if spec is None or spec.loader is None:
-        raise ImportError(f"could not load policy: {path}")
-    module = importlib.util.module_from_spec(spec)
-    sys.modules[name] = module
-    spec.loader.exec_module(module)
-    for symbol in ("get_method_config", "choose_synthesis_epsilon"):
-        if not callable(getattr(module, symbol, None)):
-            raise AttributeError(f"{path.name} must define {symbol}()")
+    module = ModuleType(name)
+    module.__dict__.update(
+        {
+            "__builtins__": dict(_SAFE_POLICY_BUILTINS),
+            "__file__": str(path),
+            "__name__": name,
+        }
+    )
+    exec(compile(tree, str(path), "exec"), module.__dict__)
+    product_formula = getattr(module, "ProductFormula", None)
+    if not isinstance(product_formula, type):
+        raise TypeError(f"{path.name} ProductFormula must be a class")
+    for method in ("build_step", "synthesis_epsilon"):
+        if not callable(getattr(product_formula, method, None)):
+            raise AttributeError(f"{path.name} ProductFormula must define {method}()")
     return module
 
 
@@ -434,40 +545,14 @@ def _apply_compiled_rotation(
     return workspace, unitary
 
 
-def _ordered_terms(
-    terms: Sequence[Mapping[str, Any]],
-    policy: ModuleType,
-    config: Any,
-) -> list[dict[str, Any]]:
-    copied = [dict(term) for term in terms]
-    strategy = str(getattr(config, "term_order_strategy", "input"))
-    if strategy == "input":
-        return copied
-    if strategy == "lexicographic":
-        return sorted(copied, key=lambda term: term["label"])
-    if strategy == "coefficient_desc":
-        return sorted(copied, key=lambda term: (-abs(term["coefficient"]), term["label"]))
-    if strategy == "coefficient_asc":
-        return sorted(copied, key=lambda term: (abs(term["coefficient"]), term["label"]))
-    if strategy == "support_desc":
-        return sorted(
-            copied,
-            key=lambda term: (-term["support_size"], -abs(term["coefficient"]), term["label"]),
-        )
-    if strategy == "custom":
-        ordered = policy.order_product_formula_terms([dict(term) for term in copied], config)
-        if sorted(term["label"] for term in ordered) != sorted(term["label"] for term in copied):
-            raise ValueError("custom term ordering must preserve every Pauli term exactly once")
-        return [dict(term) for term in ordered]
-    raise ValueError(f"unsupported term_order_strategy={strategy!r}")
-
-
 def _step_rotations(
     terms: Sequence[Mapping[str, Any]],
     *,
     order: int,
     step_time: float,
 ) -> list[tuple[Mapping[str, Any], float]]:
+    """Build a standard PF1/PF2 step for sealed baseline calibration only."""
+
     if order == 1:
         return [(term, float(term["coefficient"]) * step_time) for term in terms]
     if order == 2:
@@ -477,12 +562,187 @@ def _step_rotations(
             + [(terms[-1], float(terms[-1]["coefficient"]) * step_time)]
             + list(reversed(outer))
         )
-    raise ValueError("formula_order must be 1 or 2")
+    raise ValueError("sealed baseline formula_order must be 1 or 2")
 
 
-def _config_dict(config: Any) -> dict[str, Any]:
-    values = asdict(config) if is_dataclass(config) else dict(vars(config))
-    return {str(key): value for key, value in values.items()}
+def _infer_term_order(
+    terms: Sequence[Mapping[str, Any]],
+    traversal: Sequence[Mapping[str, Any]],
+) -> str:
+    labels = [str(term["label"]) for term in traversal]
+    strategies = {
+        "lexicographic": [
+            str(term["label"]) for term in sorted(terms, key=lambda term: term["label"])
+        ],
+        "input": [str(term["label"]) for term in terms],
+        "coefficient_desc": [
+            str(term["label"])
+            for term in sorted(
+                terms,
+                key=lambda term: (-abs(float(term["coefficient"])), term["label"]),
+            )
+        ],
+        "coefficient_asc": [
+            str(term["label"])
+            for term in sorted(
+                terms,
+                key=lambda term: (abs(float(term["coefficient"])), term["label"]),
+            )
+        ],
+        "support_desc": [
+            str(term["label"])
+            for term in sorted(
+                terms,
+                key=lambda term: (
+                    -int(term["support_size"]),
+                    -abs(float(term["coefficient"])),
+                    term["label"],
+                ),
+            )
+        ],
+    }
+    for name, ordered_labels in strategies.items():
+        if labels == ordered_labels:
+            return name
+    return "custom"
+
+
+def _classify_rotation_schedule(
+    terms: Sequence[Mapping[str, Any]],
+    rotations: Sequence[tuple[Mapping[str, Any], float]],
+    *,
+    step_time: float,
+) -> dict[str, Any]:
+    """Infer standard PF1/PF2 structure; arbitrary schedules remain valid."""
+
+    term_count = len(terms)
+    labels = [str(term["label"]) for term, _angle in rotations]
+    angles = [float(angle) for _term, angle in rotations]
+    if len(rotations) == term_count and len(set(labels)) == term_count:
+        traversal = [term for term, _angle in rotations]
+        expected = [float(term["coefficient"]) * step_time for term in traversal]
+        if all(
+            math.isclose(actual, target, rel_tol=1.0e-12, abs_tol=1.0e-15)
+            for actual, target in zip(angles, expected, strict=True)
+        ):
+            return {
+                "formula_name": "first_order_lie_trotter",
+                "formula_order": 1,
+                "term_order_strategy": _infer_term_order(terms, traversal),
+            }
+
+    if len(rotations) == 2 * term_count - 1 and labels == list(reversed(labels)):
+        traversal = [term for term, _angle in rotations[:term_count]]
+        traversal_labels = [str(term["label"]) for term in traversal]
+        if len(set(traversal_labels)) == term_count:
+            forward_angles = angles[:term_count]
+            expected = [
+                (0.5 if index < term_count - 1 else 1.0) * float(term["coefficient"]) * step_time
+                for index, term in enumerate(traversal)
+            ]
+            if all(
+                math.isclose(actual, target, rel_tol=1.0e-12, abs_tol=1.0e-15)
+                for actual, target in zip(forward_angles, expected, strict=True)
+            ) and all(
+                math.isclose(left, right, rel_tol=1.0e-12, abs_tol=1.0e-15)
+                for left, right in zip(
+                    angles[term_count:],
+                    reversed(angles[: term_count - 1]),
+                    strict=True,
+                )
+            ):
+                return {
+                    "formula_name": "symmetric_second_order_trotter_suzuki",
+                    "formula_order": 2,
+                    "term_order_strategy": _infer_term_order(terms, traversal),
+                }
+
+    return {
+        "formula_name": "custom_stationary_product_formula",
+        "formula_order": None,
+        "term_order_strategy": "custom",
+    }
+
+
+def _product_formula_schedule(
+    problem: Mapping[str, Any],
+    policy: ModuleType,
+) -> tuple[Any, list[tuple[dict[str, Any], float]], dict[str, Any]]:
+    """Instantiate the candidate and validate its stationary rotation schedule."""
+
+    candidate_problem = {
+        key: value
+        for key, value in problem.items()
+        if key not in {"_path", "terms"}
+    }
+    candidate_problem["terms"] = [dict(term) for term in problem["terms"]]
+    product_formula = policy.ProductFormula(candidate_problem)
+    repetitions_method = getattr(product_formula, "repetitions", None)
+    if not callable(repetitions_method):
+        raise ValueError("ProductFormula must define repetitions()")
+    n_steps = int(repetitions_method())
+    if n_steps <= 0:
+        raise ValueError("ProductFormula.repetitions() must be positive")
+    step_time = float(problem["target_time"]) / n_steps
+    trusted_terms = {str(term["label"]): dict(term) for term in problem["terms"]}
+    raw_rotations = product_formula.build_step(
+        [dict(term) for term in problem["terms"]],
+        step_time,
+    )
+    if not isinstance(raw_rotations, (list, tuple)) or not raw_rotations:
+        raise ValueError("ProductFormula.build_step() must return a nonempty list or tuple")
+    if len(raw_rotations) > MAX_POLICY_ROTATIONS_PER_TERM * len(trusted_terms):
+        raise ValueError("ProductFormula.build_step() returned too many rotations")
+
+    rotations: list[tuple[dict[str, Any], float]] = []
+    for index, item in enumerate(raw_rotations):
+        if not isinstance(item, (list, tuple)) or len(item) != 2:
+            raise ValueError(f"rotation {index} must be a (term, angle) pair")
+        raw_term, raw_angle = item
+        if isinstance(raw_term, Mapping):
+            label = str(raw_term.get("label", ""))
+        else:
+            label = str(raw_term)
+        if label not in trusted_terms:
+            raise ValueError(f"rotation {index} references unknown Pauli term {label!r}")
+        angle = float(raw_angle)
+        if not math.isfinite(angle):
+            raise ValueError(f"rotation {index} has a non-finite angle")
+        rotations.append((dict(trusted_terms[label]), angle))
+
+    classification = _classify_rotation_schedule(
+        list(problem["terms"]),
+        rotations,
+        step_time=step_time,
+    )
+    schedule_payload = [
+        {"label": str(term["label"]), "angle": float(angle)} for term, angle in rotations
+    ]
+    schedule_sha256 = hashlib.sha256(
+        json.dumps(schedule_payload, sort_keys=True, separators=(",", ":")).encode()
+    ).hexdigest()
+    return (
+        product_formula,
+        rotations,
+        {
+            "policy": {
+                "class": "ProductFormula",
+                "formula_name": classification["formula_name"],
+                "formula_order": classification["formula_order"],
+                "n_steps": n_steps,
+                "term_order_strategy": classification["term_order_strategy"],
+                "rotation_schedule_sha256": schedule_sha256,
+            },
+            "n_steps": n_steps,
+            "formula_name": classification["formula_name"],
+            "formula_order": classification["formula_order"],
+            "term_order_strategy": classification["term_order_strategy"],
+            "step_time": step_time,
+            "rotations_per_step": len(rotations),
+            "scheduled_rotation_count": len(rotations) * n_steps,
+            "rotation_schedule_sha256": schedule_sha256,
+        },
+    )
 
 
 def _build_compiled_step(
@@ -492,18 +752,8 @@ def _build_compiled_step(
     backend_name: str,
     xp: Any,
 ) -> tuple[Any, dict[str, Any]]:
-    try:
-        config = policy.get_method_config(problem)
-    except TypeError:
-        config = policy.get_method_config()
-    order = int(config.formula_order)
-    n_steps = int(config.n_steps)
-    threshold = float(config.zero_angle_threshold)
-    if n_steps <= 0 or threshold < 0.0:
-        raise ValueError("n_steps must be positive and zero_angle_threshold nonnegative")
-    terms = _ordered_terms(problem["terms"], policy, config)
-    step_time = float(problem["target_time"]) / n_steps
-    rotations = _step_rotations(terms, order=order, step_time=step_time)
+    product_formula, rotations, schedule_metrics = _product_formula_schedule(problem, policy)
+    n_steps = int(schedule_metrics["n_steps"])
 
     dim = 1 << int(problem["n_qubits"])
     fence_interval = _rotation_fence_interval(dim)
@@ -512,23 +762,14 @@ def _build_compiled_step(
     t_count = 0
     skipped = 0
     epsilon_histogram: Counter[str] = Counter()
+    epsilon_values: set[float] = set()
     compilations: dict[str, dict[str, Any]] = {}
 
     applied_rotations = 0
     for term, alpha in rotations:
-        if abs(alpha) <= threshold:
-            skipped += 1
-            continue
-        epsilon = float(policy.choose_synthesis_epsilon(dict(term), alpha, 0, config))
-        for step_index in range(1, n_steps):
-            if (
-                float(policy.choose_synthesis_epsilon(dict(term), alpha, step_index, config))
-                != epsilon
-            ):
-                raise ValueError(
-                    "exact step diagonalization requires a stationary synthesis policy; "
-                    f"epsilon changed for {term['label']}"
-                )
+        epsilon = float(product_formula.synthesis_epsilon(dict(term), alpha))
+        if not math.isfinite(epsilon) or not 0.0 < epsilon < 1.0:
+            raise ValueError("ProductFormula.synthesis_epsilon() must return a value in (0, 1)")
         theta = float(round(-2.0 * alpha, 15))
         compiled = _compile_rz(theta, epsilon)
         unitary, workspace = _apply_compiled_rotation(
@@ -543,6 +784,7 @@ def _build_compiled_step(
             _fence(backend_name)
         t_count += int(compiled["t_count"])
         epsilon_histogram[f"{epsilon:.3e}"] += n_steps
+        epsilon_values.add(epsilon)
         key = f"{term['label']}|{theta:.17e}|{epsilon:.17e}"
         compilations[key] = {
             "label": term["label"],
@@ -556,13 +798,16 @@ def _build_compiled_step(
 
     _fence(backend_name)
     del workspace
+    policy_metrics = dict(schedule_metrics["policy"])
+    policy_metrics.update(
+        {
+            "synthesis_policy": ("uniform" if len(epsilon_values) == 1 else "rotation_dependent"),
+            "uniform_epsilon": (next(iter(epsilon_values)) if len(epsilon_values) == 1 else None),
+        }
+    )
     return unitary, {
-        "policy": _config_dict(config),
-        "n_steps": n_steps,
-        "formula_order": order,
-        "step_time": step_time,
-        "rotations_per_step": len(rotations),
-        "scheduled_rotation_count": len(rotations) * n_steps,
+        **schedule_metrics,
+        "policy": policy_metrics,
         "skipped_rotation_count": skipped * n_steps,
         "one_step_t_count": t_count,
         "t_count": t_count * n_steps,
@@ -576,6 +821,43 @@ def _build_compiled_step(
             compilations.values(),
             key=lambda row: (row["label"], row["theta"], row["epsilon"]),
         ),
+    }
+
+
+def _build_exact_product_formula_step(
+    problem: Mapping[str, Any],
+    policy: ModuleType,
+    *,
+    backend_name: str,
+    xp: Any,
+) -> tuple[Any, dict[str, Any]]:
+    """Construct the same candidate schedule with ideal Pauli rotations."""
+
+    _product_formula, rotations, schedule_metrics = _product_formula_schedule(problem, policy)
+    dim = 1 << int(problem["n_qubits"])
+    fence_interval = _rotation_fence_interval(dim)
+    unitary = xp.eye(dim, dtype=xp.complex128)
+    workspace = xp.empty_like(unitary)
+    for index, (term, alpha) in enumerate(rotations, start=1):
+        exact_rz = _rz_matrix(float(round(-2.0 * alpha, 15)))
+        unitary, workspace = _apply_compiled_rotation(
+            unitary,
+            workspace,
+            label=str(term["label"]),
+            compiled_rz=exact_rz,
+            xp=xp,
+        )
+        if index % fence_interval == 0:
+            _fence(backend_name)
+    _fence(backend_name)
+    del workspace
+    return unitary, {
+        **schedule_metrics,
+        "rotation_implementation": "ideal_pauli_rotations",
+        "dense_matrix_dimension": dim,
+        "dense_matrix_bytes": dim * dim * np.dtype(np.complex128).itemsize,
+        "rotation_workspace_bytes": dim * dim * np.dtype(np.complex128).itemsize,
+        "rotation_fence_interval": fence_interval,
     }
 
 

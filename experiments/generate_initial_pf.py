@@ -1,9 +1,11 @@
-"""Generate an immutable iteration-0 policy from paper-bound data.
+"""Generate a concise executable iteration-0 policy from paper-bound data.
 
 The Hamiltonian-dependent beta(H) comes from the exact Pauli evaluation of the
 Reiher et al. supplement's Eq. (19) coefficient bound. This command verifies
-the sealed result and source-Hamiltonian checksum before embedding the fixed
-PF2/Strang policy in ``initial_pf.py``.
+the sealed result and source-Hamiltonian checksum, then writes only the
+executable PF2/Strang schedule and its problem-specific step/tolerance values
+to ``initial_pf.py``. Full derivation metadata remains in the sealed
+calibration record.
 """
 
 from __future__ import annotations
@@ -29,7 +31,7 @@ from hsopt.paper_baseline import (
 
 
 PAPER_CONTRACT: dict[str, Any] = {
-    "schema": 6,
+    "schema": 7,
     "baseline_id": "reiher_wiebe_svore_wecker_troyer_2017_eq19_eq34_rigorous_pf2",
     "citation": {
         "authors": [
@@ -253,15 +255,14 @@ def load_baselines(
     return rows, used
 
 
-def format_baselines(rows: Mapping[str, Mapping[str, Any]]) -> str:
+def format_parameters(rows: Mapping[str, Mapping[str, Any]]) -> str:
     lines = ["{"]
     for name, row in sorted(rows.items()):
-        lines.append(f"    {json.dumps(name)}: {{")
-        for key, value in sorted(row.items()):
-            literal = json.dumps(value) if isinstance(value, str) else repr(value)
-            lines.append(f"        {json.dumps(key)}: {literal},")
-        lines.append("    },")
-    lines.append("}")
+        lines.append(
+            f"        {json.dumps(name)}: "
+            f"({int(row['n_steps'])}, {float(row['uniform_epsilon'])!r}),"
+        )
+    lines.append("    }")
     return "\n".join(lines)
 
 
@@ -276,72 +277,37 @@ def render(
         calibration_path=calibration_path,
         calibration_root=calibration_root,
     )
-    encoded = format_baselines(rows)
-    source_sha = _sha256(source)
+    encoded = format_parameters(rows)
     calibration_lines = "\n".join(
-        f"Calibration scientific SHA-256: {rows[name]['calibration_sha256']}"
-        for name in sorted(rows)
+        f"Calibration SHA-256: {rows[name]['calibration_sha256']}" for name in sorted(rows)
     )
-    scope_note = str(PAPER_CONTRACT["scope_note"])
-    return f'''"""Generated calibrated paper PF initializer. Do not edit by hand.
+    return f'''"""Generated iteration-0 product formula; mutate the class, not the benchmark.
 
-Source: {source.name}
-Source SHA-256: {source_sha}
-Paper contract SHA-256: {PAPER_CONTRACT_SHA256}
+Baseline: Reiher et al. Eq. (19)/(34) rigorous PF2, adapted to 1 kcal/mol.
 {calibration_lines}
-Generator: experiments/generate_initial_pf.py
-Paper: Reiher et al., PNAS 114, 7555-7560 (2017), DOI 10.1073/pnas.1619152114
-
-Paper structure: PF2/Strang, lexicographic order, Eq. (19) bound beta(H),
-the paper's Trotter/QPE/synthesis error relation, and uniform Clifford+T
-rotation tolerance.
-
-Benchmark adaptation: beta is referenced to 0.1 mHa; the full error target is
-1 kcal/mol; error allocation follows the supplement's Eq. (34) calculus using
-the rigorous-row gamma=4 and delta_0=11. PyGridSynth is not run here: iteration
-0 compiles the generated policy and records its realized T count. Reaction
-initializers conservatively give each signed species term an equal absolute
-share of the reaction-error target.
-
-{scope_note}
-
-This file is measured unchanged as iteration 0. Scientific acceptance is based
-exclusively on exact diagonalization of the compiled PF unitary against the
-separately cached U_exact reference.
+Full bound/error derivation and the exact-energy reference are sealed outside
+this mutation file. Iteration 0 measures this code unchanged with PyGridSynth.
 """
 
-from dataclasses import dataclass
 
+class ProductFormula:
+    parameters = {encoded}
 
-BASELINES = {encoded}
+    def __init__(self, problem):
+        self.n_steps, self.epsilon = self.parameters[str(problem["name"])]
 
+    def repetitions(self):
+        return self.n_steps
 
-@dataclass(frozen=True)
-class ProductFormulaConfig:
-    formula_order: int
-    n_steps: int
-    zero_angle_threshold: float
-    uniform_epsilon: float
-    term_order_strategy: str
-    baseline_source: str
+    def build_step(self, terms, step_time):
+        ordered = sorted(terms, key=lambda term: term["label"])
+        half = [(term, 0.5 * float(term["coefficient"]) * step_time) for term in ordered[:-1]]
+        center = [(ordered[-1], float(ordered[-1]["coefficient"]) * step_time)]
+        return half + center + list(reversed(half))
 
-
-def get_method_config(problem=None) -> ProductFormulaConfig:
-    key = next(iter(BASELINES)) if problem is None else str(problem["name"])
-    row = BASELINES[key]
-    return ProductFormulaConfig(
-        formula_order=int(row["formula_order"]),
-        n_steps=int(row["n_steps"]),
-        zero_angle_threshold=float(row["zero_angle_threshold"]),
-        uniform_epsilon=float(row["uniform_epsilon"]),
-        term_order_strategy=str(row["term_order_strategy"]),
-        baseline_source=str(row["baseline_source"]),
-    )
-
-
-def choose_synthesis_epsilon(term, alpha, step_index, config) -> float:
-    _ = (term, alpha, step_index)
-    return config.uniform_epsilon
+    def synthesis_epsilon(self, term, angle):
+        _ = (term, angle)
+        return self.epsilon
 '''
 
 

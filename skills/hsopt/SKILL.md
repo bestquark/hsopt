@@ -66,9 +66,20 @@ nonnegative Eq. (19) Pauli sum deterministically; it does not substitute a
 Monte Carlo estimate. The exact reference stored in the same sealed record is
 used only for later evaluation and cannot influence the initial policy.
 
-`initial_pf.py` is immutable. Do not create or mutate an in-tree
-`optimized_pf.py`. External lane directories contain `candidate.py`,
-`incumbent.py`, exact results, decisions, and audit logs.
+`initial_pf.py` is an immutable, concise executable policy. Its
+`ProductFormula.repetitions()`, `build_step(terms, step_time)`, and
+`synthesis_epsilon(term, angle)` methods are copied to the lane mutation
+target. The rotation schedule returned by `build_step()` is authoritative:
+the evaluator can apply it with ideal rotations or compile the same schedule
+with PyGridSynth. Do not force a declared formula order; infer PF1/PF2 from the
+actual schedule and record arbitrary recurrences as custom. The verbose bound
+derivation remains in the sealed calibration JSON.
+
+Do not create or mutate an in-tree `optimized_pf.py`. External lane
+directories contain `candidate.py`, `incumbent.py`, exact results, decisions,
+and audit logs. Every checked-in experiment directory also contains a thin
+`evaluate.py` that selects that directory's fixed identity while requiring the
+coefficient-bearing Hamiltonian/reaction and cached exact reference explicitly.
 
 Do not modify Hamiltonians, geometries, basis sets, active spaces, target
 times, localization, electron sectors, or evaluator semantics during a run.

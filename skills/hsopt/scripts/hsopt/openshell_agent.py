@@ -3,7 +3,6 @@
 from __future__ import annotations
 
 import argparse
-import ast
 import json
 import os
 import re
@@ -15,6 +14,8 @@ from collections import Counter
 from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any, Sequence
+
+from .compiled_unitary import validate_policy_source
 
 
 NVIDIA_PROVIDER = "hsopt-nvidia"
@@ -313,9 +314,7 @@ def _validate_agent_action_contract(path: Path) -> None:
                 raise RuntimeError("OpenCode attempted to mutate outside candidate.py")
         if tool in ONLINE_TOOLS or tool == "skill":
             research_actions.append(action)
-    completed_mutations = [
-        action for action in mutation_actions if action["status"] == "completed"
-    ]
+    completed_mutations = [action for action in mutation_actions if action["status"] == "completed"]
     if len(read_actions) > 1:
         raise RuntimeError("OpenCode read candidate.py more than once")
     if len(mutation_actions) != 1 or len(completed_mutations) != 1:
@@ -513,9 +512,9 @@ def opencode_config() -> dict[str, Any]:
                     "or codesearch for at most three research calls total. Read "
                     "candidate.py at most once, call one edit or write tool exactly "
                     "once, then immediately return a final text response without "
-                    "calling another tool. The only supported term_order_strategy "
-                    "values are input, lexicographic, coefficient_desc, "
-                    "coefficient_asc, support_desc, and custom."
+                    "calling another tool. ProductFormula.build_step() is the "
+                    "authoritative recurrence and may return any deterministic "
+                    "stationary Pauli-rotation schedule."
                 ),
                 "permission": {
                     # OpenCode 1.2.18 currently rejects granular edit allows
@@ -580,16 +579,19 @@ cached exact ground energy. Small resolved HF peak weight is therefore
 penalized by a larger repetition cost; it is not an energy average.
 
 Make one coherent deterministic mutation intended to lower the
-confidence-adjusted T cost while remaining accurate. Preserve
-get_method_config(problem) and
-choose_synthesis_epsilon(term, alpha, step_index, config). Do not change any
-Hamiltonian, evaluator, source data, or benchmark definition. Do not fabricate
-an evaluation result. Read candidate.py at most once. Call one edit or write
-tool exactly once. After that tool succeeds, immediately return a final text
-response without reading or rewriting the file. If changing term_order_strategy,
-use only input, lexicographic, coefficient_desc, coefficient_asc, support_desc,
-or custom. A custom order_product_formula_terms implementation must preserve
-every Pauli term exactly once.
+confidence-adjusted T cost while remaining accurate. Preserve the
+ProductFormula class and its repetitions(), build_step(), and
+synthesis_epsilon() methods. build_step() is the scientific definition of the
+formula: it may implement PF1, PF2/Strang, a higher-order stationary
+composition, grouping, or another deterministic recurrence. The evaluator
+infers standard PF1/PF2 labels from the returned rotations; it never trusts a
+declared order. synthesis_epsilon() selects the PyGridSynth tolerance for each
+returned rotation.
+
+Do not change any Hamiltonian, evaluator, source data, or benchmark definition.
+Do not fabricate an evaluation result. Read candidate.py at most once. Call one
+edit or write tool exactly once. After that tool succeeds, immediately return a
+final text response without reading or rewriting the file.
 """
     if feedback is None:
         return prompt
@@ -667,13 +669,10 @@ def agent_feedback(feedback: dict[str, Any]) -> dict[str, Any]:
 
 
 def _validate_candidate(path: Path) -> None:
-    source = path.read_text(encoding="utf-8")
-    tree = ast.parse(source, filename=str(path))
-    functions = {node.name for node in tree.body if isinstance(node, ast.FunctionDef)}
-    required = {"get_method_config", "choose_synthesis_epsilon"}
-    missing = sorted(required - functions)
-    if missing:
-        raise RuntimeError(f"candidate is missing required functions: {missing}")
+    try:
+        validate_policy_source(path)
+    except (SyntaxError, TypeError, ValueError) as exc:
+        raise RuntimeError(f"candidate violates the ProductFormula contract: {exc}") from exc
 
 
 def _terminate_sandbox_opencode(sandbox_name: str) -> None:

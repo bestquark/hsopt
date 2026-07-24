@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import csv
 import json
+import math
 import subprocess
 import sys
 from collections import Counter
@@ -18,17 +19,21 @@ from hsopt.compiled_unitary import (
     _anchored_ground_state,
     _apply_compiled_rotation,
     _build_compiled_step,
+    _build_exact_product_formula_step,
     _compile_rz,
     _dense_hamiltonian,
     _fixed_electron_hamiltonian,
     _rotation_fence_interval,
     _qpe_repetitions,
+    _product_formula_schedule,
     _select_lowest_hf_accessible_peak,
     evaluate_exact_reference,
     evaluate_molecule,
     load_policy,
     load_problem,
+    validate_policy_source,
 )
+from hsopt.experiment_evaluator import evaluate_absolute_directory
 from hsopt.paper_baseline import (
     BENCHMARK_TOTAL_ERROR_HARTREE,
     PAPER_ALLOCATION_METHOD,
@@ -92,8 +97,57 @@ def test_checked_in_benchmark_layout_matches_the_91_and_10_registries() -> None:
         "absolute_hamiltonians": 91,
         "difference_reactions": 10,
         "definition_files": 101,
+        "evaluator_files": 101,
         "initial_policies": 101,
     }
+
+
+def test_directory_evaluator_uses_its_sealed_hamiltonian_identity(tmp_path: Path) -> None:
+    problem = json.loads((ABSOLUTE / "hamiltonian.json").read_text(encoding="utf-8"))
+    experiment = tmp_path / "experiment"
+    experiment.mkdir()
+    (experiment / "instance.json").write_text(
+        json.dumps(
+            {
+                "instance": str(problem["name"]).removeprefix("HamLib "),
+                "n_qubits": int(problem["n_qubits"]),
+            }
+        ),
+        encoding="utf-8",
+    )
+    reference_path = tmp_path / "exact-reference.json"
+    reference_path.write_text(
+        json.dumps(
+            evaluate_exact_reference(
+                ABSOLUTE / "hamiltonian.json",
+                backend="numpy",
+            )
+        ),
+        encoding="utf-8",
+    )
+    output = tmp_path / "result.json"
+
+    status = evaluate_absolute_directory(
+        experiment,
+        [
+            "--problem",
+            str(ABSOLUTE / "hamiltonian.json"),
+            "--policy-file",
+            str(ABSOLUTE / "initial_pf.py"),
+            "--exact-reference",
+            str(reference_path),
+            "--backend",
+            "numpy",
+            "--output",
+            str(output),
+        ],
+    )
+
+    assert status == 0
+    result = json.loads(output.read_text(encoding="utf-8"))
+    assert result["problem"] == problem["name"]
+    assert result["formula_order"] == 2
+    assert result["policy"]["class"] == "ProductFormula"
 
 
 @pytest.mark.parametrize(
@@ -140,8 +194,14 @@ def test_initial_policy_is_exactly_generated_from_paper_baseline(
         check=True,
     )
     generated = output.read_text()
-    assert "DOI 10.1073/pnas.1619152114" in generated
-    assert "separately cached U_exact reference" in generated
+    assert "Reiher et al. Eq. (19)/(34) rigorous PF2" in generated
+    assert "adapted to 1 kcal/mol" in generated
+    assert "class ProductFormula" in generated
+    assert "def repetitions(self)" in generated
+    assert "def build_step(self, terms, step_time)" in generated
+    assert "def synthesis_epsilon(self, term, angle)" in generated
+    assert "BASELINES" not in generated
+    assert "get_method_config" not in generated
     assert not (output.parent / "optimized_pf.py").exists()
 
 
@@ -714,6 +774,99 @@ def test_step_eigendecomposition_equals_explicit_full_compiled_pf_product() -> N
         evaluated["compiled_pf_energy_hartree"],
         abs=1.0e-10,
     )
+
+
+def test_product_formula_schedule_has_exact_and_compiled_realizations() -> None:
+    problem = load_problem(ABSOLUTE / "hamiltonian.json")
+    policy = load_policy(ABSOLUTE / "initial_pf.py")
+    exact_step, exact_metrics = _build_exact_product_formula_step(
+        problem,
+        policy,
+        backend_name="numpy",
+        xp=np,
+    )
+    _formula, rotations, schedule_metrics = _product_formula_schedule(problem, policy)
+
+    paulis = {
+        "I": np.eye(2, dtype=np.complex128),
+        "X": np.asarray([[0.0, 1.0], [1.0, 0.0]], dtype=np.complex128),
+        "Y": np.asarray([[0.0, -1.0j], [1.0j, 0.0]], dtype=np.complex128),
+        "Z": np.asarray([[1.0, 0.0], [0.0, -1.0]], dtype=np.complex128),
+    }
+    dimension = 1 << int(problem["n_qubits"])
+    explicit = np.eye(dimension, dtype=np.complex128)
+    identity = np.eye(dimension, dtype=np.complex128)
+    for term, angle in rotations:
+        dense_pauli = paulis[term["label"][0]]
+        for symbol in term["label"][1:]:
+            dense_pauli = np.kron(dense_pauli, paulis[symbol])
+        rotation = math.cos(angle) * identity + 1.0j * math.sin(angle) * dense_pauli
+        explicit = rotation @ explicit
+
+    assert exact_step == pytest.approx(explicit, abs=1.0e-12)
+    assert exact_metrics["rotation_implementation"] == "ideal_pauli_rotations"
+    assert exact_metrics["rotation_schedule_sha256"] == schedule_metrics["rotation_schedule_sha256"]
+    assert schedule_metrics["formula_order"] == 2
+    assert schedule_metrics["term_order_strategy"] == "lexicographic"
+
+
+def test_product_formula_can_define_a_custom_recurrence_without_declared_order(
+    tmp_path: Path,
+) -> None:
+    candidate = tmp_path / "candidate.py"
+    candidate.write_text(
+        """class ProductFormula:
+    def __init__(self, problem):
+        self.epsilon = 1.0e-6
+
+    def repetitions(self):
+        return 3
+
+    def build_step(self, terms, step_time):
+        first = sorted(terms, key=lambda term: -abs(float(term["coefficient"])))[0]
+        return [(first, float(first["coefficient"]) * step_time)]
+
+    def synthesis_epsilon(self, term, angle):
+        return self.epsilon
+""",
+        encoding="utf-8",
+    )
+    problem = load_problem(ABSOLUTE / "hamiltonian.json")
+    policy = load_policy(candidate)
+    _formula, rotations, metrics = _product_formula_schedule(problem, policy)
+
+    assert len(rotations) == 1
+    assert metrics["n_steps"] == 3
+    assert metrics["formula_name"] == "custom_stationary_product_formula"
+    assert metrics["formula_order"] is None
+    assert metrics["term_order_strategy"] == "custom"
+
+
+@pytest.mark.parametrize(
+    "source",
+    [
+        "import os\nclass ProductFormula: pass\n",
+        """class ProductFormula:
+    def __init__(self, problem):
+        self.problem = problem
+    def repetitions(self):
+        return 1
+    def build_step(self, terms, step_time):
+        open("/tmp/escape", "w")
+        return []
+    def synthesis_epsilon(self, term, angle):
+        return 1.0e-6
+""",
+    ],
+)
+def test_product_formula_ast_contract_rejects_external_capabilities(
+    source: str,
+    tmp_path: Path,
+) -> None:
+    candidate = tmp_path / "candidate.py"
+    candidate.write_text(source, encoding="utf-8")
+    with pytest.raises(ValueError):
+        validate_policy_source(candidate)
 
 
 def test_lowest_hf_accessible_peak_is_not_the_largest_probability_peak() -> None:

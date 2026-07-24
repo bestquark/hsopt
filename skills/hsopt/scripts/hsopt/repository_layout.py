@@ -15,9 +15,29 @@ DIFF_FAMILY = "diff_energy"
 ABS_DESCRIPTOR = "instance.json"
 DIFF_DESCRIPTOR = "definition.json"
 INITIAL_POLICY = "initial_pf.py"
+EVALUATOR = "evaluate.py"
 ABS_INSTANCE_COUNT = 91
 DIFF_INSTANCE_COUNT = 10
-BOUND_BASELINE_ID = "reiher_wiebe_svore_wecker_troyer_2017_eq19_eq34_rigorous_pf2"
+ABS_EVALUATOR = '''"""Evaluate this directory's sealed absolute-energy experiment."""
+
+from pathlib import Path
+
+from hsopt.experiment_evaluator import evaluate_absolute_directory
+
+
+if __name__ == "__main__":
+    raise SystemExit(evaluate_absolute_directory(Path(__file__).resolve().parent))
+'''
+DIFF_EVALUATOR = '''"""Evaluate this directory's sealed signed-energy experiment."""
+
+from pathlib import Path
+
+from hsopt.experiment_evaluator import evaluate_difference_directory
+
+
+if __name__ == "__main__":
+    raise SystemExit(evaluate_difference_directory(Path(__file__).resolve().parent))
+'''
 
 
 def _json_text(payload: Any) -> str:
@@ -190,12 +210,14 @@ def expected_layout(
     expected: dict[Path, str] = {}
     for instance, payload in absolute_definitions(abs_manifest, abs_checksums).items():
         expected[abs_root / instance / ABS_DESCRIPTOR] = _json_text(payload)
+        expected[abs_root / instance / EVALUATOR] = ABS_EVALUATOR
     for instance, payload in reaction_definitions(
         reaction_manifest,
         reaction_checksums,
         reaction_metadata,
     ).items():
         expected[diff_root / instance / DIFF_DESCRIPTOR] = _json_text(payload)
+        expected[diff_root / instance / EVALUATOR] = DIFF_EVALUATOR
     return expected
 
 
@@ -213,37 +235,44 @@ def _validate_initial_policy(path: Path, *, expected_problems: int) -> None:
     if not path.is_file():
         raise ValueError(f"missing generated initial policy: {path}")
     module = ast.parse(path.read_text(encoding="utf-8"), filename=str(path))
-    baseline_nodes = [
-        node.value
+    classes = [
+        node
         for node in module.body
+        if isinstance(node, ast.ClassDef) and node.name == "ProductFormula"
+    ]
+    if len(classes) != 1:
+        raise ValueError(f"{path}: expected one ProductFormula class")
+    policy_class = classes[0]
+    parameter_nodes = [
+        node.value
+        for node in policy_class.body
         if isinstance(node, ast.Assign)
         and any(
-            isinstance(target, ast.Name) and target.id == "BASELINES" for target in node.targets
+            isinstance(target, ast.Name) and target.id == "parameters" for target in node.targets
         )
     ]
-    if len(baseline_nodes) != 1:
-        raise ValueError(f"{path}: expected one BASELINES assignment")
-    baselines = ast.literal_eval(baseline_nodes[0])
-    if not isinstance(baselines, dict) or len(baselines) != expected_problems:
+    if len(parameter_nodes) != 1:
+        raise ValueError(f"{path}: expected one ProductFormula.parameters assignment")
+    parameters = ast.literal_eval(parameter_nodes[0])
+    if not isinstance(parameters, dict) or len(parameters) != expected_problems:
         raise ValueError(
             f"{path}: expected {expected_problems} problem policies, "
-            f"found {len(baselines) if isinstance(baselines, dict) else 'invalid'}"
+            f"found {len(parameters) if isinstance(parameters, dict) else 'invalid'}"
         )
-    for problem, policy in baselines.items():
+    for problem, values in parameters.items():
         if (
             not isinstance(problem, str)
-            or not isinstance(policy, dict)
-            or policy.get("baseline_source") != BOUND_BASELINE_ID
-            or policy.get("calibration_mode") != "hamiltonian_bound"
-            or policy.get("bound_method") != "exact_vectorized_pauli_sum"
-            or policy.get("formula_order") != 2
-            or policy.get("term_order_strategy") != "lexicographic"
-            or not isinstance(policy.get("n_steps"), int)
-            or int(policy["n_steps"]) <= 0
-            or float(policy.get("uniform_epsilon", 0.0)) <= 0.0
-            or float(policy.get("reference_trotter_number_beta", 0.0)) <= 0.0
+            or not isinstance(values, tuple)
+            or len(values) != 2
+            or not isinstance(values[0], int)
+            or values[0] <= 0
+            or float(values[1]) <= 0.0
         ):
             raise ValueError(f"{path}: invalid bound-derived policy for {problem!r}")
+    methods = {node.name for node in policy_class.body if isinstance(node, ast.FunctionDef)}
+    required = {"__init__", "repetitions", "build_step", "synthesis_epsilon"}
+    if not required <= methods:
+        raise ValueError(f"{path}: ProductFormula is missing {sorted(required - methods)}")
 
 
 def sync_layout(
@@ -324,7 +353,10 @@ def sync_layout(
     return {
         "absolute_hamiltonians": len(expected_abs),
         "difference_reactions": len(expected_diff),
-        "definition_files": len(expected),
+        "definition_files": sum(
+            path.name in {ABS_DESCRIPTOR, DIFF_DESCRIPTOR} for path in expected
+        ),
+        "evaluator_files": sum(path.name == EVALUATOR for path in expected),
         "initial_policies": len(expected_abs) + len(expected_diff),
     }
 

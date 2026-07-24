@@ -213,7 +213,7 @@ def test_opencode_policy_only_allows_candidate_file_mutations() -> None:
 
     assert agent["steps"] == 8
     assert "exactly once" in agent["prompt"]
-    assert "coefficient_desc" in agent["prompt"]
+    assert "ProductFormula.build_step()" in agent["prompt"]
     assert "reverse_lexicographic" not in agent["prompt"]
     assert permissions["*"] == "allow"
     assert permissions["edit"] == "allow"
@@ -355,11 +355,11 @@ def test_mutation_prompt_requires_one_edit_then_terminal_text() -> None:
 
     assert "Read candidate.py at most once" in prompt
     assert "tool exactly once" in prompt
-    assert "immediately return a final text" in prompt
+    assert "immediately return a final text" in normalized
     assert "at most three research tool calls" in normalized
     assert "Web research is optional" in prompt
-    assert "support_desc" in prompt
-    assert "preserve every Pauli term exactly once" in normalized
+    assert "higher-order stationary composition" in normalized
+    assert "Do not change any Hamiltonian" in normalized
 
 
 def test_sandbox_cleanup_terminates_opencode_without_matching_itself(

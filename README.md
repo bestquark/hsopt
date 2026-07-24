@@ -55,13 +55,51 @@ by the union bound. Stoichiometric coefficients affect the energy difference
 but do not duplicate circuits. The reaction objective is the sum of the
 confidence-adjusted species costs and is reported as **T95 (raw total)**.
 
+## Product-formula policy
+
+The agent edits a small executable `ProductFormula` class, not the baseline's
+derivation record. Its three scientific hooks are:
+
+```python
+class ProductFormula:
+    def repetitions(self): ...
+    def build_step(self, terms, step_time): ...
+    def synthesis_epsilon(self, term, angle): ...
+```
+
+`build_step()` returns the ordered `(Pauli term, angle)` rotations for one
+stationary step. That returned schedule is authoritative: the evaluator can
+apply it with ideal rotations to construct the exact mathematical PF step or
+compile the same rotations with PyGridSynth. No `formula_order = 2` constraint
+is imposed. The generated baseline implements PF2/Strang, while mutations may
+replace its recurrence with PF1, a higher-order composition, grouping, or
+another deterministic stationary product formula.
+
+The evaluator infers standard PF1/PF2 and common ordering labels from the
+actual schedule. Arbitrary recurrences are recorded as custom together with a
+schedule checksum, so a stale human-written label cannot affect evaluation.
+The full Eq. (19)/(34) derivation, checksums, error allocation, and cached exact
+energy remain in sealed campaign metadata outside the agent-editable file.
+
+Every experiment folder has a thin `evaluate.py`. Because coefficient-heavy
+Hamiltonians and exact references remain external, invoke it with those sealed
+paths explicitly:
+
+```bash
+uv run python experiments/abs_energy/<instance>/evaluate.py \
+  --problem /path/to/hamiltonian.json \
+  --exact-reference /path/to/exact-reference.json \
+  --policy-file experiments/abs_energy/<instance>/initial_pf.py \
+  --backend numpy --output /path/to/result.json
+```
+
 ## Repository layout
 
 ```text
 hsopt/
 ├── experiments/
-│   ├── abs_energy/             91 HamLib folders: definition + initial_pf.py
-│   ├── diff_energy/            10 reaction folders: definition + initial_pf.py
+│   ├── abs_energy/             91 folders: definition + initial_pf.py + evaluate.py
+│   ├── diff_energy/            10 folders: definition + initial_pf.py + evaluate.py
 │   └── generate_initial_pf.py  Immutable initializer for both families
 ├── plots/                      Publication-plot source code
 ├── skills/hsopt/
@@ -106,8 +144,8 @@ uv run python tests/fixtures/diff_energy_h2_bond_stretch/evaluate.py \
   --backend numpy
 ```
 
-Verify that an immutable iteration-0 policy still matches the embedded paper
-contract:
+Verify that an immutable iteration-0 policy still matches its sealed paper
+calibration:
 
 ```bash
 uv run hsopt-paper-baseline \
