@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import hashlib
 import json
 import subprocess
 from concurrent.futures import ThreadPoolExecutor
@@ -14,11 +15,13 @@ from hsopt.exact_queue import (
     requeue_missing,
     run_batch,
 )
+from hsopt.compiled_unitary import evaluate_exact_difference_reference
 from hsopt.nvpark_queue import _system_memory_mib, submit_batch, submit_ready
 
 
 REPO = Path(__file__).resolve().parents[1]
 ABSOLUTE = REPO / "tests" / "fixtures" / "abs_energy_h2"
+DIFFERENCE = REPO / "tests" / "fixtures" / "diff_energy_h2_bond_stretch"
 
 
 def test_queue_deduplicates_snapshots_and_merges_results(tmp_path: Path) -> None:
@@ -106,6 +109,38 @@ def test_reference_is_a_distinct_cached_stage_before_candidate_evaluation(
     assert (candidate_task / "reference.json").read_bytes() == reference_path.read_bytes()
     assert queue_status(tmp_path)["completed"] == 1
     assert queue_status(tmp_path)["pending"] == 1
+
+
+def test_difference_reference_is_rebound_to_the_staged_reaction(
+    tmp_path: Path,
+) -> None:
+    reference = evaluate_exact_difference_reference(
+        DIFFERENCE / "reaction.json",
+        backend="numpy",
+    )
+    reference_path = tmp_path / "exact_reference.json"
+    reference_path.write_text(
+        json.dumps(reference, indent=2, sort_keys=True) + "\n",
+        encoding="utf-8",
+    )
+
+    candidate = enqueue(
+        tmp_path / "queue",
+        kind="difference",
+        source=DIFFERENCE / "reaction.json",
+        policy=DIFFERENCE / "initial_pf.py",
+        reference=reference_path,
+    )
+    task = tmp_path / "queue" / "pending" / candidate["task_id"]
+    staged_reference = json.loads((task / "reference.json").read_text())
+    staged_reaction_sha256 = hashlib.sha256((task / "reaction.json").read_bytes()).hexdigest()
+
+    assert staged_reference["source_reaction_sha256"] == reference["reaction_sha256"]
+    assert staged_reference["reaction_sha256"] == staged_reaction_sha256
+    batch = Path(prepare_batch(tmp_path / "queue")["batch_dir"])
+    finished = run_batch(batch, backend="numpy")
+    assert finished["succeeded"] == 1
+    assert finished["failed"] == 0
 
 
 def test_nvpark_submission_requests_only_one_small_gpu_allocation(

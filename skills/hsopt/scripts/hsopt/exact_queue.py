@@ -116,6 +116,30 @@ def _snapshot_source(kind: str, source: Path, task_dir: Path) -> str:
     return "reaction.json"
 
 
+def _snapshot_reference(
+    kind: str,
+    source: Path,
+    reference: Path,
+    task_dir: Path,
+) -> None:
+    """Copy a reference and bind reaction metadata to the staged path layout."""
+
+    destination = task_dir / "reference.json"
+    shutil.copyfile(reference, destination)
+    if kind != "difference":
+        return
+
+    payload = json.loads(destination.read_text(encoding="utf-8"))
+    original_sha256 = hashlib.sha256(source.resolve().read_bytes()).hexdigest()
+    if payload.get("reaction_sha256") != original_sha256:
+        raise ValueError(f"exact reference does not match {source.resolve()}")
+    staged_reaction = task_dir / "reaction.json"
+    payload["source_reaction_sha256"] = original_sha256
+    payload["reaction_sha256"] = hashlib.sha256(staged_reaction.read_bytes()).hexdigest()
+    payload["reaction_path"] = str(staged_reaction)
+    _write_json(destination, payload)
+
+
 def enqueue(
     queue_dir: Path,
     *,
@@ -161,7 +185,7 @@ def enqueue(
             source_name = _snapshot_source(kind, source, temporary)
             shutil.copyfile(policy, temporary / "policy.py")
             if reference is not None:
-                shutil.copyfile(reference, temporary / "reference.json")
+                _snapshot_reference(kind, source, reference, temporary)
             metadata = {
                 "schema": 2,
                 "evaluation_contract_version": EVALUATION_CONTRACT_VERSION,
@@ -176,6 +200,11 @@ def enqueue(
                 "reference_original": str(reference) if reference is not None else None,
                 "reference_sha256": (
                     hashlib.sha256(reference.read_bytes()).hexdigest()
+                    if reference is not None
+                    else None
+                ),
+                "reference_snapshot_sha256": (
+                    hashlib.sha256((temporary / "reference.json").read_bytes()).hexdigest()
                     if reference is not None
                     else None
                 ),
