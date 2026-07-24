@@ -10,12 +10,8 @@ import traceback
 from pathlib import Path
 from typing import Any, Mapping
 
-from hsopt.paper_baseline import (
-    BENCHMARK_TOTAL_ERROR_HARTREE,
-    PAPER_BETA_REFERENCE_ERROR_HARTREE,
-    calibrate_problem,
-    verify_calibration,
-)
+PAPER_BETA_REFERENCE_ERROR_HARTREE = 1.0e-4
+BENCHMARK_TOTAL_ERROR_HARTREE = 1.0 / 627.5094740631
 
 
 def _json_text(payload: Any) -> str:
@@ -146,6 +142,8 @@ def run_batch(
 ) -> dict[str, Any]:
     """Run one deterministic shard, safely skipping sealed outputs."""
 
+    from hsopt.paper_baseline import calibrate_problem, seal_calibration, verify_calibration
+
     if shard_count <= 0 or not 0 <= shard_index < shard_count:
         raise ValueError("shard index must satisfy 0 <= index < shard count")
     started = time.perf_counter()
@@ -211,8 +209,6 @@ def run_batch(
             result["n_qubits"] = int(record["n_qubits"])
             result["consumers"] = list(record["consumers"])
             # Dataset annotations are included in the checksum.
-            from hsopt.paper_baseline import seal_calibration
-
             result = seal_calibration(result)
             _write_json(output, result)
             failure.unlink(missing_ok=True)
@@ -267,6 +263,8 @@ def run_batch(
 
 def audit_batch(manifest_path: Path, output_dir: Path) -> dict[str, Any]:
     """Require one sealed source-matching result for every manifest row."""
+
+    from hsopt.paper_baseline import verify_calibration
 
     manifest_path = manifest_path.resolve()
     output_dir = output_dir.resolve()
