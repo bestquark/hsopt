@@ -28,7 +28,7 @@ energies, and selects the lowest-energy peak with numerically resolved HF
 weight $p_{\mathrm{HF}}$. If one QPE attempt costs $T_{\mathrm{raw}}$, the number of
 independent attempts required to observe that peak with 95% confidence is
 
-$$
+```math
 R_{95} =
 \begin{cases}
 1, & p_{\mathrm{HF}}=1, \\
@@ -36,7 +36,7 @@ R_{95} =
 & 0<p_{\mathrm{HF}}<1,
 \end{cases}
 \qquad T_{95} = R_{95}T_{\mathrm{raw}}.
-$$
+```
 
 A molecular candidate is feasible when
 
