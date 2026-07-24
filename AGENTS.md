@@ -41,10 +41,13 @@ selected under the paper's Trotter/QPE/rotation-error relation with a
 The exact reference is an evaluation oracle only; it must not affect
 `beta(H)`, the step count, or the synthesis tolerance.
 
-Never invent or hand-edit an initializer. Never mutate `initial_pf.py`, and do
-not create an in-tree `optimized_pf.py`. A lane's mutable `candidate.py` and
-`incumbent.py`, all evaluations, and all transcripts live in its external
-campaign directory.
+Every `experiments/abs_energy/<instance>/` and
+`experiments/diff_energy/<reaction>/` directory contains the generated
+`initial_pf.py` for that dataset element. These checked-in files must be
+byte-identical to the external batch output. Never invent or hand-edit an
+initializer. Never mutate `initial_pf.py`, and do not create an in-tree
+`optimized_pf.py`. A lane's mutable `candidate.py` and `incumbent.py`, all
+evaluations, and all transcripts live in its external campaign directory.
 
 Do not change Hamiltonians, molecules, geometries, basis sets, active spaces,
 target times, localization, electron sectors, or evaluator semantics during a

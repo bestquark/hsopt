@@ -5,6 +5,7 @@ from __future__ import annotations
 import argparse
 import hashlib
 import json
+import shutil
 import subprocess
 import sys
 import time
@@ -327,13 +328,18 @@ def generate_policies(
     output_dir: Path,
     *,
     generator: Path,
+    repository_root: Path | None = None,
 ) -> dict[str, Any]:
-    """Render one immutable initializer per dataset element after a complete audit."""
+    """Render external and optionally checked-in immutable initializers."""
 
     manifest_path = manifest_path.resolve()
     calibration_dir = calibration_dir.resolve()
     output_dir = output_dir.resolve()
     generator = generator.resolve()
+    if repository_root is not None:
+        repository_root = repository_root.resolve()
+        if not (repository_root / "experiments/generate_initial_pf.py").is_file():
+            raise ValueError(f"not an hsopt repository root: {repository_root}")
     audit = audit_batch(manifest_path, calibration_dir)
     if not audit["complete"]:
         raise RuntimeError("cannot generate initial policies from an incomplete calibration")
@@ -361,6 +367,22 @@ def generate_policies(
         else:
             subprocess.run(command, check=True)
             status = "generated"
+        checked_in_policy = None
+        if repository_root is not None:
+            checked_in_policy = (
+                repository_root / "experiments" / family / _safe_key(key) / "initial_pf.py"
+            )
+            checked_in_policy.parent.mkdir(parents=True, exist_ok=True)
+            if (
+                checked_in_policy.is_file()
+                and checked_in_policy.read_bytes() == output.read_bytes()
+            ):
+                checked_in_status = "verified"
+            else:
+                temporary = checked_in_policy.with_suffix(".py.tmp")
+                shutil.copyfile(output, temporary)
+                temporary.replace(checked_in_policy)
+                checked_in_status = "generated"
         records.append(
             {
                 "family": family,
@@ -370,6 +392,15 @@ def generate_policies(
                 "policy": str(output.relative_to(output_dir)),
                 "policy_sha256": _sha256(output),
                 "status": status,
+                **(
+                    {
+                        "checked_in_policy": str(checked_in_policy.relative_to(repository_root)),
+                        "checked_in_policy_sha256": _sha256(checked_in_policy),
+                        "checked_in_status": checked_in_status,
+                    }
+                    if checked_in_policy is not None and repository_root is not None
+                    else {}
+                ),
             }
         )
 
@@ -393,6 +424,7 @@ def generate_policies(
         "calibration_audit_sha256": _sha256(calibration_dir / "audit.json"),
         "generator": str(generator),
         "generator_sha256": _sha256(generator),
+        "repository_root": (str(repository_root) if repository_root is not None else None),
         "absolute_initial_policies": sum(row["family"] == "abs_energy" for row in records),
         "reaction_initial_policies": sum(row["family"] == "diff_energy" for row in records),
         "policies": records,
@@ -448,6 +480,14 @@ def _parser() -> argparse.ArgumentParser:
     generate.add_argument("--calibration-dir", required=True, type=Path)
     generate.add_argument("--output-dir", required=True, type=Path)
     generate.add_argument("--generator", required=True, type=Path)
+    generate.add_argument(
+        "--repository-root",
+        type=Path,
+        help=(
+            "also materialize byte-identical initial_pf.py files under "
+            "experiments/{abs_energy,diff_energy}/<instance>/"
+        ),
+    )
     return parser
 
 
@@ -481,6 +521,7 @@ def main() -> int:
             args.calibration_dir,
             args.output_dir,
             generator=args.generator,
+            repository_root=args.repository_root,
         )
     print(_json_text(result), end="")
     if args.command == "run":

@@ -25,17 +25,17 @@ external reaction directories consumed by the fixed evaluator in
 The ten directories beside `inputs/` make that production set visible on
 GitHub. Each `definition.json` records the signed reaction terms and the
 metadata/coefficients SHA-256 checksums for every external species
-Hamiltonian. Run `uv run hsopt-layout --check` to verify that all ten match the
-compact registry, or `uv run hsopt-layout --write` after an intentional
-registry change.
+Hamiltonian; its `initial_pf.py` contains the bound-derived PF2 policy for
+every species in the reaction. Run `uv run hsopt-layout --check` to verify that
+all ten definitions match the compact registry, or `uv run hsopt-layout
+--write` after an intentional registry change.
 
 Each reaction has two policy-lane labels, `equal_share` and `reaction_aware`.
 Both start from the same calibrated baseline and use the same exact signed
 reaction reference. The species are calibrated once each; the signed exact
 reaction reference is assembled from those cached species values without
-another eigensolve. During campaign initialization,
-`experiments/generate_initial_pf.py` generates the immutable iteration-0
-`initial_pf.py` for every reaction/contract pair.
+another eigensolve. Both contracts copy the same checked-in immutable
+iteration-0 `initial_pf.py`; only their later mutation strategies differ.
 
 Compact executable evaluator fixtures live under `tests/fixtures/`. All
 generated ten-reaction inputs, mutation history, exports, and reports remain

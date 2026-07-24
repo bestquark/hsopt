@@ -30,6 +30,8 @@ from hsopt.compiled_unitary import (
     load_problem,
 )
 from hsopt.paper_baseline import _double_commutator_bound, calibrate_problem
+from hsopt.paper_baseline import seal_calibration
+from hsopt.paper_baseline_batch import build_manifest, generate_policies
 from hsopt.repository_layout import sync_layout
 
 
@@ -193,6 +195,78 @@ def test_bound_beta_is_independent_of_the_cached_exact_reference() -> None:
     assert calibration["reference"]["exact_ground_energy_hartree"] is None
     assert calibration["exact_reference"]["observable"] == "exact_unitary_ground_eigenphase"
     assert calibration["timing_seconds"]["exact_reference"] >= 0.0
+
+
+def test_batch_generator_can_materialize_a_checked_in_policy(
+    tmp_path: Path,
+) -> None:
+    abs_inputs = tmp_path / "inputs/abs_energy"
+    reaction_inputs = tmp_path / "inputs/diff_energy"
+    abs_inputs.mkdir(parents=True)
+    reaction_inputs.mkdir(parents=True)
+    problem = abs_inputs / "h2.json"
+    problem.write_bytes((ABSOLUTE / "hamiltonian.json").read_bytes())
+    (abs_inputs / "manifest.json").write_text(
+        json.dumps(
+            {
+                "family": "abs_energy",
+                "instances": [
+                    {
+                        "instance": "h2",
+                        "problem": "h2.json",
+                        "n_qubits": 4,
+                    }
+                ],
+            }
+        )
+        + "\n",
+        encoding="utf-8",
+    )
+    (reaction_inputs / "manifest.json").write_text(
+        json.dumps({"family": "diff_energy", "instances": []}) + "\n",
+        encoding="utf-8",
+    )
+    manifest_path = tmp_path / "manifest.json"
+    manifest = build_manifest(abs_inputs, reaction_inputs, manifest_path)
+
+    calibration = calibrate_problem(problem, backend="numpy")
+    calibration.update(
+        {
+            "dataset_key": "h2",
+            "dataset_family": "abs_energy",
+            "n_qubits": 4,
+            "consumers": ["abs_energy/h2"],
+        }
+    )
+    calibration = seal_calibration(calibration)
+    calibration_dir = tmp_path / "calibrations"
+    calibration_path = calibration_dir / "abs_energy/h2.json"
+    calibration_path.parent.mkdir(parents=True)
+    calibration_path.write_text(
+        json.dumps(calibration, indent=2, sort_keys=True) + "\n",
+        encoding="utf-8",
+    )
+
+    repository_root = tmp_path / "repo"
+    (repository_root / "experiments").mkdir(parents=True)
+    (repository_root / "experiments/generate_initial_pf.py").write_text(
+        "# repository marker\n",
+        encoding="utf-8",
+    )
+    result = generate_policies(
+        manifest_path,
+        calibration_dir,
+        tmp_path / "external-policies",
+        generator=GENERATOR,
+        repository_root=repository_root,
+    )
+
+    checked_in = repository_root / "experiments/abs_energy/h2/initial_pf.py"
+    external = tmp_path / "external-policies/abs_energy/h2/initial_pf.py"
+    assert manifest["absolute_hamiltonians"] == 1
+    assert result["absolute_initial_policies"] == 1
+    assert checked_in.read_bytes() == external.read_bytes()
+    assert result["policies"][0]["checked_in_policy"] == ("experiments/abs_energy/h2/initial_pf.py")
 
 
 def test_pygridsynth_compilation_is_reproducible_and_within_tolerance() -> None:

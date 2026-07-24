@@ -60,8 +60,8 @@ confidence-adjusted species costs and is reported as **T95 (raw total)**.
 ```text
 hsopt/
 ├── experiments/
-│   ├── abs_energy/             91 visible HamLib Hamiltonian folders
-│   ├── diff_energy/            10 visible reaction-definition folders
+│   ├── abs_energy/             91 HamLib folders: definition + initial_pf.py
+│   ├── diff_energy/            10 reaction folders: definition + initial_pf.py
 │   └── generate_initial_pf.py  Immutable initializer for both families
 ├── plots/                      Publication-plot source code
 ├── skills/hsopt/
@@ -124,10 +124,10 @@ uv run python experiments/generate_initial_pf.py \
 
 These fixtures are development checks and therefore live under `tests/`.
 Under `experiments/abs_energy/`, every production Hamiltonian has its own
-folder containing `instance.json`. Under `experiments/diff_energy/`, every
-production reaction has its own folder containing `definition.json`, including
-the checksummed external Hamiltonians it uses. Verify those visible folders
-against the compact source registries with:
+folder containing `instance.json` and its generated `initial_pf.py`. Under
+`experiments/diff_energy/`, every production reaction has its own folder
+containing `definition.json` and its generated `initial_pf.py`. Verify the
+definitions against the compact source registries with:
 
 ```bash
 uv run hsopt-layout --check
@@ -189,7 +189,8 @@ uv run hsopt-paper-baseline-batch generate \
   "$HSOPT_DATA_ROOT/exact/baseline-bound-v1/manifest.json" \
   --calibration-dir "$HSOPT_DATA_ROOT/exact/baseline-bound-v1/results" \
   --output-dir "$HSOPT_DATA_ROOT/exact/baseline-bound-v1/initial-policies" \
-  --generator experiments/generate_initial_pf.py
+  --generator experiments/generate_initial_pf.py \
+  --repository-root "$PWD"
 ```
 
 On NVPark, run each shard as a separate job on the `cpu` partition with no
@@ -198,8 +199,9 @@ verified and skipped. `hamiltonian_bound` is the canonical baseline: it
 computes the complete Eq. (19) Pauli coefficient sum, not a Monte Carlo
 estimate. The same pass caches one exact reference solely for evaluator reuse;
 that energy does not enter $\beta(H)$.
-The final command refuses incomplete calibration sets and writes a checksummed
-index for the 91 absolute-energy and 10 reaction initializers.
+The final command refuses incomplete calibration sets, writes a checksummed
+external index, and materializes byte-identical `initial_pf.py` files in all
+101 checked-in experiment directories.
 
 ```bash
 uv run hsopt-campaign initialize \

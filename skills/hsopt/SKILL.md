@@ -122,9 +122,11 @@ compiled unitary used by the reported observable.
 Before preparing inputs, run `uv run hsopt-layout --check`. The 91
 `experiments/abs_energy/*/instance.json` files and ten
 `experiments/diff_energy/*/definition.json` files must match their compact
-registries and source checksums exactly. These checked-in definitions make the
-production set visible; coefficient-heavy Hamiltonians and generated
-`initial_pf.py` policies still belong in the external campaign data root.
+registries and source checksums exactly. Each of those 101 directories also
+contains its generated immutable `initial_pf.py`. The checked-in policy must
+be byte-identical to the copy generated under the external campaign data root;
+coefficient-heavy Hamiltonians and sealed calibration/reference records remain
+external.
 
 Run OpenShell and OpenCode/Nemotron on persistent Omni infrastructure.
 OpenCode receives only the incumbent policy and prior result, with deny-all
@@ -210,7 +212,8 @@ uv run hsopt-paper-baseline-batch generate \
   "$HSOPT_DATA_ROOT/exact/baseline-bound-v1/manifest.json" \
   --calibration-dir "$HSOPT_DATA_ROOT/exact/baseline-bound-v1/results" \
   --output-dir "$HSOPT_DATA_ROOT/exact/baseline-bound-v1/initial-policies" \
-  --generator experiments/generate_initial_pf.py
+  --generator experiments/generate_initial_pf.py \
+  --repository-root "$PWD"
 ```
 
 Initialize a fresh external campaign only after all four shards pass audit:

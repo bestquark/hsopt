@@ -17,16 +17,18 @@ the canonical dense evaluator through 14 qubits:
 `inputs/hamlib_zip_sha256.txt` pins the upstream HamLib archives. Running
 `hsopt-campaign prepare-hamlib --max-qubits 14` materializes the 91 compact
 Hamiltonian JSON files under an external input directory. Campaign
-baseline preparation first computes one sealed Eq. (19) bound $\beta(H)$ and exact
-reference per Hamiltonian on CPU nodes. Campaign initialization then runs
-`experiments/generate_initial_pf.py` once for each Hamiltonian and creates five
-mutation lanes that reuse that same exact reference.
+baseline preparation first computes one sealed Eq. (19) bound $\beta(H)$ and
+exact reference per Hamiltonian on CPU nodes. It then runs
+`experiments/generate_initial_pf.py` once per Hamiltonian, writing the
+immutable policy both beside its `instance.json` and into the external
+campaign data. Campaign initialization creates five mutation lanes that reuse
+that same exact reference.
 
 The 91 directories beside `inputs/` are the visible production selection. Each
-contains one deterministic `instance.json` recording its HamLib archive and
-dataset, archive checksum, mapped qubit/electron/term counts, one-norm, target
-time, and dense-exact fit metadata. The large coefficient payload is not
-duplicated in Git.
+contains one deterministic `instance.json` and one generated `initial_pf.py`.
+The definition records its HamLib archive and dataset, archive checksum,
+mapped qubit/electron/term counts, one-norm, target time, and dense-exact fit
+metadata. The large coefficient payload is not duplicated in Git.
 
 Verify or intentionally regenerate this directory view with:
 
