@@ -214,7 +214,7 @@ def test_opencode_policy_only_allows_candidate_file_mutations() -> None:
     assert "exactly once" in agent["prompt"]
     assert "coefficient_desc" in agent["prompt"]
     assert "reverse_lexicographic" not in agent["prompt"]
-    assert permissions["*"] == "deny"
+    assert permissions["*"] == "allow"
     assert permissions["edit"] == {
         "*": "deny",
         "candidate.py": "allow",
@@ -230,6 +230,11 @@ def test_opencode_policy_only_allows_candidate_file_mutations() -> None:
     assert permissions["webfetch"] == "allow"
     assert permissions["websearch"] == "allow"
     assert permissions["bash"] == "deny"
+    assert permissions["batch"] == "deny"
+    assert permissions["external_directory"] == "deny"
+    assert permissions["task"] == "deny"
+    assert permissions["todoread"] == "deny"
+    assert permissions["todowrite"] == "deny"
 
 
 def test_research_network_is_optional_and_binary_scoped(

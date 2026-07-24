@@ -476,8 +476,16 @@ def opencode_config() -> dict[str, Any]:
                     "coefficient_asc, support_desc, and custom."
                 ),
                 "permission": {
-                    "*": "deny",
+                    # OpenCode applies an explicit global deny before its
+                    # tool-specific path rules, so it cannot be overridden by
+                    # the candidate.py allow entries below. File mutation is
+                    # still confined by edit (which also gates write/patch),
+                    # while every non-research built-in is denied explicitly.
+                    "*": "allow",
                     "bash": "deny",
+                    "batch": "deny",
+                    "doom_loop": "deny",
+                    "external_directory": "deny",
                     "glob": "deny",
                     "grep": "deny",
                     "list": "deny",
@@ -499,6 +507,7 @@ def opencode_config() -> dict[str, Any]:
                         "hsopt": "allow",
                     },
                     "task": "deny",
+                    "todoread": "deny",
                     "todowrite": "deny",
                     "codesearch": "allow",
                     "webfetch": "allow",
