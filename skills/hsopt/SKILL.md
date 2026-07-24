@@ -205,6 +205,12 @@ uv run hsopt-paper-baseline-batch run \
 uv run hsopt-paper-baseline-batch audit \
   "$HSOPT_DATA_ROOT/exact/calibration-v1/manifest.json" \
   --output-dir "$HSOPT_DATA_ROOT/exact/calibration-v1/results"
+
+uv run hsopt-paper-baseline-batch generate \
+  "$HSOPT_DATA_ROOT/exact/calibration-v1/manifest.json" \
+  --calibration-dir "$HSOPT_DATA_ROOT/exact/calibration-v1/results" \
+  --output-dir "$HSOPT_DATA_ROOT/exact/calibration-v1/initial-policies" \
+  --generator experiments/generate_initial_pf.py
 ```
 
 Initialize a fresh external campaign only after all four shards pass audit:

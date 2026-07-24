@@ -5,6 +5,8 @@ from __future__ import annotations
 import argparse
 import hashlib
 import json
+import subprocess
+import sys
 import time
 import traceback
 from pathlib import Path
@@ -309,6 +311,86 @@ def audit_batch(manifest_path: Path, output_dir: Path) -> dict[str, Any]:
     return summary
 
 
+def generate_policies(
+    manifest_path: Path,
+    calibration_dir: Path,
+    output_dir: Path,
+    *,
+    generator: Path,
+) -> dict[str, Any]:
+    """Render one immutable initializer per dataset element after a complete audit."""
+
+    manifest_path = manifest_path.resolve()
+    calibration_dir = calibration_dir.resolve()
+    output_dir = output_dir.resolve()
+    generator = generator.resolve()
+    audit = audit_batch(manifest_path, calibration_dir)
+    if not audit["complete"]:
+        raise RuntimeError("cannot generate initial policies from an incomplete calibration")
+    manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
+    abs_inputs = Path(str(manifest["abs_inputs"])).resolve()
+    reaction_inputs = Path(str(manifest["reaction_inputs"])).resolve()
+    absolute_manifest = json.loads((abs_inputs / "manifest.json").read_text(encoding="utf-8"))
+    reaction_manifest = json.loads((reaction_inputs / "manifest.json").read_text(encoding="utf-8"))
+    records: list[dict[str, Any]] = []
+
+    def render(family: str, key: str, source: Path) -> None:
+        output = output_dir / family / _safe_key(key) / "initial_pf.py"
+        command = [
+            sys.executable,
+            str(generator),
+            str(source.resolve()),
+            "--output",
+            str(output),
+            "--calibration-root",
+            str(calibration_dir),
+        ]
+        if output.is_file():
+            subprocess.run([*command, "--check"], check=True)
+            status = "verified"
+        else:
+            subprocess.run(command, check=True)
+            status = "generated"
+        records.append(
+            {
+                "family": family,
+                "key": key,
+                "source": str(source.resolve()),
+                "source_sha256": _sha256(source),
+                "policy": str(output.relative_to(output_dir)),
+                "policy_sha256": _sha256(output),
+                "status": status,
+            }
+        )
+
+    for item in absolute_manifest["instances"]:
+        render(
+            "abs_energy",
+            str(item["instance"]),
+            abs_inputs / str(item["problem"]),
+        )
+    for item in reaction_manifest["instances"]:
+        render(
+            "diff_energy",
+            str(item["instance"]),
+            reaction_inputs / str(item["reaction"]),
+        )
+    index = {
+        "schema": 1,
+        "manifest": str(manifest_path),
+        "manifest_sha256": _sha256(manifest_path),
+        "calibration_dir": str(calibration_dir),
+        "calibration_audit_sha256": _sha256(calibration_dir / "audit.json"),
+        "generator": str(generator),
+        "generator_sha256": _sha256(generator),
+        "absolute_initial_policies": sum(row["family"] == "abs_energy" for row in records),
+        "reaction_initial_policies": sum(row["family"] == "diff_energy" for row in records),
+        "policies": records,
+    }
+    _write_json(output_dir / "index.json", index)
+    return index
+
+
 def _parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(description=__doc__)
     commands = parser.add_subparsers(dest="command", required=True)
@@ -348,6 +430,12 @@ def _parser() -> argparse.ArgumentParser:
     audit = commands.add_parser("audit")
     audit.add_argument("manifest", type=Path)
     audit.add_argument("--output-dir", required=True, type=Path)
+
+    generate = commands.add_parser("generate")
+    generate.add_argument("manifest", type=Path)
+    generate.add_argument("--calibration-dir", required=True, type=Path)
+    generate.add_argument("--output-dir", required=True, type=Path)
+    generate.add_argument("--generator", required=True, type=Path)
     return parser
 
 
@@ -375,8 +463,15 @@ def main() -> int:
             bound_seed=args.bound_seed,
             bound_confidence=args.bound_confidence,
         )
-    else:
+    elif args.command == "audit":
         result = audit_batch(args.manifest, args.output_dir)
+    else:
+        result = generate_policies(
+            args.manifest,
+            args.calibration_dir,
+            args.output_dir,
+            generator=args.generator,
+        )
     print(_json_text(result), end="")
     if args.command == "run":
         return int(result["failed"] > 0)

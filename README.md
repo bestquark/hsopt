@@ -183,6 +183,12 @@ done
 uv run hsopt-paper-baseline-batch audit \
   "$HSOPT_DATA_ROOT/exact/calibration-v1/manifest.json" \
   --output-dir "$HSOPT_DATA_ROOT/exact/calibration-v1/results"
+
+uv run hsopt-paper-baseline-batch generate \
+  "$HSOPT_DATA_ROOT/exact/calibration-v1/manifest.json" \
+  --calibration-dir "$HSOPT_DATA_ROOT/exact/calibration-v1/results" \
+  --output-dir "$HSOPT_DATA_ROOT/exact/calibration-v1/initial-policies" \
+  --generator experiments/generate_initial_pf.py
 ```
 
 On NVPark, run each shard as a separate job on the `cpu` partition with no
@@ -190,6 +196,8 @@ GPU request. The command is resumable: a sealed source-matching calibration is
 verified and skipped. The optional `--mode hamiltonian_bound` computes the
 paper's double-commutator coefficient bound without $E_0$, but it is not the
 baseline used for this campaign.
+The final command refuses incomplete calibration sets and writes a checksummed
+index for the 91 absolute-energy and 10 reaction initializers.
 
 ```bash
 uv run hsopt-campaign initialize \
