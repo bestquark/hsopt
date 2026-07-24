@@ -20,15 +20,17 @@ from hsopt.paper_baseline import (
     PAPER_ERROR_CONSTRAINT,
     PAPER_FORMULA_ORDER,
     PAPER_PHASE_ESTIMATION_ALPHA,
+    PAPER_SYNTHESIS_DELTA_0,
+    PAPER_SYNTHESIS_GAMMA,
     PAPER_TERM_ORDER,
-    optimize_direct_error_allocation,
+    optimize_paper_error_allocation,
     verify_calibration,
 )
 
 
 PAPER_CONTRACT: dict[str, Any] = {
-    "schema": 5,
-    "baseline_id": "reiher_wiebe_svore_wecker_troyer_2017_eq19_bound_pf2",
+    "schema": 6,
+    "baseline_id": "reiher_wiebe_svore_wecker_troyer_2017_eq19_eq34_rigorous_pf2",
     "citation": {
         "authors": [
             "Markus Reiher",
@@ -48,10 +50,13 @@ PAPER_CONTRACT: dict[str, Any] = {
         "formula_name": "symmetric_second_order_trotter_suzuki",
         "step_structure": "forward_half_except_center_full_then_reverse_half",
         "term_order_strategy": PAPER_TERM_ORDER,
-        "rotation_synthesis": "clifford_plus_t_pygridsynth",
+        "rotation_synthesis": "clifford_plus_t_pygridsynth_at_iteration_zero",
         "beta_reference_error_hartree": PAPER_BETA_REFERENCE_ERROR_HARTREE,
         "beta_selection": "exact Eq. (19) Pauli double-commutator coefficient bound",
         "phase_estimation_alpha": PAPER_PHASE_ESTIMATION_ALPHA,
+        "synthesis_gamma": PAPER_SYNTHESIS_GAMMA,
+        "synthesis_delta_0": PAPER_SYNTHESIS_DELTA_0,
+        "allocation_equation": "supplement Eq. (34)",
         "error_constraint": PAPER_ERROR_CONSTRAINT,
         "synthesis_energy_bound": "(2M - 1) * Delta_synth / step_time",
     },
@@ -59,7 +64,8 @@ PAPER_CONTRACT: dict[str, Any] = {
         "total_error_target_hartree": BENCHMARK_TOTAL_ERROR_HARTREE,
         "total_error_target": "1 kcal/mol",
         "target_time_hartree_inverse": 1.0,
-        "allocation_cost": "direct PyGridSynth T counts; no gamma/delta fit",
+        "allocation_cost": "supplement Eq. (34) with rigorous gamma=4 and delta_0=11",
+        "realized_t_count": "direct PyGridSynth compilation during iteration 0",
     },
     "scope_note": (
         "beta(H) is obtained from the paper's rigorous Eq. (19) "
@@ -146,21 +152,25 @@ def _policy_row(
     if calibration["calibration_mode"] != "hamiltonian_bound":
         raise ValueError(f"{calibration_path}: not a Hamiltonian-bound baseline")
     if reaction_coefficient is None:
-        policy = dict(calibration["instantiated_policy"])
+        species_error_target = BENCHMARK_TOTAL_ERROR_HARTREE
     else:
         if reaction_species_count <= 0 or reaction_coefficient == 0.0:
             raise ValueError("reaction calibration requires nonzero signed terms")
         species_error_target = BENCHMARK_TOTAL_ERROR_HARTREE / (
             reaction_species_count * abs(reaction_coefficient)
         )
-        policy, _search = optimize_direct_error_allocation(
-            problem,
-            reference_trotter_number_beta=float(
-                calibration["reference"]["reference_trotter_number_beta"]
-            ),
-            reference_error_hartree=float(calibration["reference"]["reference_error_hartree"]),
-            total_error_hartree=species_error_target,
+    policy, _derivation = optimize_paper_error_allocation(
+        problem,
+        beta=float(calibration["reference"]["reference_trotter_number_beta"]),
+        reference_error_hartree=float(calibration["reference"]["reference_error_hartree"]),
+        total_error_hartree=species_error_target,
+    )
+    if reaction_coefficient is None and policy != calibration["instantiated_policy"]:
+        raise ValueError(
+            f"{calibration_path}: generator Eq. (34) policy does not match "
+            "the sealed calibration policy"
         )
+    if reaction_coefficient is not None:
         policy["reaction_coefficient"] = reaction_coefficient
         policy["reaction_species_count"] = reaction_species_count
         policy["reaction_error_allocation"] = (
@@ -287,9 +297,11 @@ the paper's Trotter/QPE/synthesis error relation, and uniform Clifford+T
 rotation tolerance.
 
 Benchmark adaptation: beta is referenced to 0.1 mHa; the full error target is
-1 kcal/mol; allocation cost uses direct PyGridSynth T counts instead of the
-paper's gamma/delta synthesis fit. Reaction initializers conservatively give
-each signed species term an equal absolute share of the reaction-error target.
+1 kcal/mol; error allocation follows the supplement's Eq. (34) calculus using
+the rigorous-row gamma=4 and delta_0=11. PyGridSynth is not run here: iteration
+0 compiles the generated policy and records its realized T count. Reaction
+initializers conservatively give each signed species term an equal absolute
+share of the reaction-error target.
 
 {scope_note}
 

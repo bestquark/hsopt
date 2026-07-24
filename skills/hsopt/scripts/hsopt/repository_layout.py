@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import argparse
+import ast
 import csv
 import json
 from pathlib import Path, PurePosixPath
@@ -13,8 +14,10 @@ ABS_FAMILY = "abs_energy"
 DIFF_FAMILY = "diff_energy"
 ABS_DESCRIPTOR = "instance.json"
 DIFF_DESCRIPTOR = "definition.json"
+INITIAL_POLICY = "initial_pf.py"
 ABS_INSTANCE_COUNT = 91
 DIFF_INSTANCE_COUNT = 10
+BOUND_BASELINE_ID = "reiher_wiebe_svore_wecker_troyer_2017_eq19_eq34_rigorous_pf2"
 
 
 def _json_text(payload: Any) -> str:
@@ -204,6 +207,45 @@ def _instance_directories(root: Path) -> set[str]:
     }
 
 
+def _validate_initial_policy(path: Path, *, expected_problems: int) -> None:
+    """Validate the compact immutable contract without importing the policy."""
+
+    if not path.is_file():
+        raise ValueError(f"missing generated initial policy: {path}")
+    module = ast.parse(path.read_text(encoding="utf-8"), filename=str(path))
+    baseline_nodes = [
+        node.value
+        for node in module.body
+        if isinstance(node, ast.Assign)
+        and any(
+            isinstance(target, ast.Name) and target.id == "BASELINES" for target in node.targets
+        )
+    ]
+    if len(baseline_nodes) != 1:
+        raise ValueError(f"{path}: expected one BASELINES assignment")
+    baselines = ast.literal_eval(baseline_nodes[0])
+    if not isinstance(baselines, dict) or len(baselines) != expected_problems:
+        raise ValueError(
+            f"{path}: expected {expected_problems} problem policies, "
+            f"found {len(baselines) if isinstance(baselines, dict) else 'invalid'}"
+        )
+    for problem, policy in baselines.items():
+        if (
+            not isinstance(problem, str)
+            or not isinstance(policy, dict)
+            or policy.get("baseline_source") != BOUND_BASELINE_ID
+            or policy.get("calibration_mode") != "hamiltonian_bound"
+            or policy.get("bound_method") != "exact_vectorized_pauli_sum"
+            or policy.get("formula_order") != 2
+            or policy.get("term_order_strategy") != "lexicographic"
+            or not isinstance(policy.get("n_steps"), int)
+            or int(policy["n_steps"]) <= 0
+            or float(policy.get("uniform_epsilon", 0.0)) <= 0.0
+            or float(policy.get("reference_trotter_number_beta", 0.0)) <= 0.0
+        ):
+            raise ValueError(f"{path}: invalid bound-derived policy for {problem!r}")
+
+
 def sync_layout(
     *,
     abs_manifest: Path,
@@ -240,14 +282,38 @@ def sync_layout(
         ]
         actual_abs = _instance_directories(abs_root)
         actual_diff = _instance_directories(diff_root)
+        invalid_policies: list[str] = []
+        for instance in sorted(expected_abs):
+            try:
+                _validate_initial_policy(
+                    abs_root / instance / INITIAL_POLICY,
+                    expected_problems=1,
+                )
+            except (KeyError, TypeError, ValueError, SyntaxError) as exc:
+                invalid_policies.append(str(exc))
+        for instance in sorted(expected_diff):
+            definition = json.loads(expected[diff_root / instance / DIFF_DESCRIPTOR])
+            try:
+                _validate_initial_policy(
+                    diff_root / instance / INITIAL_POLICY,
+                    expected_problems=len(definition["terms"]),
+                )
+            except (KeyError, TypeError, ValueError, SyntaxError) as exc:
+                invalid_policies.append(str(exc))
         if mismatches or actual_abs != expected_abs or actual_diff != expected_diff:
             raise ValueError(
                 "repository benchmark layout is stale: "
                 f"mismatched_files={mismatches}, "
+                f"invalid_initial_policies={invalid_policies}, "
                 f"unexpected_abs={sorted(actual_abs - expected_abs)}, "
                 f"missing_abs={sorted(expected_abs - actual_abs)}, "
                 f"unexpected_diff={sorted(actual_diff - expected_diff)}, "
                 f"missing_diff={sorted(expected_diff - actual_diff)}"
+            )
+        if invalid_policies:
+            raise ValueError(
+                "repository benchmark policies are stale: "
+                f"invalid_initial_policies={invalid_policies}"
             )
     else:
         for path, content in expected.items():
@@ -259,6 +325,7 @@ def sync_layout(
         "absolute_hamiltonians": len(expected_abs),
         "difference_reactions": len(expected_diff),
         "definition_files": len(expected),
+        "initial_policies": len(expected_abs) + len(expected_diff),
     }
 
 

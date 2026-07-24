@@ -54,9 +54,12 @@ The checked-in paper contract records:
 - lexicographic term ordering;
 - Eq. (19) double-commutator-bound `beta(H)` referenced to 0.1 mHa;
 - `t=1`, the resulting integer step count and step time;
-- direct PyGridSynth T counts used to select a uniform synthesis tolerance
-  under the paper's Trotter/QPE/rotation error relation, with a 1 kcal/mol
-  benchmark target and no fitted gamma/delta constants.
+- the supplement's rigorous Eq. (32)/(34) calculus allocation with
+  `alpha=8*pi`, `gamma=4`, and `delta_0=11`, adapted only to the benchmark's
+  1 kcal/mol total target;
+- the resulting uniform synthesis tolerance. Do not run PyGridSynth while
+  generating `initial_pf.py`; iteration 0 performs the first direct synthesis
+  and records the realized T count.
 
 The current campaign baseline is `hamiltonian_bound`. It evaluates the full
 nonnegative Eq. (19) Pauli sum deterministically; it does not substitute a

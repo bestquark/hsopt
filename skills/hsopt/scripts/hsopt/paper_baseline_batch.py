@@ -158,6 +158,7 @@ def run_batch(
     completed = 0
     skipped = 0
     failed = 0
+    exact_references_reused = 0
     for index, record in enumerate(records, start=1):
         key = str(record["key"])
         problem = Path(str(record["problem"])).resolve()
@@ -166,11 +167,27 @@ def run_batch(
         failure = output.with_suffix(".failure.json")
         if _sha256(problem) != expected_sha256:
             raise ValueError(f"{key}: input checksum mismatch for {problem}")
+        reusable_exact_reference: Mapping[str, Any] | None = None
         if output.is_file():
             try:
                 prior = json.loads(output.read_text(encoding="utf-8"))
+            except json.JSONDecodeError:
+                prior = None
+            if isinstance(prior, Mapping):
+                candidate_reference = prior.get("exact_reference")
+                if (
+                    include_exact_reference
+                    and isinstance(candidate_reference, Mapping)
+                    and candidate_reference.get("observable") == "exact_unitary_ground_eigenphase"
+                    and candidate_reference.get("problem_sha256") == expected_sha256
+                    and float(candidate_reference.get("target_time", float("nan"))) == target_time
+                ):
+                    reusable_exact_reference = candidate_reference
+            try:
+                if not isinstance(prior, Mapping):
+                    raise ValueError("calibration output is not a JSON object")
                 verify_calibration(prior, problem_path=problem)
-            except (KeyError, TypeError, ValueError, json.JSONDecodeError):
+            except (KeyError, TypeError, ValueError):
                 pass
             else:
                 if (
@@ -203,7 +220,10 @@ def run_batch(
                 total_error_hartree=total_error_hartree,
                 max_steps=max_steps,
                 include_exact_reference=include_exact_reference,
+                precomputed_exact_reference=reusable_exact_reference,
             )
+            if reusable_exact_reference is not None:
+                exact_references_reused += 1
             result["dataset_key"] = key
             result["dataset_family"] = str(record["family"])
             result["n_qubits"] = int(record["n_qubits"])
@@ -253,6 +273,7 @@ def run_batch(
         "completed": completed,
         "skipped": skipped,
         "failed": failed,
+        "exact_references_reused": exact_references_reused,
         "batch_wall_seconds": time.perf_counter() - started,
     }
     _write_json(
@@ -329,6 +350,7 @@ def generate_policies(
     *,
     generator: Path,
     repository_root: Path | None = None,
+    require_exact_reference: bool = True,
 ) -> dict[str, Any]:
     """Render external and optionally checked-in immutable initializers."""
 
@@ -340,7 +362,11 @@ def generate_policies(
         repository_root = repository_root.resolve()
         if not (repository_root / "experiments/generate_initial_pf.py").is_file():
             raise ValueError(f"not an hsopt repository root: {repository_root}")
-    audit = audit_batch(manifest_path, calibration_dir)
+    audit = audit_batch(
+        manifest_path,
+        calibration_dir,
+        require_exact_reference=require_exact_reference,
+    )
     if not audit["complete"]:
         raise RuntimeError("cannot generate initial policies from an incomplete calibration")
     manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
@@ -474,12 +500,22 @@ def _parser() -> argparse.ArgumentParser:
     audit = commands.add_parser("audit")
     audit.add_argument("manifest", type=Path)
     audit.add_argument("--output-dir", required=True, type=Path)
+    audit.add_argument(
+        "--without-exact-reference",
+        action="store_true",
+        help="audit policy-only calibrations that intentionally omit U_exact",
+    )
 
     generate = commands.add_parser("generate")
     generate.add_argument("manifest", type=Path)
     generate.add_argument("--calibration-dir", required=True, type=Path)
     generate.add_argument("--output-dir", required=True, type=Path)
     generate.add_argument("--generator", required=True, type=Path)
+    generate.add_argument(
+        "--without-exact-reference",
+        action="store_true",
+        help="allow policy-only calibrations that intentionally omit U_exact",
+    )
     generate.add_argument(
         "--repository-root",
         type=Path,
@@ -514,7 +550,11 @@ def main() -> int:
             include_exact_reference=not args.without_exact_reference,
         )
     elif args.command == "audit":
-        result = audit_batch(args.manifest, args.output_dir)
+        result = audit_batch(
+            args.manifest,
+            args.output_dir,
+            require_exact_reference=not args.without_exact_reference,
+        )
     else:
         result = generate_policies(
             args.manifest,
@@ -522,6 +562,7 @@ def main() -> int:
             args.output_dir,
             generator=args.generator,
             repository_root=args.repository_root,
+            require_exact_reference=not args.without_exact_reference,
         )
     print(_json_text(result), end="")
     if args.command == "run":

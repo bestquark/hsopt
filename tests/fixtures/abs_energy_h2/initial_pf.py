@@ -2,8 +2,8 @@
 
 Source: hamiltonian.json
 Source SHA-256: 7e741dc5e8e4d37c3cb8e17dc6bfe970da921bcd0242e2d50940161f1f312d4a
-Paper contract SHA-256: 857c98ae69f93598087e5131c4c46b3a775aa6a69be128e32b7e9b4127e3bb39
-Calibration scientific SHA-256: 96636fada0df16a6e25b9f809b553539df29b047f009198ef678629e3da13c1b
+Paper contract SHA-256: 9d74067aa7507dde7c4af016beb1b54288ba97de9927b6cff4f00e2af63e6a4f
+Calibration scientific SHA-256: 6922794f3b3d91828ffde8824b2acba0de0767e639133d01bf56a2bc6c0d8dda
 Generator: experiments/generate_initial_pf.py
 Paper: Reiher et al., PNAS 114, 7555-7560 (2017), DOI 10.1073/pnas.1619152114
 
@@ -12,9 +12,11 @@ the paper's Trotter/QPE/synthesis error relation, and uniform Clifford+T
 rotation tolerance.
 
 Benchmark adaptation: beta is referenced to 0.1 mHa; the full error target is
-1 kcal/mol; allocation cost uses direct PyGridSynth T counts instead of the
-paper's gamma/delta synthesis fit. Reaction initializers conservatively give
-each signed species term an equal absolute share of the reaction-error target.
+1 kcal/mol; error allocation follows the supplement's Eq. (34) calculus using
+the rigorous-row gamma=4 and delta_0=11. PyGridSynth is not run here: iteration
+0 compiles the generated policy and records its realized T count. Reaction
+initializers conservatively give each signed species term an equal absolute
+share of the reaction-error target.
 
 beta(H) is obtained from the paper's rigorous Eq. (19) double-commutator coefficient bound for this Pauli decomposition. The separately cached exact energy is used only by the evaluator and does not enter beta, the Trotter step count, or the synthesis tolerance.
 
@@ -28,45 +30,49 @@ from dataclasses import dataclass
 
 BASELINES = {
     "HamLib H2 linear R=0.7 STO-6G Jordan-Wigner": {
-        "allocation_candidates_evaluated": 33,
-        "baseline_source": "reiher_wiebe_svore_wecker_troyer_2017_eq19_bound_pf2",
+        "baseline_source": "reiher_wiebe_svore_wecker_troyer_2017_eq19_eq34_rigorous_pf2",
         "bound_equation": "Reiher_et_al_PNAS_2017_supplement_Eq_19",
         "bound_method": "exact_vectorized_pauli_sum",
         "bound_term_count": 14,
         "calibration_mode": "hamiltonian_bound",
-        "calibration_sha256": "96636fada0df16a6e25b9f809b553539df29b047f009198ef678629e3da13c1b",
+        "calibration_sha256": "6922794f3b3d91828ffde8824b2acba0de0767e639133d01bf56a2bc6c0d8dda",
         "double_commutator_sum_upper": 0.41861518626301725,
-        "error_allocation": "direct_pygridsynth_t_count_optimization_under_paper_variance_constraint",
+        "error_allocation": "supplement_eq34_rigorous_additive_analytic_optimum",
         "error_constraint_value_hartree": 0.0015936014376405157,
         "formula_name": "symmetric_second_order_trotter_suzuki",
         "formula_order": 2,
-        "full_pf_t_count": 53220,
-        "n_steps": 30,
+        "n_steps": 29,
         "nonidentity_terms": 14,
-        "one_step_gate_count": 4551,
-        "one_step_t_count": 1774,
-        "phase_estimation_error_hartree": 0.001064139217959783,
+        "paper_eq34_cost_proxy": 2173512258.421287,
+        "paper_error_constraint": "epsilon_QPE + epsilon_TS + epsilon_Rot <= epsilon_total",
+        "paper_modeled_t_per_rotation": 111.06873536587325,
+        "paper_phase_estimation_alpha": 25.132741228718345,
+        "paper_synthesis_delta_0": 11.0,
+        "paper_synthesis_gamma": 4.0,
+        "phase_estimation_error_hartree": 0.0010268336076057723,
         "problem_sha256": "7e741dc5e8e4d37c3cb8e17dc6bfe970da921bcd0242e2d50940161f1f312d4a",
-        "qpe_full_evolution_queries": 1477,
-        "qpe_step_queries": 44310,
-        "qpe_t_count_proxy": 78605940,
+        "qpe_fraction": 0.6443478170590138,
+        "qpe_full_evolution_queries": 24476,
+        "qpe_step_queries": 709804,
+        "realized_t_count": None,
+        "realized_t_count_stage": "iteration_0_exact_compiled_unitary_evaluation",
         "reference_beta_error_hartree": 0.0001,
         "reference_error_hartree": 0.0001,
         "reference_trotter_number_beta": 64.7004780711099,
-        "rotation_radial_fraction": 0.3,
-        "rotation_synthesis": "clifford_plus_t_pygridsynth",
-        "rotation_synthesis_energy_error_hartree": 0.0003346563019045083,
-        "scheduled_rotations": 810,
+        "rotation_fraction": 0.033478274411479436,
+        "rotation_synthesis": "clifford_plus_t_pygridsynth_at_iteration_zero",
+        "rotation_synthesis_energy_error_hartree": 5.3351026231857315e-05,
+        "scheduled_rotations": 783,
         "scheduled_rotations_per_step": 27,
-        "step_repetitions": 30,
+        "step_repetitions": 29,
         "step_structure": "forward_half_except_center_full_then_reverse_half",
-        "step_time": 0.03333333333333333,
+        "step_time": 0.034482758620689655,
         "target_time": 1.0,
         "term_order_strategy": "lexicographic",
         "total_error_target_hartree": 0.0015936014376405157,
-        "trotter_error_hartree": 0.0004780804312921547,
-        "trotter_fraction": 0.3,
-        "uniform_epsilon": 4.1315592827717075e-07,
+        "trotter_error_hartree": 0.0005134168038028862,
+        "trotter_fraction": 0.3221739085295069,
+        "uniform_epsilon": 6.813668739700806e-08,
         "zero_angle_threshold": 0.0,
     },
 }

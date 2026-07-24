@@ -30,7 +30,6 @@ import numpy as np
 from hsopt.compiled_unitary import (
     CHEMICAL_ACCURACY_HARTREE,
     _apply_compiled_rotation,
-    _compile_rz,
     _fence,
     _step_rotations,
     _unwrap_energy,
@@ -44,14 +43,16 @@ PAPER_BETA_REFERENCE_ERROR_HARTREE = 1.0e-4
 BENCHMARK_TOTAL_ERROR_HARTREE = CHEMICAL_ACCURACY_HARTREE
 PAPER_FORMULA_ORDER = 2
 PAPER_TERM_ORDER = "lexicographic"
-PAPER_PHASE_ESTIMATION_ALPHA = math.pi / 2.0
-PAPER_ERROR_CONSTRAINT = "epsilon_TS + sqrt(epsilon_QPE^2 + epsilon_Rot^2) <= epsilon_total"
+PAPER_PHASE_ESTIMATION_ALPHA = 8.0 * math.pi
+PAPER_SYNTHESIS_GAMMA = 4.0
+PAPER_SYNTHESIS_DELTA_0 = 11.0
+PAPER_ERROR_CONSTRAINT = "epsilon_QPE + epsilon_TS + epsilon_Rot <= epsilon_total"
+PAPER_ALLOCATION_METHOD = "supplement_eq34_rigorous_additive_analytic_optimum"
 PAPER_TROTTER_SELECTION = (
     "empirical_exact_ground_branch_at_0.1_mHa_then_beta_sqrt_reference_over_allocated_trotter_error"
 )
 HAMILTONIAN_BOUND_SELECTION = "paper_eq19_exact_pauli_double_commutator_bound_without_exact_energy"
-CALIBRATION_SCHEMA = 3
-ALLOCATION_GRID = (0.1, 0.3, 0.5, 0.7, 0.9)
+CALIBRATION_SCHEMA = 4
 
 
 def _canonical_json(payload: Mapping[str, Any]) -> bytes:
@@ -88,7 +89,6 @@ def _calibration_signature(payload: Mapping[str, Any]) -> dict[str, Any]:
         "schema": payload.get("schema"),
         "problem": payload.get("problem"),
         "problem_sha256": payload.get("problem_sha256"),
-        "backend": payload.get("backend"),
         "calibration_mode": payload.get("calibration_mode"),
         "paper": payload.get("paper"),
         "benchmark_adaptation": payload.get("benchmark_adaptation"),
@@ -132,6 +132,22 @@ def verify_calibration(
         raise ValueError("paper baseline must use PF2/Strang")
     if str(policy.get("term_order_strategy", "")) != PAPER_TERM_ORDER:
         raise ValueError("paper baseline must use lexicographic term ordering")
+    if str(policy.get("error_allocation", "")) != PAPER_ALLOCATION_METHOD:
+        raise ValueError("paper baseline must use the supplement Eq. (34) allocation")
+    if not math.isclose(
+        float(policy.get("paper_synthesis_gamma", math.nan)),
+        PAPER_SYNTHESIS_GAMMA,
+        rel_tol=0.0,
+        abs_tol=0.0,
+    ):
+        raise ValueError("paper baseline has the wrong rigorous synthesis gamma")
+    if not math.isclose(
+        float(policy.get("paper_synthesis_delta_0", math.nan)),
+        PAPER_SYNTHESIS_DELTA_0,
+        rel_tol=0.0,
+        abs_tol=0.0,
+    ):
+        raise ValueError("paper baseline has the wrong rigorous synthesis delta_0")
     mode = str(payload.get("calibration_mode", ""))
     exact_reference = payload.get("exact_reference")
     if mode == "empirical_exact":
@@ -442,92 +458,143 @@ def _double_commutator_bound(
     }
 
 
-def _one_step_t_count(
-    problem: Mapping[str, Any],
+def _paper_eq34_rotation_error(
     *,
-    n_steps: int,
-    uniform_epsilon: float,
-) -> tuple[int, int]:
-    """Compile the actual PF2 angles and return one-step T and gate counts."""
+    terms: int,
+    beta: float,
+    total_error_hartree: float,
+) -> tuple[float, dict[str, Any]]:
+    """Solve the supplement Eq. (34) stationary condition.
 
-    terms = sorted(problem["terms"], key=lambda term: str(term["label"]))
-    rotations = _step_rotations(
-        terms,
-        order=PAPER_FORMULA_ORDER,
-        step_time=float(problem["target_time"]) / int(n_steps),
-    )
-    t_count = 0
-    gate_count = 0
-    for _term, alpha in rotations:
-        theta = float(round(-2.0 * float(alpha), 15))
-        compiled = _compile_rz(theta, float(uniform_epsilon))
-        if float(compiled["operator_error"]) > float(uniform_epsilon) + 1.0e-15:
-            raise RuntimeError("PyGridSynth exceeded the requested synthesis tolerance")
-        t_count += int(compiled["t_count"])
-        gate_count += int(compiled["gate_count"])
-    return t_count, gate_count
+    For fixed rotation error ``epsilon_rot``, the additive constraint and
+    Eq. (34) give ``epsilon_QPE = 2 * epsilon_TS``.  The remaining scalar
+    stationary equation has exactly one root in ``(0, epsilon_total)`` for
+    the rigorous-row parameters used here.  Bisection avoids an optional
+    Lambert-W dependency while solving that analytic condition directly.
+    """
+
+    if terms <= 0:
+        raise ValueError("paper allocation requires at least one Hamiltonian term")
+    if beta <= 0.0 or total_error_hartree <= 0.0:
+        raise ValueError("paper allocation inputs must be positive")
+    logarithm_scale = 2.0 * terms * beta
+    shifted_log_constant = PAPER_SYNTHESIS_DELTA_0 * math.log(2.0) / PAPER_SYNTHESIS_GAMMA
+
+    def stationarity(epsilon_rot: float) -> float:
+        if epsilon_rot == 0.0:
+            return -2.0 * total_error_hartree
+        return (
+            3.0 * epsilon_rot * (math.log(logarithm_scale / epsilon_rot) + shifted_log_constant)
+            + 2.0 * epsilon_rot
+            - 2.0 * total_error_hartree
+        )
+
+    lower = 0.0
+    upper = math.nextafter(total_error_hartree, 0.0)
+    lower_value = stationarity(lower)
+    upper_value = stationarity(upper)
+    if not lower_value < 0.0 < upper_value:
+        raise RuntimeError("paper Eq. (34) stationary root is not bracketed")
+    iterations = 0
+    for iterations in range(1, 257):
+        middle = 0.5 * (lower + upper)
+        value = stationarity(middle)
+        if value > 0.0:
+            upper = middle
+        else:
+            lower = middle
+        if upper - lower <= max(
+            1.0e-15 * total_error_hartree,
+            math.ulp(middle),
+        ):
+            break
+    epsilon_rot = 0.5 * (lower + upper)
+    return epsilon_rot, {
+        "method": PAPER_ALLOCATION_METHOD,
+        "paper_equation": "Reiher_et_al_PNAS_2017_supplement_Eq_34",
+        "constraint_equation": "Reiher_et_al_PNAS_2017_supplement_Eq_32",
+        "stationary_equation": (
+            "3*epsilon_Rot*(ln(2*M*beta/epsilon_Rot)"
+            "+delta_0*ln(2)/gamma)+2*epsilon_Rot-2*epsilon_total=0"
+        ),
+        "root_solver": "deterministic_bisection_of_analytic_stationary_condition",
+        "root_iterations": iterations,
+        "root_residual_hartree": stationarity(epsilon_rot),
+    }
 
 
-def _allocation_candidate(
+def optimize_paper_error_allocation(
     problem: Mapping[str, Any],
     *,
     beta: float,
     reference_error_hartree: float,
     total_error_hartree: float,
-    trotter_fraction: float,
-    rotation_radial_fraction: float,
-) -> dict[str, Any]:
-    """Instantiate and directly compile one paper-constraint allocation."""
+) -> tuple[dict[str, Any], dict[str, Any]]:
+    """Derive the paper's rigorous Eq. (34) policy without compiling it."""
 
-    if not 0.0 < trotter_fraction < 1.0:
-        raise ValueError("Trotter fraction must lie strictly between zero and one")
-    if not 0.0 < rotation_radial_fraction < 1.0:
-        raise ValueError("rotation fraction must lie strictly between zero and one")
-    epsilon_ts = total_error_hartree * trotter_fraction
-    radial = total_error_hartree - epsilon_ts
-    epsilon_rot = radial * rotation_radial_fraction
-    epsilon_qpe = math.sqrt(max(0.0, radial * radial - epsilon_rot * epsilon_rot))
+    if beta <= 0.0:
+        raise ValueError("reference Trotter number beta must be positive")
+    if reference_error_hartree <= 0.0 or total_error_hartree <= 0.0:
+        raise ValueError("error targets must be positive")
+    terms = len(problem["terms"])
+    epsilon_rot, derivation = _paper_eq34_rotation_error(
+        terms=terms,
+        beta=beta,
+        total_error_hartree=total_error_hartree,
+    )
+    residual = total_error_hartree - epsilon_rot
+    epsilon_ts = residual / 3.0
+    epsilon_qpe = 2.0 * residual / 3.0
     target_time = float(problem["target_time"])
     n_steps = max(
         1,
         math.ceil(target_time * float(beta) * math.sqrt(reference_error_hartree / epsilon_ts)),
     )
     step_time = target_time / n_steps
-    terms = len(problem["terms"])
     rotations_per_step = 2 * terms - 1
     uniform_epsilon = epsilon_rot * step_time / rotations_per_step
-    one_step_t_count, one_step_gate_count = _one_step_t_count(
-        problem,
-        n_steps=n_steps,
-        uniform_epsilon=uniform_epsilon,
-    )
-    full_pf_t_count = n_steps * one_step_t_count
     qpe_full_evolution_queries = max(
         1,
         math.ceil(PAPER_PHASE_ESTIMATION_ALPHA / (target_time * epsilon_qpe)),
     )
     qpe_step_queries = qpe_full_evolution_queries * n_steps
-    qpe_t_count = qpe_full_evolution_queries * full_pf_t_count
-    return {
-        "trotter_fraction": float(trotter_fraction),
-        "rotation_radial_fraction": float(rotation_radial_fraction),
+    paper_synthesis_t_per_rotation = (
+        PAPER_SYNTHESIS_GAMMA * math.log2((2.0 * terms * float(beta)) / epsilon_rot)
+        + PAPER_SYNTHESIS_DELTA_0
+    )
+    paper_eq34_cost_proxy = (
+        2.0
+        * terms
+        * (PAPER_PHASE_ESTIMATION_ALPHA / epsilon_qpe)
+        * (float(beta) * math.sqrt(reference_error_hartree / epsilon_ts))
+        * paper_synthesis_t_per_rotation
+    )
+    policy = {
+        "error_allocation": PAPER_ALLOCATION_METHOD,
+        "paper_error_constraint": PAPER_ERROR_CONSTRAINT,
+        "paper_phase_estimation_alpha": PAPER_PHASE_ESTIMATION_ALPHA,
+        "paper_synthesis_gamma": PAPER_SYNTHESIS_GAMMA,
+        "paper_synthesis_delta_0": PAPER_SYNTHESIS_DELTA_0,
+        "paper_modeled_t_per_rotation": paper_synthesis_t_per_rotation,
+        "paper_eq34_cost_proxy": paper_eq34_cost_proxy,
+        "qpe_fraction": epsilon_qpe / total_error_hartree,
+        "trotter_fraction": epsilon_ts / total_error_hartree,
+        "rotation_fraction": epsilon_rot / total_error_hartree,
         "phase_estimation_error_hartree": epsilon_qpe,
         "trotter_error_hartree": epsilon_ts,
         "rotation_synthesis_energy_error_hartree": epsilon_rot,
-        "error_constraint_value_hartree": epsilon_ts + math.hypot(epsilon_qpe, epsilon_rot),
+        "error_constraint_value_hartree": epsilon_qpe + epsilon_ts + epsilon_rot,
         "formula_name": "symmetric_second_order_trotter_suzuki",
         "formula_order": PAPER_FORMULA_ORDER,
         "n_steps": n_steps,
         "nonidentity_terms": terms,
-        "one_step_gate_count": one_step_gate_count,
-        "one_step_t_count": one_step_t_count,
-        "full_pf_t_count": full_pf_t_count,
         "qpe_full_evolution_queries": qpe_full_evolution_queries,
         "qpe_step_queries": qpe_step_queries,
-        "qpe_t_count_proxy": qpe_t_count,
         "reference_error_hartree": float(reference_error_hartree),
         "reference_trotter_number_beta": float(beta),
-        "rotation_synthesis": "clifford_plus_t_pygridsynth",
+        "rotation_synthesis": "clifford_plus_t_pygridsynth_at_iteration_zero",
+        "realized_t_count": None,
+        "realized_t_count_stage": "iteration_0_exact_compiled_unitary_evaluation",
         "scheduled_rotations": n_steps * rotations_per_step,
         "scheduled_rotations_per_step": rotations_per_step,
         "step_repetitions": n_steps,
@@ -539,79 +606,15 @@ def _allocation_candidate(
         "uniform_epsilon": uniform_epsilon,
         "zero_angle_threshold": 0.0,
     }
-
-
-def optimize_direct_error_allocation(
-    problem: Mapping[str, Any],
-    *,
-    reference_trotter_number_beta: float,
-    reference_error_hartree: float = PAPER_BETA_REFERENCE_ERROR_HARTREE,
-    total_error_hartree: float = BENCHMARK_TOTAL_ERROR_HARTREE,
-) -> tuple[dict[str, Any], list[dict[str, Any]]]:
-    """Minimize direct PyGridSynth QPE T cost under the paper constraint."""
-
-    if reference_trotter_number_beta <= 0.0:
-        raise ValueError("reference Trotter number beta must be positive")
-    if reference_error_hartree <= 0.0 or total_error_hartree <= 0.0:
-        raise ValueError("error targets must be positive")
-    evaluated: dict[tuple[float, float], dict[str, Any]] = {}
-
-    def evaluate(trotter_fraction: float, rotation_fraction: float) -> None:
-        key = (round(trotter_fraction, 12), round(rotation_fraction, 12))
-        if key not in evaluated:
-            evaluated[key] = _allocation_candidate(
-                problem,
-                beta=reference_trotter_number_beta,
-                reference_error_hartree=reference_error_hartree,
-                total_error_hartree=total_error_hartree,
-                trotter_fraction=key[0],
-                rotation_radial_fraction=key[1],
-            )
-
-    for trotter_fraction in ALLOCATION_GRID:
-        for rotation_fraction in ALLOCATION_GRID:
-            evaluate(trotter_fraction, rotation_fraction)
-
-    for _round in range(2):
-        best = min(
-            evaluated.values(),
-            key=lambda row: (
-                int(row["qpe_t_count_proxy"]),
-                int(row["full_pf_t_count"]),
-                float(row["uniform_epsilon"]),
-            ),
-        )
-        for field in ("trotter_fraction", "rotation_radial_fraction"):
-            value = float(best[field])
-            existing = sorted({key[0 if field == "trotter_fraction" else 1] for key in evaluated})
-            position = min(range(len(existing)), key=lambda index: abs(existing[index] - value))
-            lower = existing[position - 1] if position > 0 else 0.01
-            upper = existing[position + 1] if position + 1 < len(existing) else 0.99
-            if field == "trotter_fraction":
-                trotter_values = ((lower + value) / 2.0, value, (value + upper) / 2.0)
-                rotation_values = (float(best["rotation_radial_fraction"]),)
-            else:
-                trotter_values = (float(best["trotter_fraction"]),)
-                rotation_values = ((lower + value) / 2.0, value, (value + upper) / 2.0)
-            for trotter_fraction in trotter_values:
-                for rotation_fraction in rotation_values:
-                    evaluate(trotter_fraction, rotation_fraction)
-
-    ordered = sorted(
-        evaluated.values(),
-        key=lambda row: (
-            int(row["qpe_t_count_proxy"]),
-            int(row["full_pf_t_count"]),
-            float(row["trotter_fraction"]),
-            float(row["rotation_radial_fraction"]),
-        ),
+    derivation.update(
+        {
+            "epsilon_qpe_hartree": epsilon_qpe,
+            "epsilon_ts_hartree": epsilon_ts,
+            "epsilon_rot_hartree": epsilon_rot,
+            "paper_eq34_cost_proxy": paper_eq34_cost_proxy,
+        }
     )
-    selected = dict(ordered[0])
-    selected["error_allocation"] = (
-        "direct_pygridsynth_t_count_optimization_under_paper_variance_constraint"
-    )
-    selected["allocation_candidates_evaluated"] = len(ordered)
-    return selected, ordered
+    return policy, derivation
 
 
 def calibrate_problem(
@@ -624,6 +627,7 @@ def calibrate_problem(
     reference_error_hartree: float = PAPER_BETA_REFERENCE_ERROR_HARTREE,
     total_error_hartree: float = BENCHMARK_TOTAL_ERROR_HARTREE,
     max_steps: int = 1 << 20,
+    precomputed_exact_reference: Mapping[str, Any] | None = None,
 ) -> dict[str, Any]:
     """Calibrate beta(H), allocate errors, and instantiate one immutable PF2."""
 
@@ -649,7 +653,26 @@ def calibrate_problem(
     exact_reference: dict[str, Any] | None = None
     exact_started = time.perf_counter()
     if include_exact_reference:
-        exact_reference = evaluate_exact_reference(path, backend=backend_name)
+        if precomputed_exact_reference is None:
+            exact_reference = evaluate_exact_reference(path, backend=backend_name)
+        else:
+            exact_reference = dict(precomputed_exact_reference)
+            if exact_reference.get("observable") != "exact_unitary_ground_eigenphase":
+                raise ValueError("precomputed exact reference has the wrong observable")
+            if (
+                exact_reference.get("problem_sha256")
+                != hashlib.sha256(path.read_bytes()).hexdigest()
+            ):
+                raise ValueError("precomputed exact reference has the wrong problem hash")
+            if not math.isclose(
+                float(exact_reference.get("target_time", math.nan)),
+                float(problem["target_time"]),
+                rel_tol=0.0,
+                abs_tol=1.0e-15,
+            ):
+                raise ValueError("precomputed exact reference has the wrong target time")
+    elif precomputed_exact_reference is not None:
+        raise ValueError("cannot reuse an exact reference when exact references are disabled")
     exact_reference_seconds = time.perf_counter() - exact_started
 
     beta_started = time.perf_counter()
@@ -674,9 +697,9 @@ def calibrate_problem(
     beta_seconds = time.perf_counter() - beta_started
 
     allocation_started = time.perf_counter()
-    policy, allocation_search = optimize_direct_error_allocation(
+    policy, allocation_derivation = optimize_paper_error_allocation(
         problem,
-        reference_trotter_number_beta=float(reference["reference_trotter_number_beta"]),
+        beta=float(reference["reference_trotter_number_beta"]),
         reference_error_hartree=reference_error_hartree,
         total_error_hartree=total_error_hartree,
     )
@@ -695,6 +718,9 @@ def calibrate_problem(
             "beta_reference_error_hartree": float(reference_error_hartree),
             "error_constraint": PAPER_ERROR_CONSTRAINT,
             "phase_estimation_alpha": PAPER_PHASE_ESTIMATION_ALPHA,
+            "synthesis_gamma": PAPER_SYNTHESIS_GAMMA,
+            "synthesis_delta_0": PAPER_SYNTHESIS_DELTA_0,
+            "allocation_equation": "supplement_Eq_34",
             "synthesis_energy_bound": "(2M - 1) * Delta_synth / step_time",
         },
         "benchmark_adaptation": {
@@ -703,17 +729,21 @@ def calibrate_problem(
                 total_error_hartree / CHEMICAL_ACCURACY_HARTREE
             ),
             "target_time": float(target_time),
-            "uses_gamma_delta_synthesis_fit": False,
-            "allocation_cost_source": "direct PyGridSynth compilation",
+            "uses_gamma_delta_synthesis_fit": True,
+            "allocation_cost_source": "paper Eq. (34) rigorous gamma/delta_0 model",
+            "realized_t_count_source": "iteration-0 direct PyGridSynth compilation",
         },
         "reference": reference,
         "exact_reference": exact_reference,
+        "exact_reference_reused": bool(
+            include_exact_reference and precomputed_exact_reference is not None
+        ),
         "instantiated_policy": policy,
-        "allocation_search": allocation_search,
+        "allocation_derivation": allocation_derivation,
         "timing_seconds": {
             "exact_reference": exact_reference_seconds,
             "beta_calibration": beta_seconds,
-            "direct_allocation_search": allocation_seconds,
+            "paper_allocation": allocation_seconds,
             "total": time.perf_counter() - started,
         },
     }

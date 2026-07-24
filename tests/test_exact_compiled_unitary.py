@@ -29,9 +29,17 @@ from hsopt.compiled_unitary import (
     load_policy,
     load_problem,
 )
-from hsopt.paper_baseline import _double_commutator_bound, calibrate_problem
-from hsopt.paper_baseline import seal_calibration
-from hsopt.paper_baseline_batch import build_manifest, generate_policies
+from hsopt.paper_baseline import (
+    BENCHMARK_TOTAL_ERROR_HARTREE,
+    PAPER_ALLOCATION_METHOD,
+    PAPER_SYNTHESIS_DELTA_0,
+    PAPER_SYNTHESIS_GAMMA,
+    _double_commutator_bound,
+    calibrate_problem,
+    optimize_paper_error_allocation,
+    seal_calibration,
+)
+from hsopt.paper_baseline_batch import build_manifest, generate_policies, run_batch
 from hsopt.repository_layout import sync_layout
 
 
@@ -84,6 +92,7 @@ def test_checked_in_benchmark_layout_matches_the_91_and_10_registries() -> None:
         "absolute_hamiltonians": 91,
         "difference_reactions": 10,
         "definition_files": 101,
+        "initial_policies": 101,
     }
 
 
@@ -197,6 +206,57 @@ def test_bound_beta_is_independent_of_the_cached_exact_reference() -> None:
     assert calibration["timing_seconds"]["exact_reference"] >= 0.0
 
 
+def test_policy_only_and_exact_calibrations_have_the_same_scientific_signature() -> None:
+    policy_only = calibrate_problem(
+        ABSOLUTE / "hamiltonian.json",
+        backend="numpy",
+        include_exact_reference=False,
+    )
+    with_reference = calibrate_problem(
+        ABSOLUTE / "hamiltonian.json",
+        backend="numpy",
+        include_exact_reference=True,
+    )
+
+    assert policy_only["instantiated_policy"] == with_reference["instantiated_policy"]
+    assert policy_only["calibration_sha256"] == with_reference["calibration_sha256"]
+
+
+def test_initial_policy_uses_paper_eq34_calculus_before_iteration_zero() -> None:
+    problem = json.loads((ABSOLUTE / "hamiltonian.json").read_text(encoding="utf-8"))
+    bound = _double_commutator_bound(
+        problem,
+        reference_error_hartree=1.0e-4,
+    )
+    policy, derivation = optimize_paper_error_allocation(
+        problem,
+        beta=float(bound["reference_trotter_number_beta"]),
+        reference_error_hartree=1.0e-4,
+        total_error_hartree=BENCHMARK_TOTAL_ERROR_HARTREE,
+    )
+
+    assert policy["error_allocation"] == PAPER_ALLOCATION_METHOD
+    assert policy["paper_synthesis_gamma"] == PAPER_SYNTHESIS_GAMMA == 4.0
+    assert policy["paper_synthesis_delta_0"] == PAPER_SYNTHESIS_DELTA_0 == 11.0
+    assert policy["phase_estimation_error_hartree"] == pytest.approx(
+        2.0 * policy["trotter_error_hartree"]
+    )
+    assert (
+        policy["phase_estimation_error_hartree"]
+        + policy["trotter_error_hartree"]
+        + policy["rotation_synthesis_energy_error_hartree"]
+    ) == pytest.approx(BENCHMARK_TOTAL_ERROR_HARTREE)
+    assert policy["uniform_epsilon"] == pytest.approx(
+        policy["rotation_synthesis_energy_error_hartree"]
+        * policy["step_time"]
+        / policy["scheduled_rotations_per_step"]
+    )
+    assert policy["realized_t_count"] is None
+    assert policy["realized_t_count_stage"] == ("iteration_0_exact_compiled_unitary_evaluation")
+    assert derivation["paper_equation"].endswith("Eq_34")
+    assert abs(derivation["root_residual_hartree"]) < 1.0e-14
+
+
 def test_batch_generator_can_materialize_a_checked_in_policy(
     tmp_path: Path,
 ) -> None:
@@ -267,6 +327,70 @@ def test_batch_generator_can_materialize_a_checked_in_policy(
     assert result["absolute_initial_policies"] == 1
     assert checked_in.read_bytes() == external.read_bytes()
     assert result["policies"][0]["checked_in_policy"] == ("experiments/abs_energy/h2/initial_pf.py")
+
+
+def test_batch_reuses_exact_reference_when_allocation_schema_changes(
+    tmp_path: Path,
+) -> None:
+    abs_inputs = tmp_path / "inputs/abs_energy"
+    reaction_inputs = tmp_path / "inputs/diff_energy"
+    abs_inputs.mkdir(parents=True)
+    reaction_inputs.mkdir(parents=True)
+    problem = abs_inputs / "h2.json"
+    problem.write_bytes((ABSOLUTE / "hamiltonian.json").read_bytes())
+    (abs_inputs / "manifest.json").write_text(
+        json.dumps(
+            {
+                "family": "abs_energy",
+                "instances": [
+                    {
+                        "instance": "h2",
+                        "problem": "h2.json",
+                        "n_qubits": 4,
+                    }
+                ],
+            }
+        )
+        + "\n",
+        encoding="utf-8",
+    )
+    (reaction_inputs / "manifest.json").write_text(
+        json.dumps({"family": "diff_energy", "instances": []}) + "\n",
+        encoding="utf-8",
+    )
+    manifest_path = tmp_path / "manifest.json"
+    build_manifest(abs_inputs, reaction_inputs, manifest_path)
+    output_dir = tmp_path / "results"
+    stale = calibrate_problem(problem, backend="numpy")
+    stale["schema"] = 3
+    stale = seal_calibration(stale)
+    stale_path = output_dir / "abs_energy/h2.json"
+    stale_path.parent.mkdir(parents=True)
+    stale_path.write_text(
+        json.dumps(stale, indent=2, sort_keys=True) + "\n",
+        encoding="utf-8",
+    )
+
+    summary = run_batch(
+        manifest_path,
+        output_dir,
+        backend="numpy",
+        mode="hamiltonian_bound",
+        target_time=1.0,
+        reference_error_hartree=1.0e-4,
+        total_error_hartree=BENCHMARK_TOTAL_ERROR_HARTREE,
+        shard_index=0,
+        shard_count=1,
+        max_steps=1 << 20,
+        include_exact_reference=True,
+    )
+    refreshed = json.loads(stale_path.read_text(encoding="utf-8"))
+
+    assert summary["completed"] == 1
+    assert summary["exact_references_reused"] == 1
+    assert refreshed["schema"] == 4
+    assert refreshed["exact_reference_reused"] is True
+    assert refreshed["exact_reference"] == stale["exact_reference"]
 
 
 def test_pygridsynth_compilation_is_reproducible_and_within_tolerance() -> None:
@@ -529,12 +653,12 @@ def test_absolute_baseline_uses_cached_exact_reference_and_compiled_eigenphase(
     assert result["evaluation_contract_version"] == EVALUATION_CONTRACT_VERSION
     assert result["observable"] == "compiled_unitary_lowest_hf_accessible_eigenphase"
     assert result["exact_ground_energy_hartree"] == pytest.approx(-1.144979079498297)
-    assert result["compiled_pf_energy_hartree"] == pytest.approx(-1.1449578985211235)
+    assert result["compiled_pf_energy_hartree"] == pytest.approx(-1.144974124417129)
     assert result["passes_chemical_accuracy"] is True
     assert result["formula_order"] == 2
-    assert result["n_steps"] == 30
+    assert result["n_steps"] == 29
     assert result["policy"]["term_order_strategy"] == "lexicographic"
-    assert result["t_count"] == 53_220
+    assert result["t_count"] == 59_276
     assert result["per_attempt_t_count"] == result["t_count"]
     assert result["qpe_repetitions"] == 1
     assert result["qpe_target_confidence"] == QPE_TARGET_CONFIDENCE
@@ -545,7 +669,7 @@ def test_absolute_baseline_uses_cached_exact_reference_and_compiled_eigenphase(
     assert result["timing_seconds"]["compiled_unitary_build"] > 0.0
     assert result["timing_seconds"]["compiled_unitary_eigensolve"] > 0.0
     assert result["rotation_fence_interval"] == 32
-    assert result["qpe_success_probability_from_hf"] == pytest.approx(0.9890347908295765)
+    assert result["qpe_success_probability_from_hf"] == pytest.approx(0.9890313366958328)
     assert all("gate_string" not in row for row in result["unique_compilations"])
     assert all(len(row["gate_string_sha256"]) == 64 for row in result["unique_compilations"])
 

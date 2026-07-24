@@ -143,10 +143,12 @@ Every optimization lane follows the same order:
 1. Prepare the paper baseline once per unique Hamiltonian. Compute the
    supplement's Eq. (19) Pauli double-commutator coefficient bound exactly,
    derive $\beta(H)$ at the paper's $0.1$ mHa reference error without using
-   $E_{\mathrm{exact}}$, and directly allocate a $1$ kcal/mol Trotter/QPE/
-   synthesis budget using PyGridSynth T counts. Separately compute and cache
+   $E_{\mathrm{exact}}$, and allocate the $1$ kcal/mol Trotter/QPE/synthesis
+   budget using the supplement's rigorous Eq. (32)/(34) calculus with
+   $\alpha=8\pi$, $\gamma=4$, and $\delta_0=11$. Separately compute and cache
    $U_{\mathrm{exact}}$ once for evaluator reuse.
-2. Evaluate the generated paper baseline unchanged as iteration 0.
+2. Evaluate the generated paper baseline unchanged as iteration 0. This is
+   the first stage that invokes PyGridSynth and records the realized T count.
 3. Run iterations 1--50 sequentially, retaining every proposal, evaluator
    result, and accept/reject decision.
 4. Accept only feasible strict improvements in confidence-adjusted $T$ cost.
