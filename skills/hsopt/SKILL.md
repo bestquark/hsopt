@@ -77,6 +77,44 @@ derivation remains in the sealed calibration JSON. Candidate policies may use
 the restricted `import math` module; other imports and external capabilities
 remain unavailable.
 
+The agent-visible runtime contract is deliberately plain Python:
+
+```text
+problem = {
+    "name": str,
+    "n_qubits": int,
+    "electrons": int,
+    "target_time": float,
+    "identity_coefficient": float,
+    "terms": list[term],
+    ...  # immutable source metadata may also be present
+}
+
+term = {
+    "label": str,         # n_qubits characters from I, X, Y, Z
+    "coefficient": float,
+    "support_size": int,  # number of non-I characters
+    "x_count": int,
+    "y_count": int,
+    "z_count": int,
+}
+```
+
+`ProductFormula(problem)` receives a fresh dictionary and should treat the
+benchmark description as read-only. `repetitions()` returns a positive integer
+`n_steps`, after which the evaluator computes
+`step_time = problem["target_time"] / n_steps`.
+`build_step(terms, step_time)` receives fresh copies of the term dictionaries
+and returns a nonempty sequence of `(term, angle)` pairs for one stationary
+step. The pair's `term` may be a supplied dictionary or its Pauli-label string;
+the evaluator resolves it against the trusted Hamiltonian. `angle` is the
+finite real `alpha` in `exp(+i * alpha * P)`, so an ordinary first-order
+occurrence uses `term["coefficient"] * step_time`. The exact returned schedule
+is repeated `n_steps` times. For every pair,
+`synthesis_epsilon(term, angle)` receives a fresh trusted term dictionary and
+the same `alpha`; it must return a finite PyGridSynth operator-norm tolerance
+strictly between zero and one.
+
 Do not create or mutate an in-tree `optimized_pf.py`. External lane
 directories contain `candidate.py`, `incumbent.py`, exact results, decisions,
 and audit logs. Every checked-in experiment directory also contains a thin

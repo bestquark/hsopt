@@ -386,6 +386,13 @@ def test_mutation_prompt_requires_one_edit_then_terminal_text() -> None:
     assert "Web research is optional" in prompt
     assert "higher-order stationary composition" in normalized
     assert "Do not change any Hamiltonian" in normalized
+    assert "identity_coefficient (float)" in normalized
+    assert "support_size (number of non-I characters)" in normalized
+    assert "x_count, y_count, and z_count (ints)" in normalized
+    assert 'step_time = problem["target_time"] / n_steps' in normalized
+    assert "(term, angle) pairs for one stationary step" in normalized
+    assert "exp(+i * alpha * P)" in normalized
+    assert "operator-norm tolerance strictly between 0 and 1" in normalized
 
 
 def test_sandbox_cleanup_terminates_opencode_without_matching_itself(

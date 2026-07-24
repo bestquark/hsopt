@@ -84,9 +84,18 @@ Mutation loop:
 6. Keep campaign history in the external run directory used by the caller. The simplified `pfs/` tree contains only benchmark definitions and fixed evaluators.
 
 Product-formula search guidance:
-- `synthesis_epsilon` receives Hamiltonian term metadata such as
-  Pauli label, coefficient, support size, and Pauli-family counts, plus the
-  actual per-application rotation angle. Use those fields to
+- `ProductFormula(problem)` receives a plain dict with `name`, `n_qubits`,
+  `electrons`, `target_time`, `identity_coefficient`, and `terms`.
+- Each term is a plain dict with `label`, `coefficient`, `support_size`,
+  `x_count`, `y_count`, and `z_count`. `label` is an `n_qubits`-character
+  I/X/Y/Z string.
+- `repetitions()` supplies positive `n_steps`; the evaluator passes
+  `step_time = problem["target_time"] / n_steps` to `build_step`.
+- `build_step` returns `(term, angle)` pairs for one stationary step, where
+  `angle` is the real `alpha` in `exp(+i * alpha * P)`.
+- `synthesis_epsilon` receives a fresh trusted term dict plus that exact
+  per-application angle and must return a finite PyGridSynth tolerance in
+  `(0, 1)`. Use those fields to
   allocate looser precision to low-impact rotations and tighter precision where
   accuracy is likely to matter.
 - The rotation schedule returned by `build_step` defines the formula. The

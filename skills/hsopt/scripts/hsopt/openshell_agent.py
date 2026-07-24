@@ -579,6 +579,28 @@ infers standard PF1/PF2 labels from the returned rotations; it never trusts a
 declared order. synthesis_epsilon() selects the PyGridSynth tolerance for each
 returned rotation.
 
+The ProductFormula runtime interface is:
+
+- ProductFormula(problem) receives a fresh plain dict. Its guaranteed fields
+  are name (str), n_qubits (int), electrons (int), target_time (float),
+  identity_coefficient (float), and terms (list of term dicts). Treat this
+  benchmark description as read-only.
+- Every term is a plain dict with label (an n_qubits-character I/X/Y/Z Pauli
+  string), coefficient (finite float), support_size (number of non-I
+  characters), and x_count, y_count, and z_count (ints).
+- repetitions() returns a positive integer n_steps. The evaluator sets
+  step_time = problem["target_time"] / n_steps.
+- build_step(terms, step_time) receives fresh copies of those term dicts and
+  returns a nonempty list or tuple of (term, angle) pairs for one stationary
+  step. term may be one of the supplied term dicts or its label string. angle
+  is the finite real alpha in exp(+i * alpha * P); for an ordinary first-order
+  occurrence it is term["coefficient"] * step_time. The evaluator resolves
+  every returned label against the trusted Hamiltonian and repeats this exact
+  one-step schedule n_steps times.
+- synthesis_epsilon(term, angle) receives a fresh trusted term dict and the
+  exact returned alpha for each scheduled rotation. It must return a finite
+  PyGridSynth operator-norm tolerance strictly between 0 and 1.
+
 Do not change any Hamiltonian, evaluator, source data, or benchmark definition.
 Do not fabricate an evaluation result. Read candidate.py as needed. Call one
 edit or write tool exactly once. After that tool succeeds, immediately return
