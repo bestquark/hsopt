@@ -153,7 +153,7 @@ def _recover_job_id(host: str, job_name: str) -> str | None:
 def _source_id(repo_dir: Path) -> str:
     digest = hashlib.sha256()
     paths = [repo_dir / "pyproject.toml", repo_dir / "uv.lock", repo_dir / "README.md"]
-    paths.extend(sorted((repo_dir / "skills" / "hsopt").rglob("*")))
+    paths.extend(sorted((repo_dir / "src" / "hsopt").rglob("*")))
     paths = [path for path in paths if path.is_file() and "__pycache__" not in path.parts]
     for path in paths:
         digest.update(str(path.relative_to(repo_dir)).encode())
@@ -165,7 +165,7 @@ def _evaluator_source_id(repo_dir: Path) -> str:
     """Fingerprint only the fixed scientific evaluator and its locked dependencies."""
 
     digest = hashlib.sha256()
-    runtime = repo_dir / "skills" / "hsopt" / "scripts" / "hsopt"
+    runtime = repo_dir / "src" / "hsopt"
     paths = [
         runtime / "compiled_unitary.py",
         runtime / "exact_queue.py",
@@ -234,7 +234,7 @@ def submit_batch(
             "./pyproject.toml",
             "./uv.lock",
             "./README.md",
-            "./skills/hsopt",
+            "./src/hsopt",
             f"{host}:{remote_source}/",
         ],
         cwd=repo_dir,
@@ -278,7 +278,7 @@ def submit_batch(
         )
         evaluator_python = "uv run --no-sync python"
     else:
-        runtime_root = f"{remote_source}/skills/hsopt/scripts"
+        runtime_root = f"{remote_source}/src"
         batch_parts.append(f"export PYTHONPATH={shlex.quote(runtime_root)};")
         evaluator_python = shlex.quote(runtime_python)
     if use_gpu:

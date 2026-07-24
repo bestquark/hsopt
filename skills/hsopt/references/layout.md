@@ -3,9 +3,10 @@
 Current organization:
 
 - `skills/hsopt/SKILL.md`: instructions for sequential exact T-gate optimization.
-- `skills/hsopt/scripts/hsopt/compiled_unitary.py`: fixed compiled-unitary evaluator.
-- `skills/hsopt/scripts/hsopt/exact_queue.py`: content-addressed evaluation queue.
-- `skills/hsopt/scripts/hsopt/exact_loop.py`: external lane state and acceptance loop.
+- `src/hsopt/compiled_unitary.py`: fixed compiled-unitary evaluator.
+- `src/hsopt/exact_queue.py`: content-addressed evaluation queue.
+- `src/hsopt/exact_loop.py`: external lane state and acceptance loop.
+- `src/hsopt/openshell_agent.py`: isolated OpenCode/OpenShell mutation adapter.
 - `experiments/abs_energy/`: compact HamLib absolute-energy fixtures.
 - `experiments/diff_energy/`: ten-reaction definition and compact difference fixture.
 - `experiments/generate_initial_pf.py`: immutable baseline-policy generator.

@@ -1,9 +1,9 @@
 # hsopt Exact-Unitary Campaign Notes
 
 The production paper workflow is the exact compiled-unitary pipeline in
-`skills/hsopt/scripts/hsopt/compiled_unitary.py`,
-`skills/hsopt/scripts/hsopt/exact_queue.py`, and
-`skills/hsopt/scripts/hsopt/exact_loop.py`. All checked-in benchmark fixtures,
+`src/hsopt/compiled_unitary.py`,
+`src/hsopt/exact_queue.py`, and
+`src/hsopt/exact_loop.py`. All checked-in benchmark fixtures,
 paper protocols, and support files live under `experiments/`.
 
 Use `$hsopt` for product-formula T-gate optimization and `$ssh` for NVPark
@@ -91,11 +91,11 @@ OpenCode/OpenShell logs plus redacted tool-action and metrics summaries.
 Treat these as fixed during a campaign unless the user explicitly changes the
 benchmark framework:
 
-- `skills/hsopt/scripts/hsopt/compiled_unitary.py`
-- `skills/hsopt/scripts/hsopt/exact_queue.py`
-- `skills/hsopt/scripts/hsopt/exact_loop.py`
-- `skills/hsopt/scripts/hsopt/paper_baseline.py`
-- `skills/hsopt/scripts/hsopt/paper_baseline_batch.py`
+- `src/hsopt/compiled_unitary.py`
+- `src/hsopt/exact_queue.py`
+- `src/hsopt/exact_loop.py`
+- `src/hsopt/paper_baseline.py`
+- `src/hsopt/paper_baseline_batch.py`
 - `experiments/generate_initial_pf.py`
 
 Campaign histories belong outside the checkout. After every lane completes,
