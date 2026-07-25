@@ -85,7 +85,10 @@ Mutation loop:
 
 Product-formula search guidance:
 - `ProductFormula(problem)` receives a plain dict with `name`, `n_qubits`,
-  `electrons`, `target_time`, `identity_coefficient`, and `terms`.
+  `electrons`, `target_time`, `phase_encoding`, `identity_coefficient`, and
+  `terms`. The immutable encoding sets
+  `target_time = 1 / sum(abs(nonidentity coefficients))`, ensuring that the
+  centered Hamiltonian spectrum cannot wrap at the QPE principal-phase branch.
 - Each term is a plain dict with `label`, `coefficient`, `support_size`,
   `x_count`, `y_count`, and `z_count`. `label` is an `n_qubits`-character
   I/X/Y/Z string.

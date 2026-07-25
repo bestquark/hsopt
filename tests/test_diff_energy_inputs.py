@@ -62,7 +62,10 @@ def test_reaction_inputs_are_minimal_and_baseline_free() -> None:
     assert set(manifest["reactions"]) == set(REACTION_KEYS)
     assert manifest["reaction_target_hartree"] == CHEMICAL_ACCURACY_HARTREE
     assert set(metadata["species"]) == SPECIES
-    assert all(float(row["target_time"]) == 1.0 for row in metadata["species"].values())
+    assert metadata["phase_encoding"]["method"] == (
+        "centered_nonidentity_pauli_one_norm"
+    )
+    assert all("target_time" not in row for row in metadata["species"].values())
 
 
 def test_external_cache_manifest_is_exact_and_minimal() -> None:

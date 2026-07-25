@@ -27,7 +27,12 @@ CHEMICAL_ACCURACY_HARTREE = 1.0 / 627.5094740631
 EXACT_GROUND_SUBSPACE_ATOL_HARTREE = 1.0e-9
 TARGET_ANCHOR_MIN_PROBABILITY = 1.0e-12
 TARGET_STATE_DEFINITION = "normalized_anchor_projection_onto_exact_ground_eigenspace"
-EVALUATION_CONTRACT_VERSION = "lowest_resolved_hf_qpe_peak_95pct_t_count_v1"
+PHASE_ENCODING_SCHEMA = 1
+PHASE_ENCODING_METHOD = "centered_nonidentity_pauli_one_norm"
+QPE_DIMENSIONLESS_EVOLUTION_TIME = 1.0
+QPE_PHASE_ESTIMATION_ALPHA = 8.0 * math.pi
+QPE_SINGLE_RUN_PHASE_SUCCESS_LOWER_BOUND = 0.5
+EVALUATION_CONTRACT_VERSION = "normalized_hamiltonian_qpe_t_count_v2"
 QPE_TARGET_CONFIDENCE = 0.95
 # Match the established HF-reference spectral evaluator. This suppresses
 # floating-point zero-weight eigenvectors; it is not a physical p_min or an
@@ -256,6 +261,9 @@ def load_problem(path: Path) -> dict[str, Any]:
             f"{path.name} has {n_qubits} qubits; this exact dense evaluator is intentionally "
             f"limited to {DENSE_EVALUATOR_MAX_QUBITS} qubits"
         )
+    identity_coefficient = float(problem["identity_coefficient"])
+    if not math.isfinite(identity_coefficient):
+        raise ValueError(f"non-finite identity coefficient in {path}")
     terms = problem["terms"]
     if not isinstance(terms, list) or not terms:
         raise ValueError(f"{path.name} has no Pauli terms")
@@ -272,8 +280,111 @@ def load_problem(path: Path) -> dict[str, Any]:
         term["x_count"] = label.count("X")
         term["y_count"] = label.count("Y")
         term["z_count"] = label.count("Z")
+    expected_encoding = qpe_phase_encoding(identity_coefficient, terms)
+    supplied_encoding = problem.get("phase_encoding")
+    if not isinstance(supplied_encoding, Mapping):
+        raise ValueError(
+            f"{path.name} is missing the required normalized-QPE phase_encoding"
+        )
+    _validate_phase_encoding(
+        supplied_encoding,
+        expected=expected_encoding,
+        path=path,
+    )
+    target_time = float(problem["target_time"])
+    expected_time = float(expected_encoding["physical_evolution_time_hartree_inverse"])
+    if not math.isclose(target_time, expected_time, rel_tol=1.0e-12, abs_tol=1.0e-15):
+        raise ValueError(
+            f"{path.name} target_time={target_time} does not match the normalized-QPE "
+            f"time {expected_time}"
+        )
+    problem["identity_coefficient"] = identity_coefficient
+    problem["target_time"] = target_time
+    problem["phase_encoding"] = expected_encoding
     problem["_path"] = str(path)
     return problem
+
+
+def qpe_phase_encoding(
+    identity_coefficient: float,
+    terms: Sequence[Mapping[str, Any]],
+) -> dict[str, Any]:
+    """Return the rigorous centered Hamiltonian encoding used by QPE.
+
+    Let ``H = c0 I + sum_j h_j P_j`` and
+    ``lambda = sum_j |h_j|``.  The encoded unitary is
+
+    ``U = exp(+i (H - c0 I) / lambda)``.
+
+    Since ``||(H - c0 I)|| <= lambda``, every encoded eigenphase lies in
+    ``[-1, 1]`` radians.  The principal phase therefore maps back to a unique
+    physical energy without consulting the exact energy:
+
+    ``E = c0 + lambda * phase``.
+    """
+
+    shift = float(identity_coefficient)
+    scale = math.fsum(abs(float(term["coefficient"])) for term in terms)
+    if not math.isfinite(shift):
+        raise ValueError("phase-encoding energy shift must be finite")
+    if not math.isfinite(scale) or scale <= 0.0:
+        raise ValueError("phase-encoding nonidentity Pauli one-norm must be positive")
+    physical_time = QPE_DIMENSIONLESS_EVOLUTION_TIME / scale
+    return {
+        "schema": PHASE_ENCODING_SCHEMA,
+        "method": PHASE_ENCODING_METHOD,
+        "dimensionless_evolution_time": QPE_DIMENSIONLESS_EVOLUTION_TIME,
+        "energy_shift_hartree": shift,
+        "energy_scale_hartree": scale,
+        "physical_evolution_time_hartree_inverse": physical_time,
+        "centered_spectral_bound_hartree": [-scale, scale],
+        "encoded_phase_bound_radians": [
+            -QPE_DIMENSIONLESS_EVOLUTION_TIME,
+            QPE_DIMENSIONLESS_EVOLUTION_TIME,
+        ],
+        "energy_recovery": "E_hartree = energy_shift_hartree + energy_scale_hartree * phase",
+    }
+
+
+def _validate_phase_encoding(
+    supplied: Mapping[str, Any],
+    *,
+    expected: Mapping[str, Any],
+    path: Path,
+) -> None:
+    """Require checked-in encoding metadata to match the Hamiltonian exactly."""
+
+    for key in ("schema", "method", "energy_recovery"):
+        if supplied.get(key) != expected[key]:
+            raise ValueError(f"{path.name} has stale phase_encoding field {key!r}")
+    for key in (
+        "dimensionless_evolution_time",
+        "energy_shift_hartree",
+        "energy_scale_hartree",
+        "physical_evolution_time_hartree_inverse",
+    ):
+        if not math.isclose(
+            float(supplied.get(key, math.nan)),
+            float(expected[key]),
+            rel_tol=1.0e-12,
+            abs_tol=1.0e-15,
+        ):
+            raise ValueError(f"{path.name} has stale phase_encoding field {key!r}")
+    for key in ("centered_spectral_bound_hartree", "encoded_phase_bound_radians"):
+        actual_values = supplied.get(key)
+        expected_values = expected[key]
+        if not isinstance(actual_values, list) or len(actual_values) != 2:
+            raise ValueError(f"{path.name} has malformed phase_encoding field {key!r}")
+        if not all(
+            math.isclose(
+                float(actual),
+                float(wanted),
+                rel_tol=1.0e-12,
+                abs_tol=1.0e-15,
+            )
+            for actual, wanted in zip(actual_values, expected_values, strict=True)
+        ):
+            raise ValueError(f"{path.name} has stale phase_encoding field {key!r}")
 
 
 def _pauli_left_action(label: str) -> tuple[np.ndarray, np.ndarray]:
@@ -884,10 +995,36 @@ def _build_exact_product_formula_step(
     }
 
 
-def _unwrap_energy(phase: float, time: float, reference: float) -> float:
-    principal = phase / time
-    period = 2.0 * math.pi / time
-    return principal + round((reference - principal) / period) * period
+def _principal_phase(phase: float) -> float:
+    """Wrap a real phase into ``[-pi, pi]`` without a spectral reference."""
+
+    return math.atan2(math.sin(float(phase)), math.cos(float(phase)))
+
+
+def _decode_energy(
+    phase: float,
+    *,
+    target_time: float,
+    identity_coefficient: float,
+) -> float:
+    """Map a normalized principal phase back to an energy in Hartree."""
+
+    if target_time <= 0.0:
+        raise ValueError("target_time must be positive")
+    return float(identity_coefficient) + _principal_phase(phase) / float(target_time)
+
+
+def _qpe_full_evolution_queries(
+    *,
+    target_time: float,
+    energy_precision_hartree: float,
+) -> int:
+    """Return the paper's rigorous full-evolution query bound for QPE."""
+
+    if target_time <= 0.0 or energy_precision_hartree <= 0.0:
+        raise ValueError("QPE time and energy precision must be positive")
+    phase_precision = target_time * energy_precision_hartree
+    return max(1, math.ceil(QPE_PHASE_ESTIMATION_ALPHA / phase_precision))
 
 
 def _qpe_repetitions(
@@ -920,6 +1057,52 @@ def _qpe_achieved_confidence(success_probability: float, repetitions: int) -> fl
     return -math.expm1(repetitions * math.log1p(-probability))
 
 
+def _qpe_cost_metrics(
+    *,
+    peak_probability: float,
+    target_confidence: float,
+    target_time: float,
+    energy_precision_hartree: float,
+    compiled_evolution_t_count: int,
+) -> dict[str, Any]:
+    """Return full QPE cost, including precision queries and peak repetitions."""
+
+    success_probability = (
+        float(peak_probability) * QPE_SINGLE_RUN_PHASE_SUCCESS_LOWER_BOUND
+    )
+    qpe_repetitions = _qpe_repetitions(
+        success_probability,
+        target_confidence=target_confidence,
+    )
+    qpe_achieved_confidence = _qpe_achieved_confidence(
+        success_probability,
+        qpe_repetitions,
+    )
+    full_evolution_queries = _qpe_full_evolution_queries(
+        target_time=target_time,
+        energy_precision_hartree=energy_precision_hartree,
+    )
+    per_qpe_run_t_count = int(compiled_evolution_t_count) * full_evolution_queries
+    return {
+        "qpe_target_confidence": float(target_confidence),
+        "qpe_achieved_confidence": qpe_achieved_confidence,
+        "qpe_repetitions": qpe_repetitions,
+        "qpe_single_run_phase_success_lower_bound": (
+            QPE_SINGLE_RUN_PHASE_SUCCESS_LOWER_BOUND
+        ),
+        "qpe_success_probability_per_attempt": success_probability,
+        "qpe_energy_precision_hartree": float(energy_precision_hartree),
+        "qpe_phase_precision_radians": float(target_time)
+        * float(energy_precision_hartree),
+        "qpe_phase_estimation_alpha": QPE_PHASE_ESTIMATION_ALPHA,
+        "qpe_full_evolution_queries": full_evolution_queries,
+        "compiled_evolution_t_count": int(compiled_evolution_t_count),
+        "per_attempt_t_count": per_qpe_run_t_count,
+        "per_qpe_run_t_count": per_qpe_run_t_count,
+        "confidence_adjusted_t_count": qpe_repetitions * per_qpe_run_t_count,
+    }
+
+
 def _select_lowest_hf_accessible_peak(
     step_phases: Sequence[float],
     hf_probabilities: Sequence[float],
@@ -927,7 +1110,6 @@ def _select_lowest_hf_accessible_peak(
     n_steps: int,
     target_time: float,
     identity_coefficient: float,
-    exact_energy: float,
 ) -> dict[str, Any]:
     """Select the lowest resolved PF energy that ideal QPE can sample from HF."""
 
@@ -938,11 +1120,14 @@ def _select_lowest_hf_accessible_peak(
     if n_steps <= 0 or target_time <= 0.0:
         raise ValueError("n_steps and target_time must be positive")
 
-    centered_reference = exact_energy - identity_coefficient
     total_phases = int(n_steps) * phases
     energies = np.asarray(
         [
-            _unwrap_energy(float(phase), target_time, centered_reference) + identity_coefficient
+            _decode_energy(
+                float(phase),
+                target_time=target_time,
+                identity_coefficient=identity_coefficient,
+            )
             for phase in total_phases
         ],
         dtype=np.float64,
@@ -961,16 +1146,18 @@ def _select_lowest_hf_accessible_peak(
         "selected_eigen_index": selected,
         "selected_step_eigenphase_radians": float(phases[selected]),
         "selected_total_eigenphase_radians": float(total_phases[selected]),
+        "selected_principal_eigenphase_radians": _principal_phase(total_phases[selected]),
         "compiled_pf_energy_hartree": float(energies[selected]),
         "qpe_success_probability_from_hf": selected_probability,
         "hf_accessible_peak_count": int(accessible.size),
         "hf_accessible_probability_mass": float(
             min(1.0, max(0.0, probabilities[accessible].sum()))
         ),
-        "phase_unwrap_energy_window_hartree": [
-            float(exact_energy - math.pi / target_time),
-            float(exact_energy + math.pi / target_time),
+        "phase_decoding_energy_window_hartree": [
+            float(identity_coefficient - math.pi / target_time),
+            float(identity_coefficient + math.pi / target_time),
         ],
+        "phase_branch_selection": "principal_phase_without_exact_energy_reference",
     }
 
 
@@ -1004,7 +1191,7 @@ def evaluate_exact_reference(
     *,
     backend: str = "cupynumeric",
 ) -> dict[str, Any]:
-    """Construct and diagonalize ``U_exact = exp(+i H t)`` once."""
+    """Construct and diagonalize the normalized, centered exact unitary once."""
 
     evaluation_started = time.perf_counter()
     problem = load_problem(problem_path)
@@ -1036,7 +1223,9 @@ def evaluate_exact_reference(
         xp=xp,
     )
     exact_unitary_started = time.perf_counter()
-    phases = xp.exp(1.0j * h_eigenvalues * float(problem["target_time"]))
+    identity_coefficient = float(problem["identity_coefficient"])
+    centered_h_eigenvalues = h_eigenvalues - identity_coefficient
+    phases = xp.exp(1.0j * centered_h_eigenvalues * float(problem["target_time"]))
     exact_unitary = (h_eigenvectors * phases[None, :]) @ h_eigenvectors.conj().T
     _fence(backend_name)
     exact_unitary_build_seconds = time.perf_counter() - exact_unitary_started
@@ -1051,10 +1240,10 @@ def evaluate_exact_reference(
     ground_overlaps = xp.abs(eigenvectors.conj().T @ hamiltonian_target) ** 2
     selected = int(np.asarray(xp.argmax(ground_overlaps)))
     selected_phase = float(np.asarray(xp.angle(eigenvalues[selected])))
-    unitary_energy = _unwrap_energy(
+    unitary_energy = _decode_energy(
         selected_phase,
-        float(problem["target_time"]),
-        hamiltonian_energy,
+        target_time=float(problem["target_time"]),
+        identity_coefficient=identity_coefficient,
     )
     full_target_state = xp.zeros(1 << int(problem["n_qubits"]), dtype=xp.complex128)
     indices = xp.asarray(indices_host, dtype=xp.int64)
@@ -1075,7 +1264,7 @@ def evaluate_exact_reference(
         "status": "ok",
         "evaluation_contract_version": EVALUATION_CONTRACT_VERSION,
         "observable": "exact_unitary_ground_eigenphase",
-        "unitary_definition": "U_exact = exp(+i H t)",
+        "unitary_definition": "U_exact = exp(+i (H - c0 I) / lambda)",
         "problem": problem["name"],
         "problem_path": str(Path(problem_path).resolve()),
         "problem_sha256": _sha256(Path(problem_path)),
@@ -1090,6 +1279,7 @@ def evaluate_exact_reference(
         "target_anchor_kind": target_anchor_kind,
         "target_anchor_basis_index": target_anchor_basis_index,
         "target_time": float(problem["target_time"]),
+        "phase_encoding": dict(problem["phase_encoding"]),
         "hamiltonian_ground_energy_hartree": hamiltonian_energy,
         "exact_unitary_ground_energy_hartree": unitary_energy,
         "unitary_hamiltonian_consistency_error_hartree": consistency_error,
@@ -1150,7 +1340,9 @@ def assemble_exact_difference_reference(
         "status": "ok",
         "evaluation_contract_version": EVALUATION_CONTRACT_VERSION,
         "observable": "exact_unitary_signed_energy_difference",
-        "unitary_definition": "U_exact = exp(+i H t) for each species",
+        "unitary_definition": (
+            "U_exact = exp(+i (H - c0 I) / lambda) for each species"
+        ),
         "reaction": reaction["name"],
         "reaction_path": str(reaction_path),
         "reaction_sha256": _sha256(reaction_path),
@@ -1260,23 +1452,25 @@ def evaluate_molecule(
         n_steps=int(metrics["n_steps"]),
         target_time=float(problem["target_time"]),
         identity_coefficient=float(problem["identity_coefficient"]),
-        exact_energy=exact_energy,
     )
     estimated_energy = float(peak["compiled_pf_energy_hartree"])
     signed_error = estimated_energy - exact_energy
     absolute_error = abs(signed_error)
-    passes = absolute_error <= CHEMICAL_ACCURACY_HARTREE
+    passes = absolute_error < CHEMICAL_ACCURACY_HARTREE
     qpe_success_probability = float(peak["qpe_success_probability_from_hf"])
-    qpe_repetitions = _qpe_repetitions(
-        qpe_success_probability,
+    compiled_evolution_t_count = int(metrics["t_count"])
+    qpe_energy_precision = (
+        CHEMICAL_ACCURACY_HARTREE - absolute_error
+        if passes
+        else CHEMICAL_ACCURACY_HARTREE
+    )
+    qpe_cost = _qpe_cost_metrics(
+        peak_probability=qpe_success_probability,
         target_confidence=target_confidence,
+        target_time=float(problem["target_time"]),
+        energy_precision_hartree=qpe_energy_precision,
+        compiled_evolution_t_count=compiled_evolution_t_count,
     )
-    qpe_achieved_confidence = _qpe_achieved_confidence(
-        qpe_success_probability,
-        qpe_repetitions,
-    )
-    per_attempt_t_count = int(metrics["t_count"])
-    confidence_adjusted_t_count = qpe_repetitions * per_attempt_t_count
     max_modulus_error = float(np.asarray(xp.max(xp.abs(xp.abs(eigenvalues) - 1.0))))
     _fence(backend_name)
     postprocess_seconds = time.perf_counter() - postprocess_started
@@ -1305,20 +1499,19 @@ def evaluate_molecule(
         "absolute_energy_error_mha": 1000.0 * absolute_error,
         "chemical_accuracy_hartree": CHEMICAL_ACCURACY_HARTREE,
         "passes_chemical_accuracy": passes,
+        "target_time": float(problem["target_time"]),
+        "phase_encoding": dict(problem["phase_encoding"]),
         **peak,
         "pf_peak_selection": "lowest_energy_peak_with_resolved_hf_weight",
         "qpe_peak_weight_threshold": QPE_PEAK_WEIGHT_THRESHOLD,
-        "qpe_target_confidence": float(target_confidence),
-        "qpe_achieved_confidence": qpe_achieved_confidence,
-        "qpe_repetitions": qpe_repetitions,
         "max_eigenvalue_modulus_error": max_modulus_error,
-        "per_attempt_t_count": per_attempt_t_count,
-        "confidence_adjusted_t_count": confidence_adjusted_t_count,
-        "t_count": per_attempt_t_count,
-        "score": confidence_adjusted_t_count if passes else None,
+        **qpe_cost,
+        "t_count": compiled_evolution_t_count,
+        "score": qpe_cost["confidence_adjusted_t_count"] if passes else None,
         "evaluation_contract": (
-            "minimize 95%-confidence QPE T cost subject to chemical accuracy "
-            "of the lowest resolved HF-reference compiled-PF eigenphase"
+            "minimize the paper-bound full QPE T cost, including phase-resolution "
+            "queries and enough HF-state attempts for 95% peak confidence, subject "
+            "to chemical accuracy after decoding the normalized Hamiltonian phase"
         ),
         "evaluation_wall_seconds": evaluation_wall_seconds,
         "timing_seconds": {
@@ -1359,7 +1552,7 @@ def evaluate_difference(
     exact_difference = 0.0
     compiled_difference = 0.0
     total_t_count = 0
-    confidence_adjusted_t_count = 0
+    species_coefficients: dict[str, float] = {}
     unique_species = {str(item["species"]) for item in reaction["terms"]}
     if not unique_species:
         raise ValueError("reaction must contain at least one species")
@@ -1370,6 +1563,7 @@ def evaluate_difference(
     for item in reaction["terms"]:
         species = str(item["species"])
         coefficient = float(item["coefficient"])
+        species_coefficients[species] = species_coefficients.get(species, 0.0) + coefficient
         if species not in species_results:
             problem_path = (reaction_path.parent / str(item["problem"])).resolve()
             result = evaluate_molecule(
@@ -1381,14 +1575,43 @@ def evaluate_difference(
             )
             species_results[species] = result
             total_t_count += int(result["t_count"])
-            confidence_adjusted_t_count += int(result["confidence_adjusted_t_count"])
         result = species_results[species]
         exact_difference += coefficient * result["exact_ground_energy_hartree"]
         compiled_difference += coefficient * result["compiled_pf_energy_hartree"]
 
     signed_error = compiled_difference - exact_difference
     absolute_error = abs(signed_error)
-    passes = absolute_error <= CHEMICAL_ACCURACY_HARTREE
+    passes = absolute_error < CHEMICAL_ACCURACY_HARTREE
+    reaction_qpe_precision = (
+        CHEMICAL_ACCURACY_HARTREE - absolute_error
+        if passes
+        else CHEMICAL_ACCURACY_HARTREE
+    )
+    confidence_adjusted_t_count = 0
+    per_attempt_t_count = 0
+    for species, result in species_results.items():
+        weight = abs(species_coefficients[species])
+        if weight <= 0.0:
+            raise ValueError(f"reaction has zero net coefficient for species {species!r}")
+        species_precision = reaction_qpe_precision / (len(unique_species) * weight)
+        species_qpe_cost = _qpe_cost_metrics(
+            peak_probability=float(result["qpe_success_probability_from_hf"]),
+            target_confidence=species_target_confidence,
+            target_time=float(result["phase_encoding"][
+                "physical_evolution_time_hartree_inverse"
+            ]),
+            energy_precision_hartree=species_precision,
+            compiled_evolution_t_count=int(result["t_count"]),
+        )
+        result.update(species_qpe_cost)
+        result["qpe_energy_precision_allocation"] = (
+            "equal_absolute_reaction_contribution_under_triangle_inequality"
+        )
+        result["reaction_coefficient"] = species_coefficients[species]
+        confidence_adjusted_t_count += int(
+            species_qpe_cost["confidence_adjusted_t_count"]
+        )
+        per_attempt_t_count += int(species_qpe_cost["per_attempt_t_count"])
     union_bound_confidence = max(
         0.0,
         1.0
@@ -1418,12 +1641,17 @@ def evaluate_difference(
         "absolute_difference_error_mha": 1000.0 * absolute_error,
         "chemical_accuracy_hartree": CHEMICAL_ACCURACY_HARTREE,
         "passes_chemical_accuracy": passes,
+        "qpe_energy_precision_hartree": reaction_qpe_precision,
+        "qpe_energy_precision_allocation": (
+            "equal_absolute_species_contribution_under_triangle_inequality"
+        ),
         "qpe_joint_target_confidence": QPE_TARGET_CONFIDENCE,
         "qpe_species_target_confidence": species_target_confidence,
         "qpe_confidence_allocation": "equal_union_bound_failure_budget",
         "qpe_joint_achieved_confidence_union_bound": union_bound_confidence,
         "qpe_joint_achieved_confidence_independent": independent_joint_confidence,
-        "per_attempt_t_count": total_t_count,
+        "compiled_evolution_t_count": total_t_count,
+        "per_attempt_t_count": per_attempt_t_count,
         "confidence_adjusted_t_count": confidence_adjusted_t_count,
         "t_count": total_t_count,
         "score": confidence_adjusted_t_count if passes else None,

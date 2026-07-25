@@ -19,7 +19,7 @@ def _reference(*, energy: float, seconds: float) -> dict[str, object]:
         "status": "ok",
         "evaluation_contract_version": EVALUATION_CONTRACT_VERSION,
         "observable": "exact_unitary_ground_eigenphase",
-        "unitary_definition": "U_exact = exp(+i H t)",
+        "unitary_definition": "U_exact = exp(+i (H - c0 I) / lambda)",
         "target_state_definition": "anchored_ground",
         "target_anchor_kind": "hartree_fock",
         "target_anchor_basis_index": 12,

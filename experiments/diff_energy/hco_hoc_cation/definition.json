@@ -29,9 +29,14 @@
       },
       "n_qubits": 10,
       "nonidentity_terms": 435,
+      "phase_encoding": {
+        "dimensionless_evolution_time": 1.0,
+        "energy_recovery": "E_hartree = c0 + lambda * principal_phase",
+        "method": "centered_nonidentity_pauli_one_norm",
+        "physical_evolution_time": "computed after parsing as inverse of the nonidentity Pauli one-norm"
+      },
       "problem_name": "Reaction seed hco_plus",
-      "species": "hco_plus",
-      "target_time": 1.0
+      "species": "hco_plus"
     },
     {
       "active_electrons": 6,
@@ -47,9 +52,14 @@
       },
       "n_qubits": 10,
       "nonidentity_terms": 435,
+      "phase_encoding": {
+        "dimensionless_evolution_time": 1.0,
+        "energy_recovery": "E_hartree = c0 + lambda * principal_phase",
+        "method": "centered_nonidentity_pauli_one_norm",
+        "physical_evolution_time": "computed after parsing as inverse of the nonidentity Pauli one-norm"
+      },
       "problem_name": "Reaction seed hoc_plus",
-      "species": "hoc_plus",
-      "target_time": 1.0
+      "species": "hoc_plus"
     }
   ]
 }

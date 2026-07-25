@@ -16,6 +16,12 @@
   "n_qubits": 12,
   "nonidentity_terms": 630,
   "pauli_terms_including_identity": 631,
+  "phase_encoding": {
+    "dimensionless_evolution_time": 1.0,
+    "energy_recovery": "E_hartree = c0 + lambda * principal_phase",
+    "method": "centered_nonidentity_pauli_one_norm",
+    "physical_evolution_time": "computed after parsing as inverse of the nonidentity Pauli one-norm"
+  },
   "schema": 1,
   "source": {
     "active_space_key": "12",
@@ -26,6 +32,5 @@
     "library": "HamLib",
     "mapping": "JW",
     "member": "CH.hdf5"
-  },
-  "target_time": 1.0
+  }
 }

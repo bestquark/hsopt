@@ -5,7 +5,7 @@ Two compact JSON files define the fixed ten-reaction campaign:
 - `reactions.json`: reaction identities, stoichiometry, ordering, and the
   $1$ kcal/mol signed-energy target.
 - `problem_metadata.json`: basis, active-space, term-count, qubit-count, and
-  $t=1$ metadata for each unique species Hamiltonian.
+  the norm-based phase-encoding contract for each unique species Hamiltonian.
 
 The 21 JSON/NPZ Hamiltonian-cache pairs are intentionally external. They total
 about 6.8 MiB and are verified before use against

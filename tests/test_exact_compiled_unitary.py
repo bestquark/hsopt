@@ -31,6 +31,7 @@ from hsopt.compiled_unitary import (
     evaluate_molecule,
     load_policy,
     load_problem,
+    qpe_phase_encoding,
     validate_policy_source,
 )
 from hsopt.experiment_evaluator import evaluate_absolute_directory
@@ -52,6 +53,18 @@ REPO = Path(__file__).resolve().parents[1]
 ABSOLUTE = REPO / "tests" / "fixtures" / "abs_energy_h2"
 DIFFERENCE = REPO / "tests" / "fixtures" / "diff_energy_h2_bond_stretch"
 GENERATOR = REPO / "experiments" / "generate_initial_pf.py"
+
+
+def _encoded_problem(problem: dict[str, object]) -> dict[str, object]:
+    """Attach the same phase encoding required of production Hamiltonians."""
+
+    encoding = qpe_phase_encoding(
+        float(problem["identity_coefficient"]),
+        problem["terms"],
+    )
+    problem["phase_encoding"] = encoding
+    problem["target_time"] = encoding["physical_evolution_time_hartree_inverse"]
+    return problem
 
 
 def test_experiments_tree_is_the_only_checked_in_benchmark_tree() -> None:
@@ -182,7 +195,6 @@ def test_initial_policy_is_exactly_generated_from_paper_baseline(
             problem_path,
             backend="numpy",
             mode="hamiltonian_bound",
-            target_time=1.0,
         )
         (calibration_root / f"{index:03d}.json").write_text(
             json.dumps(calibration, indent=2, sort_keys=True) + "\n",
@@ -444,7 +456,7 @@ def test_batch_reuses_exact_reference_when_allocation_schema_changes(
         output_dir,
         backend="numpy",
         mode="hamiltonian_bound",
-        target_time=1.0,
+        target_time=None,
         reference_error_hartree=1.0e-4,
         total_error_hartree=BENCHMARK_TOTAL_ERROR_HARTREE,
         shard_index=0,
@@ -456,7 +468,7 @@ def test_batch_reuses_exact_reference_when_allocation_schema_changes(
 
     assert summary["completed"] == 1
     assert summary["exact_references_reused"] == 1
-    assert refreshed["schema"] == 4
+    assert refreshed["schema"] == 5
     assert refreshed["exact_reference_reused"] is True
     assert refreshed["exact_reference"] == stale["exact_reference"]
 
@@ -555,14 +567,13 @@ def test_dense_evaluator_qubit_limit(
     problem_path = tmp_path / f"q{n_qubits}.json"
     problem_path.write_text(
         json.dumps(
-            {
+            _encoded_problem({
                 "name": "limit fixture",
                 "n_qubits": n_qubits,
                 "electrons": 1,
-                "target_time": 0.1,
                 "identity_coefficient": 0.0,
                 "terms": [{"label": "Z" + "I" * (n_qubits - 1), "coefficient": 1.0}],
-            }
+            })
         ),
         encoding="utf-8",
     )
@@ -581,7 +592,8 @@ def test_exact_reference_is_obtained_from_the_exact_unitary_once() -> None:
     )
 
     assert result["observable"] == "exact_unitary_ground_eigenphase"
-    assert result["unitary_definition"] == "U_exact = exp(+i H t)"
+    assert result["unitary_definition"] == "U_exact = exp(+i (H - c0 I) / lambda)"
+    assert result["phase_encoding"]["encoded_phase_bound_radians"] == [-1.0, 1.0]
     assert result["exact_unitary_ground_energy_hartree"] == pytest.approx(-1.144979079498297)
     assert result["hamiltonian_ground_energy_hartree"] == pytest.approx(
         result["exact_unitary_ground_energy_hartree"]
@@ -666,17 +678,16 @@ def test_degenerate_exact_reference_serializes_unique_anchored_ground_component(
     problem_path = tmp_path / "degenerate.json"
     problem_path.write_text(
         json.dumps(
-            {
+            _encoded_problem({
                 "name": "degenerate HF target",
                 "n_qubits": 4,
                 "electrons": 1,
-                "target_time": 0.2,
                 "identity_coefficient": 0.0,
                 "terms": [
                     {"label": "ZIII", "coefficient": 1.0},
                     {"label": "IIZI", "coefficient": 1.0},
                 ],
-            }
+            })
         ),
         encoding="utf-8",
     )
@@ -721,23 +732,28 @@ def test_absolute_baseline_uses_cached_exact_reference_and_compiled_eigenphase(
     assert result["evaluation_contract_version"] == EVALUATION_CONTRACT_VERSION
     assert result["observable"] == "compiled_unitary_lowest_hf_accessible_eigenphase"
     assert result["exact_ground_energy_hartree"] == pytest.approx(-1.144979079498297)
-    assert result["compiled_pf_energy_hartree"] == pytest.approx(-1.144974124417129)
+    assert result["compiled_pf_energy_hartree"] == pytest.approx(-1.144983078779298)
     assert result["passes_chemical_accuracy"] is True
     assert result["formula_order"] == 2
-    assert result["n_steps"] == 29
+    assert result["n_steps"] == 15
     assert result["policy"]["term_order_strategy"] == "lexicographic"
-    assert result["t_count"] == 59_276
-    assert result["per_attempt_t_count"] == result["t_count"]
-    assert result["qpe_repetitions"] == 1
+    assert result["t_count"] == 30_420
+    assert result["compiled_evolution_t_count"] == result["t_count"]
+    assert result["per_attempt_t_count"] == 938_000_700
+    assert result["qpe_repetitions"] == 5
     assert result["qpe_target_confidence"] == QPE_TARGET_CONFIDENCE
     assert result["qpe_achieved_confidence"] >= QPE_TARGET_CONFIDENCE
-    assert result["confidence_adjusted_t_count"] == result["t_count"]
+    assert result["qpe_full_evolution_queries"] == 30_835
+    assert result["confidence_adjusted_t_count"] == 4_690_003_500
     assert result["score"] == result["confidence_adjusted_t_count"]
     assert result["evaluation_wall_seconds"] > 0.0
     assert result["timing_seconds"]["compiled_unitary_build"] > 0.0
     assert result["timing_seconds"]["compiled_unitary_eigensolve"] > 0.0
     assert result["rotation_fence_interval"] == 32
-    assert result["qpe_success_probability_from_hf"] == pytest.approx(0.9890313366958328)
+    assert result["qpe_success_probability_from_hf"] == pytest.approx(0.9890307462934342)
+    assert result["qpe_success_probability_per_attempt"] == pytest.approx(
+        0.5 * result["qpe_success_probability_from_hf"]
+    )
     assert all("gate_string" not in row for row in result["unique_compilations"])
     assert all(len(row["gate_string_sha256"]) == 64 for row in result["unique_compilations"])
 
@@ -775,7 +791,6 @@ def test_step_eigendecomposition_equals_explicit_full_compiled_pf_product() -> N
         n_steps=1,
         target_time=float(problem["target_time"]),
         identity_coefficient=float(problem["identity_coefficient"]),
-        exact_energy=float(reference["exact_unitary_ground_energy_hartree"]),
     )
 
     assert explicit["compiled_pf_energy_hartree"] == pytest.approx(
@@ -920,7 +935,6 @@ def test_lowest_hf_accessible_peak_is_not_the_largest_probability_peak() -> None
         n_steps=1,
         target_time=1.0,
         identity_coefficient=0.0,
-        exact_energy=0.0,
     )
 
     assert selected["selected_eigen_index"] == 1

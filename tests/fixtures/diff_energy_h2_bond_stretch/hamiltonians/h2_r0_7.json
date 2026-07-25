@@ -9,8 +9,19 @@
   },
   "n_qubits": 4,
   "electrons": 2,
-  "target_time": 1.0,
+  "target_time": 0.5127568450530159,
   "identity_coefficient": -0.049751615584930575,
+  "phase_encoding": {
+    "schema": 1,
+    "method": "centered_nonidentity_pauli_one_norm",
+    "dimensionless_evolution_time": 1.0,
+    "energy_shift_hartree": -0.049751615584930575,
+    "energy_scale_hartree": 1.9502421267464622,
+    "physical_evolution_time_hartree_inverse": 0.5127568450530159,
+    "centered_spectral_bound_hartree": [-1.9502421267464622, 1.9502421267464622],
+    "encoded_phase_bound_radians": [-1.0, 1.0],
+    "energy_recovery": "E_hartree = energy_shift_hartree + energy_scale_hartree * phase"
+  },
   "terms": [
     {"label": "IIIZ", "coefficient": -0.2413093490372312},
     {"label": "IIZI", "coefficient": -0.2413093490372312},

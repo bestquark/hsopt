@@ -65,7 +65,12 @@ PAPER_CONTRACT: dict[str, Any] = {
     "benchmark_adaptation": {
         "total_error_target_hartree": BENCHMARK_TOTAL_ERROR_HARTREE,
         "total_error_target": "1 kcal/mol",
-        "target_time_hartree_inverse": 1.0,
+        "phase_encoding": "centered_nonidentity_pauli_one_norm",
+        "dimensionless_qpe_evolution_time": 1.0,
+        "physical_target_time": (
+            "inverse of the nonidentity Pauli one-norm, in Hartree^-1"
+        ),
+        "energy_recovery": "E_hartree = c0 + lambda * principal_phase",
         "allocation_cost": "supplement Eq. (34) with rigorous gamma=4 and delta_0=11",
         "realized_t_count": "direct PyGridSynth compilation during iteration 0",
     },
@@ -73,7 +78,8 @@ PAPER_CONTRACT: dict[str, Any] = {
         "beta(H) is obtained from the paper's rigorous Eq. (19) "
         "double-commutator coefficient bound for this Pauli decomposition. "
         "The separately cached exact energy is used only by the evaluator and "
-        "does not enter beta, the Trotter step count, or the synthesis tolerance."
+        "does not enter beta, the Trotter step count, the synthesis tolerance, "
+        "or selection of a 2pi phase branch."
     ),
 }
 PAPER_CONTRACT_SHA256 = hashlib.sha256(

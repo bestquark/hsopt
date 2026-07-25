@@ -1,5 +1,11 @@
 {
-  "schema": 1,
+  "schema": 2,
+  "phase_encoding": {
+    "method": "centered_nonidentity_pauli_one_norm",
+    "dimensionless_evolution_time": 1.0,
+    "physical_evolution_time": "computed after loading coefficients as inverse of the nonidentity Pauli one-norm",
+    "energy_recovery": "E_hartree = c0 + lambda * principal_phase"
+  },
   "source": {
     "description": "Compact metadata extracted from the externally stored, checksummed reaction Hamiltonian caches.",
     "checksum_manifest": "problem_cache.sha256"
@@ -12,8 +18,7 @@
       "cas_label": "CAS(6e,5o)",
       "metadata_sha256": "bcd2c3cd0ba7f72e372111e035f833c9af7d3ff9751a30600a9588a6c35f1d46",
       "n_qubits": 10,
-      "nonidentity_terms": 195,
-      "target_time": 1.0
+      "nonidentity_terms": 195
     },
     "ch4": {
       "active_electrons": 6,
@@ -22,8 +27,7 @@
       "cas_label": "CAS(6e,5o)",
       "metadata_sha256": "f39bc80337a3d7470d81eeac9cf6be748661727439638beb90305e4cbc3afc5d",
       "n_qubits": 10,
-      "nonidentity_terms": 827,
-      "target_time": 1.0
+      "nonidentity_terms": 827
     },
     "cl2": {
       "active_electrons": 8,
@@ -32,8 +36,7 @@
       "cas_label": "CAS(8e,5o)",
       "metadata_sha256": "470c97819f034d12933db8d4b355d0d95329baf412be1630237d4b50bf234c71",
       "n_qubits": 10,
-      "nonidentity_terms": 435,
-      "target_time": 1.0
+      "nonidentity_terms": 435
     },
     "co": {
       "active_electrons": 6,
@@ -42,8 +45,7 @@
       "cas_label": "CAS(6e,5o)",
       "metadata_sha256": "9ae0ee52cca2a0f3c12688b8bd1e21afcaa120e38e2621fc29c666494106a3a2",
       "n_qubits": 10,
-      "nonidentity_terms": 435,
-      "target_time": 1.0
+      "nonidentity_terms": 435
     },
     "co2": {
       "active_electrons": 6,
@@ -52,8 +54,7 @@
       "cas_label": "CAS(6e,5o)",
       "metadata_sha256": "1f37bcc6a1b80303e3390fc96fe4efe5a1cf23f6feb937c0240e5f00df1e0f0d",
       "n_qubits": 10,
-      "nonidentity_terms": 195,
-      "target_time": 1.0
+      "nonidentity_terms": 195
     },
     "f2": {
       "active_electrons": 8,
@@ -62,8 +63,7 @@
       "cas_label": "CAS(8e,5o)",
       "metadata_sha256": "1b681a89fc91e2272e5785cf7f606a50e00214fa88a11f63e4bd6e9253af1629",
       "n_qubits": 10,
-      "nonidentity_terms": 367,
-      "target_time": 1.0
+      "nonidentity_terms": 367
     },
     "h2": {
       "active_electrons": 2,
@@ -72,8 +72,7 @@
       "cas_label": "CAS(2e,2o)",
       "metadata_sha256": "e962e679f03486b5d54f6195cf99ac12748e67b966cb0e96c4d95e404df0c46e",
       "n_qubits": 4,
-      "nonidentity_terms": 14,
-      "target_time": 1.0
+      "nonidentity_terms": 14
     },
     "h2co": {
       "active_electrons": 8,
@@ -82,8 +81,7 @@
       "cas_label": "CAS(8e,5o)",
       "metadata_sha256": "b63a3bbfcae0c91afe90aeacce1bb7d72d54d737b33f2d9bb643557d12f76d1f",
       "n_qubits": 10,
-      "nonidentity_terms": 251,
-      "target_time": 1.0
+      "nonidentity_terms": 251
     },
     "h2o": {
       "active_electrons": 6,
@@ -92,8 +90,7 @@
       "cas_label": "CAS(6e,5o)",
       "metadata_sha256": "f9df9982cb6105a60a62cbd1cdde31bd67f863597912269a5024a8e81c169646",
       "n_qubits": 10,
-      "nonidentity_terms": 259,
-      "target_time": 1.0
+      "nonidentity_terms": 259
     },
     "hcl": {
       "active_electrons": 8,
@@ -102,8 +99,7 @@
       "cas_label": "CAS(8e,5o)",
       "metadata_sha256": "c6f1c703702d909c908d39c467b1a155b173265c7d3be9a256a4a4e06b63190d",
       "n_qubits": 10,
-      "nonidentity_terms": 275,
-      "target_time": 1.0
+      "nonidentity_terms": 275
     },
     "hcn": {
       "active_electrons": 6,
@@ -112,8 +108,7 @@
       "cas_label": "CAS(6e,5o)",
       "metadata_sha256": "8979324b7c5633d3e505208ef1744b3f98462d9e11d88a05feadddf519036a77",
       "n_qubits": 10,
-      "nonidentity_terms": 435,
-      "target_time": 1.0
+      "nonidentity_terms": 435
     },
     "hco_plus": {
       "active_electrons": 6,
@@ -122,8 +117,7 @@
       "cas_label": "CAS(6e,5o)",
       "metadata_sha256": "f46d94306614a93729829a5ec36b2c4f44dfbb1fae914ddb8a64cef579be454b",
       "n_qubits": 10,
-      "nonidentity_terms": 435,
-      "target_time": 1.0
+      "nonidentity_terms": 435
     },
     "hcoh": {
       "active_electrons": 8,
@@ -132,8 +126,7 @@
       "cas_label": "CAS(8e,5o)",
       "metadata_sha256": "bd229e4d0512e81ce404f5b70660c41e62eac4d3db24f490a1a8e82f6b2b5ef5",
       "n_qubits": 10,
-      "nonidentity_terms": 443,
-      "target_time": 1.0
+      "nonidentity_terms": 443
     },
     "hf": {
       "active_electrons": 8,
@@ -142,8 +135,7 @@
       "cas_label": "CAS(8e,5o)",
       "metadata_sha256": "67c6194f395b37ad031e29c66b3d6513ac3a52b871e4f6f43f760e8c7f011953",
       "n_qubits": 10,
-      "nonidentity_terms": 275,
-      "target_time": 1.0
+      "nonidentity_terms": 275
     },
     "hnc": {
       "active_electrons": 6,
@@ -152,8 +144,7 @@
       "cas_label": "CAS(6e,5o)",
       "metadata_sha256": "d83bd200188ad0eba2908dfb0500f2982e2633b57864825d8477dfd927006fd9",
       "n_qubits": 10,
-      "nonidentity_terms": 435,
-      "target_time": 1.0
+      "nonidentity_terms": 435
     },
     "hno": {
       "active_electrons": 8,
@@ -162,8 +153,7 @@
       "cas_label": "CAS(8e,5o)",
       "metadata_sha256": "1ab35d99a05c3470a3287124723972ef54f67e225b66cbea52f54f8261b2b10b",
       "n_qubits": 10,
-      "nonidentity_terms": 443,
-      "target_time": 1.0
+      "nonidentity_terms": 443
     },
     "hoc_plus": {
       "active_electrons": 6,
@@ -172,8 +162,7 @@
       "cas_label": "CAS(6e,5o)",
       "metadata_sha256": "6971abb4b5e095c2c3e8ea271b023526067ce7a38c22690ded645b15b860773f",
       "n_qubits": 10,
-      "nonidentity_terms": 435,
-      "target_time": 1.0
+      "nonidentity_terms": 435
     },
     "n2": {
       "active_electrons": 6,
@@ -182,8 +171,7 @@
       "cas_label": "CAS(6e,5o)",
       "metadata_sha256": "38d0cd8306e1441c3cdc0ee9185957e25e19734593ca0853bba61d49542d454e",
       "n_qubits": 10,
-      "nonidentity_terms": 391,
-      "target_time": 1.0
+      "nonidentity_terms": 391
     },
     "nh3": {
       "active_electrons": 6,
@@ -192,8 +180,7 @@
       "cas_label": "CAS(6e,5o)",
       "metadata_sha256": "5997d7de564cceca52772a80f4975745f2a3ac891fcadc81ddbefcedb6296660",
       "n_qubits": 10,
-      "nonidentity_terms": 443,
-      "target_time": 1.0
+      "nonidentity_terms": 443
     },
     "noh": {
       "active_electrons": 8,
@@ -202,8 +189,7 @@
       "cas_label": "CAS(8e,5o)",
       "metadata_sha256": "3cd49c200ea4e4604ba3ac0b068b860287ef25935307dcedaca17241ca737666",
       "n_qubits": 10,
-      "nonidentity_terms": 443,
-      "target_time": 1.0
+      "nonidentity_terms": 443
     },
     "vinylidene": {
       "active_electrons": 6,
@@ -212,8 +198,7 @@
       "cas_label": "CAS(6e,5o)",
       "metadata_sha256": "263c1d51c56f2719e591aa910ff3c820ffed6d6d2e46bc6dc8b7d455715b32e5",
       "n_qubits": 10,
-      "nonidentity_terms": 251,
-      "target_time": 1.0
+      "nonidentity_terms": 251
     }
   }
 }

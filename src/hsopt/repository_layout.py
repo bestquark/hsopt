@@ -18,6 +18,14 @@ INITIAL_POLICY = "initial_pf.py"
 EVALUATOR = "evaluate.py"
 ABS_INSTANCE_COUNT = 91
 DIFF_INSTANCE_COUNT = 10
+PHASE_ENCODING_DESCRIPTOR = {
+    "method": "centered_nonidentity_pauli_one_norm",
+    "dimensionless_evolution_time": 1.0,
+    "physical_evolution_time": (
+        "computed after parsing as inverse of the nonidentity Pauli one-norm"
+    ),
+    "energy_recovery": "E_hartree = c0 + lambda * principal_phase",
+}
 
 
 def _json_text(payload: Any) -> str:
@@ -84,7 +92,7 @@ def absolute_definitions(
             "pauli_terms_including_identity": pauli_terms,
             "nonidentity_terms": pauli_terms - 1,
             "hamiltonian_one_norm": one_norm,
-            "target_time": 1.0,
+            "phase_encoding": PHASE_ENCODING_DESCRIPTOR,
             "source": {
                 "library": "HamLib",
                 "collection": str(row["collection"]),
@@ -150,7 +158,7 @@ def reaction_definitions(
                     "basis": str(compact["basis"]),
                     "cas_label": str(compact["cas_label"]),
                     "nonidentity_terms": int(compact["nonidentity_terms"]),
-                    "target_time": float(compact["target_time"]),
+                    "phase_encoding": PHASE_ENCODING_DESCRIPTOR,
                     "external_hamiltonian_cache": {
                         "metadata": metadata,
                         "metadata_sha256": checksums[metadata],

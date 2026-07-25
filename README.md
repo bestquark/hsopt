@@ -17,43 +17,90 @@ outside the Git checkout.
 
 ## Objective
 
-For a fixed Hamiltonian $H$, evolution time $t$, electron number, and
-Hartree--Fock (HF) input, HSOpt caches the exact ground energy
-$E^{\mathrm{exact}}$ once. A candidate policy may change only the
-product-formula and rotation-synthesis parameters used to compile
-$U_{\mathrm{PF}}$.
-
-The evaluator diagonalizes $U_{\mathrm{PF}}$, unwraps its eigenphases into
-energies, and selects the lowest-energy peak with numerically resolved HF
-weight $p_{\mathrm{HF}}$. If $p_{\mathrm{HF}}=1$, one QPE attempt is
-sufficient, so $R_{95}=1$. For $0<p_{\mathrm{HF}}<1$, the number of
-independent attempts required to observe that peak with 95% confidence is
+For each physical Hamiltonian,
 
 ```math
-R_{95} =
-\left\lceil
-\frac{\log(0.05)}{\log\left(1-p_{\mathrm{HF}}\right)}
-\right\rceil,
+H=c_0I+\sum_j h_jP_j,
 \qquad
-T_{95}=R_{95}T_{\mathrm{raw}}.
+\lambda=\sum_j |h_j|,
 ```
 
-A molecular candidate is feasible when
+HSOpt uses the explicit QPE encoding
+
+```math
+U=\exp\left(+i\frac{H-c_0I}{\lambda}\right).
+```
+
+Equivalently, the product formula simulates the physical Hamiltonian for
+$t=1/\lambda$ Hartree$^{-1}$. Since
+$\lVert H-c_0I\rVert\leq\lambda$, every exact encoded eigenphase lies in
+$[-1,1]$ radians and cannot wrap across $\pm\pi$. The principal phase is
+decoded without consulting the exact answer:
+
+```math
+E_{\mathrm{Ha}}=c_0+\lambda\phi.
+```
+
+The exact ground energy is cached once only to score candidates. A candidate
+may change the product formula and rotation-synthesis parameters, but not this
+encoding, the Hamiltonian, or the electron sector.
+
+The evaluator diagonalizes the compiled $U_{\mathrm{PF}}$ and selects the
+lowest decoded energy with numerically resolved HF weight $p_{\mathrm{HF}}$.
+After measuring its compiled-unitary systematic error
+$\epsilon_{\mathrm{sys}}$, the remaining chemical-accuracy budget is assigned
+to QPE:
+
+```math
+\epsilon_{\mathrm{QPE}}
+=
+\epsilon_{\mathrm{chem}}-\epsilon_{\mathrm{sys}}.
+```
+
+Using the rigorous phase-estimation row of the Reiher *et al.* supplement, one
+QPE attempt uses
+
+```math
+M_{\mathrm{QPE}}
+=
+\left\lceil
+\frac{8\pi}{t\epsilon_{\mathrm{QPE}}}
+\right\rceil
+```
+
+full-evolution queries and succeeds with probability at least
+$p_{\mathrm{HF}}/2$. The number of independent attempts required for 95%
+confidence is therefore
+
+```math
+R_{95}
+=
+\left\lceil
+\frac{\log(0.05)}{\log\left(1-p_{\mathrm{HF}}/2\right)}
+\right\rceil,
+\qquad
+T_{95}=R_{95}M_{\mathrm{QPE}}T_U,
+```
+
+where $T_U$ is the directly synthesized PyGridSynth $T$ count of one compiled
+product-formula evolution. A molecular candidate is feasible when
 
 $$
 \left|E^{\mathrm{PF}}-E^{\mathrm{exact}}\right|
-\leq 1\ \mathrm{kcal}\,\mathrm{mol}^{-1}.
+< 1\ \mathrm{kcal}\,\mathrm{mol}^{-1}.
 $$
 
 Among feasible candidates, HSOpt minimizes $T_{95}$.
-Reports display this objective as **T95 (raw x R)**.
+Reports retain $T_U$, $M_{\mathrm{QPE}}$, $R_{95}$, and their full product.
 
 For a reaction, each unique species is evaluated independently and the signed
-reaction energy is formed classically. The five-percent failure budget is
-shared equally across the unique species, giving at least 95% joint confidence
-by the union bound. Stoichiometric coefficients affect the energy difference
-but do not duplicate circuits. The reaction objective is the sum of the
-confidence-adjusted species costs and is reported as **T95 (raw total)**.
+reaction energy is formed classically. The remaining QPE energy budget is
+allocated so every species contributes an equal worst-case absolute error
+after its stoichiometric coefficient. The five-percent failure budget is shared
+equally across unique species, giving at least 95% joint confidence by the
+union bound. Stoichiometric coefficients affect the energy difference but do
+not duplicate circuits. The reaction objective is the sum of the full
+confidence-adjusted species QPE costs.
 
 ## Product-formula policy
 

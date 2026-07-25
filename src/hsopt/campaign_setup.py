@@ -17,7 +17,7 @@ from typing import Any
 
 import numpy as np
 
-from .compiled_unitary import assemble_exact_difference_reference
+from .compiled_unitary import assemble_exact_difference_reference, qpe_phase_encoding
 from .exact_loop import initialize_lane
 from .paper_baseline import verify_calibration
 
@@ -43,6 +43,20 @@ def _write_json(path: Path, payload: Any) -> None:
     temporary = path.with_suffix(path.suffix + ".tmp")
     temporary.write_text(json.dumps(payload, indent=2, sort_keys=True) + "\n", encoding="utf-8")
     temporary.replace(path)
+
+
+def _attach_phase_encoding(problem: dict[str, Any]) -> dict[str, Any]:
+    """Attach the explicit norm-based QPE encoding to a physical Hamiltonian."""
+
+    encoding = qpe_phase_encoding(
+        float(problem["identity_coefficient"]),
+        problem["terms"],
+    )
+    problem["phase_encoding"] = encoding
+    problem["target_time"] = float(
+        encoding["physical_evolution_time_hartree_inverse"]
+    )
+    return problem
 
 
 def _require_empty(path: Path) -> Path:
@@ -277,7 +291,7 @@ def prepare_hamlib(
                 f"{row['lane_id']}: parsed {len(terms) + 1} terms, expected {row['terms']}"
             )
         one_norm = float(row["one_norm"])
-        problem = {
+        problem = _attach_phase_encoding({
             "name": f"HamLib {row['lane_id']}",
             "source": {
                 "library": "HamLib",
@@ -291,10 +305,9 @@ def prepare_hamlib(
             },
             "n_qubits": int(row["nqubits"]),
             "electrons": int(row["electrons"]),
-            "target_time": 1.0,
             "identity_coefficient": identity,
             "terms": terms,
-        }
+        })
         problem_path = output_root / row["lane_id"] / "hamiltonian.json"
         _write_json(problem_path, problem)
         records.append(
@@ -372,7 +385,7 @@ def prepare_reactions(
                 metadata["total_pauli_rotation_terms"]
             ):
                 raise ValueError(f"{species}: inconsistent cached Pauli decomposition")
-            problem = {
+            problem = _attach_phase_encoding({
                 "name": f"Reaction seed {species}",
                 "source": {
                     "library": "HSOpt paper reaction cache",
@@ -385,13 +398,12 @@ def prepare_reactions(
                 },
                 "n_qubits": int(metadata["n_qubits"]),
                 "electrons": int(metadata["active_electrons"]),
-                "target_time": 1.0,
                 "identity_coefficient": float(metadata["identity_coefficient"]),
                 "terms": [
                     {"label": label, "coefficient": coefficient}
                     for label, coefficient in zip(labels, coefficients, strict=True)
                 ],
-            }
+            })
             relative_problem = Path("hamiltonians") / f"{species}.json"
             _write_json(reaction_dir / relative_problem, problem)
             reaction_terms.append(

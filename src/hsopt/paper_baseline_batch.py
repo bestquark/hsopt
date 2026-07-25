@@ -133,7 +133,7 @@ def run_batch(
     *,
     backend: str,
     mode: str,
-    target_time: float,
+    target_time: float | None,
     reference_error_hartree: float,
     total_error_hartree: float,
     shard_index: int,
@@ -162,6 +162,9 @@ def run_batch(
     for index, record in enumerate(records, start=1):
         key = str(record["key"])
         problem = Path(str(record["problem"])).resolve()
+        problem_target_time = float(
+            json.loads(problem.read_text(encoding="utf-8"))["target_time"]
+        )
         expected_sha256 = str(record["problem_sha256"])
         output = _output_path(output_dir, record)
         failure = output.with_suffix(".failure.json")
@@ -180,7 +183,8 @@ def run_batch(
                     and isinstance(candidate_reference, Mapping)
                     and candidate_reference.get("observable") == "exact_unitary_ground_eigenphase"
                     and candidate_reference.get("problem_sha256") == expected_sha256
-                    and float(candidate_reference.get("target_time", float("nan"))) == target_time
+                    and float(candidate_reference.get("target_time", float("nan")))
+                    == problem_target_time
                 ):
                     reusable_exact_reference = candidate_reference
             try:
@@ -192,7 +196,8 @@ def run_batch(
             else:
                 if (
                     str(prior["calibration_mode"]) == mode
-                    and float(prior["instantiated_policy"]["target_time"]) == target_time
+                    and float(prior["instantiated_policy"]["target_time"])
+                    == problem_target_time
                     and float(prior["reference"]["reference_error_hartree"])
                     == reference_error_hartree
                     and float(prior["instantiated_policy"]["total_error_target_hartree"])
@@ -264,6 +269,9 @@ def run_batch(
         "backend": backend,
         "mode": mode,
         "target_time": target_time,
+        "target_time_mode": (
+            "asserted_constant" if target_time is not None else "per_problem_phase_encoding"
+        ),
         "reference_error_hartree": reference_error_hartree,
         "total_error_hartree": total_error_hartree,
         "includes_exact_reference": include_exact_reference,
@@ -477,7 +485,14 @@ def _parser() -> argparse.ArgumentParser:
         choices=("empirical_exact", "hamiltonian_bound"),
         default="hamiltonian_bound",
     )
-    run.add_argument("--target-time", type=float, default=1.0)
+    run.add_argument(
+        "--target-time",
+        type=float,
+        help=(
+            "optional assertion for every problem's normalized target time; "
+            "normally omitted because the Pauli one-norm makes it problem-specific"
+        ),
+    )
     run.add_argument(
         "--reference-error-hartree",
         type=float,

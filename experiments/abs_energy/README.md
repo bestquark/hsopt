@@ -27,7 +27,7 @@ that same exact reference.
 The 91 directories beside `inputs/` are the visible production selection. Each
 contains one deterministic `instance.json` and one generated `initial_pf.py`.
 The definition records its HamLib archive and dataset, archive checksum,
-mapped qubit/electron/term counts, one-norm, target time, and dense-exact fit
+mapped qubit/electron/term counts, one-norm, phase-encoding policy, and dense-exact fit
 metadata. The large coefficient payload is not duplicated in Git.
 
 Verify or intentionally regenerate this directory view with:

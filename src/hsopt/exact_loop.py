@@ -151,6 +151,8 @@ def _validate_replay(
         "candidate_sha256": candidate_sha256 == replay["canonical_candidate_sha256"],
         "status": result.get("status") == canonical_result.get("status"),
         "t_count": result.get("t_count") == canonical_result.get("t_count"),
+        "qpe_full_evolution_queries": result.get("qpe_full_evolution_queries")
+        == canonical_result.get("qpe_full_evolution_queries"),
         "qpe_repetitions": result.get("qpe_repetitions") == canonical_result.get("qpe_repetitions"),
         "confidence_adjusted_t_count": result.get("confidence_adjusted_t_count")
         == canonical_result.get("confidence_adjusted_t_count"),

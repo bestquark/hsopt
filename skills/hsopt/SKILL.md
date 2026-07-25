@@ -40,6 +40,10 @@ Pauli `label`, numerical `coefficient`, `support_size`, and X/Y/Z counts.
 
 `repetitions()` returns a positive integer. The evaluator sets
 `step_time = problem["target_time"] / repetitions()`.
+`target_time` is not an arbitrary fixed one: it is the physical time
+`1 / sum(abs(term["coefficient"]))` from the immutable QPE phase encoding.
+The exact unitary is `exp(+i * (H - c0 I) / lambda)`, and the principal phase
+is decoded back to Hartree as `c0 + lambda * phase`.
 
 `build_step()` returns a nonempty deterministic sequence of `(term, angle)`
 pairs for one stationary step. `angle` is the real alpha in
@@ -66,8 +70,12 @@ The evaluator:
 4. selects the lowest-energy peak with numerically resolved weight from the
    fixed Hartree--Fock input;
 5. compares it with the cached exact ground energy; and
-6. scores a feasible candidate by
-   `T95 = compiled_T_per_attempt * QPE_attempts_for_95_percent_confidence`.
+6. assigns the remaining one-kcal/mol budget to QPE precision and multiplies
+   the directly compiled one-evolution T count by the paper's
+   `ceil(8*pi/(target_time*epsilon_QPE))` full-evolution query bound; and
+7. multiplies that QPE-run cost by enough attempts for 95% confidence,
+   accounting for both HF peak weight and the paper's one-half
+   phase-estimation success guarantee.
 
 For a reaction, the signed energy is assembled from independently evaluated
 species. The five-percent failure budget is shared across unique species and

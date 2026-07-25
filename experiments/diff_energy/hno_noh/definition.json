@@ -29,9 +29,14 @@
       },
       "n_qubits": 10,
       "nonidentity_terms": 443,
+      "phase_encoding": {
+        "dimensionless_evolution_time": 1.0,
+        "energy_recovery": "E_hartree = c0 + lambda * principal_phase",
+        "method": "centered_nonidentity_pauli_one_norm",
+        "physical_evolution_time": "computed after parsing as inverse of the nonidentity Pauli one-norm"
+      },
       "problem_name": "Reaction seed hno",
-      "species": "hno",
-      "target_time": 1.0
+      "species": "hno"
     },
     {
       "active_electrons": 8,
@@ -47,9 +52,14 @@
       },
       "n_qubits": 10,
       "nonidentity_terms": 443,
+      "phase_encoding": {
+        "dimensionless_evolution_time": 1.0,
+        "energy_recovery": "E_hartree = c0 + lambda * principal_phase",
+        "method": "centered_nonidentity_pauli_one_norm",
+        "physical_evolution_time": "computed after parsing as inverse of the nonidentity Pauli one-norm"
+      },
       "problem_name": "Reaction seed noh",
-      "species": "noh",
-      "target_time": 1.0
+      "species": "noh"
     }
   ]
 }

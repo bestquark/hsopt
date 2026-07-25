@@ -29,10 +29,11 @@ import numpy as np
 
 from hsopt.compiled_unitary import (
     CHEMICAL_ACCURACY_HARTREE,
+    QPE_PHASE_ESTIMATION_ALPHA,
     _apply_compiled_rotation,
+    _decode_energy,
     _fence,
     _step_rotations,
-    _unwrap_energy,
     array_backend,
     evaluate_exact_reference,
     load_problem,
@@ -43,7 +44,7 @@ PAPER_BETA_REFERENCE_ERROR_HARTREE = 1.0e-4
 BENCHMARK_TOTAL_ERROR_HARTREE = CHEMICAL_ACCURACY_HARTREE
 PAPER_FORMULA_ORDER = 2
 PAPER_TERM_ORDER = "lexicographic"
-PAPER_PHASE_ESTIMATION_ALPHA = 8.0 * math.pi
+PAPER_PHASE_ESTIMATION_ALPHA = QPE_PHASE_ESTIMATION_ALPHA
 PAPER_SYNTHESIS_GAMMA = 4.0
 PAPER_SYNTHESIS_DELTA_0 = 11.0
 PAPER_ERROR_CONSTRAINT = "epsilon_QPE + epsilon_TS + epsilon_Rot <= epsilon_total"
@@ -52,7 +53,7 @@ PAPER_TROTTER_SELECTION = (
     "empirical_exact_ground_branch_at_0.1_mHa_then_beta_sqrt_reference_over_allocated_trotter_error"
 )
 HAMILTONIAN_BOUND_SELECTION = "paper_eq19_exact_pauli_double_commutator_bound_without_exact_energy"
-CALIBRATION_SCHEMA = 4
+CALIBRATION_SCHEMA = 5
 
 
 def _canonical_json(payload: Mapping[str, Any]) -> bytes:
@@ -171,6 +172,12 @@ def verify_calibration(
                 raise ValueError(
                     "Hamiltonian-bound calibration exact reference has the wrong problem hash"
                 )
+            if exact_reference.get("phase_encoding") != payload.get(
+                "benchmark_adaptation", {}
+            ).get("phase_encoding"):
+                raise ValueError(
+                    "Hamiltonian-bound calibration exact reference has the wrong phase encoding"
+                )
         reference = payload.get("reference")
         if not isinstance(reference, Mapping):
             raise ValueError("Hamiltonian-bound calibration is missing its reference data")
@@ -233,8 +240,11 @@ def _exact_pf_energy(
     step_phase = float(np.asarray(xp.angle(eigenvalues[selected])))
     total_phase = int(n_steps) * step_phase
     identity = float(problem["identity_coefficient"])
-    centered_reference = exact_energy - identity
-    energy = _unwrap_energy(total_phase, target_time, centered_reference) + identity
+    energy = _decode_energy(
+        total_phase,
+        target_time=target_time,
+        identity_coefficient=identity,
+    )
     selected_overlap = float(np.asarray(overlaps[selected]))
     _fence(backend_name)
     del unitary, eigenvalues, eigenvectors, overlaps
@@ -623,7 +633,7 @@ def calibrate_problem(
     backend: str,
     mode: str = "hamiltonian_bound",
     include_exact_reference: bool = True,
-    target_time: float = 1.0,
+    target_time: float | None = None,
     reference_error_hartree: float = PAPER_BETA_REFERENCE_ERROR_HARTREE,
     total_error_hartree: float = BENCHMARK_TOTAL_ERROR_HARTREE,
     max_steps: int = 1 << 20,
@@ -634,10 +644,10 @@ def calibrate_problem(
     started = time.perf_counter()
     path = problem_path.resolve()
     problem = load_problem(path)
-    if not math.isclose(
+    if target_time is not None and not math.isclose(
         float(problem["target_time"]),
         float(target_time),
-        rel_tol=0.0,
+        rel_tol=1.0e-12,
         abs_tol=1.0e-15,
     ):
         raise ValueError(
@@ -728,7 +738,8 @@ def calibrate_problem(
             "total_error_target_kcal_per_mol": float(
                 total_error_hartree / CHEMICAL_ACCURACY_HARTREE
             ),
-            "target_time": float(target_time),
+            "target_time": float(problem["target_time"]),
+            "phase_encoding": dict(problem["phase_encoding"]),
             "uses_gamma_delta_synthesis_fit": True,
             "allocation_cost_source": "paper Eq. (34) rigorous gamma/delta_0 model",
             "realized_t_count_source": "iteration-0 direct PyGridSynth compilation",
@@ -778,7 +789,14 @@ def main() -> int:
             "autoresearch campaign until an exact evaluator reference is supplied"
         ),
     )
-    parser.add_argument("--target-time", type=float, default=1.0)
+    parser.add_argument(
+        "--target-time",
+        type=float,
+        help=(
+            "optional assertion for the per-Hamiltonian normalized evolution time; "
+            "by default it is read from phase_encoding"
+        ),
+    )
     parser.add_argument(
         "--reference-error-hartree",
         type=float,

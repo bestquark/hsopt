@@ -652,9 +652,17 @@ mutation instead of retrying it.
 The fixed evaluator compiles every Pauli rotation with PyGridSynth, constructs
 the actual compiled product-formula unitary, diagonalizes it, and selects the
 lowest-energy eigenphase with resolved weight from the fixed Hartree--Fock
-input. The score is the per-attempt compiled T count multiplied by the number
-of independent QPE attempts needed to observe that peak with 95% confidence,
-and is feasible only when the eigenphase is within chemical accuracy of the
+input. The immutable problem uses the branch-safe encoding
+U = exp(+i * (H - c0 I) / lambda), where lambda is the nonidentity Pauli
+one-norm and problem["target_time"] = 1 / lambda. The evaluator decodes the
+principal phase back to Hartree as c0 + lambda * phase.
+
+The score multiplies the directly compiled T count of one product-formula
+evolution by the paper's full-evolution QPE query bound at the remaining
+chemical-accuracy precision, then by enough independent attempts for 95%
+confidence. The confidence calculation includes both the resolved HF peak
+weight and the paper's one-half phase-estimation success guarantee. It is
+feasible only when the decoded energy is within chemical accuracy of the
 cached exact ground energy. Small resolved HF peak weight is therefore
 penalized by a larger repetition cost; it is not an energy average.
 
@@ -701,7 +709,9 @@ def agent_feedback(feedback: dict[str, Any]) -> dict[str, Any]:
         "absolute_energy_error_mha",
         "absolute_difference_error_mha",
         "passes_chemical_accuracy",
+        "compiled_evolution_t_count",
         "per_attempt_t_count",
+        "per_qpe_run_t_count",
         "confidence_adjusted_t_count",
         "t_count",
         "score",
@@ -711,9 +721,13 @@ def agent_feedback(feedback: dict[str, Any]) -> dict[str, Any]:
         "scheduled_rotation_count",
         "one_step_t_count",
         "qpe_repetitions",
+        "qpe_energy_precision_hartree",
+        "qpe_phase_precision_radians",
+        "qpe_full_evolution_queries",
         "qpe_target_confidence",
         "qpe_achieved_confidence",
         "qpe_success_probability_from_hf",
+        "qpe_success_probability_per_attempt",
     )
     result = {key: feedback[key] for key in scalar_keys if key in feedback}
     if isinstance(feedback.get("policy"), dict):
@@ -728,7 +742,9 @@ def agent_feedback(feedback: dict[str, Any]) -> dict[str, Any]:
                     "electrons",
                     "absolute_energy_error_mha",
                     "passes_chemical_accuracy",
+                    "compiled_evolution_t_count",
                     "per_attempt_t_count",
+                    "per_qpe_run_t_count",
                     "confidence_adjusted_t_count",
                     "t_count",
                     "formula_order",
@@ -736,9 +752,13 @@ def agent_feedback(feedback: dict[str, Any]) -> dict[str, Any]:
                     "rotations_per_step",
                     "scheduled_rotation_count",
                     "qpe_repetitions",
+                    "qpe_energy_precision_hartree",
+                    "qpe_phase_precision_radians",
+                    "qpe_full_evolution_queries",
                     "qpe_target_confidence",
                     "qpe_achieved_confidence",
                     "qpe_success_probability_from_hf",
+                    "qpe_success_probability_per_attempt",
                     "policy",
                 )
                 if key in row

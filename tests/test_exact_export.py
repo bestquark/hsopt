@@ -179,8 +179,8 @@ def test_completed_hamlib_campaign_exports_dynamic_strict_report_tables(
     assert len(candidates) == 1
     assert len(summaries) == 1
     assert candidates[0]["agent_tool_calls"] == "2"
-    assert "T95 (raw x R)" in _hamlib_summary("fixture", summaries)
-    assert "T95 (raw x R)" in _hamlib_extended("fixture", summaries, candidates)
+    assert "T95 (U x M x R)" in _hamlib_summary("fixture", summaries)
+    assert "T95 (U x M x R)" in _hamlib_extended("fixture", summaries, candidates)
     assert (output / "records/fixture/run_01/iterations/0001/agent_actions.jsonl").exists() is False
     reports = tmp_path / "hamlib-reports"
     generate_reports("abs_energy", output, reports, engine="reportlab")
@@ -223,8 +223,12 @@ def test_completed_reaction_campaign_exports_both_contracts(tmp_path: Path) -> N
     assert len(candidates) == 4
     assert set(pooled["fixture"]) >= {"equal_share", "reaction_aware", "reaction"}
     reaction_rows = [row for row in candidates if row["reaction_key"] == "fixture"]
-    assert "T95 (raw total)" in _reaction_summary("fixture", reaction_rows, pooled["fixture"])
-    assert "T95 (raw total)" in _reaction_extended("fixture", reaction_rows, pooled["fixture"])
+    assert "T95 (sum U x M x R)" in _reaction_summary(
+        "fixture", reaction_rows, pooled["fixture"]
+    )
+    assert "T95 (sum U x M x R)" in _reaction_extended(
+        "fixture", reaction_rows, pooled["fixture"]
+    )
     reports = tmp_path / "reaction-reports"
     generate_reports("diff_energy", output, reports, engine="reportlab")
     assert (reports / "reactions/fixture/summary.pdf").read_bytes().startswith(b"%PDF-")
