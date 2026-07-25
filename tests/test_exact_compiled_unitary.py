@@ -1,8 +1,10 @@
 from __future__ import annotations
 
 import csv
+import hashlib
 import json
 import math
+import shutil
 import subprocess
 import sys
 from collections import Counter
@@ -34,6 +36,7 @@ from hsopt.compiled_unitary import (
     qpe_phase_encoding,
     validate_policy_source,
 )
+from hsopt.campaign_setup import normalize_materialized_inputs
 from hsopt.experiment_evaluator import evaluate_absolute_directory
 from hsopt.paper_baseline import (
     BENCHMARK_TOTAL_ERROR_HARTREE,
@@ -121,6 +124,78 @@ def test_checked_in_benchmark_layout_matches_the_91_and_10_registries() -> None:
         source = evaluator.read_text(encoding="utf-8")
         assert "from hsopt.compiled_unitary import" in source
         assert "hsopt.experiment_evaluator" not in source
+
+
+def test_normalize_materialized_inputs_copies_only_fresh_phase_encoded_inputs(
+    tmp_path: Path,
+) -> None:
+    abs_inputs = tmp_path / "source/abs_energy"
+    abs_problem = abs_inputs / "h2/hamiltonian.json"
+    abs_problem.parent.mkdir(parents=True)
+    abs_problem.write_bytes((ABSOLUTE / "hamiltonian.json").read_bytes())
+    source_abs_sha256 = hashlib.sha256(abs_problem.read_bytes()).hexdigest()
+    (abs_inputs / "manifest.json").write_text(
+        json.dumps(
+            {
+                "schema": 1,
+                "family": "abs_energy",
+                "instances": [
+                    {
+                        "instance": "h2",
+                        "problem": "h2/hamiltonian.json",
+                        "problem_sha256": source_abs_sha256,
+                    }
+                ],
+            }
+        )
+        + "\n",
+        encoding="utf-8",
+    )
+
+    reaction_inputs = tmp_path / "source/diff_energy"
+    shutil.copytree(DIFFERENCE, reaction_inputs / "stretch")
+    (reaction_inputs / "stretch/paper_seed.json").write_text(
+        '{"obsolete": true}\n',
+        encoding="utf-8",
+    )
+    (reaction_inputs / "manifest.json").write_text(
+        json.dumps(
+            {
+                "schema": 1,
+                "family": "diff_energy",
+                "instances": [
+                    {
+                        "instance": "stretch",
+                        "reaction": "stretch/reaction.json",
+                    }
+                ],
+            }
+        )
+        + "\n",
+        encoding="utf-8",
+    )
+
+    result = normalize_materialized_inputs(
+        abs_inputs,
+        reaction_inputs,
+        tmp_path / "normalized",
+    )
+    normalized_abs = tmp_path / "normalized/abs_energy/h2/hamiltonian.json"
+    normalized_manifest = json.loads(
+        (tmp_path / "normalized/abs_energy/manifest.json").read_text(encoding="utf-8")
+    )
+
+    assert result["absolute_hamiltonians"] == 1
+    assert result["reaction_instances"] == 1
+    assert result["reaction_hamiltonian_files"] == 2
+    assert result["unique_hamiltonians"] == 2
+    assert load_problem(normalized_abs)["target_time"] == pytest.approx(
+        0.5127568450530159
+    )
+    assert normalized_manifest["instances"][0]["source_problem_sha256"] == (
+        source_abs_sha256
+    )
+    assert not (tmp_path / "normalized/diff_energy/stretch/paper_seed.json").exists()
 
 
 def test_directory_evaluator_uses_its_sealed_hamiltonian_identity(tmp_path: Path) -> None:

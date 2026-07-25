@@ -8,6 +8,7 @@ import hashlib
 import io
 import json
 import re
+import shutil
 import subprocess
 import sys
 import zipfile
@@ -57,6 +58,92 @@ def _attach_phase_encoding(problem: dict[str, Any]) -> dict[str, Any]:
         encoding["physical_evolution_time_hartree_inverse"]
     )
     return problem
+
+
+def normalize_materialized_inputs(
+    abs_inputs: Path,
+    reaction_inputs: Path,
+    output_root: Path,
+) -> dict[str, Any]:
+    """Create a fresh normalized-QPE input tree from physical Hamiltonian JSON.
+
+    This intentionally re-materializes only benchmark inputs. It never copies
+    calibrations, exact references, policies, queues, or campaign state.
+    """
+
+    abs_inputs = abs_inputs.resolve()
+    reaction_inputs = reaction_inputs.resolve()
+    output_root = output_root.resolve()
+    if output_root == abs_inputs or output_root.is_relative_to(abs_inputs):
+        raise ValueError("normalized output cannot be inside the absolute input tree")
+    if output_root == reaction_inputs or output_root.is_relative_to(reaction_inputs):
+        raise ValueError("normalized output cannot be inside the reaction input tree")
+    output_root = _require_empty(output_root)
+    output_abs = output_root / ABS_ENERGY_FAMILY
+    output_diff = output_root / DIFF_ENERGY_FAMILY
+    shutil.copytree(abs_inputs, output_abs)
+    shutil.copytree(reaction_inputs, output_diff)
+    for obsolete_seed in output_diff.rglob("paper_seed.json"):
+        obsolete_seed.unlink()
+
+    abs_manifest_path = output_abs / "manifest.json"
+    abs_manifest = json.loads(abs_manifest_path.read_text(encoding="utf-8"))
+    for record in abs_manifest["instances"]:
+        relative = Path(str(record["problem"]))
+        problem_path = output_abs / relative
+        problem = json.loads(problem_path.read_text(encoding="utf-8"))
+        problem.pop("phase_encoding", None)
+        _write_json(problem_path, _attach_phase_encoding(problem))
+        record["source_problem_sha256"] = str(record["problem_sha256"])
+        record["problem_sha256"] = _sha256(problem_path)
+    abs_manifest["phase_encoding"] = {
+        "method": "centered_nonidentity_pauli_one_norm",
+        "dimensionless_evolution_time": 1.0,
+    }
+    abs_manifest["source_materialization"] = {
+        "path": str(abs_inputs),
+        "manifest_sha256": _sha256(abs_inputs / "manifest.json"),
+    }
+    abs_manifest["created_at"] = _now()
+    _write_json(abs_manifest_path, abs_manifest)
+
+    reaction_manifest_path = output_diff / "manifest.json"
+    reaction_manifest = json.loads(reaction_manifest_path.read_text(encoding="utf-8"))
+    normalized_problems: dict[str, str] = {}
+    for record in reaction_manifest["instances"]:
+        reaction_path = output_diff / str(record["reaction"])
+        reaction = json.loads(reaction_path.read_text(encoding="utf-8"))
+        for item in reaction["terms"]:
+            problem_path = (reaction_path.parent / str(item["problem"])).resolve()
+            relative = problem_path.relative_to(output_diff).as_posix()
+            if relative in normalized_problems:
+                continue
+            problem = json.loads(problem_path.read_text(encoding="utf-8"))
+            problem.pop("phase_encoding", None)
+            _write_json(problem_path, _attach_phase_encoding(problem))
+            normalized_problems[relative] = _sha256(problem_path)
+    reaction_manifest["phase_encoding"] = {
+        "method": "centered_nonidentity_pauli_one_norm",
+        "dimensionless_evolution_time": 1.0,
+    }
+    reaction_manifest["source_materialization"] = {
+        "path": str(reaction_inputs),
+        "manifest_sha256": _sha256(reaction_inputs / "manifest.json"),
+    }
+    reaction_manifest["normalized_problems"] = [
+        {"problem": path, "problem_sha256": digest}
+        for path, digest in sorted(normalized_problems.items())
+    ]
+    reaction_manifest["created_at"] = _now()
+    _write_json(reaction_manifest_path, reaction_manifest)
+    return {
+        "absolute_hamiltonians": len(abs_manifest["instances"]),
+        "reaction_instances": len(reaction_manifest["instances"]),
+        "reaction_hamiltonian_files": len(normalized_problems),
+        "unique_hamiltonians": len(set(normalized_problems.values())),
+        "output_root": str(output_root),
+        "phase_encoding": "centered_nonidentity_pauli_one_norm",
+    }
 
 
 def _require_empty(path: Path) -> Path:
@@ -620,6 +707,11 @@ def _parser() -> argparse.ArgumentParser:
     reactions.add_argument("--cache-root", type=Path, required=True)
     reactions.add_argument("--output-root", type=Path, required=True)
 
+    normalize = commands.add_parser("normalize-inputs")
+    normalize.add_argument("--abs-inputs", type=Path, required=True)
+    normalize.add_argument("--reaction-inputs", type=Path, required=True)
+    normalize.add_argument("--output-root", type=Path, required=True)
+
     initialize = commands.add_parser("initialize")
     initialize.add_argument("--hamlib-inputs", type=Path, required=True)
     initialize.add_argument("--reaction-inputs", type=Path, required=True)
@@ -639,6 +731,8 @@ def main() -> int:
         result = prepare_hamlib(**values)
     elif command == "prepare-reactions":
         result = prepare_reactions(**values)
+    elif command == "normalize-inputs":
+        result = normalize_materialized_inputs(**values)
     else:
         result = initialize_campaign(**values)
     print(json.dumps(result, indent=2, sort_keys=True))

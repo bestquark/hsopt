@@ -249,6 +249,17 @@ Set an absolute data root before initializing a campaign:
 export HSOPT_DATA_ROOT=/absolute/path/to/hsopt-data
 ```
 
+When an existing materialization contains the physical Pauli coefficients but
+predates the norm-based QPE contract, create a fresh input-only tree. This
+copies no exact references, policies, queues, or campaign state:
+
+```bash
+uv run hsopt-campaign normalize-inputs \
+  --abs-inputs "$HSOPT_DATA_ROOT/exact/physical-inputs/abs_energy" \
+  --reaction-inputs "$HSOPT_DATA_ROOT/exact/physical-inputs/diff_energy" \
+  --output-root "$HSOPT_DATA_ROOT/exact/normalized-inputs-v1"
+```
+
 Build the unique-Hamiltonian calibration manifest, run four independent CPU
 shards, and require a complete sealed result set:
 
