@@ -12,6 +12,7 @@ and visual style while reading the new exact-unitary data contracts:
 | `plot_reaction_comparison.py` | Ten-reaction seed-policy comparison | `reaction_cancellation_budget.pdf` |
 | `plot_hamlib_active_spaces.py` | HamLib active-space census | `hamlib_molecular_dataset_active_spaces.pdf` |
 | `plot_baseline_tolerance.py` | Initial tolerance versus Hamiltonian one-norm | `baseline_epsilon_vs_lambda.pdf` |
+| `plot_policy_angle_tolerance_violins.py` | Initial-versus-best physical rotation distributions per experiment | `angle_tolerance_violin.pdf` and `.png` per Hamiltonian/reaction |
 
 All result plots verify the strict export completion marker and every declared
 SHA-256 checksum before reading data. They never read a live campaign database.
@@ -67,6 +68,22 @@ Pass `--full-census /path/to/census.json` to
 the full HamLib context. The accepted JSON format may contain either
 `active_space_counts_by_nqubits` or a lane list; a CSV with an `nqubits` or
 `n_qubits` column is also accepted.
+
+Generate one angle/tolerance violin comparison for every experiment that has
+an iteration-0 result and an incumbent in a live campaign:
+
+```bash
+uv run python plots/plot_policy_angle_tolerance_violins.py \
+  --campaign-root /path/to/campaign \
+  --baseline tight \
+  --output-dir /path/to/policy-violins
+```
+
+By default, incomplete lanes are labeled as partial and the lowest feasible
+current $T_{95}$ replicate is selected for each experiment. Add
+`--require-complete` to export only experiments that reached all 50 iterations.
+The violins weight physical rotations by product-formula repetitions and
+reaction stoichiometry; QPE query repetitions are deliberately excluded.
 
 The plots use a real LaTeX installation for typography and deliberately do not
 fall back to Matplotlib mathtext. Generated PDFs, exports, raw campaigns,
