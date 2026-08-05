@@ -417,6 +417,27 @@ def reconcile_lane(lane_dir: Path) -> dict[str, Any]:
 
     iteration = int(state["pending_iteration"])
     iteration_dir = lane_dir / "iterations" / f"{iteration:04d}"
+    if result.get("status") != "ok":
+        _write_json(iteration_dir / "result.json", result)
+        error_type = str(result.get("error_type") or "EvaluatorError")
+        error = str(result.get("error") or "candidate evaluation failed")
+        state.update(
+            {
+                "pending_kind": None,
+                "pending_iteration": None,
+                "pending_task_id": None,
+                "last_error": f"{error_type}: {error}",
+                "updated_at": _now(),
+            }
+        )
+        _write_json(lane_dir / "state.json", state)
+        return {
+            "status": "candidate_evaluation_failed",
+            "iteration": iteration,
+            "task_id": task_id,
+            "error_type": error_type,
+            "error": error,
+        }
     if result.get("evaluation_contract_version") != manifest.get("evaluation_contract_version"):
         raise RuntimeError("the candidate result uses a different evaluator contract")
     _write_json(iteration_dir / "result.json", result)

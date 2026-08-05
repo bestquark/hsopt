@@ -379,6 +379,7 @@ def run_batch(
             result = {
                 "status": "error",
                 "task_id": task_id,
+                "evaluation_contract_version": EVALUATION_CONTRACT_VERSION,
                 "error_type": type(exc).__name__,
                 "error": str(exc),
                 "traceback": traceback.format_exc(),

@@ -139,6 +139,69 @@ def test_reconcile_clears_the_retired_inaccurate_baseline_error(tmp_path: Path) 
     assert json.loads(state_path.read_text(encoding="utf-8"))["last_error"] is None
 
 
+def test_candidate_evaluator_error_is_retried_without_consuming_iteration(tmp_path: Path) -> None:
+    lane_dir = tmp_path / "campaign" / "lanes" / "abs_energy" / "fixture" / "run_01"
+    queue_dir = tmp_path / "campaign" / "queue"
+    initialize_lane(
+        lane_dir,
+        queue_dir=queue_dir,
+        kind="absolute",
+        source=ABSOLUTE / "hamiltonian.json",
+        initial_policy=ABSOLUTE / "initial_pf.py",
+        iterations=2,
+        family="abs_energy",
+        instance="fixture",
+        replicate="run_01",
+    )
+    state_path = lane_dir / "state.json"
+    state = json.loads(state_path.read_text(encoding="utf-8"))
+    state.update(
+        {
+            "pending_kind": "proposal",
+            "pending_iteration": 1,
+            "pending_task_id": "failed-task",
+            "incumbent_score": 100,
+        }
+    )
+    state_path.write_text(json.dumps(state), encoding="utf-8")
+    (lane_dir / "incumbent_result.json").write_text(
+        json.dumps(_result(error=0.001, t_count=100, passes=True)) + "\n",
+        encoding="utf-8",
+    )
+    iteration_dir = lane_dir / "iterations" / "0001"
+    iteration_dir.mkdir(parents=True)
+    (iteration_dir / "candidate.py").write_text("# invalid candidate\n", encoding="utf-8")
+    failed_task = queue_dir / "failed" / "failed-task"
+    failed_task.mkdir(parents=True)
+    failed_result = {
+        "status": "error",
+        "task_id": "failed-task",
+        "error_type": "NameError",
+        "error": "name 'term' is not defined",
+    }
+    (failed_task / "result.json").write_text(
+        json.dumps(failed_result) + "\n",
+        encoding="utf-8",
+    )
+
+    reconciled = reconcile_lane(lane_dir)
+
+    updated = json.loads(state_path.read_text(encoding="utf-8"))
+    assert reconciled == {
+        "status": "candidate_evaluation_failed",
+        "iteration": 1,
+        "task_id": "failed-task",
+        "error_type": "NameError",
+        "error": "name 'term' is not defined",
+    }
+    assert updated["iterations_completed"] == 0
+    assert updated["pending_kind"] is None
+    assert updated["pending_iteration"] is None
+    assert updated["pending_task_id"] is None
+    assert updated["last_error"] == "NameError: name 'term' is not defined"
+    assert json.loads((iteration_dir / "result.json").read_text()) == failed_result
+
+
 def test_gpu_lane_replays_the_exact_archived_cpu_candidate(tmp_path: Path) -> None:
     lane_dir = tmp_path / "gpu-campaign" / "lanes" / "abs_energy" / "fixture" / "run_01"
     initialize_lane(
