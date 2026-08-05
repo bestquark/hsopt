@@ -14,6 +14,7 @@ dependencies = [
 
 [project.scripts]
 hsopt = "hsopt.exact_loop:main"
+hsopt-baseline-drop = "hsopt.baseline_t_gate_drop:main"
 hsopt-exact = "hsopt.exact_queue:main"
 hsopt-exact-parity = "hsopt.exact_parity:main"
 hsopt-export-exact = "hsopt.exact_export:main"

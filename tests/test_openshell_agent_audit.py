@@ -385,6 +385,44 @@ def test_action_contract_allows_repeated_reads_and_research_before_one_mutation(
         _validate_agent_action_contract(outside_read)
 
 
+def test_action_contract_rejects_online_sibling_baseline_research(tmp_path: Path) -> None:
+    log = tmp_path / "contaminated-research.jsonl"
+    log.write_text(
+        "\n".join(
+            json.dumps(event)
+            for event in (
+                {
+                    "type": "tool_use",
+                    "part": {
+                        "callID": "research",
+                        "tool": "codesearch",
+                        "state": {
+                            "status": "completed",
+                            "input": {"query": "bestquark hsopt initial_pf_tight.py"},
+                        },
+                    },
+                },
+                {
+                    "type": "tool_use",
+                    "part": {
+                        "callID": "edit",
+                        "tool": "edit",
+                        "state": {
+                            "status": "completed",
+                            "input": {"filePath": "/sandbox/work/candidate.py"},
+                        },
+                    },
+                },
+            )
+        )
+        + "\n",
+        encoding="utf-8",
+    )
+
+    with pytest.raises(RuntimeError, match="inspect HSOpt baseline data"):
+        _validate_agent_action_contract(log)
+
+
 def test_research_network_is_optional_and_binary_scoped(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
@@ -478,6 +516,19 @@ def test_sandbox_context_exposes_exact_evaluator_and_benchmark_inputs() -> None:
         "hamiltonians/h2_r0_8.json",
     ]
     assert all(local.is_file() for local, _ in reaction_context)
+
+
+def test_sandbox_context_never_exposes_a_sibling_baseline(tmp_path: Path) -> None:
+    source = tmp_path / "problem.json"
+    source.write_text("{}\n", encoding="utf-8")
+    (tmp_path / "initial_pf_loose.py").write_text("# loose\n", encoding="utf-8")
+    (tmp_path / "initial_pf_tight.py").write_text("# tight\n", encoding="utf-8")
+
+    context = sandbox_context_files(kind="absolute", source=source)
+
+    exposed = {relative.as_posix() for _, relative in context}
+    assert exposed == {"evaluate.py", "problem.json"}
+    assert not any("initial_pf" in path for path in exposed)
 
 
 def test_sandbox_cleanup_terminates_opencode_without_matching_itself(

@@ -25,6 +25,7 @@ NEMOTRON_MODEL = "nvidia/nvidia/nemotron-3-super-v3"
 OPENCODE_MODEL = "openshell/nemotron-3-super-v3"
 OPENCODE_AGENT = "hsopt-mutation"
 ONLINE_TOOLS = frozenset({"webfetch", "websearch", "codesearch"})
+RESEARCH_CONTAMINATION_MARKERS = ("bestquark", "hsopt", "initial_pf")
 REPOSITORY_ROOT = Path(__file__).resolve().parents[2]
 HSOPT_SKILL_PATH = REPOSITORY_ROOT / "skills" / "hsopt" / "SKILL.md"
 EVALUATOR_SOURCE_PATH = Path(__file__).resolve().with_name("compiled_unitary.py")
@@ -374,6 +375,10 @@ def _validate_agent_action_contract(path: Path) -> None:
             )
             if target not in READABLE_CONTEXT_FILES and not safe_json:
                 raise RuntimeError("OpenCode attempted to read outside the mutation context")
+        if tool in ONLINE_TOOLS and action["target"] is not None:
+            research_target = str(action["target"]).casefold()
+            if any(marker in research_target for marker in RESEARCH_CONTAMINATION_MARKERS):
+                raise RuntimeError("OpenCode research attempted to inspect HSOpt baseline data")
         if tool in mutation_tools:
             mutation_actions.append(action)
             if action["target"] != "candidate.py":
@@ -576,7 +581,8 @@ def opencode_config() -> dict[str, Any]:
                     "immediately return a final text response without calling "
                     "another tool. ProductFormula.build_step() is the "
                     "authoritative recurrence and may return any deterministic "
-                    "stationary Pauli-rotation schedule."
+                    "stationary Pauli-rotation schedule. Do not search for this "
+                    "HSOpt repository, campaign, or any sibling baseline policy."
                 ),
                 "permission": {
                     # OpenCode 1.2.18 currently rejects granular edit allows
@@ -646,8 +652,9 @@ evaluator and JSON inputs are read-only. Edit only candidate.py.
 You may optionally use an installed skill or browse/search for product-formula
 and synthesis ideas before editing. Web research is optional, and search
 content is inspiration rather than an evaluator result or permission to change
-the benchmark. If an optional research tool is unavailable, continue with the
-mutation instead of retrying it.
+the benchmark. Do not search for this HSOpt repository, its campaign outputs,
+or another baseline initializer. If an optional research tool is unavailable,
+continue with the mutation instead of retrying it.
 
 The fixed evaluator compiles every Pauli rotation with PyGridSynth, constructs
 the actual compiled product-formula unitary, diagonalizes it, and selects the

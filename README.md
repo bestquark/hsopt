@@ -125,8 +125,11 @@ another deterministic stationary product formula.
 The evaluator infers standard PF1/PF2 and common ordering labels from the
 actual schedule. Arbitrary recurrences are recorded as custom together with a
 schedule checksum, so a stale human-written label cannot affect evaluation.
-The full Eq. (19)/(34) derivation, checksums, error allocation, and cached exact
+The full beta/Eq. (34) derivation, checksums, error allocation, and cached exact
 energy remain in sealed campaign metadata outside the agent-editable file.
+The `loose` initializer uses the rigorous Eq. (19) beta upper bound; the
+`tight` initializer measures beta numerically against the cached exact energy
+at the same 0.1 mHa reference error.
 
 Each experiment family has one explicit evaluator entry point. Because
 coefficient-heavy Hamiltonians and exact references remain external, invoke it
@@ -137,7 +140,7 @@ uv run python experiments/abs_energy/evaluate.py \
   experiments/abs_energy/<instance> \
   --problem /path/to/hamiltonian.json \
   --exact-reference /path/to/exact-reference.json \
-  --policy-file experiments/abs_energy/<instance>/initial_pf.py \
+  --baseline loose \
   --backend numpy --output /path/to/result.json
 ```
 
@@ -146,9 +149,9 @@ uv run python experiments/abs_energy/evaluate.py \
 ```text
 hsopt/
 ├── experiments/
-│   ├── abs_energy/             91 policies + one explicit family evaluator
-│   ├── diff_energy/            10 policies + one explicit family evaluator
-│   └── generate_initial_pf.py  Immutable initializer for both families
+│   ├── abs_energy/             82 definitions × two baseline policies
+│   ├── diff_energy/            10 definitions × two baseline policies
+│   └── generate_initial_pf.py  Loose/tight initializer for both families
 ├── plots/                      Publication-plot source code
 ├── skills/hsopt/               Compact agent instructions and references
 ├── src/hsopt/                  Evaluator, queue, supervisor, export, and reports
@@ -202,14 +205,16 @@ uv run python experiments/generate_initial_pf.py \
   tests/fixtures/abs_energy_h2/hamiltonian.json \
   --output tests/fixtures/abs_energy_h2/initial_pf.py \
   --calibration /tmp/h2-paper-calibration.json \
+  --baseline loose \
   --check
 ```
 
 These fixtures are development checks and therefore live under `tests/`.
 Under `experiments/abs_energy/`, every production Hamiltonian has its own
-folder containing `instance.json` and its generated `initial_pf.py`. Under
+folder containing `instance.json`, `initial_pf_loose.py`, and
+`initial_pf_tight.py`. Under
 `experiments/diff_energy/`, every production reaction has its own folder
-containing `definition.json` and its generated `initial_pf.py`. Verify the
+containing `definition.json` and the same two generated policy variants. Verify the
 definitions against the compact source registries with:
 
 ```bash
@@ -223,13 +228,13 @@ remain external datasets supplied to `hsopt-campaign`.
 
 Every optimization lane follows the same order:
 
-1. Prepare the paper baseline once per unique Hamiltonian. Compute the
-   supplement's Eq. (19) Pauli double-commutator coefficient bound exactly,
-   derive $\beta(H)$ at the paper's $0.1$ mHa reference error without using
-   $E_{\mathrm{exact}}$, and allocate the $1$ kcal/mol Trotter/QPE/synthesis
-   budget using the supplement's rigorous Eq. (32)/(34) calculus with
-   $\alpha=8\pi$, $\gamma=4$, and $\delta_0=11$. Separately compute and cache
-   $U_{\mathrm{exact}}$ once for evaluator reuse.
+1. Compute and cache $U_{\mathrm{exact}}$ once per unique Hamiltonian. Prepare
+   the selected paper baseline: `loose` derives $\beta(H)$ from the rigorous
+   Eq. (19) Pauli double-commutator upper bound without
+   $E_{\mathrm{exact}}$; `tight` finds the first PF2 step count passing 0.1 mHa
+   against that cached exact energy. Both allocate the 1 kcal/mol
+   Trotter/QPE/synthesis budget using the same rigorous Eq. (32)/(34) calculus
+   with $\alpha=8\pi$, $\gamma=4$, and $\delta_0=11$.
 2. Evaluate the generated paper baseline unchanged as iteration 0. This is
    the first stage that invokes PyGridSynth and records the realized T count.
 3. Run iterations 1--50 sequentially, retaining every proposal, evaluator
@@ -237,10 +242,10 @@ Every optimization lane follows the same order:
 4. Accept only feasible strict improvements in confidence-adjusted $T$ cost.
 5. Export and report only after every expected lane is complete.
 
-The current dense production selection contains exactly 91 HamLib
-Hamiltonians through 14 qubits, with five mutation lanes per Hamiltonian. It
+The current dense production selection contains exactly 82 HamLib
+Hamiltonians through 12 qubits, with five mutation lanes per Hamiltonian. It
 also contains ten reactions with two policy contracts each.
-This gives 475 lanes and 23,750 mutation evaluations, plus iteration 0 for
+This gives 430 lanes and 21,500 mutation evaluations, plus iteration 0 for
 every lane.
 
 Set an absolute data root before initializing a campaign:
@@ -279,13 +284,15 @@ done
 
 uv run hsopt-paper-baseline-batch audit \
   "$HSOPT_DATA_ROOT/exact/baseline-bound-v1/manifest.json" \
-  --output-dir "$HSOPT_DATA_ROOT/exact/baseline-bound-v1/results"
+  --output-dir "$HSOPT_DATA_ROOT/exact/baseline-bound-v1/results" \
+  --baseline loose
 
 uv run hsopt-paper-baseline-batch generate \
   "$HSOPT_DATA_ROOT/exact/baseline-bound-v1/manifest.json" \
   --calibration-dir "$HSOPT_DATA_ROOT/exact/baseline-bound-v1/results" \
   --output-dir "$HSOPT_DATA_ROOT/exact/baseline-bound-v1/initial-policies" \
   --generator experiments/generate_initial_pf.py \
+  --baseline loose \
   --repository-root "$PWD"
 ```
 
@@ -296,8 +303,56 @@ computes the complete Eq. (19) Pauli coefficient sum, not a Monte Carlo
 estimate. The same pass caches one exact reference solely for evaluator reuse;
 that energy does not enter $\beta(H)$.
 The final command refuses incomplete calibration sets, writes a checksummed
-external index, and materializes byte-identical `initial_pf.py` files in all
-101 checked-in experiment directories.
+external index, and materializes byte-identical `initial_pf_loose.py` files in
+all 92 checked-in experiment directories. Prepare the tight comparison in a
+separate result tree while reusing those exact references:
+
+```bash
+uv run hsopt-paper-baseline-batch run \
+  "$HSOPT_DATA_ROOT/exact/baseline-bound-v1/manifest.json" \
+  --output-dir "$HSOPT_DATA_ROOT/exact/baseline-tight-v1/results" \
+  --backend cupynumeric --mode empirical_exact \
+  --exact-reference-root "$HSOPT_DATA_ROOT/exact/baseline-bound-v1/results"
+
+uv run hsopt-paper-baseline-batch generate \
+  "$HSOPT_DATA_ROOT/exact/baseline-bound-v1/manifest.json" \
+  --calibration-dir "$HSOPT_DATA_ROOT/exact/baseline-tight-v1/results" \
+  --output-dir "$HSOPT_DATA_ROOT/exact/baseline-tight-v1/initial-policies" \
+  --generator experiments/generate_initial_pf.py \
+  --baseline tight \
+  --repository-root "$PWD"
+```
+
+`--exact-reference-root` prevents a second exact-Hamiltonian diagonalization;
+only the ideal PF2 step search is new. Keep the calibration trees separate so
+one problem hash can have one sealed result per beta definition.
+
+After the independent iteration-0 T95 census has completed for the loose and
+tight baselines on the same backend/placement, materialize the baseline-only
+reduction used for comparison with autoresearch:
+
+```bash
+uv run hsopt-baseline-drop \
+  --loose-census-root "$HSOPT_DATA_ROOT/exact/iteration0-t95-loose-v1" \
+  --tight-census-root "$HSOPT_DATA_ROOT/exact/iteration0-t95-tight-v1" \
+  --loose-placement omni-l4 \
+  --tight-placement omni-l4 \
+  --repository-root "$PWD" \
+  --audit-output "$HSOPT_DATA_ROOT/exact/baseline-t-gate-drop-audit.json"
+```
+
+The census already deduplicates replicate lanes only after their immutable
+inputs agree. The comparison command then requires matching complete 82 + 10
+grids, source hashes, exact-reference hashes, evaluator contracts, execution
+backends/accelerators, placement labels, and chemical-accuracy passes. Only
+then does it write one
+`baseline_t_gate_drop_percent.txt` value in each Hamiltonian or reaction
+folder. The signed value is
+$100(T_{\mathrm{loose}}-T_{\mathrm{tight}})/T_{\mathrm{loose}}$, where $T$ is
+the confidence-adjusted QPE T count (`T95`) optimized by autoresearch. Thus a
+positive value is a reduction from the loose bound to the tight baseline. For
+reactions, $T$ is the evaluator's summed reaction cost; the two reaction
+contracts are represented by their single validated census result.
 
 ```bash
 uv run hsopt-campaign initialize \
@@ -305,7 +360,8 @@ uv run hsopt-campaign initialize \
   --reaction-inputs "$HSOPT_DATA_ROOT/exact/inputs-v1/diff_energy" \
   --calibration-root "$HSOPT_DATA_ROOT/exact/baseline-bound-v1/results" \
   --generator experiments/generate_initial_pf.py \
-  --campaign-root "$HSOPT_DATA_ROOT/exact/production-gpu91-v1" \
+  --campaign-root "$HSOPT_DATA_ROOT/exact/production-gpu82-v1" \
+  --baseline loose \
   --hamlib-replicates 5 \
   --iterations 50
 ```
@@ -337,9 +393,10 @@ and virtual environments outside the repository.
 | Command | Purpose |
 |---|---|
 | `hsopt` / `hsopt-loop` | Initialize, reconcile, inspect, propose, or replay one sequential lane |
+| `hsopt-baseline-drop` | Write the loose-to-tight iteration-0 T95 reduction per experiment |
 | `hsopt-exact` | Enqueue exact references and candidates, prepare batches, run them, and merge results |
-| `hsopt-layout` | Verify or regenerate the checked-in 91-Hamiltonian/10-reaction directory layout |
-| `hsopt-paper-baseline` | Prepare one Eq. (19) bound-derived PF2 baseline and exact reference |
+| `hsopt-layout` | Verify or regenerate the checked-in 82-Hamiltonian/10-reaction directory layout |
+| `hsopt-paper-baseline` | Prepare one loose or tight PF2 calibration and exact reference |
 | `hsopt-paper-baseline-batch` | Build, run, and audit resumable calibration shards |
 | `hsopt-campaign` | Prepare external inputs and initialize the complete lane grid |
 | `hsopt-supervisor` | Persistently coordinate mutation, batching, recovery, export, and reports |
@@ -356,7 +413,7 @@ First produce a normalized, checksummed export:
 
 ```bash
 uv run hsopt-export-exact \
-  --campaign-root "$HSOPT_DATA_ROOT/exact/production-gpu91-v1" \
+  --campaign-root "$HSOPT_DATA_ROOT/exact/production-gpu82-v1" \
   --family abs_energy \
   --output-dir "$HSOPT_DATA_ROOT/exact/final-abs-energy-export"
 ```
@@ -384,9 +441,9 @@ audit:
 
 ```bash
 uv run hsopt-exact-parity \
-  --cpu-campaign-root "$HSOPT_DATA_ROOT/exact/production-cpu91-replay-v1" \
-  --gpu-campaign-root "$HSOPT_DATA_ROOT/exact/production-gpu91-v1" \
-  --output "$HSOPT_DATA_ROOT/exact/production-gpu91-v1/cross_backend_audit.json" \
+  --cpu-campaign-root "$HSOPT_DATA_ROOT/exact/production-cpu82-replay-v1" \
+  --gpu-campaign-root "$HSOPT_DATA_ROOT/exact/production-gpu82-v1" \
+  --output "$HSOPT_DATA_ROOT/exact/production-gpu82-v1/cross_backend_audit.json" \
   --wait \
   --interval-seconds 60
 ```
@@ -443,6 +500,12 @@ isolated `candidate.py` mutation target plus bounded research tools, records
 the OpenCode/OpenShell action logs, and deletes the sandbox. OpenCode's
 [standalone installer](https://opencode.ai/docs/) is needed only when using a
 custom image that does not already include it.
+
+Run loose and tight campaigns with distinct supervisors, mutation pools,
+queues, evaluator workers, and output roots. An evaluator worker must accept
+exactly one baseline-tagged campaign root; deployments may coordinate access
+to a shared accelerator with hardware locks, but must never round-robin tasks
+from loose and tight queues through the same worker.
 
 ## Development
 

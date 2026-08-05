@@ -2,7 +2,7 @@
 
 Use this split to keep `main` small and make future work explicit.
 
-- `main`: exact compiled-unitary HSOpt with the visible 91-Hamiltonian and
+- `main`: exact compiled-unitary HSOpt with the visible 82-Hamiltonian and
   ten-reaction paper protocols under `experiments/`. The former `clean` branch
   was promoted to `main` and deleted.
 - `site`: tracked documentation-site source and the GitHub Pages deployment

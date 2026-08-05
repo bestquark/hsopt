@@ -14,9 +14,9 @@ ABS_FAMILY = "abs_energy"
 DIFF_FAMILY = "diff_energy"
 ABS_DESCRIPTOR = "instance.json"
 DIFF_DESCRIPTOR = "definition.json"
-INITIAL_POLICY = "initial_pf.py"
+INITIAL_POLICIES = ("initial_pf_loose.py", "initial_pf_tight.py")
 EVALUATOR = "evaluate.py"
-ABS_INSTANCE_COUNT = 91
+ABS_INSTANCE_COUNT = 82
 DIFF_INSTANCE_COUNT = 10
 PHASE_ENCODING_DESCRIPTOR = {
     "method": "centered_nonidentity_pauli_one_norm",
@@ -254,7 +254,7 @@ def _validate_initial_policy(path: Path, *, expected_problems: int) -> None:
             or values[0] <= 0
             or float(values[1]) <= 0.0
         ):
-            raise ValueError(f"{path}: invalid bound-derived policy for {problem!r}")
+            raise ValueError(f"{path}: invalid generated policy for {problem!r}")
     methods = {node.name for node in policy_class.body if isinstance(node, ast.FunctionDef)}
     required = {"__init__", "repetitions", "build_step", "synthesis_epsilon"}
     if not required <= methods:
@@ -272,7 +272,7 @@ def sync_layout(
     diff_root: Path,
     check: bool,
 ) -> dict[str, int]:
-    """Write or verify the complete 91-Hamiltonian/10-reaction layout."""
+    """Write or verify the complete 82-Hamiltonian/10-reaction layout."""
 
     expected = expected_layout(
         abs_manifest=abs_manifest,
@@ -302,30 +302,39 @@ def sync_layout(
             for root in (abs_root, diff_root)
             for path in sorted(root.glob(f"*/{EVALUATOR}"))
         ]
+        stale_single_policies = [
+            str(path)
+            for root in (abs_root, diff_root)
+            for path in sorted(root.glob("*/initial_pf.py"))
+        ]
         actual_abs = _instance_directories(abs_root)
         actual_diff = _instance_directories(diff_root)
         invalid_policies: list[str] = []
         for instance in sorted(expected_abs):
-            try:
-                _validate_initial_policy(
-                    abs_root / instance / INITIAL_POLICY,
-                    expected_problems=1,
-                )
-            except (KeyError, TypeError, ValueError, SyntaxError) as exc:
-                invalid_policies.append(str(exc))
+            for policy_name in INITIAL_POLICIES:
+                try:
+                    _validate_initial_policy(
+                        abs_root / instance / policy_name,
+                        expected_problems=1,
+                    )
+                except (KeyError, TypeError, ValueError, SyntaxError) as exc:
+                    invalid_policies.append(str(exc))
         for instance in sorted(expected_diff):
             definition = json.loads(expected[diff_root / instance / DIFF_DESCRIPTOR])
-            try:
-                _validate_initial_policy(
-                    diff_root / instance / INITIAL_POLICY,
-                    expected_problems=len(definition["terms"]),
-                )
-            except (KeyError, TypeError, ValueError, SyntaxError) as exc:
-                invalid_policies.append(str(exc))
+            for policy_name in INITIAL_POLICIES:
+                try:
+                    _validate_initial_policy(
+                        diff_root / instance / policy_name,
+                        expected_problems=len(definition["terms"]),
+                    )
+                except (KeyError, TypeError, ValueError, SyntaxError) as exc:
+                    invalid_policies.append(str(exc))
         if (
             mismatches
             or missing_evaluators
             or stale_instance_evaluators
+            or stale_single_policies
+            or invalid_policies
             or actual_abs != expected_abs
             or actual_diff != expected_diff
         ):
@@ -334,16 +343,12 @@ def sync_layout(
                 f"mismatched_files={mismatches}, "
                 f"missing_family_evaluators={missing_evaluators}, "
                 f"stale_instance_evaluators={stale_instance_evaluators}, "
+                f"stale_single_policies={stale_single_policies}, "
                 f"invalid_initial_policies={invalid_policies}, "
                 f"unexpected_abs={sorted(actual_abs - expected_abs)}, "
                 f"missing_abs={sorted(expected_abs - actual_abs)}, "
                 f"unexpected_diff={sorted(actual_diff - expected_diff)}, "
                 f"missing_diff={sorted(expected_diff - actual_diff)}"
-            )
-        if invalid_policies:
-            raise ValueError(
-                "repository benchmark policies are stale: "
-                f"invalid_initial_policies={invalid_policies}"
             )
     else:
         for path, content in expected.items():
@@ -358,7 +363,7 @@ def sync_layout(
             path.name in {ABS_DESCRIPTOR, DIFF_DESCRIPTOR} for path in expected
         ),
         "evaluator_files": sum(path.is_file() for path in family_evaluators),
-        "initial_policies": len(expected_abs) + len(expected_diff),
+        "initial_policies": len(INITIAL_POLICIES) * (len(expected_abs) + len(expected_diff)),
     }
 
 

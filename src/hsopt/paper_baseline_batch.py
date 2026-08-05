@@ -13,6 +13,8 @@ import traceback
 from pathlib import Path
 from typing import Any, Mapping
 
+from hsopt.paper_baseline import BASELINE_VARIANTS, calibration_mode_for_baseline
+
 PAPER_BETA_REFERENCE_ERROR_HARTREE = 1.0e-4
 BENCHMARK_TOTAL_ERROR_HARTREE = 1.0 / 627.5094740631
 
@@ -140,6 +142,9 @@ def run_batch(
     shard_count: int,
     max_steps: int,
     include_exact_reference: bool,
+    exact_reference_root: Path | None = None,
+    min_qubits: int | None = None,
+    max_qubits: int | None = None,
 ) -> dict[str, Any]:
     """Run one deterministic shard, safely skipping sealed outputs."""
 
@@ -150,8 +155,21 @@ def run_batch(
     started = time.perf_counter()
     manifest_path = manifest_path.resolve()
     output_dir = output_dir.resolve()
+    if exact_reference_root is not None:
+        exact_reference_root = exact_reference_root.resolve()
     manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
-    all_records = list(manifest["problems"])
+    if min_qubits is not None and min_qubits <= 0:
+        raise ValueError("min_qubits must be positive")
+    if max_qubits is not None and max_qubits <= 0:
+        raise ValueError("max_qubits must be positive")
+    if min_qubits is not None and max_qubits is not None and min_qubits > max_qubits:
+        raise ValueError("min_qubits cannot exceed max_qubits")
+    all_records = [
+        record
+        for record in manifest["problems"]
+        if (min_qubits is None or int(record["n_qubits"]) >= min_qubits)
+        and (max_qubits is None or int(record["n_qubits"]) <= max_qubits)
+    ]
     records = [
         record for index, record in enumerate(all_records) if index % shard_count == shard_index
     ]
@@ -162,9 +180,7 @@ def run_batch(
     for index, record in enumerate(records, start=1):
         key = str(record["key"])
         problem = Path(str(record["problem"])).resolve()
-        problem_target_time = float(
-            json.loads(problem.read_text(encoding="utf-8"))["target_time"]
-        )
+        problem_target_time = float(json.loads(problem.read_text(encoding="utf-8"))["target_time"])
         expected_sha256 = str(record["problem_sha256"])
         output = _output_path(output_dir, record)
         failure = output.with_suffix(".failure.json")
@@ -196,8 +212,7 @@ def run_batch(
             else:
                 if (
                     str(prior["calibration_mode"]) == mode
-                    and float(prior["instantiated_policy"]["target_time"])
-                    == problem_target_time
+                    and float(prior["instantiated_policy"]["target_time"]) == problem_target_time
                     and float(prior["reference"]["reference_error_hartree"])
                     == reference_error_hartree
                     and float(prior["instantiated_policy"]["total_error_target_hartree"])
@@ -210,6 +225,31 @@ def run_batch(
                         flush=True,
                     )
                     continue
+        if (
+            include_exact_reference
+            and reusable_exact_reference is None
+            and exact_reference_root is not None
+        ):
+            reference_source = _output_path(exact_reference_root, record)
+            if reference_source.is_file():
+                try:
+                    reference_calibration = json.loads(reference_source.read_text(encoding="utf-8"))
+                    verify_calibration(reference_calibration, problem_path=problem)
+                    candidate_reference = reference_calibration.get("exact_reference")
+                    if not isinstance(candidate_reference, Mapping):
+                        raise ValueError("calibration has no reusable exact reference")
+                    if (
+                        candidate_reference.get("problem_sha256") != expected_sha256
+                        or float(candidate_reference.get("target_time", float("nan")))
+                        != problem_target_time
+                    ):
+                        raise ValueError("exact reference does not match the source problem")
+                    reusable_exact_reference = candidate_reference
+                except (KeyError, TypeError, ValueError, json.JSONDecodeError) as exc:
+                    raise ValueError(
+                        f"{record['family']}/{key}: invalid reusable exact reference "
+                        f"at {reference_source}: {exc}"
+                    ) from exc
         print(
             f"[{index}/{len(records)}] calibrating {record['family']}/{key} "
             f"({record['n_qubits']} qubits)",
@@ -275,6 +315,11 @@ def run_batch(
         "reference_error_hartree": reference_error_hartree,
         "total_error_hartree": total_error_hartree,
         "includes_exact_reference": include_exact_reference,
+        "min_qubits": min_qubits,
+        "max_qubits": max_qubits,
+        "exact_reference_root": (
+            str(exact_reference_root) if exact_reference_root is not None else None
+        ),
         "shard_index": shard_index,
         "shard_count": shard_count,
         "assigned_problems": len(records),
@@ -359,6 +404,7 @@ def generate_policies(
     generator: Path,
     repository_root: Path | None = None,
     require_exact_reference: bool = True,
+    baseline: str = "loose",
 ) -> dict[str, Any]:
     """Render external and optionally checked-in immutable initializers."""
 
@@ -373,6 +419,7 @@ def generate_policies(
     audit = audit_batch(
         manifest_path,
         calibration_dir,
+        expected_mode=calibration_mode_for_baseline(baseline),
         require_exact_reference=require_exact_reference,
     )
     if not audit["complete"]:
@@ -385,7 +432,8 @@ def generate_policies(
     records: list[dict[str, Any]] = []
 
     def render(family: str, key: str, source: Path) -> None:
-        output = output_dir / family / _safe_key(key) / "initial_pf.py"
+        policy_name = f"initial_pf_{baseline}.py"
+        output = output_dir / family / _safe_key(key) / policy_name
         command = [
             sys.executable,
             str(generator),
@@ -394,6 +442,8 @@ def generate_policies(
             str(output),
             "--calibration-root",
             str(calibration_dir),
+            "--baseline",
+            baseline,
         ]
         if output.is_file():
             subprocess.run([*command, "--check"], check=True)
@@ -404,7 +454,7 @@ def generate_policies(
         checked_in_policy = None
         if repository_root is not None:
             checked_in_policy = (
-                repository_root / "experiments" / family / _safe_key(key) / "initial_pf.py"
+                repository_root / "experiments" / family / _safe_key(key) / policy_name
             )
             checked_in_policy.parent.mkdir(parents=True, exist_ok=True)
             if (
@@ -452,6 +502,8 @@ def generate_policies(
         )
     index = {
         "schema": 1,
+        "baseline_variant": baseline,
+        "calibration_mode": calibration_mode_for_baseline(baseline),
         "manifest": str(manifest_path),
         "manifest_sha256": _sha256(manifest_path),
         "calibration_dir": str(calibration_dir),
@@ -506,6 +558,16 @@ def _parser() -> argparse.ArgumentParser:
     run.add_argument("--shard-index", type=int, default=0)
     run.add_argument("--shard-count", type=int, default=1)
     run.add_argument("--max-steps", type=int, default=1 << 20)
+    run.add_argument("--min-qubits", type=int)
+    run.add_argument("--max-qubits", type=int)
+    run.add_argument(
+        "--exact-reference-root",
+        type=Path,
+        help=(
+            "reuse exact references from a separate verified calibration tree; "
+            "use the loose tree when preparing the tight baseline"
+        ),
+    )
     run.add_argument(
         "--without-exact-reference",
         action="store_true",
@@ -515,6 +577,7 @@ def _parser() -> argparse.ArgumentParser:
     audit = commands.add_parser("audit")
     audit.add_argument("manifest", type=Path)
     audit.add_argument("--output-dir", required=True, type=Path)
+    audit.add_argument("--baseline", choices=BASELINE_VARIANTS, default="loose")
     audit.add_argument(
         "--without-exact-reference",
         action="store_true",
@@ -526,6 +589,7 @@ def _parser() -> argparse.ArgumentParser:
     generate.add_argument("--calibration-dir", required=True, type=Path)
     generate.add_argument("--output-dir", required=True, type=Path)
     generate.add_argument("--generator", required=True, type=Path)
+    generate.add_argument("--baseline", choices=BASELINE_VARIANTS, default="loose")
     generate.add_argument(
         "--without-exact-reference",
         action="store_true",
@@ -535,7 +599,7 @@ def _parser() -> argparse.ArgumentParser:
         "--repository-root",
         type=Path,
         help=(
-            "also materialize byte-identical initial_pf.py files under "
+            "also materialize byte-identical initial_pf_<baseline>.py files under "
             "experiments/{abs_energy,diff_energy}/<instance>/"
         ),
     )
@@ -563,11 +627,15 @@ def main() -> int:
             shard_count=args.shard_count,
             max_steps=args.max_steps,
             include_exact_reference=not args.without_exact_reference,
+            exact_reference_root=args.exact_reference_root,
+            min_qubits=args.min_qubits,
+            max_qubits=args.max_qubits,
         )
     elif args.command == "audit":
         result = audit_batch(
             args.manifest,
             args.output_dir,
+            expected_mode=calibration_mode_for_baseline(args.baseline),
             require_exact_reference=not args.without_exact_reference,
         )
     else:
@@ -578,6 +646,7 @@ def main() -> int:
             generator=args.generator,
             repository_root=args.repository_root,
             require_exact_reference=not args.without_exact_reference,
+            baseline=args.baseline,
         )
     print(_json_text(result), end="")
     if args.command == "run":

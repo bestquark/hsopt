@@ -80,24 +80,23 @@ def test_experiments_tree_is_the_only_checked_in_benchmark_tree() -> None:
     assert not (REPO / "examples").exists()
 
 
-def test_abs_energy_manifest_is_exactly_the_91_instance_dataset() -> None:
+def test_abs_energy_manifest_is_exactly_the_82_instance_dataset() -> None:
     manifest = REPO / "experiments" / "abs_energy" / "inputs" / "instances.csv"
     with manifest.open(encoding="utf-8", newline="") as stream:
         rows = list(csv.DictReader(stream))
 
-    assert len(rows) == 91
-    assert len({row["lane_id"] for row in rows}) == 91
+    assert len(rows) == 82
+    assert len({row["lane_id"] for row in rows}) == 82
     assert Counter(int(row["nqubits"]) for row in rows) == {
         4: 20,
         6: 2,
         8: 24,
         10: 11,
         12: 25,
-        14: 9,
     }
 
 
-def test_checked_in_benchmark_layout_matches_the_91_and_10_registries() -> None:
+def test_checked_in_benchmark_layout_matches_the_82_and_10_registries() -> None:
     result = sync_layout(
         abs_manifest=REPO / "experiments/abs_energy/inputs/instances.csv",
         abs_checksums=REPO / "experiments/abs_energy/inputs/hamlib_zip_sha256.txt",
@@ -110,11 +109,11 @@ def test_checked_in_benchmark_layout_matches_the_91_and_10_registries() -> None:
     )
 
     assert result == {
-        "absolute_hamiltonians": 91,
+        "absolute_hamiltonians": 82,
         "difference_reactions": 10,
-        "definition_files": 101,
+        "definition_files": 92,
         "evaluator_files": 2,
-        "initial_policies": 101,
+        "initial_policies": 184,
     }
     for family in ("abs_energy", "diff_energy"):
         root = REPO / "experiments" / family
@@ -189,12 +188,8 @@ def test_normalize_materialized_inputs_copies_only_fresh_phase_encoded_inputs(
     assert result["reaction_instances"] == 1
     assert result["reaction_hamiltonian_files"] == 2
     assert result["unique_hamiltonians"] == 2
-    assert load_problem(normalized_abs)["target_time"] == pytest.approx(
-        0.5127568450530159
-    )
-    assert normalized_manifest["instances"][0]["source_problem_sha256"] == (
-        source_abs_sha256
-    )
+    assert load_problem(normalized_abs)["target_time"] == pytest.approx(0.5127568450530159)
+    assert normalized_manifest["instances"][0]["source_problem_sha256"] == (source_abs_sha256)
     assert not (tmp_path / "normalized/diff_energy/stretch/paper_seed.json").exists()
 
 
@@ -247,14 +242,14 @@ def test_directory_evaluator_uses_its_sealed_hamiltonian_identity(tmp_path: Path
 
 
 @pytest.mark.parametrize(
-    ("source", "output"),
+    "source",
     [
-        (ABSOLUTE / "hamiltonian.json", ABSOLUTE / "initial_pf.py"),
-        (DIFFERENCE / "reaction.json", DIFFERENCE / "initial_pf.py"),
+        ABSOLUTE / "hamiltonian.json",
+        DIFFERENCE / "reaction.json",
     ],
 )
 def test_initial_policy_is_exactly_generated_from_paper_baseline(
-    source: Path, output: Path, tmp_path: Path
+    source: Path, tmp_path: Path
 ) -> None:
     payload = json.loads(source.read_text(encoding="utf-8"))
     if "n_qubits" in payload:
@@ -275,6 +270,7 @@ def test_initial_policy_is_exactly_generated_from_paper_baseline(
             json.dumps(calibration, indent=2, sort_keys=True) + "\n",
             encoding="utf-8",
         )
+    output = tmp_path / "initial_pf_loose.py"
     subprocess.run(
         [
             sys.executable,
@@ -284,7 +280,6 @@ def test_initial_policy_is_exactly_generated_from_paper_baseline(
             str(output),
             "--calibration-root",
             str(calibration_root),
-            "--check",
         ],
         check=True,
     )
@@ -298,6 +293,109 @@ def test_initial_policy_is_exactly_generated_from_paper_baseline(
     assert "BASELINES" not in generated
     assert "get_method_config" not in generated
     assert not (output.parent / "optimized_pf.py").exists()
+
+
+def test_tight_initial_policy_uses_only_an_empirical_exact_calibration(
+    tmp_path: Path,
+) -> None:
+    source = ABSOLUTE / "hamiltonian.json"
+    tight = calibrate_problem(source, backend="numpy", mode="empirical_exact")
+    calibration = tmp_path / "tight.json"
+    calibration.write_text(
+        json.dumps(tight, indent=2, sort_keys=True) + "\n",
+        encoding="utf-8",
+    )
+    output = tmp_path / "initial_pf_tight.py"
+    subprocess.run(
+        [
+            sys.executable,
+            str(GENERATOR),
+            str(source),
+            "--output",
+            str(output),
+            "--calibration",
+            str(calibration),
+            "--baseline",
+            "tight",
+        ],
+        check=True,
+    )
+
+    generated = output.read_text(encoding="utf-8")
+    assert "Baseline variant: tight" in generated
+    assert "LIQUi|>-style numeric-beta/Eq. (34) PF2" in generated
+    assert "Eq. (19)/(34) rigorous PF2" not in generated
+    assert "exact_ground_energy_hartree" not in generated
+    assert "class ProductFormula" in generated
+
+    with pytest.raises(subprocess.CalledProcessError):
+        subprocess.run(
+            [
+                sys.executable,
+                str(GENERATOR),
+                str(source),
+                "--output",
+                str(tmp_path / "wrong.py"),
+                "--calibration",
+                str(calibration),
+                "--baseline",
+                "loose",
+            ],
+            check=True,
+        )
+
+
+@pytest.mark.parametrize(
+    ("baseline", "mode", "expected_label"),
+    [
+        ("loose", "hamiltonian_bound", "Eq. (19)/(34) rigorous PF2"),
+        ("tight", "empirical_exact", "LIQUi|>-style numeric-beta/Eq. (34) PF2"),
+    ],
+)
+def test_reaction_initial_policy_is_generatable_for_each_baseline(
+    baseline: str,
+    mode: str,
+    expected_label: str,
+    tmp_path: Path,
+) -> None:
+    source = DIFFERENCE / "reaction.json"
+    reaction = json.loads(source.read_text(encoding="utf-8"))
+    calibration_root = tmp_path / baseline
+    calibration_root.mkdir()
+    expected_problem_names: set[str] = set()
+    for index, item in enumerate(reaction["terms"]):
+        problem_path = (source.parent / str(item["problem"])).resolve()
+        problem = json.loads(problem_path.read_text(encoding="utf-8"))
+        expected_problem_names.add(str(problem["name"]))
+        calibration = calibrate_problem(problem_path, backend="numpy", mode=mode)
+        (calibration_root / f"{index:03d}.json").write_text(
+            json.dumps(calibration, indent=2, sort_keys=True) + "\n",
+            encoding="utf-8",
+        )
+
+    output = tmp_path / f"initial_pf_{baseline}.py"
+    subprocess.run(
+        [
+            sys.executable,
+            str(GENERATOR),
+            str(source),
+            "--output",
+            str(output),
+            "--calibration-root",
+            str(calibration_root),
+            "--baseline",
+            baseline,
+        ],
+        check=True,
+    )
+    generated = output.read_text(encoding="utf-8")
+    namespace: dict[str, object] = {}
+    exec(compile(generated, str(output), "exec"), namespace)
+    parameters = namespace["ProductFormula"].parameters
+
+    assert expected_label in generated
+    assert set(parameters) == expected_problem_names
+    assert len(parameters) == len(reaction["terms"])
 
 
 def test_eq19_pauli_bound_matches_direct_ordered_triple_sum() -> None:
@@ -474,14 +572,17 @@ def test_batch_generator_can_materialize_a_checked_in_policy(
         tmp_path / "external-policies",
         generator=GENERATOR,
         repository_root=repository_root,
+        baseline="loose",
     )
 
-    checked_in = repository_root / "experiments/abs_energy/h2/initial_pf.py"
-    external = tmp_path / "external-policies/abs_energy/h2/initial_pf.py"
+    checked_in = repository_root / "experiments/abs_energy/h2/initial_pf_loose.py"
+    external = tmp_path / "external-policies/abs_energy/h2/initial_pf_loose.py"
     assert manifest["absolute_hamiltonians"] == 1
     assert result["absolute_initial_policies"] == 1
     assert checked_in.read_bytes() == external.read_bytes()
-    assert result["policies"][0]["checked_in_policy"] == ("experiments/abs_energy/h2/initial_pf.py")
+    assert result["policies"][0]["checked_in_policy"] == (
+        "experiments/abs_energy/h2/initial_pf_loose.py"
+    )
 
 
 def test_batch_reuses_exact_reference_when_allocation_schema_changes(
@@ -546,6 +647,68 @@ def test_batch_reuses_exact_reference_when_allocation_schema_changes(
     assert refreshed["schema"] == 5
     assert refreshed["exact_reference_reused"] is True
     assert refreshed["exact_reference"] == stale["exact_reference"]
+
+
+def test_tight_batch_reuses_the_loose_tree_exact_reference(tmp_path: Path) -> None:
+    abs_inputs = tmp_path / "inputs/abs_energy"
+    reaction_inputs = tmp_path / "inputs/diff_energy"
+    abs_inputs.mkdir(parents=True)
+    reaction_inputs.mkdir(parents=True)
+    problem = abs_inputs / "h2.json"
+    problem.write_bytes((ABSOLUTE / "hamiltonian.json").read_bytes())
+    (abs_inputs / "manifest.json").write_text(
+        json.dumps(
+            {
+                "family": "abs_energy",
+                "instances": [
+                    {
+                        "instance": "h2",
+                        "problem": "h2.json",
+                        "n_qubits": 4,
+                    }
+                ],
+            }
+        )
+        + "\n",
+        encoding="utf-8",
+    )
+    (reaction_inputs / "manifest.json").write_text(
+        json.dumps({"family": "diff_energy", "instances": []}) + "\n",
+        encoding="utf-8",
+    )
+    manifest = tmp_path / "manifest.json"
+    build_manifest(abs_inputs, reaction_inputs, manifest)
+    loose_root = tmp_path / "loose"
+    loose = calibrate_problem(problem, backend="numpy", mode="hamiltonian_bound")
+    loose_path = loose_root / "abs_energy/h2.json"
+    loose_path.parent.mkdir(parents=True)
+    loose_path.write_text(
+        json.dumps(loose, indent=2, sort_keys=True) + "\n",
+        encoding="utf-8",
+    )
+
+    tight_root = tmp_path / "tight"
+    summary = run_batch(
+        manifest,
+        tight_root,
+        backend="numpy",
+        mode="empirical_exact",
+        target_time=None,
+        reference_error_hartree=1.0e-4,
+        total_error_hartree=BENCHMARK_TOTAL_ERROR_HARTREE,
+        shard_index=0,
+        shard_count=1,
+        max_steps=1 << 20,
+        include_exact_reference=True,
+        exact_reference_root=loose_root,
+    )
+    tight = json.loads((tight_root / "abs_energy/h2.json").read_text(encoding="utf-8"))
+
+    assert summary["completed"] == 1
+    assert summary["exact_references_reused"] == 1
+    assert tight["calibration_mode"] == "empirical_exact"
+    assert tight["exact_reference_reused"] is True
+    assert tight["exact_reference"] == loose["exact_reference"]
 
 
 def test_pygridsynth_compilation_is_reproducible_and_within_tolerance() -> None:
@@ -642,13 +805,15 @@ def test_dense_evaluator_qubit_limit(
     problem_path = tmp_path / f"q{n_qubits}.json"
     problem_path.write_text(
         json.dumps(
-            _encoded_problem({
-                "name": "limit fixture",
-                "n_qubits": n_qubits,
-                "electrons": 1,
-                "identity_coefficient": 0.0,
-                "terms": [{"label": "Z" + "I" * (n_qubits - 1), "coefficient": 1.0}],
-            })
+            _encoded_problem(
+                {
+                    "name": "limit fixture",
+                    "n_qubits": n_qubits,
+                    "electrons": 1,
+                    "identity_coefficient": 0.0,
+                    "terms": [{"label": "Z" + "I" * (n_qubits - 1), "coefficient": 1.0}],
+                }
+            )
         ),
         encoding="utf-8",
     )
@@ -753,16 +918,18 @@ def test_degenerate_exact_reference_serializes_unique_anchored_ground_component(
     problem_path = tmp_path / "degenerate.json"
     problem_path.write_text(
         json.dumps(
-            _encoded_problem({
-                "name": "degenerate HF target",
-                "n_qubits": 4,
-                "electrons": 1,
-                "identity_coefficient": 0.0,
-                "terms": [
-                    {"label": "ZIII", "coefficient": 1.0},
-                    {"label": "IIZI", "coefficient": 1.0},
-                ],
-            })
+            _encoded_problem(
+                {
+                    "name": "degenerate HF target",
+                    "n_qubits": 4,
+                    "electrons": 1,
+                    "identity_coefficient": 0.0,
+                    "terms": [
+                        {"label": "ZIII", "coefficient": 1.0},
+                        {"label": "IIZI", "coefficient": 1.0},
+                    ],
+                }
+            )
         ),
         encoding="utf-8",
     )

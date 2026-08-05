@@ -207,6 +207,7 @@ def initialize_lane(
     family: str = "custom",
     replicate: str | None = None,
     instance: str | None = None,
+    baseline_variant: str | None = None,
     reference_task_id: str | None = None,
     exact_reference_path: Path | None = None,
 ) -> dict[str, Any]:
@@ -271,6 +272,7 @@ def initialize_lane(
         "family": family,
         "replicate": replicate,
         "instance": instance,
+        "baseline_variant": baseline_variant,
         "exact_reference_task_id": reference_task_id,
         "exact_reference_source": (
             str(exact_reference_path) if exact_reference_path is not None else None

@@ -86,17 +86,35 @@ Once a lane is feasible, accept only a strict T95 reduction that remains within
 
 ## Campaign invariants
 
-- Prepare the rigorous paper PF2 baseline and exact reference once per unique
-  Hamiltonian.
+- Select exactly one generated paper PF2 baseline per campaign: `loose` uses
+  the rigorous Eq. (19) beta upper bound; `tight` uses the numeric beta measured
+  against the cached exact energy at 0.1 mHa. Both use the same Eq. (34)
+  allocation and evaluator.
+- Compute the exact reference once per unique Hamiltonian and reuse it during
+  tight calibration, iteration 0, and every mutation evaluation.
+- The mutation sandbox receives only the selected policy as `candidate.py`; it
+  must not receive or read the sibling baseline initializer.
+- Keep loose and tight supervisors, mutation pools, queues, evaluator workers,
+  and output roots separate. Each evaluator worker accepts exactly one
+  baseline-tagged campaign root; a hardware lock may coordinate a shared GPU,
+  but a worker must never alternate between baseline queues.
 - Iteration 0 measures the immutable generated baseline.
 - Iterations 1--50 mutate the external incumbent sequentially.
-- The production grid is 91 absolute-energy instances times five lanes, plus
-  ten reactions times two lanes: 475 lanes and 23,750 mutations.
+- The production grid is 82 absolute-energy instances times five lanes, plus
+  ten reactions times two lanes: 430 lanes and 21,500 mutations.
 - Candidate histories, evaluator results, OpenCode/OpenShell transcripts,
   tool metrics, and sandbox rejections remain in the external campaign root.
 - The canonical A100 campaign creates the single mutation trace. Any CPU
   validation campaign replays those exact archived candidates without invoking
   the agent and is audited for numerical parity.
+
+After the independent iteration-0 census exists for complete same-placement
+loose and tight baselines, run `hsopt-baseline-drop`. It writes one
+`baseline_t_gate_drop_percent.txt` number per checked-in experiment folder,
+using `100 * (T95_loose - T95_tight) / T95_loose`. Require identical census
+grids, source and reference hashes, evaluator contracts, backends,
+accelerators, placement labels, and chemical-accuracy passes; never pool CPU,
+A100, and L4 observations.
 
 For repository layout, read `references/layout.md`. For campaign initialization,
 Slurm resources, supervisor operation, export, and parity commands, use the

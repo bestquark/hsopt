@@ -7,12 +7,13 @@ The paper uses two different accuracy quantities that must not be conflated:
 * This benchmark uses ``1 kcal/mol`` as its total absolute-energy accuracy
   target.
 
-The production baseline computes the paper's Eq. (19) double-commutator
+HSOpt exposes two controlled versions of the same paper PF2/Eq. (34)
+baseline.  ``loose`` computes the paper's Eq. (19) double-commutator
 coefficient bound exactly for the Pauli decomposition and obtains beta(H)
-without using E0.  It separately computes the exact reference once because
-the fixed evaluator needs that reference to score iteration 0 and later
-autoresearch proposals.  The exact energy never enters the bound-derived
-step count.
+without using E0.  ``tight`` measures beta(H) numerically against the cached
+exact ground energy at the same 0.1 mHa reference error.  Both versions reuse
+the same exact reference, error-allocation constants, term order, evaluator,
+and total benchmark error target.
 """
 
 from __future__ import annotations
@@ -54,6 +55,20 @@ PAPER_TROTTER_SELECTION = (
 )
 HAMILTONIAN_BOUND_SELECTION = "paper_eq19_exact_pauli_double_commutator_bound_without_exact_energy"
 CALIBRATION_SCHEMA = 5
+BASELINE_VARIANT_TO_MODE = {
+    "loose": "hamiltonian_bound",
+    "tight": "empirical_exact",
+}
+BASELINE_VARIANTS = tuple(BASELINE_VARIANT_TO_MODE)
+
+
+def calibration_mode_for_baseline(baseline: str) -> str:
+    """Map the public baseline name to its sealed calibration mode."""
+
+    try:
+        return BASELINE_VARIANT_TO_MODE[baseline]
+    except KeyError as exc:
+        raise ValueError(f"baseline must be one of {', '.join(BASELINE_VARIANTS)}") from exc
 
 
 def _canonical_json(payload: Mapping[str, Any]) -> bytes:
@@ -172,9 +187,9 @@ def verify_calibration(
                 raise ValueError(
                     "Hamiltonian-bound calibration exact reference has the wrong problem hash"
                 )
-            if exact_reference.get("phase_encoding") != payload.get(
-                "benchmark_adaptation", {}
-            ).get("phase_encoding"):
+            if exact_reference.get("phase_encoding") != payload.get("benchmark_adaptation", {}).get(
+                "phase_encoding"
+            ):
                 raise ValueError(
                     "Hamiltonian-bound calibration exact reference has the wrong phase encoding"
                 )

@@ -2,26 +2,28 @@
 
 The checked-in benchmark surface has exactly two families:
 
-- `abs_energy/`: the canonical 91-instance HamLib selection through 14
+- `abs_energy/`: the canonical 82-instance HamLib selection through 12
   qubits. Each selected Hamiltonian has a visible directory containing an
-  `instance.json` definition and generated `initial_pf.py`. The family-level
+  `instance.json` definition plus generated `initial_pf_loose.py` and
+  `initial_pf_tight.py`. The family-level
   `abs_energy/evaluate.py` contains its explicit fixed evaluator entry point,
   alongside the source/checksum manifests used to prepare external inputs.
 - `diff_energy/`: ten visible reaction directories. Each contains a
-  `definition.json` plus generated `initial_pf.py`. Its explicit fixed
+  `definition.json` plus the same two baseline variants. Its explicit fixed
   evaluator entry point is `diff_energy/evaluate.py`.
 
 `generate_initial_pf.py` is the single immutable iteration-0 policy generator
 for both families. It verifies sealed per-Hamiltonian calibration records and
-embeds the Reiher--Wiebe--Svore--Wecker--Troyer PF2 baseline: lexicographic
-Strang ordering, Eq. (19) double-commutator-bound $\beta(H)$, the normalized
-physical time $t=1/\sum_j|h_j|$, the resulting step count and $\Delta t$, and a
-directly synthesized uniform
-rotation tolerance. The exact energy is cached separately for evaluation and
-does not enter this initializer. There is no second baseline-definition folder
-to keep in sync.
+embeds two controlled forms of the Reiher--Wiebe--Svore--Wecker--Troyer PF2
+baseline. `loose` uses the rigorous Eq. (19) double-commutator upper bound for
+$\beta(H)$ without the exact energy. `tight` numerically finds the first PF2
+step count passing the same 0.1 mHa reference error against the cached exact
+ground energy. Both use lexicographic Strang ordering, the same Eq. (34) error
+allocation, normalized physical time $t=1/\sum_j|h_j|$, and 1 kcal/mol total
+target. The two policies stay beside the same definition; there are no extra
+experiment-family folders.
 
-Run `uv run hsopt-layout --check` to prove that the 91 + 10 visible directories
+Run `uv run hsopt-layout --check` to prove that the 82 + 10 visible directories
 match their compact registries and source checksums exactly. Run
 `uv run hsopt-layout --write` after an intentional registry update to
 regenerate the deterministic definition files.
@@ -29,13 +31,22 @@ regenerate the deterministic definition files.
 The coefficient-heavy production Hamiltonians, sealed per-instance
 calibrations, exact references, mutation lanes, scheduler logs, agent
 transcripts, exports, and reports live below an external `HSOPT_DATA_ROOT`.
-Only the compact generated iteration-0 policies are duplicated in Git.
+Only the compact generated loose and tight iteration-0 policies and the
+requested folder-level comparison scalar are duplicated in Git.
+
+Once matching same-placement loose and tight iteration-0 censuses have both
+completed, `hsopt-baseline-drop` writes
+`baseline_t_gate_drop_percent.txt` beside those two policies. That file is
+deliberately one signed decimal number: the percentage reduction in the
+confidence-adjusted QPE T count from the loose baseline to the tight baseline.
+Its detailed counts, hashes, evaluator contract, backend, and accelerator
+remain in the external audit specified with `--audit-output`.
 
 The external campaign layout mirrors the two families:
 
 ```text
 $HSOPT_DATA_ROOT/exact/inputs-v2/abs_energy/
 $HSOPT_DATA_ROOT/exact/inputs-v1/diff_energy/
-$HSOPT_DATA_ROOT/exact/production-cpu91-v1/lanes/{abs_energy,diff_energy}/
-$HSOPT_DATA_ROOT/exact/production-gpu91-v2/lanes/{abs_energy,diff_energy}/
+$HSOPT_DATA_ROOT/exact/production-cpu82-v1/lanes/{abs_energy,diff_energy}/
+$HSOPT_DATA_ROOT/exact/production-gpu82-v2/lanes/{abs_energy,diff_energy}/
 ```

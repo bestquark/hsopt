@@ -570,7 +570,7 @@ def test_campaign_reuses_one_calibrated_reference_for_all_replicate_baselines(
     monkeypatch.setattr("hsopt.campaign_setup._generate_policy", fake_generate_policy)
     monkeypatch.setattr(
         "hsopt.campaign_setup._calibration_catalog",
-        lambda _root: {},
+        lambda _root, **_kwargs: {},
     )
     monkeypatch.setattr(
         "hsopt.campaign_setup._calibrated_exact_reference",
@@ -586,9 +586,13 @@ def test_campaign_reuses_one_calibrated_reference_for_all_replicate_baselines(
         iterations=50,
         expected_hamlib_instances=1,
         expected_reaction_instances=1,
+        baseline="tight",
     )
 
     assert len(campaign["lanes"]) == 7
+    assert campaign["baseline_variant"] == "tight"
+    assert campaign["calibration_mode"] == "empirical_exact"
+    assert all(row["baseline_variant"] == "tight" for row in campaign["lanes"])
     assert all(row["reference_task_id"] is None for row in campaign["lanes"])
     assert len({row["reference_sha256"] for row in campaign["lanes"]}) == 2
     assert all(row["baseline_task_id"] is not None for row in campaign["lanes"])

@@ -23,7 +23,7 @@ from pathlib import Path
 from typing import Any, Iterable, Mapping, Sequence
 
 
-HAMLIB_LANES = 91
+HAMLIB_LANES = 82
 HAMLIB_RUNS = 5
 HAMLIB_ITERATIONS = 50
 REACTIONS = 10
@@ -308,7 +308,7 @@ def _hamlib_summary(lane_id: str, rows: Sequence[Mapping[str, str]]) -> str:
             table_rows,
         )
     )
-    return _document(f"HamLib91 summary: {lane_id}", body)
+    return _document(f"HamLib82 summary: {lane_id}", body)
 
 
 def _hamlib_extended(
@@ -393,7 +393,7 @@ def _hamlib_extended(
         ),
         mutation_rows,
     )
-    return _document(f"HamLib91 extended log: {lane_id}", body)
+    return _document(f"HamLib82 extended log: {lane_id}", body)
 
 
 def _species_signature(raw: object) -> str:
@@ -1072,7 +1072,7 @@ def generate_reports(
                 for name, title, tex, content in (
                     (
                         "summary.pdf",
-                        f"HamLib91 summary: {lane_id}",
+                        f"HamLib82 summary: {lane_id}",
                         _hamlib_summary(lane_id, lane_summaries),
                         _hamlib_reportlab_content(
                             lane_id,
@@ -1083,7 +1083,7 @@ def generate_reports(
                     ),
                     (
                         "extended_log.pdf",
-                        f"HamLib91 extended log: {lane_id}",
+                        f"HamLib82 extended log: {lane_id}",
                         _hamlib_extended(lane_id, lane_summaries, lane_candidates),
                         _hamlib_reportlab_content(
                             lane_id,

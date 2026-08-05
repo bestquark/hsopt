@@ -1,10 +1,11 @@
-"""Generate a concise executable iteration-0 policy from paper-bound data.
+"""Generate one concise executable iteration-0 paper policy.
 
-The Hamiltonian-dependent beta(H) comes from the exact Pauli evaluation of the
-Reiher et al. supplement's Eq. (19) coefficient bound. This command verifies
-the sealed result and source-Hamiltonian checksum, then writes only the
-executable PF2/Strang schedule and its problem-specific step/tolerance values
-to ``initial_pf.py``. Full derivation metadata remains in the sealed
+``--baseline loose`` uses the rigorous Eq. (19) Pauli-commutator upper bound
+for beta(H). ``--baseline tight`` uses the numerically calibrated beta(H) from
+the exact ground energy at the same 0.1 mHa reference error. The command
+verifies the selected sealed result and source-Hamiltonian checksum, then
+writes only the executable PF2/Strang schedule and its problem-specific
+step/tolerance values. Full derivation metadata remains in the sealed
 calibration record.
 """
 
@@ -17,6 +18,7 @@ from pathlib import Path
 from typing import Any, Mapping
 
 from hsopt.paper_baseline import (
+    BASELINE_VARIANTS,
     BENCHMARK_TOTAL_ERROR_HARTREE,
     PAPER_BETA_REFERENCE_ERROR_HARTREE,
     PAPER_ERROR_CONSTRAINT,
@@ -25,14 +27,14 @@ from hsopt.paper_baseline import (
     PAPER_SYNTHESIS_DELTA_0,
     PAPER_SYNTHESIS_GAMMA,
     PAPER_TERM_ORDER,
+    calibration_mode_for_baseline,
     optimize_paper_error_allocation,
     verify_calibration,
 )
 
 
-PAPER_CONTRACT: dict[str, Any] = {
+COMMON_PAPER_CONTRACT: dict[str, Any] = {
     "schema": 7,
-    "baseline_id": "reiher_wiebe_svore_wecker_troyer_2017_eq19_eq34_rigorous_pf2",
     "citation": {
         "authors": [
             "Markus Reiher",
@@ -54,7 +56,6 @@ PAPER_CONTRACT: dict[str, Any] = {
         "term_order_strategy": PAPER_TERM_ORDER,
         "rotation_synthesis": "clifford_plus_t_pygridsynth_at_iteration_zero",
         "beta_reference_error_hartree": PAPER_BETA_REFERENCE_ERROR_HARTREE,
-        "beta_selection": "exact Eq. (19) Pauli double-commutator coefficient bound",
         "phase_estimation_alpha": PAPER_PHASE_ESTIMATION_ALPHA,
         "synthesis_gamma": PAPER_SYNTHESIS_GAMMA,
         "synthesis_delta_0": PAPER_SYNTHESIS_DELTA_0,
@@ -67,24 +68,49 @@ PAPER_CONTRACT: dict[str, Any] = {
         "total_error_target": "1 kcal/mol",
         "phase_encoding": "centered_nonidentity_pauli_one_norm",
         "dimensionless_qpe_evolution_time": 1.0,
-        "physical_target_time": (
-            "inverse of the nonidentity Pauli one-norm, in Hartree^-1"
-        ),
+        "physical_target_time": ("inverse of the nonidentity Pauli one-norm, in Hartree^-1"),
         "energy_recovery": "E_hartree = c0 + lambda * principal_phase",
         "allocation_cost": "supplement Eq. (34) with rigorous gamma=4 and delta_0=11",
         "realized_t_count": "direct PyGridSynth compilation during iteration 0",
     },
-    "scope_note": (
-        "beta(H) is obtained from the paper's rigorous Eq. (19) "
-        "double-commutator coefficient bound for this Pauli decomposition. "
-        "The separately cached exact energy is used only by the evaluator and "
-        "does not enter beta, the Trotter step count, the synthesis tolerance, "
-        "or selection of a 2pi phase branch."
-    ),
 }
-PAPER_CONTRACT_SHA256 = hashlib.sha256(
-    json.dumps(PAPER_CONTRACT, sort_keys=True, separators=(",", ":")).encode()
-).hexdigest()
+BASELINE_CONTRACTS: dict[str, dict[str, Any]] = {
+    "loose": {
+        "baseline_id": "reiher_wiebe_svore_wecker_troyer_2017_eq19_eq34_rigorous_pf2",
+        "calibration_mode": "hamiltonian_bound",
+        "display_name": "Reiher et al. Eq. (19)/(34) rigorous PF2",
+        "beta_selection": "exact Eq. (19) Pauli double-commutator coefficient bound",
+        "scope_note": (
+            "The exact energy is cached for evaluation but does not enter beta, "
+            "the Trotter step count, or the synthesis tolerance."
+        ),
+    },
+    "tight": {
+        "baseline_id": "reiher_wiebe_svore_wecker_troyer_2017_numeric_beta_eq34_pf2",
+        "calibration_mode": "empirical_exact",
+        "display_name": "Reiher et al. LIQUi|>-style numeric-beta/Eq. (34) PF2 (tight)",
+        "beta_selection": (
+            "first passing lexicographic PF2 step count against the exact ground energy at 0.1 mHa"
+        ),
+        "scope_note": (
+            "The cached exact ground energy selects the numeric beta calibration; "
+            "the paper Eq. (34) allocation and all evaluator semantics remain unchanged."
+        ),
+    },
+}
+
+
+def paper_contract(baseline: str) -> dict[str, Any]:
+    """Return the immutable scientific contract for one public baseline."""
+
+    mode = calibration_mode_for_baseline(baseline)
+    variant = BASELINE_CONTRACTS[baseline]
+    if variant["calibration_mode"] != mode:
+        raise AssertionError(f"inconsistent baseline contract for {baseline}")
+    contract = json.loads(json.dumps(COMMON_PAPER_CONTRACT))
+    contract.update(variant)
+    contract["paper_method"]["beta_selection"] = variant["beta_selection"]
+    return contract
 
 
 def _sha256(path: Path) -> str:
@@ -114,21 +140,29 @@ def _problem_paths(
     return rows
 
 
-def _read_calibration(path: Path) -> dict[str, Any]:
+def _read_calibration(path: Path, *, baseline: str) -> dict[str, Any]:
     payload = json.loads(path.read_text(encoding="utf-8"))
     verify_calibration(payload)
-    if payload["calibration_mode"] != "hamiltonian_bound":
-        raise ValueError(f"{path}: expected canonical hamiltonian_bound calibration")
+    expected_mode = calibration_mode_for_baseline(baseline)
+    if payload["calibration_mode"] != expected_mode:
+        raise ValueError(
+            f"{path}: {baseline} requires {expected_mode}, found {payload['calibration_mode']}"
+        )
     return payload
 
 
-def _calibration_catalog(root: Path) -> dict[str, tuple[Path, dict[str, Any]]]:
+def _calibration_catalog(
+    root: Path,
+    *,
+    baseline: str,
+) -> dict[str, tuple[Path, dict[str, Any]]]:
+    expected_mode = calibration_mode_for_baseline(baseline)
     catalog: dict[str, tuple[Path, dict[str, Any]]] = {}
     for path in sorted(root.rglob("*.json")):
         try:
             payload = json.loads(path.read_text(encoding="utf-8"))
             verify_calibration(payload)
-            if payload["calibration_mode"] != "hamiltonian_bound":
+            if payload["calibration_mode"] != expected_mode:
                 continue
         except (KeyError, TypeError, ValueError, json.JSONDecodeError):
             continue
@@ -142,7 +176,7 @@ def _calibration_catalog(root: Path) -> dict[str, tuple[Path, dict[str, Any]]]:
             continue
         catalog[problem_sha256] = (path, payload)
     if not catalog:
-        raise ValueError(f"no sealed paper-baseline calibrations found under {root}")
+        raise ValueError(f"no sealed {baseline} ({expected_mode}) calibrations found under {root}")
     return catalog
 
 
@@ -155,10 +189,12 @@ def _policy_row(
     species: str | None,
     reaction_coefficient: float | None,
     reaction_species_count: int,
+    baseline: str,
 ) -> tuple[str, dict[str, Any]]:
     verify_calibration(calibration, problem_path=problem_path)
-    if calibration["calibration_mode"] != "hamiltonian_bound":
-        raise ValueError(f"{calibration_path}: not a Hamiltonian-bound baseline")
+    expected_mode = calibration_mode_for_baseline(baseline)
+    if calibration["calibration_mode"] != expected_mode:
+        raise ValueError(f"{calibration_path}: not a {baseline} baseline")
     if reaction_coefficient is None:
         species_error_target = BENCHMARK_TOTAL_ERROR_HARTREE
     else:
@@ -191,9 +227,11 @@ def _policy_row(
             f"calibrated target_time={policy['target_time']}"
         )
     name = str(problem["name"])
+    contract = paper_contract(baseline)
     policy.update(
         {
-            "baseline_source": str(PAPER_CONTRACT["baseline_id"]),
+            "baseline_variant": baseline,
+            "baseline_source": str(contract["baseline_id"]),
             "calibration_mode": str(calibration["calibration_mode"]),
             "calibration_sha256": str(calibration["calibration_sha256"]),
             "problem_sha256": str(calibration["problem_sha256"]),
@@ -203,14 +241,29 @@ def _policy_row(
             "reference_beta_error_hartree": float(
                 calibration["reference"]["reference_error_hartree"]
             ),
-            "bound_method": str(calibration["reference"]["bound_method"]),
-            "bound_equation": str(calibration["reference"]["bound_equation"]),
-            "bound_term_count": int(calibration["reference"]["bound_term_count"]),
-            "double_commutator_sum_upper": float(
-                calibration["reference"]["double_commutator_sum_upper"]
-            ),
         }
     )
+    reference = calibration["reference"]
+    if baseline == "loose":
+        policy.update(
+            {
+                "bound_method": str(reference["bound_method"]),
+                "bound_equation": str(reference["bound_equation"]),
+                "bound_term_count": int(reference["bound_term_count"]),
+                "double_commutator_sum_upper": float(reference["double_commutator_sum_upper"]),
+            }
+        )
+    else:
+        policy.update(
+            {
+                "numeric_reference_step_count": int(reference["reference_step_count"]),
+                "numeric_reference_step_time": float(reference["reference_step_time"]),
+                "numeric_reference_energy_hartree": float(reference["exact_ground_energy_hartree"]),
+                "numeric_reference_error_hartree": float(
+                    reference["selected_evaluation"]["absolute_trotter_error_hartree"]
+                ),
+            }
+        )
     if species is not None:
         policy["species"] = species
     return name, policy
@@ -223,6 +276,7 @@ def math_isclose(left: float, right: float) -> bool:
 def load_baselines(
     source: Path,
     *,
+    baseline: str,
     calibration_path: Path | None,
     calibration_root: Path | None,
 ) -> tuple[dict[str, dict[str, Any]], list[Path]]:
@@ -230,10 +284,10 @@ def load_baselines(
     if calibration_path is not None:
         if len(problems) != 1:
             raise ValueError("--calibration can only be used with one Hamiltonian")
-        direct = _read_calibration(calibration_path)
+        direct = _read_calibration(calibration_path, baseline=baseline)
         catalog = {str(direct["problem_sha256"]): (calibration_path, direct)}
     elif calibration_root is not None:
-        catalog = _calibration_catalog(calibration_root)
+        catalog = _calibration_catalog(calibration_root, baseline=baseline)
     else:
         raise ValueError("provide --calibration or --calibration-root")
 
@@ -253,6 +307,7 @@ def load_baselines(
             species=species,
             reaction_coefficient=reaction_coefficient,
             reaction_species_count=reaction_species_count,
+            baseline=baseline,
         )
         if name in rows:
             raise ValueError(f"duplicate evaluator-visible problem name {name!r}")
@@ -275,11 +330,13 @@ def format_parameters(rows: Mapping[str, Mapping[str, Any]]) -> str:
 def render(
     source: Path,
     *,
+    baseline: str = "loose",
     calibration_path: Path | None = None,
     calibration_root: Path | None = None,
 ) -> str:
     rows, _calibration_paths = load_baselines(
         source,
+        baseline=baseline,
         calibration_path=calibration_path,
         calibration_root=calibration_root,
     )
@@ -287,11 +344,14 @@ def render(
     calibration_lines = "\n".join(
         f"Calibration SHA-256: {rows[name]['calibration_sha256']}" for name in sorted(rows)
     )
+    contract = paper_contract(baseline)
+    variant_line = "" if baseline == "loose" else f"Baseline variant: {baseline}\n"
+    derivation_label = "bound" if baseline == "loose" else "beta"
     return f'''"""Generated iteration-0 product formula; mutate the class, not the benchmark.
 
-Baseline: Reiher et al. Eq. (19)/(34) rigorous PF2, adapted to 1 kcal/mol.
+{variant_line}Baseline: {contract["display_name"]}, adapted to 1 kcal/mol.
 {calibration_lines}
-Full bound/error derivation and the exact-energy reference are sealed outside
+Full {derivation_label}/error derivation and the exact-energy reference are sealed outside
 this mutation file. Iteration 0 measures this code unchanged with PyGridSynth.
 """
 
@@ -321,6 +381,7 @@ def _parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("source", type=Path)
     parser.add_argument("--output", type=Path, required=True)
+    parser.add_argument("--baseline", choices=BASELINE_VARIANTS, default="loose")
     calibration = parser.add_mutually_exclusive_group(required=True)
     calibration.add_argument("--calibration", type=Path)
     calibration.add_argument("--calibration-root", type=Path)
@@ -332,6 +393,7 @@ def main() -> int:
     args = _parser().parse_args()
     expected = render(
         args.source.resolve(),
+        baseline=args.baseline,
         calibration_path=args.calibration.resolve() if args.calibration else None,
         calibration_root=args.calibration_root.resolve() if args.calibration_root else None,
     )

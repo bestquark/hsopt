@@ -20,14 +20,14 @@ import numpy as np
 
 from .compiled_unitary import assemble_exact_difference_reference, qpe_phase_encoding
 from .exact_loop import initialize_lane
-from .paper_baseline import verify_calibration
+from .paper_baseline import BASELINE_VARIANTS, calibration_mode_for_baseline, verify_calibration
 
 
 HAMLIB_BASE_URL = "https://portal.nersc.gov/cfs/m888/dcamps/hamlib/chemistry/electronic"
 PAULI_TOKEN = re.compile(r"([IXYZ])(\d+)")
 ABS_ENERGY_FAMILY = "abs_energy"
 DIFF_ENERGY_FAMILY = "diff_energy"
-HAMLIB91_INSTANCES = 91
+HAMLIB82_INSTANCES = 82
 REACTION_INSTANCES = 10
 
 
@@ -54,9 +54,7 @@ def _attach_phase_encoding(problem: dict[str, Any]) -> dict[str, Any]:
         problem["terms"],
     )
     problem["phase_encoding"] = encoding
-    problem["target_time"] = float(
-        encoding["physical_evolution_time_hartree_inverse"]
-    )
+    problem["target_time"] = float(encoding["physical_evolution_time_hartree_inverse"])
     return problem
 
 
@@ -154,15 +152,22 @@ def _require_empty(path: Path) -> Path:
     return path
 
 
-def _calibration_catalog(root: Path) -> dict[str, dict[str, Any]]:
+def _calibration_catalog(
+    root: Path,
+    *,
+    baseline: str,
+) -> dict[str, dict[str, Any]]:
     """Index sealed calibrations by the exact source-Hamiltonian checksum."""
 
     root = root.resolve()
+    expected_mode = calibration_mode_for_baseline(baseline)
     catalog: dict[str, dict[str, Any]] = {}
     for path in sorted(root.rglob("*.json")):
         try:
             payload = json.loads(path.read_text(encoding="utf-8"))
             verify_calibration(payload)
+            if payload["calibration_mode"] != expected_mode:
+                continue
         except (KeyError, TypeError, ValueError, json.JSONDecodeError):
             continue
         problem_sha256 = str(payload["problem_sha256"])
@@ -174,7 +179,7 @@ def _calibration_catalog(root: Path) -> dict[str, dict[str, Any]]:
             continue
         catalog[problem_sha256] = payload
     if not catalog:
-        raise ValueError(f"no sealed calibrations found under {root}")
+        raise ValueError(f"no sealed {baseline} ({expected_mode}) calibrations found under {root}")
     return catalog
 
 
@@ -182,18 +187,13 @@ def _calibrated_exact_reference(
     source: Path,
     catalog: dict[str, dict[str, Any]],
 ) -> dict[str, Any]:
-    """Return the exact reference stored beside the bound-derived baseline."""
+    """Return the exact reference stored beside the selected baseline."""
 
     digest = _sha256(source)
     if digest not in catalog:
         raise ValueError(f"no calibration for {source} (SHA-256 {digest})")
     calibration = catalog[digest]
     verify_calibration(calibration, problem_path=source)
-    if calibration.get("calibration_mode") != "hamiltonian_bound":
-        raise ValueError(
-            f"{source}: campaign initialization requires the canonical "
-            "hamiltonian_bound baseline calibration"
-        )
     reference = calibration.get("exact_reference")
     if not isinstance(reference, dict):
         raise ValueError(f"{source}: calibration has no reusable exact reference")
@@ -329,17 +329,17 @@ def prepare_hamlib(
     checksum_manifest: Path,
     data_root: Path,
     output_root: Path,
-    max_qubits: int = 14,
+    max_qubits: int = 12,
 ) -> dict[str, Any]:
     """Convert the exact-capable HamLib subset into compact immutable JSON."""
 
     output_root = _require_empty(output_root)
     rows = list(csv.DictReader(active_manifest.read_text(encoding="utf-8").splitlines()))
     selected = [row for row in rows if int(row["nqubits"]) <= max_qubits]
-    if max_qubits == 14 and len(selected) != HAMLIB91_INSTANCES:
+    if max_qubits == 12 and len(selected) != HAMLIB82_INSTANCES:
         raise ValueError(
-            f"canonical HamLib <=14-qubit selection must contain "
-            f"{HAMLIB91_INSTANCES} instances, found {len(selected)}"
+            f"canonical HamLib <=12-qubit selection must contain "
+            f"{HAMLIB82_INSTANCES} instances, found {len(selected)}"
         )
     checksums = _checksum_manifest(checksum_manifest)
     verified_archives: dict[str, str] = {}
@@ -378,23 +378,25 @@ def prepare_hamlib(
                 f"{row['lane_id']}: parsed {len(terms) + 1} terms, expected {row['terms']}"
             )
         one_norm = float(row["one_norm"])
-        problem = _attach_phase_encoding({
-            "name": f"HamLib {row['lane_id']}",
-            "source": {
-                "library": "HamLib",
-                "base_url": HAMLIB_BASE_URL,
-                "archive": relative,
-                "archive_sha256": expected_digest,
-                "dataset": row["dataset"],
-                "active_manifest_lane_id": row["lane_id"],
-                "hamlib_one_norm": one_norm,
-                **parse_info,
-            },
-            "n_qubits": int(row["nqubits"]),
-            "electrons": int(row["electrons"]),
-            "identity_coefficient": identity,
-            "terms": terms,
-        })
+        problem = _attach_phase_encoding(
+            {
+                "name": f"HamLib {row['lane_id']}",
+                "source": {
+                    "library": "HamLib",
+                    "base_url": HAMLIB_BASE_URL,
+                    "archive": relative,
+                    "archive_sha256": expected_digest,
+                    "dataset": row["dataset"],
+                    "active_manifest_lane_id": row["lane_id"],
+                    "hamlib_one_norm": one_norm,
+                    **parse_info,
+                },
+                "n_qubits": int(row["nqubits"]),
+                "electrons": int(row["electrons"]),
+                "identity_coefficient": identity,
+                "terms": terms,
+            }
+        )
         problem_path = output_root / row["lane_id"] / "hamiltonian.json"
         _write_json(problem_path, problem)
         records.append(
@@ -472,25 +474,27 @@ def prepare_reactions(
                 metadata["total_pauli_rotation_terms"]
             ):
                 raise ValueError(f"{species}: inconsistent cached Pauli decomposition")
-            problem = _attach_phase_encoding({
-                "name": f"Reaction seed {species}",
-                "source": {
-                    "library": "HSOpt paper reaction cache",
-                    "metadata_sha256": _sha256(metadata_path),
-                    "npz_sha256": _sha256(npz_path),
-                    "basis": metadata["basis"],
-                    "geometry": metadata["geometry"],
-                    "localization": metadata["localization"],
-                    "active_orbitals": metadata["active_orbitals"],
-                },
-                "n_qubits": int(metadata["n_qubits"]),
-                "electrons": int(metadata["active_electrons"]),
-                "identity_coefficient": float(metadata["identity_coefficient"]),
-                "terms": [
-                    {"label": label, "coefficient": coefficient}
-                    for label, coefficient in zip(labels, coefficients, strict=True)
-                ],
-            })
+            problem = _attach_phase_encoding(
+                {
+                    "name": f"Reaction seed {species}",
+                    "source": {
+                        "library": "HSOpt paper reaction cache",
+                        "metadata_sha256": _sha256(metadata_path),
+                        "npz_sha256": _sha256(npz_path),
+                        "basis": metadata["basis"],
+                        "geometry": metadata["geometry"],
+                        "localization": metadata["localization"],
+                        "active_orbitals": metadata["active_orbitals"],
+                    },
+                    "n_qubits": int(metadata["n_qubits"]),
+                    "electrons": int(metadata["active_electrons"]),
+                    "identity_coefficient": float(metadata["identity_coefficient"]),
+                    "terms": [
+                        {"label": label, "coefficient": coefficient}
+                        for label, coefficient in zip(labels, coefficients, strict=True)
+                    ],
+                }
+            )
             relative_problem = Path("hamiltonians") / f"{species}.json"
             _write_json(reaction_dir / relative_problem, problem)
             reaction_terms.append(
@@ -536,6 +540,7 @@ def _generate_policy(
     source: Path,
     output: Path,
     calibration_root: Path,
+    baseline: str,
 ) -> None:
     output.parent.mkdir(parents=True, exist_ok=True)
     command = [
@@ -546,6 +551,8 @@ def _generate_policy(
         str(output),
         "--calibration-root",
         str(calibration_root),
+        "--baseline",
+        baseline,
     ]
     subprocess.run(command, check=True)
 
@@ -559,8 +566,9 @@ def initialize_campaign(
     campaign_root: Path,
     hamlib_replicates: int = 5,
     iterations: int = 50,
-    expected_hamlib_instances: int = HAMLIB91_INSTANCES,
+    expected_hamlib_instances: int = HAMLIB82_INSTANCES,
     expected_reaction_instances: int = REACTION_INSTANCES,
+    baseline: str = "loose",
 ) -> dict[str, Any]:
     """Create lanes from calibration-cached immutable exact-unitary references."""
 
@@ -569,7 +577,7 @@ def initialize_campaign(
     lanes_root = campaign_root / "lanes"
     policies_root = campaign_root / "policies"
     references_root = campaign_root / "references"
-    calibration_catalog = _calibration_catalog(calibration_root)
+    calibration_catalog = _calibration_catalog(calibration_root, baseline=baseline)
     hamlib_manifest = json.loads((hamlib_inputs / "manifest.json").read_text(encoding="utf-8"))
     reaction_manifest = json.loads((reaction_inputs / "manifest.json").read_text(encoding="utf-8"))
     if hamlib_manifest.get("family") != ABS_ENERGY_FAMILY:
@@ -599,6 +607,7 @@ def initialize_campaign(
             source=source,
             output=policy,
             calibration_root=calibration_root,
+            baseline=baseline,
         )
         for replicate_index in range(1, hamlib_replicates + 1):
             replicate = f"run_{replicate_index:02d}"
@@ -613,11 +622,13 @@ def initialize_campaign(
                 family=ABS_ENERGY_FAMILY,
                 replicate=replicate,
                 instance=instance,
+                baseline_variant=baseline,
                 exact_reference_path=reference_path,
             )
             lanes.append(
                 {
                     "family": ABS_ENERGY_FAMILY,
+                    "baseline_variant": baseline,
                     "instance": instance,
                     "replicate": replicate,
                     "lane_dir": str(lane_dir.relative_to(campaign_root)),
@@ -641,6 +652,7 @@ def initialize_campaign(
                 source=source,
                 output=policy,
                 calibration_root=calibration_root,
+                baseline=baseline,
             )
             lane_dir = lanes_root / DIFF_ENERGY_FAMILY / instance / contract
             initialized = initialize_lane(
@@ -653,11 +665,13 @@ def initialize_campaign(
                 family=DIFF_ENERGY_FAMILY,
                 replicate=contract,
                 instance=instance,
+                baseline_variant=baseline,
                 exact_reference_path=reference_path,
             )
             lanes.append(
                 {
                     "family": DIFF_ENERGY_FAMILY,
+                    "baseline_variant": baseline,
                     "instance": instance,
                     "replicate": contract,
                     "lane_dir": str(lane_dir.relative_to(campaign_root)),
@@ -670,6 +684,8 @@ def initialize_campaign(
         "schema": 1,
         "created_at": _now(),
         "iterations": iterations,
+        "baseline_variant": baseline,
+        "calibration_mode": calibration_mode_for_baseline(baseline),
         "queue_dir": str(queue_dir),
         "hamlib": {
             "instances": len(hamlib_manifest["instances"]),
@@ -699,7 +715,7 @@ def _parser() -> argparse.ArgumentParser:
     hamlib.add_argument("--checksum-manifest", type=Path, required=True)
     hamlib.add_argument("--data-root", type=Path, required=True)
     hamlib.add_argument("--output-root", type=Path, required=True)
-    hamlib.add_argument("--max-qubits", type=int, default=14)
+    hamlib.add_argument("--max-qubits", type=int, default=12)
 
     reactions = commands.add_parser("prepare-reactions")
     reactions.add_argument("--reaction-manifest", type=Path, required=True)
@@ -720,6 +736,17 @@ def _parser() -> argparse.ArgumentParser:
     initialize.add_argument("--campaign-root", type=Path, required=True)
     initialize.add_argument("--hamlib-replicates", type=int, default=5)
     initialize.add_argument("--iterations", type=int, default=50)
+    initialize.add_argument("--baseline", choices=BASELINE_VARIANTS, default="loose")
+    initialize.add_argument(
+        "--expected-hamlib-instances",
+        type=int,
+        default=HAMLIB82_INSTANCES,
+    )
+    initialize.add_argument(
+        "--expected-reaction-instances",
+        type=int,
+        default=REACTION_INSTANCES,
+    )
     return parser
 
 

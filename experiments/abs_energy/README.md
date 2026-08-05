@@ -1,7 +1,7 @@
 # Absolute-energy benchmark
 
-This family is the 91-instance HamLib electronic-structure selection that fits
-the canonical dense evaluator through 14 qubits:
+This family is the 82-instance HamLib electronic-structure selection that fits
+the canonical dense evaluator through 12 qubits:
 
 | Qubits | Instances |
 |---:|---:|
@@ -10,22 +10,21 @@ the canonical dense evaluator through 14 qubits:
 | 8 | 24 |
 | 10 | 11 |
 | 12 | 25 |
-| 14 | 9 |
-| **Total** | **91** |
+| **Total** | **82** |
 
-`inputs/instances.csv` records exactly those 91 selected instances and
+`inputs/instances.csv` records exactly those 82 selected instances and
 `inputs/hamlib_zip_sha256.txt` pins the upstream HamLib archives. Running
-`hsopt-campaign prepare-hamlib --max-qubits 14` materializes the 91 compact
+`hsopt-campaign prepare-hamlib --max-qubits 12` materializes the 82 compact
 Hamiltonian JSON files under an external input directory. Campaign
-baseline preparation first computes one sealed Eq. (19) bound $\beta(H)$ and
-exact reference per Hamiltonian on CPU nodes. It then runs
-`experiments/generate_initial_pf.py` once per Hamiltonian, writing the
-immutable policy both beside its `instance.json` and into the external
-campaign data. Campaign initialization creates five mutation lanes that reuse
-that same exact reference.
+baseline preparation computes one exact reference per Hamiltonian and two
+sealed calibrations: the rigorous Eq. (19) upper-bound `loose` beta and the
+exact-energy-calibrated `tight` beta. `experiments/generate_initial_pf.py`
+writes `initial_pf_loose.py` or `initial_pf_tight.py`. Campaign initialization
+selects exactly one, copies only that policy into each mutation lane, and
+reuses the same exact reference.
 
-The 91 directories beside `inputs/` are the visible production selection. Each
-contains one deterministic `instance.json` and one generated `initial_pf.py`.
+The 82 directories beside `inputs/` are the visible production selection. Each
+contains one deterministic `instance.json` and both generated initial policies.
 The definition records its HamLib archive and dataset, archive checksum,
 mapped qubit/electron/term counts, one-norm, phase-encoding policy, and dense-exact fit
 metadata. The large coefficient payload is not duplicated in Git.

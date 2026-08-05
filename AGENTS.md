@@ -13,13 +13,13 @@ submission or Slurm diagnosis.
 
 Every production lane must follow these stages:
 
-1. Prepare the paper baseline once for each distinct Hamiltonian. Compute the
-   supplement's Eq. (19) double-commutator coefficient sum exactly for the
-   Pauli decomposition and derive the Hamiltonian-dependent PF2 Trotter number
-   without using `E_exact`. Separately construct and diagonalize
-   `U_exact = exp(+i H t)` exactly once for evaluator reuse. Five HamLib
-   replicas share one reference per instance; reaction references are
-   assembled from the prepared species without another eigensolve.
+1. Prepare the selected paper baseline once for each distinct Hamiltonian.
+   `loose` obtains the Hamiltonian-dependent PF2 Trotter number from the
+   supplement's rigorous Eq. (19) Pauli double-commutator upper bound without
+   using `E_exact`. `tight` obtains it from the first numerically passing PF2
+   step count against the cached exact ground energy at the same 0.1 mHa
+   reference error. Construct and diagonalize `U_exact = exp(+i H t)` exactly
+   once; both calibration modes and every lane reuse that reference.
 2. Measure the generated paper policy unchanged as iteration 0 against that
    cached reference.
 3. Permit OpenCode mutations only after iteration 0 passes. Mutations are
@@ -31,21 +31,22 @@ are not acceptance metrics.
 
 ## Immutable baseline
 
-`experiments/generate_initial_pf.py` is the sole generator of `initial_pf.py`.
-It requires sealed calibration data and embeds the
-Reiher--Wiebe--Svore--Wecker--Troyer citation, lexicographic PF2/Strang
-structure, Eq. (19) bound-derived `beta(H)` referenced to 0.1 mHa, `t=1`, the
-resulting step count and step time, and the direct PyGridSynth tolerance
-selected under the paper's Trotter/QPE/rotation-error relation with a
-1 kcal/mol total target.
-The exact reference is an evaluation oracle only; it must not affect
-`beta(H)`, the step count, or the synthesis tolerance.
+`experiments/generate_initial_pf.py` is the sole generator of
+`initial_pf_loose.py` and `initial_pf_tight.py`. Both require sealed calibration
+data and embed the Reiher--Wiebe--Svore--Wecker--Troyer citation,
+lexicographic PF2/Strang structure, `beta(H)` referenced to 0.1 mHa, the
+norm-derived physical target time, and the PyGridSynth tolerance selected by
+the same paper Eq. (34) Trotter/QPE/rotation-error allocation with a
+1 kcal/mol total target. The exact reference must not affect the loose policy;
+it intentionally selects the numeric beta used by the tight policy.
 
 Every `experiments/abs_energy/<instance>/` and
-`experiments/diff_energy/<reaction>/` directory contains the generated
-`initial_pf.py` for that dataset element. These checked-in files must be
-byte-identical to the external batch output. Never invent or hand-edit an
-initializer. Never mutate `initial_pf.py`, and do not create an in-tree
+`experiments/diff_energy/<reaction>/` directory contains both generated
+initializers for that dataset element. These checked-in files must be
+byte-identical to the matching external batch output. Never invent or
+hand-edit an initializer. A campaign must select one baseline explicitly and
+copy it to the lane as `initial_pf.py`; the OpenShell workspace must never
+expose the sibling baseline. Never mutate a generated initializer, and do not create an in-tree
 `optimized_pf.py`. A lane's mutable `candidate.py` and `incumbent.py`, all
 evaluations, and all transcripts live in its external campaign directory.
 
@@ -55,11 +56,11 @@ campaign.
 
 ## Production shape and resources
 
-- HamLib exact subset: 91 instances through 14 qubits, five independent
+- HamLib exact subset: 82 instances through 12 qubits, five independent
   mutation lanes per instance, 50 mutation iterations per lane.
 - Reaction set: 10 reactions, two policy lanes per reaction, 50 mutation
   iterations per lane.
-- Total: 475 lanes and 23,750 mutation evaluations, excluding iteration 0.
+- Total: 430 lanes and 21,500 mutation evaluations, excluding iteration 0.
 
 The canonical mutation campaign uses cuPyNumeric on one A100 in the `polar4`
 partition with `normal` QoS, two CPU cores, 16 GB system memory, and a 60000
@@ -79,7 +80,9 @@ campaign's explicit numerical tolerance rather than claiming bitwise equality.
 Do not increase CPUs, GPUs, or RAM merely to improve scheduling priority. A CPU
 validation run must use the `cpu` partition and request no GPU resource.
 
-OpenShell and OpenCode/Nemotron run persistently on Omni. Preserve raw
+OpenShell and OpenCode/Nemotron run persistently on Omni. Tight-baseline
+campaigns use separate campaign roots and must not alter active loose campaign
+state. Preserve raw
 OpenCode/OpenShell logs plus redacted tool-action and metrics summaries.
 
 ## Fixed infrastructure

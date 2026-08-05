@@ -36,6 +36,7 @@ def main(argv: Sequence[str] | None = None) -> int:
         help="External coefficient-bearing Hamiltonian JSON.",
     )
     parser.add_argument("--policy-file", type=Path)
+    parser.add_argument("--baseline", choices=("loose", "tight"), default="loose")
     parser.add_argument("--exact-reference", type=Path, required=True)
     parser.add_argument("--backend", choices=("numpy", "cupynumeric"), default="cupynumeric")
     parser.add_argument("--output", type=Path)
@@ -56,7 +57,7 @@ def main(argv: Sequence[str] | None = None) -> int:
 
     result = evaluate_molecule(
         problem_path,
-        (args.policy_file or experiment_dir / "initial_pf.py").resolve(),
+        (args.policy_file or experiment_dir / f"initial_pf_{args.baseline}.py").resolve(),
         backend=args.backend,
         reference_path=args.exact_reference.resolve(),
     )

@@ -9,7 +9,10 @@ Current organization:
 - `src/hsopt/openshell_agent.py`: isolated OpenCode/OpenShell mutation adapter.
 - `experiments/abs_energy/`: compact HamLib absolute-energy fixtures.
 - `experiments/diff_energy/`: ten-reaction definition and compact difference fixture.
-- `experiments/generate_initial_pf.py`: immutable baseline-policy generator.
+- `experiments/generate_initial_pf.py`: immutable loose/tight baseline-policy generator.
+- `experiments/{abs_energy,diff_energy}/<instance>/initial_pf_{loose,tight}.py`:
+  the two generated iteration-0 policies; a campaign copies exactly one into
+  its isolated lane.
 - caller-supplied external `HSOPT_DATA_ROOT`: all campaign workspaces and logs.
 
 Keep mutable campaign histories outside the repository checkout under

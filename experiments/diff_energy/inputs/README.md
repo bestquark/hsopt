@@ -17,7 +17,8 @@ The sibling reaction directories expose this registry as one
 `definition.json` per reaction, including the applicable cache checksums.
 `uv run hsopt-layout --check` proves that view is current.
 
-No old fixed-step or prevalidated initializer is authoritative. The Eq. (19)
-paper bound is recomputed from every prepared Hamiltonian and rendered by
-`experiments/generate_initial_pf.py`; its large calibration outputs stay in the
-external campaign data root.
+No old fixed-step or prevalidated initializer is authoritative. The loose
+Eq. (19) bound and tight exact-energy numeric beta are separately calibrated
+from every prepared Hamiltonian and rendered by
+`experiments/generate_initial_pf.py`; their large calibration outputs stay in
+the external campaign data root.

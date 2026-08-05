@@ -285,9 +285,7 @@ def _hamlib_summary_row(
         "rejected": int(manifest["iterations_target"]) - len(accepted_iterations),
         **{f"baseline_{key}": value for key, value in baseline_policy.items()},
         "baseline_compiled_evolution_t_gates": baseline.get("t_count", ""),
-        "baseline_qpe_full_evolution_queries": baseline.get(
-            "qpe_full_evolution_queries", ""
-        ),
+        "baseline_qpe_full_evolution_queries": baseline.get("qpe_full_evolution_queries", ""),
         "baseline_per_attempt_t_gates_qpe": baseline.get("per_attempt_t_count", ""),
         "baseline_qpe_peak_probability_from_hf": baseline.get(
             "qpe_success_probability_from_hf", ""
@@ -402,6 +400,8 @@ def export_family(campaign_root: Path, family: str, output_dir: Path) -> dict[st
     output_dir = output_dir.expanduser().absolute()
     if output_dir.exists():
         raise ExactExportError(f"refusing to overwrite export: {output_dir}")
+    campaign_definition = _read_json(campaign_root / "campaign.json")
+    baseline_variant = str(campaign_definition.get("baseline_variant") or "legacy_unspecified")
     lanes = _campaign_lanes(campaign_root, family)
     output_dir.parent.mkdir(parents=True, exist_ok=True)
     temporary = Path(tempfile.mkdtemp(prefix=f".{output_dir.name}.tmp-", dir=output_dir.parent))
@@ -430,37 +430,46 @@ def export_family(campaign_root: Path, family: str, output_dir: Path) -> dict[st
             )
             if family == "abs_energy":
                 summaries.append(
-                    _hamlib_summary_row(
-                        instance=instance,
-                        replicate=replicate,
-                        manifest=manifest,
-                        state=state,
-                        lane_dir=lane_dir,
-                    )
+                    {
+                        "baseline_variant": baseline_variant,
+                        **_hamlib_summary_row(
+                            instance=instance,
+                            replicate=replicate,
+                            manifest=manifest,
+                            state=state,
+                            lane_dir=lane_dir,
+                        ),
+                    }
                 )
                 for iteration in range(1, iterations + 1):
                     iteration_dir = lane_dir / "iterations" / f"{iteration:04d}"
                     candidates.append(
-                        _hamlib_candidate_row(
-                            instance=instance,
-                            replicate=replicate,
-                            iteration=iteration,
-                            iteration_dir=iteration_dir,
-                        )
+                        {
+                            "baseline_variant": baseline_variant,
+                            **_hamlib_candidate_row(
+                                instance=instance,
+                                replicate=replicate,
+                                iteration=iteration,
+                                iteration_dir=iteration_dir,
+                            ),
+                        }
                     )
             else:
                 reaction = _read_json(Path(str(manifest["source"])))
                 reaction_names[instance] = str(reaction["name"])
                 baseline = _read_json(lane_dir / "baseline_result.json")
                 candidates.append(
-                    _reaction_row(
-                        instance=instance,
-                        contract=replicate,
-                        iteration=0,
-                        result=baseline,
-                        decision=None,
-                        iteration_dir=None,
-                    )
+                    {
+                        "baseline_variant": baseline_variant,
+                        **_reaction_row(
+                            instance=instance,
+                            contract=replicate,
+                            iteration=0,
+                            result=baseline,
+                            decision=None,
+                            iteration_dir=None,
+                        ),
+                    }
                 )
                 incumbent = baseline
                 incumbent_iteration = 0
@@ -469,19 +478,23 @@ def export_family(campaign_root: Path, family: str, output_dir: Path) -> dict[st
                     result = _read_json(iteration_dir / "result.json")
                     decision = _read_json(iteration_dir / "decision.json")
                     candidates.append(
-                        _reaction_row(
-                            instance=instance,
-                            contract=replicate,
-                            iteration=iteration,
-                            result=result,
-                            decision=decision,
-                            iteration_dir=iteration_dir,
-                        )
+                        {
+                            "baseline_variant": baseline_variant,
+                            **_reaction_row(
+                                instance=instance,
+                                contract=replicate,
+                                iteration=iteration,
+                                result=result,
+                                decision=decision,
+                                iteration_dir=iteration_dir,
+                            ),
+                        }
                     )
                     if bool(decision.get("accepted")):
                         incumbent = result
                         incumbent_iteration = iteration
                 reaction_final[(instance, replicate)] = {
+                    "baseline_variant": baseline_variant,
                     "selected_source_contract": replicate,
                     "selected_source_iteration": incumbent_iteration,
                     "per_attempt_t_gate_count": incumbent["t_count"],
@@ -509,6 +522,7 @@ def export_family(campaign_root: Path, family: str, output_dir: Path) -> dict[st
                 temporary / "candidate_log.csv",
                 candidates,
                 (
+                    "baseline_variant",
                     "run",
                     "lane_id",
                     "iteration",
@@ -548,6 +562,7 @@ def export_family(campaign_root: Path, family: str, output_dir: Path) -> dict[st
                 temporary / "lane_run_summary.csv",
                 summaries,
                 (
+                    "baseline_variant",
                     "run",
                     "lane_id",
                     "molecule",
@@ -599,6 +614,7 @@ def export_family(campaign_root: Path, family: str, output_dir: Path) -> dict[st
                 temporary / "candidate_log.csv",
                 candidates,
                 (
+                    "baseline_variant",
                     "reaction_key",
                     "source_contract",
                     "source_lane",
@@ -645,6 +661,7 @@ def export_family(campaign_root: Path, family: str, output_dir: Path) -> dict[st
                 temporary / "summary.json",
                 {
                     "status": "complete",
+                    "baseline_variant": baseline_variant,
                     "candidate_record_count": len(candidates),
                     "reaction_count": len(instances),
                     "contract_count": len(replicates),
@@ -655,6 +672,7 @@ def export_family(campaign_root: Path, family: str, output_dir: Path) -> dict[st
             "schema": 1,
             "status": "complete",
             "family": family,
+            "baseline_variant": baseline_variant,
             "created_at": _now(),
             "campaign_root": str(campaign_root),
             "campaign_sha256": _sha256(campaign_root / "campaign.json"),

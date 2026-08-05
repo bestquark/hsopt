@@ -33,7 +33,7 @@ from hsopt.nvpark_queue import (
 )
 
 
-EXPECTED_ABSOLUTE = 91
+EXPECTED_ABSOLUTE = 82
 EXPECTED_REACTIONS = 10
 DEFAULT_JOBS = 4
 DEFAULT_REMOTE_ROOT = "/lustre/fs12/portfolios/nvr/users/lmantilla/hsopt-iteration0-t95-census-v1"
@@ -81,6 +81,28 @@ def _sha256(path: Path) -> str:
     return hashlib.sha256(path.read_bytes()).hexdigest()
 
 
+def _reference_scientific_sha256(path: Path) -> str:
+    """Hash exact-reference content while excluding nondeterministic timings."""
+
+    def strip_timings(value: Any) -> Any:
+        if isinstance(value, dict):
+            return {
+                key: strip_timings(item)
+                for key, item in value.items()
+                if key not in {"evaluation_wall_seconds", "timing_seconds"}
+            }
+        if isinstance(value, list):
+            return [strip_timings(item) for item in value]
+        return value
+
+    canonical = json.dumps(
+        strip_timings(_read_json(path)),
+        sort_keys=True,
+        separators=(",", ":"),
+    ).encode()
+    return hashlib.sha256(canonical).hexdigest()
+
+
 def _lane_inputs(campaign_root: Path, lane: dict[str, Any]) -> dict[str, Any]:
     lane_dir = campaign_root / str(lane["lane_dir"])
     manifest = _read_json(lane_dir / "manifest.json")
@@ -117,6 +139,7 @@ def _lane_inputs(campaign_root: Path, lane: dict[str, Any]) -> dict[str, Any]:
         "source": source,
         "policy": policy,
         "reference": reference,
+        "reference_scientific_sha256": _reference_scientific_sha256(reference),
         **hashes,
     }
 
@@ -196,7 +219,12 @@ def prepare_census(
     records = []
     for (family, instance), instance_lanes in sorted(grouped.items()):
         inputs = [_lane_inputs(campaign_root, lane) for lane in instance_lanes]
-        for field in ("source_sha256", "policy_sha256", "reference_sha256"):
+        for field in (
+            "source_sha256",
+            "policy_sha256",
+            "reference_sha256",
+            "reference_scientific_sha256",
+        ):
             _same_across_lanes(instance, inputs, field)
         source_paths = {str(record["source"].resolve()) for record in inputs}
         if len(source_paths) != 1:
@@ -227,6 +255,7 @@ def prepare_census(
                 "policy_sha256": selected["policy_sha256"],
                 "reference_original": str(selected["reference"]),
                 "reference_sha256": selected["reference_sha256"],
+                "reference_scientific_sha256": selected["reference_scientific_sha256"],
                 "source_lane_count": len(instance_lanes),
                 **shape,
             }
@@ -241,6 +270,7 @@ def prepare_census(
         "created_at": _now(),
         "purpose": "immutable_iteration0_t95_census",
         "evaluation_contract_version": EVALUATION_CONTRACT_VERSION,
+        "baseline_variant": campaign.get("baseline_variant"),
         "campaign_root": str(campaign_root),
         "campaign_manifest_sha256": _sha256(campaign_path),
         "campaign_generator_sha256": campaign.get("generator_sha256"),
@@ -260,6 +290,7 @@ def prepare_census(
         previous = _read_json(manifest_path)
         stable_keys = (
             "evaluation_contract_version",
+            "baseline_variant",
             "campaign_manifest_sha256",
             "campaign_generator_sha256",
             "counts",
@@ -552,7 +583,7 @@ def _parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(description=__doc__)
     commands = parser.add_subparsers(dest="command", required=True)
 
-    prepare = commands.add_parser("prepare", help="snapshot the 101 immutable baselines")
+    prepare = commands.add_parser("prepare", help="snapshot the 92 immutable baselines")
     prepare.add_argument("--campaign-root", type=Path, required=True)
     prepare.add_argument("--census-root", type=Path, required=True)
     _add_counts(prepare)

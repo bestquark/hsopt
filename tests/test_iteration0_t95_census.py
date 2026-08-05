@@ -134,6 +134,8 @@ def test_census_deduplicates_iteration_zero_and_exports_exact_t95(tmp_path: Path
     )
 
     assert manifest["counts"] == {"absolute": 1, "reactions": 1, "total": 2}
+    assert manifest["baseline_variant"] is None
+    assert all(len(record["reference_scientific_sha256"]) == 64 for record in manifest["tasks"])
     assert {record["source_lane_count"] for record in manifest["tasks"]} == {2}
     batches = CENSUS.prepare_balanced_batches(census, jobs=2)
     assert len(batches) == 2
