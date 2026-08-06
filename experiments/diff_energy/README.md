@@ -20,7 +20,7 @@ scientific metadata for the 21 external species, while
 `inputs/problem_cache.sha256` pins their external JSON/NPZ Hamiltonian caches.
 `hsopt-campaign prepare-reactions` converts those checksummed caches into ten
 external reaction directories consumed by the fixed evaluator in
-`src/hsopt/compiled_unitary.py`.
+`cli/src/hsopt/compiled_unitary.py`.
 
 The ten directories beside `inputs/` make that production set visible on
 GitHub. Each `definition.json` records the signed reaction terms and the
@@ -37,6 +37,6 @@ exact references are computed once; the signed reaction reference is assembled
 from those cached values without another eigensolve. The agent sees only the
 selected initializer after it is copied to its isolated lane.
 
-Compact executable evaluator fixtures live under `tests/fixtures/`. All
+Compact executable evaluator fixtures live under `cli/tests/fixtures/`. All
 generated ten-reaction inputs, mutation history, exports, and reports remain
 under the external `HSOPT_DATA_ROOT`.

@@ -4,7 +4,7 @@ import json
 from pathlib import Path
 
 
-REPO_ROOT = Path(__file__).resolve().parents[1]
+REPO_ROOT = Path(__file__).resolve().parents[2]
 INPUT_ROOT = REPO_ROOT / "experiments" / "diff_energy" / "inputs"
 REACTION_MANIFEST = INPUT_ROOT / "reactions.json"
 PROBLEM_METADATA = INPUT_ROOT / "problem_metadata.json"
@@ -62,9 +62,7 @@ def test_reaction_inputs_are_minimal_and_baseline_free() -> None:
     assert set(manifest["reactions"]) == set(REACTION_KEYS)
     assert manifest["reaction_target_hartree"] == CHEMICAL_ACCURACY_HARTREE
     assert set(metadata["species"]) == SPECIES
-    assert metadata["phase_encoding"]["method"] == (
-        "centered_nonidentity_pauli_one_norm"
-    )
+    assert metadata["phase_encoding"]["method"] == ("centered_nonidentity_pauli_one_norm")
     assert all("target_time" not in row for row in metadata["species"].values())
 
 

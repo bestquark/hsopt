@@ -154,8 +154,9 @@ hsopt/
 │   └── generate_initial_pf.py  Loose/tight initializer for both families
 ├── plots/                      Publication-plot source code
 ├── skills/hsopt/               Compact agent instructions and references
-├── src/hsopt/                  Evaluator, queue, supervisor, export, and reports
-└── tests/                      Scientific-contract and recovery tests
+└── cli/
+    ├── src/hsopt/              Installable evaluator and campaign CLI
+    └── tests/                  Scientific-contract tests and compact fixtures
 ```
 
 ## Installation
@@ -181,14 +182,14 @@ uv sync --extra cupynumeric
 Evaluate the checked-in HamLib fixture on NumPy:
 
 ```bash
-uv run python tests/fixtures/abs_energy_h2/evaluate.py \
+uv run python cli/tests/fixtures/abs_energy_h2/evaluate.py \
   --backend numpy
 ```
 
 Evaluate the checked-in bond-stretch energy difference:
 
 ```bash
-uv run python tests/fixtures/diff_energy_h2_bond_stretch/evaluate.py \
+uv run python cli/tests/fixtures/diff_energy_h2_bond_stretch/evaluate.py \
   --backend numpy
 ```
 
@@ -197,19 +198,19 @@ calibration:
 
 ```bash
 uv run hsopt-paper-baseline \
-  tests/fixtures/abs_energy_h2/hamiltonian.json \
+  cli/tests/fixtures/abs_energy_h2/hamiltonian.json \
   --backend numpy \
   --output /tmp/h2-paper-calibration.json
 
 uv run python experiments/generate_initial_pf.py \
-  tests/fixtures/abs_energy_h2/hamiltonian.json \
-  --output tests/fixtures/abs_energy_h2/initial_pf.py \
+  cli/tests/fixtures/abs_energy_h2/hamiltonian.json \
+  --output cli/tests/fixtures/abs_energy_h2/initial_pf.py \
   --calibration /tmp/h2-paper-calibration.json \
   --baseline loose \
   --check
 ```
 
-These fixtures are development checks and therefore live under `tests/`.
+These fixtures are development checks and therefore live under `cli/tests/`.
 Under `experiments/abs_energy/`, every production Hamiltonian has its own
 folder containing `instance.json`, `initial_pf_loose.py`, and
 `initial_pf_tight.py`. Under
@@ -479,7 +480,7 @@ runners because they are part of execution rather than paper plotting.
 
 The repository keeps the `$hsopt` agent contract deliberately small under
 `skills/hsopt/`. The installable evaluator and campaign runtime live separately
-under `src/hsopt/` and are installed by `uv sync`. The mutation sandbox receives
+under `cli/src/hsopt/` and are installed by `uv sync`. The mutation sandbox receives
 the compact skill, the fixed evaluator source, and only the selected lane's
 read-only benchmark inputs; it does not receive the full campaign runtime.
 
@@ -495,6 +496,12 @@ boundary, production ordering, and A100/CPU replay rules.
 
 ### OpenShell + OpenCode mutation agent
 
+The implementation and its tests have one explicit home:
+[`cli/src/hsopt/openshell_agent.py`](cli/src/hsopt/openshell_agent.py) owns
+host setup, disposable sandbox creation, OpenCode permissions, cleanup, and
+tool/security telemetry; [`cli/README.md`](cli/README.md) documents that
+boundary and every emitted audit file.
+
 [OpenShell](https://docs.nvidia.com/openshell/latest/about/installation) base
 sandboxes include [OpenCode](https://opencode.ai/docs/), so OpenCode does not
 need a second installation inside the sandbox. Install OpenShell on the host,
@@ -505,6 +512,14 @@ curl -LsSf https://raw.githubusercontent.com/NVIDIA/OpenShell/main/install.sh | 
 openshell status
 export NVIDIA_API_KEY="your-key"
 uv run hsopt-openshell configure
+```
+
+Each mutation writes the raw `opencode.jsonl` and `openshell.log` alongside
+redacted action and metric summaries. Rebuild those summaries without rerunning
+the mutation with:
+
+```bash
+uv run hsopt-openshell audit --run-dir /path/to/mutation-run
 ```
 
 The supervisor then creates one disposable sandbox per proposal, installs
@@ -525,7 +540,7 @@ from loose and tight queues through the same worker.
 Run formatting, lint, and the complete test suite before publishing changes:
 
 ```bash
-uv run ruff format --check .
+uv run ruff format --check cli/src cli/tests
 uv run ruff check .
 uv run pytest -q
 ```

@@ -19,9 +19,9 @@ from hsopt.compiled_unitary import evaluate_exact_difference_reference
 from hsopt.nvpark_queue import _system_memory_mib, submit_batch, submit_ready
 
 
-REPO = Path(__file__).resolve().parents[1]
-ABSOLUTE = REPO / "tests" / "fixtures" / "abs_energy_h2"
-DIFFERENCE = REPO / "tests" / "fixtures" / "diff_energy_h2_bond_stretch"
+REPO = Path(__file__).resolve().parents[2]
+ABSOLUTE = REPO / "cli" / "tests" / "fixtures" / "abs_energy_h2"
+DIFFERENCE = REPO / "cli" / "tests" / "fixtures" / "diff_energy_h2_bond_stretch"
 
 
 def test_queue_deduplicates_snapshots_and_merges_results(tmp_path: Path) -> None:
@@ -366,12 +366,12 @@ def test_nvpark_cpu_submission_can_use_pinned_cupynumeric_runtime(
     environment_sync = next(command[-1] for command in calls if "test -x" in command[-1])
     assert runtime_python in environment_sync
     assert "uv sync" not in environment_sync
-    source_upload = next(command for command in calls if "./src/hsopt" in command)
-    assert source_upload[-2] == "./src/hsopt"
+    source_upload = next(command for command in calls if "./cli/src/hsopt" in command)
+    assert source_upload[-2] == "./cli/src/hsopt"
     assert "--exclude=__pycache__" in source_upload
     assert "--exclude=*.py[co]" in source_upload
     sbatch = next(command[-1] for command in calls if "sbatch" in command[-1])
-    runtime_root = f"/lustre/test/hsopt-exact/sources/{submission['source_id']}/src"
+    runtime_root = f"/lustre/test/hsopt-exact/sources/{submission['source_id']}/cli/src"
     assert f"PYTHONPATH={runtime_root}" in sbatch
     assert f"{runtime_python} -m hsopt.exact_queue" in sbatch
     assert "uv run --no-sync python -m hsopt.exact_queue" not in sbatch

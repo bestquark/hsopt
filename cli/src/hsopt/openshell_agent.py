@@ -1,4 +1,4 @@
-"""Run an isolated OpenCode mutation through OpenShell and Nemotron 3 Super."""
+"""Configure OpenShell, isolate OpenCode mutations, and record agent telemetry."""
 
 from __future__ import annotations
 
@@ -26,7 +26,7 @@ OPENCODE_MODEL = "openshell/nemotron-3-super-v3"
 OPENCODE_AGENT = "hsopt-mutation"
 ONLINE_TOOLS = frozenset({"webfetch", "websearch", "codesearch"})
 RESEARCH_CONTAMINATION_MARKERS = ("bestquark", "hsopt", "initial_pf")
-REPOSITORY_ROOT = Path(__file__).resolve().parents[2]
+REPOSITORY_ROOT = Path(__file__).resolve().parents[3]
 HSOPT_SKILL_PATH = REPOSITORY_ROOT / "skills" / "hsopt" / "SKILL.md"
 EVALUATOR_SOURCE_PATH = Path(__file__).resolve().with_name("compiled_unitary.py")
 SANDBOX_CONTEXT_ROOT = PurePosixPath("/sandbox/work")
@@ -1156,9 +1156,15 @@ def mutate(
 def _parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(description=__doc__)
     subparsers = parser.add_subparsers(dest="command", required=True)
-    subparsers.add_parser("configure")
+    subparsers.add_parser(
+        "configure",
+        help="configure the host-side OpenShell NVIDIA inference provider",
+    )
 
-    mutate_parser = subparsers.add_parser("mutate")
+    mutate_parser = subparsers.add_parser(
+        "mutate",
+        help="run one isolated OpenCode mutation and persist its audit logs",
+    )
     mutate_parser.add_argument("--policy-file", type=Path, required=True)
     mutate_parser.add_argument("--feedback-file", type=Path, required=True)
     mutate_parser.add_argument("--run-dir", type=Path, required=True)
@@ -1166,6 +1172,12 @@ def _parser() -> argparse.ArgumentParser:
     mutate_parser.add_argument("--source", type=Path, required=True)
     mutate_parser.add_argument("--timeout-seconds", type=int, default=900)
     mutate_parser.add_argument("--keep-sandbox", action="store_true")
+
+    audit_parser = subparsers.add_parser(
+        "audit",
+        help="rebuild redacted tool and OpenShell metrics from one mutation run",
+    )
+    audit_parser.add_argument("--run-dir", type=Path, required=True)
     return parser
 
 
@@ -1173,7 +1185,7 @@ def main() -> int:
     args = _parser().parse_args()
     if args.command == "configure":
         result = configure_inference()
-    else:
+    elif args.command == "mutate":
         result = mutate(
             args.policy_file,
             args.feedback_file,
@@ -1183,6 +1195,8 @@ def main() -> int:
             timeout_seconds=args.timeout_seconds,
             keep_sandbox=args.keep_sandbox,
         )
+    else:
+        result = write_agent_audit(args.run_dir.resolve())
     print(json.dumps(result, indent=2, sort_keys=True))
     return 0
 

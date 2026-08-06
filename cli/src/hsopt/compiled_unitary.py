@@ -283,9 +283,7 @@ def load_problem(path: Path) -> dict[str, Any]:
     expected_encoding = qpe_phase_encoding(identity_coefficient, terms)
     supplied_encoding = problem.get("phase_encoding")
     if not isinstance(supplied_encoding, Mapping):
-        raise ValueError(
-            f"{path.name} is missing the required normalized-QPE phase_encoding"
-        )
+        raise ValueError(f"{path.name} is missing the required normalized-QPE phase_encoding")
     _validate_phase_encoding(
         supplied_encoding,
         expected=expected_encoding,
@@ -1067,9 +1065,7 @@ def _qpe_cost_metrics(
 ) -> dict[str, Any]:
     """Return full QPE cost, including precision queries and peak repetitions."""
 
-    success_probability = (
-        float(peak_probability) * QPE_SINGLE_RUN_PHASE_SUCCESS_LOWER_BOUND
-    )
+    success_probability = float(peak_probability) * QPE_SINGLE_RUN_PHASE_SUCCESS_LOWER_BOUND
     qpe_repetitions = _qpe_repetitions(
         success_probability,
         target_confidence=target_confidence,
@@ -1087,13 +1083,10 @@ def _qpe_cost_metrics(
         "qpe_target_confidence": float(target_confidence),
         "qpe_achieved_confidence": qpe_achieved_confidence,
         "qpe_repetitions": qpe_repetitions,
-        "qpe_single_run_phase_success_lower_bound": (
-            QPE_SINGLE_RUN_PHASE_SUCCESS_LOWER_BOUND
-        ),
+        "qpe_single_run_phase_success_lower_bound": (QPE_SINGLE_RUN_PHASE_SUCCESS_LOWER_BOUND),
         "qpe_success_probability_per_attempt": success_probability,
         "qpe_energy_precision_hartree": float(energy_precision_hartree),
-        "qpe_phase_precision_radians": float(target_time)
-        * float(energy_precision_hartree),
+        "qpe_phase_precision_radians": float(target_time) * float(energy_precision_hartree),
         "qpe_phase_estimation_alpha": QPE_PHASE_ESTIMATION_ALPHA,
         "qpe_full_evolution_queries": full_evolution_queries,
         "compiled_evolution_t_count": int(compiled_evolution_t_count),
@@ -1340,9 +1333,7 @@ def assemble_exact_difference_reference(
         "status": "ok",
         "evaluation_contract_version": EVALUATION_CONTRACT_VERSION,
         "observable": "exact_unitary_signed_energy_difference",
-        "unitary_definition": (
-            "U_exact = exp(+i (H - c0 I) / lambda) for each species"
-        ),
+        "unitary_definition": ("U_exact = exp(+i (H - c0 I) / lambda) for each species"),
         "reaction": reaction["name"],
         "reaction_path": str(reaction_path),
         "reaction_sha256": _sha256(reaction_path),
@@ -1460,9 +1451,7 @@ def evaluate_molecule(
     qpe_success_probability = float(peak["qpe_success_probability_from_hf"])
     compiled_evolution_t_count = int(metrics["t_count"])
     qpe_energy_precision = (
-        CHEMICAL_ACCURACY_HARTREE - absolute_error
-        if passes
-        else CHEMICAL_ACCURACY_HARTREE
+        CHEMICAL_ACCURACY_HARTREE - absolute_error if passes else CHEMICAL_ACCURACY_HARTREE
     )
     qpe_cost = _qpe_cost_metrics(
         peak_probability=qpe_success_probability,
@@ -1583,9 +1572,7 @@ def evaluate_difference(
     absolute_error = abs(signed_error)
     passes = absolute_error < CHEMICAL_ACCURACY_HARTREE
     reaction_qpe_precision = (
-        CHEMICAL_ACCURACY_HARTREE - absolute_error
-        if passes
-        else CHEMICAL_ACCURACY_HARTREE
+        CHEMICAL_ACCURACY_HARTREE - absolute_error if passes else CHEMICAL_ACCURACY_HARTREE
     )
     confidence_adjusted_t_count = 0
     per_attempt_t_count = 0
@@ -1597,9 +1584,7 @@ def evaluate_difference(
         species_qpe_cost = _qpe_cost_metrics(
             peak_probability=float(result["qpe_success_probability_from_hf"]),
             target_confidence=species_target_confidence,
-            target_time=float(result["phase_encoding"][
-                "physical_evolution_time_hartree_inverse"
-            ]),
+            target_time=float(result["phase_encoding"]["physical_evolution_time_hartree_inverse"]),
             energy_precision_hartree=species_precision,
             compiled_evolution_t_count=int(result["t_count"]),
         )
@@ -1608,9 +1593,7 @@ def evaluate_difference(
             "equal_absolute_reaction_contribution_under_triangle_inequality"
         )
         result["reaction_coefficient"] = species_coefficients[species]
-        confidence_adjusted_t_count += int(
-            species_qpe_cost["confidence_adjusted_t_count"]
-        )
+        confidence_adjusted_t_count += int(species_qpe_cost["confidence_adjusted_t_count"])
         per_attempt_t_count += int(species_qpe_cost["per_attempt_t_count"])
     union_bound_confidence = max(
         0.0,

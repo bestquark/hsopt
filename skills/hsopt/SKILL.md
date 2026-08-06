@@ -6,7 +6,7 @@ description: Run or inspect exact compiled-unitary T-gate autoresearch for HSOpt
 # HSOpt product-formula autoresearch
 
 Use this skill for the HSOpt mutation loop. The repository runtime is ordinary
-package code under `src/hsopt/`; this file is only the compact agent contract.
+package code under `cli/src/hsopt/`; this file is only the compact agent contract.
 
 ## Mutation workspace
 
@@ -116,7 +116,10 @@ grids, source and reference hashes, evaluator contracts, backends,
 accelerators, placement labels, and chemical-accuracy passes; never pool CPU,
 A100, and L4 observations.
 
-For repository layout, read `references/layout.md`. For campaign initialization,
-Slurm resources, supervisor operation, export, and parity commands, use the
-current repository `README.md` and the `$ssh` skill. Treat `src/hsopt/` and the
-family evaluators as fixed infrastructure during a campaign.
+For campaign orchestration, invoke the installed commands (`hsopt-campaign`,
+`hsopt-supervisor`, `hsopt-export-exact`, and `hsopt-reports`) through `uv run`;
+do not execute package files by path. OpenShell host setup and telemetry use
+`hsopt-openshell` and are documented in `cli/README.md`. For repository layout,
+read `references/layout.md`; for Slurm resources use the current repository
+`README.md` and the `$ssh` skill. Treat `cli/src/hsopt/` and family evaluators
+as fixed infrastructure during a campaign.

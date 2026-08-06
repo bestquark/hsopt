@@ -77,8 +77,7 @@ def _census(
                 "source_sha256": source_sha256,
                 "policy_sha256": policy_sha256,
                 "reference_sha256": reference_sha256,
-                "reference_scientific_sha256": ("8" if family == "abs_energy" else "9")
-                * 64,
+                "reference_scientific_sha256": ("8" if family == "abs_energy" else "9") * 64,
             }
         )
         rows.append(
@@ -87,9 +86,7 @@ def _census(
                 "instance": instance,
                 "task_id": task_id,
                 "t95": t95,
-                "passes_chemical_accuracy": (
-                    family != "diff_energy" or reaction_passes
-                ),
+                "passes_chemical_accuracy": (family != "diff_energy" or reaction_passes),
                 "execution_backend": backend,
                 "execution_accelerator": accelerator,
                 "policy_sha256": policy_sha256,

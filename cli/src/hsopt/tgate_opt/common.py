@@ -25,7 +25,7 @@ def _find_repo_root(start: Path) -> Path:
     if override:
         return Path(override).expanduser().resolve()
     for candidate in (start, *start.parents):
-        runtime = candidate / "src" / "hsopt"
+        runtime = candidate / "cli" / "src" / "hsopt"
         if (candidate / "pyproject.toml").exists() and runtime.is_dir():
             return candidate
     raise RuntimeError(

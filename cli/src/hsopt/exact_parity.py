@@ -452,9 +452,7 @@ def audit_campaigns(
                 "gpu": gpu_iteration / "replay_validation.json",
             }
             validations = {
-                side: _read_json(path)
-                for side, path in validation_paths.items()
-                if path.is_file()
+                side: _read_json(path) for side, path in validation_paths.items() if path.is_file()
             }
             valid_replay = any(
                 validation.get("status") == "ok" for validation in validations.values()

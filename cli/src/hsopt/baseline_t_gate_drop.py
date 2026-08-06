@@ -159,13 +159,13 @@ def _load_census(root: Path) -> Census:
         if key in observations:
             raise BaselineTGateDropError(f"{csv_path}: duplicate experiment {key}")
         policy_sha256 = _digest(row.get("policy_sha256"), label=f"{key} policy hash")
-        reference_sha256 = _digest(
-            row.get("reference_sha256"), label=f"{key} reference hash"
-        )
+        reference_sha256 = _digest(row.get("reference_sha256"), label=f"{key} reference hash")
         if policy_sha256 != task.get("policy_sha256"):
             raise BaselineTGateDropError(f"{csv_path}: {key} policy hash disagrees with manifest")
         if reference_sha256 != task.get("reference_sha256"):
-            raise BaselineTGateDropError(f"{csv_path}: {key} reference hash disagrees with manifest")
+            raise BaselineTGateDropError(
+                f"{csv_path}: {key} reference hash disagrees with manifest"
+            )
         observations[key] = CensusObservation(
             family=family,
             instance=instance,
@@ -265,8 +265,7 @@ def materialize_baseline_t_gate_drop(
         missing_tight = sorted(set(loose.observations) - set(tight.observations))
         missing_loose = sorted(set(tight.observations) - set(loose.observations))
         raise BaselineTGateDropError(
-            "census grids differ: "
-            f"missing_tight={missing_tight}, missing_loose={missing_loose}"
+            f"census grids differ: missing_tight={missing_tight}, missing_loose={missing_loose}"
         )
     expected = _expected_instances(repository_root)
     if set(loose.observations) != expected:
@@ -293,9 +292,7 @@ def materialize_baseline_t_gate_drop(
             tight_row.backend,
             tight_row.accelerator,
         ):
-            raise BaselineTGateDropError(
-                f"{key}: refusing to mix execution backends/accelerators"
-            )
+            raise BaselineTGateDropError(f"{key}: refusing to mix execution backends/accelerators")
         if not loose_row.passes_chemical_accuracy or not tight_row.passes_chemical_accuracy:
             raise BaselineTGateDropError(
                 f"{key}: both baselines must pass chemical accuracy before comparison"

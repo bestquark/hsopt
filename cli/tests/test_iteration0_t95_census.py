@@ -15,9 +15,9 @@ from hsopt.compiled_unitary import (
 from hsopt.exact_queue import merge_batch, run_batch
 
 
-REPO = Path(__file__).resolve().parents[1]
-ABSOLUTE = REPO / "tests" / "fixtures" / "abs_energy_h2"
-DIFFERENCE = REPO / "tests" / "fixtures" / "diff_energy_h2_bond_stretch"
+REPO = Path(__file__).resolve().parents[2]
+ABSOLUTE = REPO / "cli" / "tests" / "fixtures" / "abs_energy_h2"
+DIFFERENCE = REPO / "cli" / "tests" / "fixtures" / "diff_energy_h2_bond_stretch"
 SPEC = importlib.util.spec_from_file_location(
     "compute_iteration0_t95",
     REPO / "plots" / "compute_iteration0_t95.py",

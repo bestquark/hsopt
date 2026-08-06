@@ -13,8 +13,8 @@ from hsopt.exact_loop import (
 from hsopt.compiled_unitary import EVALUATION_CONTRACT_VERSION
 
 
-REPO = Path(__file__).resolve().parents[1]
-ABSOLUTE = REPO / "tests" / "fixtures" / "abs_energy_h2"
+REPO = Path(__file__).resolve().parents[2]
+ABSOLUTE = REPO / "cli" / "tests" / "fixtures" / "abs_energy_h2"
 
 
 def _result(

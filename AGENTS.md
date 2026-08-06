@@ -1,9 +1,9 @@
 # hsopt Exact-Unitary Campaign Notes
 
 The production paper workflow is the exact compiled-unitary pipeline in
-`src/hsopt/compiled_unitary.py`,
-`src/hsopt/exact_queue.py`, and
-`src/hsopt/exact_loop.py`. All checked-in benchmark fixtures,
+`cli/src/hsopt/compiled_unitary.py`,
+`cli/src/hsopt/exact_queue.py`, and
+`cli/src/hsopt/exact_loop.py`. All checked-in benchmark fixtures,
 paper protocols, and support files live under `experiments/`.
 
 Use `$hsopt` for product-formula T-gate optimization and `$ssh` for NVPark
@@ -56,11 +56,11 @@ campaign.
 
 ## Production shape and resources
 
-- HamLib exact subset: 82 instances through 12 qubits, five independent
+- HamLib exact subset: 82 instances through 12 qubits, three independent
   mutation lanes per instance, 50 mutation iterations per lane.
 - Reaction set: 10 reactions, two policy lanes per reaction, 50 mutation
   iterations per lane.
-- Total: 430 lanes and 21,500 mutation evaluations, excluding iteration 0.
+- Total: 266 lanes and 13,300 mutation evaluations, excluding iteration 0.
 
 The canonical mutation campaign uses cuPyNumeric on one A100 in the `polar4`
 partition with `normal` QoS, two CPU cores, 16 GB system memory, and a 60000
@@ -90,11 +90,11 @@ OpenCode/OpenShell logs plus redacted tool-action and metrics summaries.
 Treat these as fixed during a campaign unless the user explicitly changes the
 benchmark framework:
 
-- `src/hsopt/compiled_unitary.py`
-- `src/hsopt/exact_queue.py`
-- `src/hsopt/exact_loop.py`
-- `src/hsopt/paper_baseline.py`
-- `src/hsopt/paper_baseline_batch.py`
+- `cli/src/hsopt/compiled_unitary.py`
+- `cli/src/hsopt/exact_queue.py`
+- `cli/src/hsopt/exact_loop.py`
+- `cli/src/hsopt/paper_baseline.py`
+- `cli/src/hsopt/paper_baseline_batch.py`
 - `experiments/generate_initial_pf.py`
 
 Campaign histories belong outside the checkout. After every lane completes,

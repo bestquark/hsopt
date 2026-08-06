@@ -18,8 +18,8 @@ from hsopt.exact_supervisor import (
 )
 
 
-REPO = Path(__file__).resolve().parents[1]
-ABSOLUTE = REPO / "tests" / "fixtures" / "abs_energy_h2"
+REPO = Path(__file__).resolve().parents[2]
+ABSOLUTE = REPO / "cli" / "tests" / "fixtures" / "abs_energy_h2"
 
 
 def _campaign(tmp_path: Path) -> tuple[Path, Path, Path]:
@@ -533,7 +533,9 @@ def test_campaign_reuses_one_calibrated_reference_for_all_replicate_baselines(
         )
         + "\n"
     )
-    reaction_source = REPO / "tests" / "fixtures" / "diff_energy_h2_bond_stretch" / "reaction.json"
+    reaction_source = (
+        REPO / "cli" / "tests" / "fixtures" / "diff_energy_h2_bond_stretch" / "reaction.json"
+    )
     (reaction_inputs / "manifest.json").write_text(
         json.dumps(
             {

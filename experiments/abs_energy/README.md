@@ -36,4 +36,4 @@ uv run hsopt-layout --check
 uv run hsopt-layout --write
 ```
 
-Compact executable evaluator fixtures live under `tests/fixtures/`.
+Compact executable evaluator fixtures live under `cli/tests/fixtures/`.

@@ -6,9 +6,9 @@ from pathlib import Path
 from hsopt.rotation_diagnostics import comparison_histograms, rotation_samples
 
 
-REPO = Path(__file__).resolve().parents[1]
-ABSOLUTE = REPO / "tests" / "fixtures" / "abs_energy_h2"
-DIFFERENCE = REPO / "tests" / "fixtures" / "diff_energy_h2_bond_stretch"
+REPO = Path(__file__).resolve().parents[2]
+ABSOLUTE = REPO / "cli" / "tests" / "fixtures" / "abs_energy_h2"
+DIFFERENCE = REPO / "cli" / "tests" / "fixtures" / "diff_energy_h2_bond_stretch"
 
 
 def test_absolute_rotation_samples_match_the_evaluator_schedule() -> None:

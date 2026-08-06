@@ -188,6 +188,48 @@ def test_openshell_audit_counts_ocsf_security_events(tmp_path: Path) -> None:
     assert metrics["denied_events"] == 1
 
 
+def test_openshell_audit_cli_materializes_redacted_metrics(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    run_dir = tmp_path / "mutation"
+    run_dir.mkdir()
+    (run_dir / "opencode.jsonl").write_text(
+        json.dumps(
+            {
+                "type": "tool_use",
+                "part": {
+                    "callID": "call-read",
+                    "tool": "read",
+                    "state": {
+                        "status": "completed",
+                        "input": {"filePath": "/sandbox/work/candidate.py"},
+                    },
+                },
+            }
+        )
+        + "\n",
+        encoding="utf-8",
+    )
+    (run_dir / "openshell.log").write_text(
+        "OCSF NET:OPEN [INFO] ALLOWED opencode -> inference.local:443\n",
+        encoding="utf-8",
+    )
+    monkeypatch.setattr(
+        sys,
+        "argv",
+        ["hsopt-openshell", "audit", "--run-dir", str(run_dir)],
+    )
+
+    assert openshell_agent.main() == 0
+    result = json.loads(capsys.readouterr().out)
+    assert result["opencode"]["tool_calls"] == 1
+    assert result["openshell"]["network_events"] == 1
+    assert (run_dir / "agent_audit.json").is_file()
+    assert (run_dir / "agent_actions.jsonl").read_text(encoding="utf-8")
+
+
 def test_agent_feedback_omits_large_compilation_payloads() -> None:
     feedback = {
         "status": "ok",
@@ -497,9 +539,9 @@ def test_mutation_prompt_requires_one_edit_then_terminal_text() -> None:
 
 
 def test_sandbox_context_exposes_exact_evaluator_and_benchmark_inputs() -> None:
-    repo = Path(__file__).resolve().parents[1]
-    absolute = repo / "tests/fixtures/abs_energy_h2/hamiltonian.json"
-    reaction = repo / "tests/fixtures/diff_energy_h2_bond_stretch/reaction.json"
+    repo = Path(__file__).resolve().parents[2]
+    absolute = repo / "cli" / "tests" / "fixtures" / "abs_energy_h2" / "hamiltonian.json"
+    reaction = repo / "cli" / "tests" / "fixtures" / "diff_energy_h2_bond_stretch" / "reaction.json"
 
     absolute_context = sandbox_context_files(kind="absolute", source=absolute)
     assert [relative.as_posix() for _, relative in absolute_context] == [

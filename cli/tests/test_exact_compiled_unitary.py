@@ -52,9 +52,9 @@ from hsopt.paper_baseline_batch import build_manifest, generate_policies, run_ba
 from hsopt.repository_layout import sync_layout
 
 
-REPO = Path(__file__).resolve().parents[1]
-ABSOLUTE = REPO / "tests" / "fixtures" / "abs_energy_h2"
-DIFFERENCE = REPO / "tests" / "fixtures" / "diff_energy_h2_bond_stretch"
+REPO = Path(__file__).resolve().parents[2]
+ABSOLUTE = REPO / "cli" / "tests" / "fixtures" / "abs_energy_h2"
+DIFFERENCE = REPO / "cli" / "tests" / "fixtures" / "diff_energy_h2_bond_stretch"
 GENERATOR = REPO / "experiments" / "generate_initial_pf.py"
 
 
