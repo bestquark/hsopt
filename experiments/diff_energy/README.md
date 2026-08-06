@@ -30,12 +30,23 @@ two PF2 variants for every species in the reaction. Run `uv run hsopt-layout --c
 all ten definitions match the compact registry, or `uv run hsopt-layout
 --write` after an intentional registry change.
 
-Each reaction has two policy-lane labels, `equal_share` and `reaction_aware`.
-Within one campaign, both contracts start from the same explicitly selected
-baseline variant and use the same exact signed reaction reference. Species
-exact references are computed once; the signed reaction reference is assembled
-from those cached values without another eigensolve. The agent sees only the
-selected initializer after it is copied to its isolated lane.
+Each reaction is optimized in two scientifically distinct, isolated lanes:
+
+- `individual_errors` enforces the conservative componentwise condition
+  $\sum_s |\nu_s(\widetilde E_s-E_s)| < \varepsilon_{\mathrm{chem}}$.
+- `error_cancellation` enforces the signed aggregate condition
+  $|\sum_s \nu_s(\widetilde E_s-E_s)| < \varepsilon_{\mathrm{chem}}$.
+
+The evaluator records both metrics on every proposal, but feasibility,
+acceptance, queue identity, and optimization history use only the lane's sealed
+contract. This lets the final plots measure cancellation without contaminating
+the conservative and cancellation-aware mutation trajectories. Both contracts
+start from the same explicitly selected baseline variant and may share the same
+immutable exact signed reaction reference; candidate evaluations and mutations
+are never shared. Species exact references are computed once, and the signed
+reaction reference is assembled from those cached values without another
+eigensolve. The agent sees only the selected initializer after it is copied to
+its isolated lane.
 
 Compact executable evaluator fixtures live under `cli/tests/fixtures/`. All
 generated ten-reaction inputs, mutation history, exports, and reports remain

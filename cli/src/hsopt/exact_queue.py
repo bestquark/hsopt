@@ -21,6 +21,8 @@ from pathlib import Path
 from typing import Any
 
 from .compiled_unitary import (
+    DIFFERENCE_ERROR_CONTRACTS,
+    DIFFERENCE_ERROR_CONTRACT_VERSION,
     EVALUATION_CONTRACT_VERSION,
     evaluate_difference,
     evaluate_exact_difference_reference,
@@ -69,13 +71,18 @@ def _task_id(
     stage: str,
     policy: Path | None = None,
     reference: Path | None = None,
+    difference_error_contract: str | None = None,
 ) -> str:
     digest = hashlib.sha256()
-    digest.update(b"hsopt-exact-task-v3\0")
+    digest.update(b"hsopt-exact-task-v4\0")
     digest.update(EVALUATION_CONTRACT_VERSION.encode())
     digest.update(b"\0")
     digest.update(stage.encode())
     digest.update(kind.encode())
+    digest.update(b"\0")
+    digest.update((difference_error_contract or "").encode())
+    if difference_error_contract is not None:
+        digest.update(DIFFERENCE_ERROR_CONTRACT_VERSION.encode())
     for path in _source_files(kind, source):
         digest.update(path.name.encode())
         digest.update(path.read_bytes())
@@ -147,6 +154,7 @@ def enqueue(
     source: Path,
     policy: Path,
     reference: Path | None = None,
+    difference_error_contract: str | None = None,
 ) -> dict[str, Any]:
     """Snapshot one candidate into the pending queue, deduplicated by content."""
 
@@ -158,6 +166,14 @@ def enqueue(
         reference = reference.resolve()
         if not reference.is_file():
             raise FileNotFoundError(reference)
+    if kind == "difference":
+        if difference_error_contract not in DIFFERENCE_ERROR_CONTRACTS:
+            raise ValueError(
+                "difference candidates require difference_error_contract in "
+                f"{DIFFERENCE_ERROR_CONTRACTS}"
+            )
+    elif difference_error_contract is not None:
+        raise ValueError("absolute candidates cannot set difference_error_contract")
     for phase in (*QUEUE_PHASES, "batches"):
         (queue_dir / phase).mkdir(parents=True, exist_ok=True)
 
@@ -167,6 +183,7 @@ def enqueue(
         stage="candidate",
         policy=policy,
         reference=reference,
+        difference_error_contract=difference_error_contract,
     )
     with _enqueue_lock(queue_dir):
         existing = _find_task(queue_dir, task_id)
@@ -187,11 +204,17 @@ def enqueue(
             if reference is not None:
                 _snapshot_reference(kind, source, reference, temporary)
             metadata = {
-                "schema": 2,
+                "schema": 3,
                 "evaluation_contract_version": EVALUATION_CONTRACT_VERSION,
                 "task_id": task_id,
                 "stage": "candidate",
                 "kind": kind,
+                "difference_error_contract": difference_error_contract,
+                "difference_error_contract_version": (
+                    DIFFERENCE_ERROR_CONTRACT_VERSION
+                    if difference_error_contract is not None
+                    else None
+                ),
                 "source": source_name,
                 "source_original": str(source.resolve()),
                 "policy_original": str(policy),
@@ -370,6 +393,7 @@ def run_batch(
                     result = evaluate_difference(
                         source,
                         policy,
+                        error_contract=metadata["difference_error_contract"],
                         backend=backend,
                         reference_path=reference,
                     )
@@ -380,6 +404,10 @@ def run_batch(
                 "status": "error",
                 "task_id": task_id,
                 "evaluation_contract_version": EVALUATION_CONTRACT_VERSION,
+                "difference_error_contract": metadata.get("difference_error_contract"),
+                "difference_error_contract_version": metadata.get(
+                    "difference_error_contract_version"
+                ),
                 "error_type": type(exc).__name__,
                 "error": str(exc),
                 "traceback": traceback.format_exc(),
@@ -531,6 +559,11 @@ def _parser() -> argparse.ArgumentParser:
     enqueue_parser.add_argument("--source", type=Path, required=True)
     enqueue_parser.add_argument("--policy", type=Path, required=True)
     enqueue_parser.add_argument("--reference", type=Path)
+    enqueue_parser.add_argument(
+        "--difference-error-contract",
+        choices=DIFFERENCE_ERROR_CONTRACTS,
+        help="Required for difference candidates; selects the immutable error metric.",
+    )
 
     reference_parser = subparsers.add_parser("enqueue-reference")
     reference_parser.add_argument("--queue-dir", type=Path, required=True)
@@ -574,6 +607,7 @@ def main() -> int:
             source=args.source,
             policy=args.policy,
             reference=args.reference,
+            difference_error_contract=args.difference_error_contract,
         )
     elif args.command == "enqueue-reference":
         result = enqueue_reference(

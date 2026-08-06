@@ -15,7 +15,11 @@ from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any
 
-from .compiled_unitary import EVALUATION_CONTRACT_VERSION
+from .compiled_unitary import (
+    DIFFERENCE_ERROR_CONTRACTS,
+    DIFFERENCE_ERROR_CONTRACT_VERSION,
+    EVALUATION_CONTRACT_VERSION,
+)
 from .exact_queue import enqueue
 from .openshell_agent import mutate
 
@@ -56,6 +60,7 @@ def _exact_error(result: dict[str, Any]) -> float:
     """Return the exact constrained error for either benchmark family."""
 
     for key in (
+        "contract_error_hartree",
         "absolute_energy_error_hartree",
         "absolute_difference_error_hartree",
     ):
@@ -160,6 +165,14 @@ def _validate_replay(
         "policy": result.get("policy") == canonical_result.get("policy"),
         "passes_chemical_accuracy": result.get("passes_chemical_accuracy")
         == canonical_result.get("passes_chemical_accuracy"),
+        "difference_error_contract": result.get("difference_error_contract")
+        == canonical_result.get("difference_error_contract"),
+        "difference_error_contract_version": result.get("difference_error_contract_version")
+        == canonical_result.get("difference_error_contract_version"),
+        "passes_individual_errors_contract": result.get("passes_individual_errors_contract")
+        == canonical_result.get("passes_individual_errors_contract"),
+        "passes_error_cancellation_contract": result.get("passes_error_cancellation_contract")
+        == canonical_result.get("passes_error_cancellation_contract"),
         "accepted": accepted == bool(canonical_decision.get("accepted")),
     }
     if "acceptance_reason" in canonical_decision:
@@ -173,6 +186,9 @@ def _validate_replay(
         "compiled_pf_difference_hartree",
         "signed_difference_error_hartree",
         "absolute_difference_error_hartree",
+        "sum_absolute_species_error_hartree",
+        "contract_error_hartree",
+        "error_cancellation_gain_hartree",
     ):
         cpu_value = canonical_result.get(key)
         gpu_value = result.get(key)
@@ -208,6 +224,7 @@ def initialize_lane(
     replicate: str | None = None,
     instance: str | None = None,
     baseline_variant: str | None = None,
+    difference_error_contract: str | None = None,
     reference_task_id: str | None = None,
     exact_reference_path: Path | None = None,
 ) -> dict[str, Any]:
@@ -215,6 +232,14 @@ def initialize_lane(
 
     if iterations <= 0:
         raise ValueError("iterations must be positive")
+    if kind == "difference":
+        if difference_error_contract not in DIFFERENCE_ERROR_CONTRACTS:
+            raise ValueError(
+                "difference lanes require difference_error_contract in "
+                f"{DIFFERENCE_ERROR_CONTRACTS}"
+            )
+    elif difference_error_contract is not None:
+        raise ValueError("absolute lanes cannot set difference_error_contract")
     lane_dir = lane_dir.resolve()
     queue_dir = queue_dir.resolve()
     source = source.resolve()
@@ -256,10 +281,11 @@ def initialize_lane(
             source=source,
             policy=lane_dir / "initial_pf.py",
             reference=lane_reference if exact_reference_path is not None else None,
+            difference_error_contract=difference_error_contract,
         )
     )
     manifest = {
-        "schema": 2,
+        "schema": 3,
         "evaluation_contract_version": EVALUATION_CONTRACT_VERSION,
         "created_at": _now(),
         "kind": kind,
@@ -273,6 +299,10 @@ def initialize_lane(
         "replicate": replicate,
         "instance": instance,
         "baseline_variant": baseline_variant,
+        "difference_error_contract": difference_error_contract,
+        "difference_error_contract_version": (
+            DIFFERENCE_ERROR_CONTRACT_VERSION if difference_error_contract is not None else None
+        ),
         "exact_reference_task_id": reference_task_id,
         "exact_reference_source": (
             str(exact_reference_path) if exact_reference_path is not None else None
@@ -366,6 +396,7 @@ def reconcile_lane(lane_dir: Path) -> dict[str, Any]:
             source=Path(manifest["source"]),
             policy=lane_dir / "initial_pf.py",
             reference=reference_path,
+            difference_error_contract=manifest.get("difference_error_contract"),
         )
         state.update(
             {
@@ -388,6 +419,12 @@ def reconcile_lane(lane_dir: Path) -> dict[str, Any]:
             raise RuntimeError("the generated baseline exact evaluation failed")
         if result.get("evaluation_contract_version") != manifest.get("evaluation_contract_version"):
             raise RuntimeError("the baseline result uses a different evaluator contract")
+        if result.get("difference_error_contract") != manifest.get("difference_error_contract"):
+            raise RuntimeError("the baseline result uses a different reaction-error contract")
+        if result.get("difference_error_contract_version") != manifest.get(
+            "difference_error_contract_version"
+        ):
+            raise RuntimeError("the baseline result uses a different reaction-error version")
         shutil.copyfile(
             Path(manifest["queue_dir"]) / phase / task_id / "result.json",
             lane_dir / "incumbent_result.json",
@@ -440,6 +477,12 @@ def reconcile_lane(lane_dir: Path) -> dict[str, Any]:
         }
     if result.get("evaluation_contract_version") != manifest.get("evaluation_contract_version"):
         raise RuntimeError("the candidate result uses a different evaluator contract")
+    if result.get("difference_error_contract") != manifest.get("difference_error_contract"):
+        raise RuntimeError("the candidate result uses a different reaction-error contract")
+    if result.get("difference_error_contract_version") != manifest.get(
+        "difference_error_contract_version"
+    ):
+        raise RuntimeError("the candidate result uses a different reaction-error version")
     _write_json(iteration_dir / "result.json", result)
     incumbent_result = _read_json(lane_dir / "incumbent_result.json")
     accepted, acceptance_reason = _accept_candidate(result, incumbent_result)
@@ -568,6 +611,7 @@ def propose_lane(lane_dir: Path, *, timeout_seconds: int = 900) -> dict[str, Any
         source=Path(manifest["source"]),
         policy=Path(mutation["candidate"]),
         reference=lane_dir / "exact_reference.json",
+        difference_error_contract=manifest.get("difference_error_contract"),
     )
     state.update(
         {
@@ -596,6 +640,12 @@ def propose_replay_lane(lane_dir: Path, canonical_lane_dir: Path) -> dict[str, A
     reconciled = reconcile_lane(lane_dir)
     state = _read_json(lane_dir / "state.json")
     manifest = _read_json(lane_dir / "manifest.json")
+    if manifest.get("kind") == "difference":
+        canonical_manifest = _read_json(canonical_lane_dir / "manifest.json")
+        if manifest.get("difference_error_contract") != canonical_manifest.get(
+            "difference_error_contract"
+        ):
+            raise RuntimeError("replay lanes must use the same reaction-error contract")
     if state["pending_task_id"] is not None or state["pending_kind"] == "mutation":
         return reconciled
     if state["iterations_completed"] >= manifest["iterations_target"]:
@@ -642,6 +692,7 @@ def propose_replay_lane(lane_dir: Path, canonical_lane_dir: Path) -> dict[str, A
         source=Path(manifest["source"]),
         policy=iteration_dir / "candidate.py",
         reference=lane_dir / "exact_reference.json",
+        difference_error_contract=manifest.get("difference_error_contract"),
     )
     state.update(
         {
@@ -690,6 +741,11 @@ def _parser() -> argparse.ArgumentParser:
     init.add_argument("--instance")
     init.add_argument("--reference-task-id")
     init.add_argument("--exact-reference", type=Path)
+    init.add_argument(
+        "--difference-error-contract",
+        choices=DIFFERENCE_ERROR_CONTRACTS,
+        help="Required for difference lanes; stored immutably in the lane manifest.",
+    )
 
     for command in ("reconcile", "status"):
         subparser = subparsers.add_parser(command)
@@ -719,6 +775,7 @@ def main() -> int:
             instance=args.instance,
             reference_task_id=args.reference_task_id,
             exact_reference_path=args.exact_reference,
+            difference_error_contract=args.difference_error_contract,
         )
     elif args.command == "reconcile":
         result = reconcile_lane(args.lane_dir)

@@ -25,6 +25,13 @@ Every production lane must follow these stages:
 3. Permit OpenCode mutations only after iteration 0 passes. Mutations are
    iterations 1 through 50.
 
+Every reaction is evaluated in two independent scientific contracts:
+`individual_errors` enforces `sum_s |nu_s (E_pf,s - E_exact,s)|`, while
+`error_cancellation` enforces `|sum_s nu_s (E_pf,s - E_exact,s)|`. Both are
+compared with the same chemical-accuracy threshold. Exact species references
+may be shared, but candidate task IDs, lane manifests, mutations, incumbents,
+exports, reports, and plots must remain contract-isolated.
+
 Candidate evaluation must load `exact_reference.json`; it must not reconstruct
 or diagonalize `U_exact`. Analytical product-formula or synthesis error bounds
 are not acceptance metrics.
@@ -58,8 +65,8 @@ campaign.
 
 - HamLib exact subset: 82 instances through 12 qubits, three independent
   mutation lanes per instance, 50 mutation iterations per lane.
-- Reaction set: 10 reactions, two policy lanes per reaction, 50 mutation
-  iterations per lane.
+- Reaction set: 10 reactions, one `individual_errors` lane and one
+  `error_cancellation` lane per reaction, 50 mutation iterations per lane.
 - Total: 266 lanes and 13,300 mutation evaluations, excluding iteration 0.
 
 The canonical mutation campaign uses cuPyNumeric on one A100 in the `polar4`

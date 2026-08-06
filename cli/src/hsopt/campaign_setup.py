@@ -18,7 +18,12 @@ from typing import Any
 
 import numpy as np
 
-from .compiled_unitary import assemble_exact_difference_reference, qpe_phase_encoding
+from .compiled_unitary import (
+    DIFFERENCE_ERROR_CONTRACTS,
+    DIFFERENCE_ERROR_CONTRACT_VERSION,
+    assemble_exact_difference_reference,
+    qpe_phase_encoding,
+)
 from .exact_loop import initialize_lane
 from .paper_baseline import BASELINE_VARIANTS, calibration_mode_for_baseline, verify_calibration
 
@@ -522,7 +527,8 @@ def prepare_reactions(
         "schema": 1,
         "family": DIFF_ENERGY_FAMILY,
         "selected_instances": len(records),
-        "contracts": ["equal_share", "reaction_aware"],
+        "contracts": list(DIFFERENCE_ERROR_CONTRACTS),
+        "contract_version": DIFFERENCE_ERROR_CONTRACT_VERSION,
         "reaction_manifest": str(reaction_manifest.resolve()),
         "reaction_manifest_sha256": _sha256(reaction_manifest),
         "cache_checksums": str(cache_checksums.resolve()),
@@ -569,6 +575,7 @@ def initialize_campaign(
     expected_hamlib_instances: int = HAMLIB82_INSTANCES,
     expected_reaction_instances: int = REACTION_INSTANCES,
     baseline: str = "loose",
+    reaction_only: bool = False,
 ) -> dict[str, Any]:
     """Create lanes from calibration-cached immutable exact-unitary references."""
 
@@ -580,12 +587,13 @@ def initialize_campaign(
     calibration_catalog = _calibration_catalog(calibration_root, baseline=baseline)
     hamlib_manifest = json.loads((hamlib_inputs / "manifest.json").read_text(encoding="utf-8"))
     reaction_manifest = json.loads((reaction_inputs / "manifest.json").read_text(encoding="utf-8"))
-    if hamlib_manifest.get("family") != ABS_ENERGY_FAMILY:
-        raise ValueError("HamLib input manifest must use family 'abs_energy'")
-    if len(hamlib_manifest.get("instances", [])) != expected_hamlib_instances:
-        raise ValueError(
-            f"abs_energy requires exactly {expected_hamlib_instances} HamLib instances"
-        )
+    if not reaction_only:
+        if hamlib_manifest.get("family") != ABS_ENERGY_FAMILY:
+            raise ValueError("HamLib input manifest must use family 'abs_energy'")
+        if len(hamlib_manifest.get("instances", [])) != expected_hamlib_instances:
+            raise ValueError(
+                f"abs_energy requires exactly {expected_hamlib_instances} HamLib instances"
+            )
     if reaction_manifest.get("family") != DIFF_ENERGY_FAMILY:
         raise ValueError("reaction input manifest must use family 'diff_energy'")
     if len(reaction_manifest.get("instances", [])) != expected_reaction_instances:
@@ -593,7 +601,7 @@ def initialize_campaign(
             f"diff_energy requires exactly {expected_reaction_instances} reaction instances"
         )
     lanes = []
-    for record in hamlib_manifest["instances"]:
+    for record in () if reaction_only else hamlib_manifest["instances"]:
         instance = str(record["instance"])
         source = hamlib_inputs / str(record["problem"])
         reference_path = _write_absolute_reference(
@@ -645,7 +653,7 @@ def initialize_campaign(
             output=references_root / DIFF_ENERGY_FAMILY / f"{instance}.json",
             catalog=calibration_catalog,
         )
-        for contract in ("equal_share", "reaction_aware"):
+        for contract in DIFFERENCE_ERROR_CONTRACTS:
             policy = policies_root / DIFF_ENERGY_FAMILY / instance / contract / "initial_pf.py"
             _generate_policy(
                 generator=generator,
@@ -666,6 +674,7 @@ def initialize_campaign(
                 replicate=contract,
                 instance=instance,
                 baseline_variant=baseline,
+                difference_error_contract=contract,
                 exact_reference_path=reference_path,
             )
             lanes.append(
@@ -674,6 +683,8 @@ def initialize_campaign(
                     "baseline_variant": baseline,
                     "instance": instance,
                     "replicate": contract,
+                    "difference_error_contract": contract,
+                    "difference_error_contract_version": DIFFERENCE_ERROR_CONTRACT_VERSION,
                     "lane_dir": str(lane_dir.relative_to(campaign_root)),
                     "reference_task_id": None,
                     "reference_sha256": _sha256(reference_path),
@@ -685,16 +696,20 @@ def initialize_campaign(
         "created_at": _now(),
         "iterations": iterations,
         "baseline_variant": baseline,
+        "included_families": (
+            [DIFF_ENERGY_FAMILY] if reaction_only else [ABS_ENERGY_FAMILY, DIFF_ENERGY_FAMILY]
+        ),
         "calibration_mode": calibration_mode_for_baseline(baseline),
         "queue_dir": str(queue_dir),
         "hamlib": {
-            "instances": len(hamlib_manifest["instances"]),
-            "replicates": hamlib_replicates,
+            "instances": 0 if reaction_only else len(hamlib_manifest["instances"]),
+            "replicates": 0 if reaction_only else hamlib_replicates,
             "input_manifest_sha256": _sha256(hamlib_inputs / "manifest.json"),
         },
         "reactions": {
             "instances": len(reaction_manifest["instances"]),
-            "contracts": ["equal_share", "reaction_aware"],
+            "contracts": list(DIFFERENCE_ERROR_CONTRACTS),
+            "contract_version": DIFFERENCE_ERROR_CONTRACT_VERSION,
             "input_manifest_sha256": _sha256(reaction_inputs / "manifest.json"),
         },
         "calibration_root": str(calibration_root.resolve()),
@@ -737,6 +752,11 @@ def _parser() -> argparse.ArgumentParser:
     initialize.add_argument("--hamlib-replicates", type=int, default=3)
     initialize.add_argument("--iterations", type=int, default=50)
     initialize.add_argument("--baseline", choices=BASELINE_VARIANTS, default="loose")
+    initialize.add_argument(
+        "--reaction-only",
+        action="store_true",
+        help="Initialize only the two isolated lanes for each reaction.",
+    )
     initialize.add_argument(
         "--expected-hamlib-instances",
         type=int,

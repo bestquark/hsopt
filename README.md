@@ -102,6 +102,26 @@ union bound. Stoichiometric coefficients affect the energy difference but do
 not duplicate circuits. The reaction objective is the sum of the full
 confidence-adjusted species QPE costs.
 
+Reaction optimization is deliberately split into two independent contracts.
+The conservative `individual_errors` lane requires
+
+$$
+\sum_s \left|\nu_s\left(\widetilde E_s-E_s\right)\right|
+< \varepsilon_{\mathrm{chem}},
+$$
+
+while the `error_cancellation` lane requires
+
+$$
+\left|\sum_s \nu_s\left(\widetilde E_s-E_s\right)\right|
+< \varepsilon_{\mathrm{chem}}.
+$$
+
+Every evaluation records both quantities. The selected contract is sealed in
+the lane manifest and queue task ID and alone controls feasibility and
+acceptance; mutations, incumbents, exports, and plots are never pooled across
+the two contracts.
+
 ## Product-formula policy
 
 The agent edits a small executable `ProductFormula` class, not the baseline's
@@ -190,6 +210,7 @@ Evaluate the checked-in bond-stretch energy difference:
 
 ```bash
 uv run python cli/tests/fixtures/diff_energy_h2_bond_stretch/evaluate.py \
+  --error-contract error_cancellation \
   --backend numpy
 ```
 
@@ -245,7 +266,8 @@ Every optimization lane follows the same order:
 
 The current dense production selection contains exactly 82 HamLib
 Hamiltonians through 12 qubits, with three mutation lanes per Hamiltonian. It
-also contains ten reactions with two policy contracts each.
+also contains ten reactions with the isolated `individual_errors` and
+`error_cancellation` contracts.
 This gives 266 lanes and 13,300 mutation evaluations, plus iteration 0 for
 every lane.
 
@@ -342,18 +364,21 @@ uv run hsopt-baseline-drop \
   --audit-output "$HSOPT_DATA_ROOT/exact/baseline-t-gate-drop-audit.json"
 ```
 
-The census already deduplicates replicate lanes only after their immutable
-inputs agree. The comparison command then requires matching complete 82 + 10
-grids, source hashes, exact-reference hashes, evaluator contracts, execution
+The census deduplicates absolute-energy replicate lanes only after their
+immutable inputs agree. It never deduplicates the two reaction contracts, so a
+complete census contains 82 absolute tasks plus 20 reaction-contract tasks.
+The comparison command then requires matching complete grids, source hashes,
+exact-reference hashes, evaluator contracts, execution
 backends/accelerators, placement labels, and chemical-accuracy passes. Only
-then does it write one
-`baseline_t_gate_drop_percent.txt` value in each Hamiltonian or reaction
-folder. The signed value is
+then does it write `baseline_t_gate_drop_percent.txt` in each absolute-energy
+folder and one
+`baseline_t_gate_drop_<contract>_percent.txt` file for each reaction contract.
+The signed value is
 $100(T_{\mathrm{loose}}-T_{\mathrm{tight}})/T_{\mathrm{loose}}$, where $T$ is
 the confidence-adjusted QPE T count (`T95`) optimized by autoresearch. Thus a
 positive value is a reduction from the loose bound to the tight baseline. For
-reactions, $T$ is the evaluator's summed reaction cost; the two reaction
-contracts are represented by their single validated census result.
+reactions, $T$ is the evaluator's summed reaction cost under the named,
+independently evaluated error contract.
 
 ```bash
 uv run hsopt-campaign initialize \
@@ -366,6 +391,10 @@ uv run hsopt-campaign initialize \
   --hamlib-replicates 3 \
   --iterations 50
 ```
+
+Use `--reaction-only` for a replacement or validation campaign that must start
+both reaction contracts from iteration 0 without duplicating valid
+absolute-energy lanes.
 
 To narrow an older five-replicate campaign without deleting its existing
 histories, first stop its supervisor and local evaluator workers, then run:

@@ -3,6 +3,10 @@ from __future__ import annotations
 import json
 from pathlib import Path
 
+from hsopt.compiled_unitary import (
+    DIFFERENCE_ERROR_CONTRACTS,
+    DIFFERENCE_ERROR_CONTRACT_VERSION,
+)
 from hsopt.exact_export import export_family
 from hsopt.tgate_opt.reporting import (
     _hamlib_extended,
@@ -52,8 +56,10 @@ def _absolute_result(t_count: int, estimate: float) -> dict[str, object]:
     }
 
 
-def _reaction_result(t_count: int, estimate: float) -> dict[str, object]:
+def _reaction_result(t_count: int, estimate: float, contract: str) -> dict[str, object]:
     species = _absolute_result(t_count, -1.0 + 0.5 * (estimate + 1.0))
+    aggregate_error = abs(estimate + 1.0)
+    sum_absolute_error = 1.5 * aggregate_error
     return {
         "status": "ok",
         "backend": "cupynumeric",
@@ -63,10 +69,19 @@ def _reaction_result(t_count: int, estimate: float) -> dict[str, object]:
         "per_attempt_t_count": t_count,
         "confidence_adjusted_t_count": t_count,
         "t_count": t_count,
+        "difference_error_contract": contract,
+        "difference_error_contract_version": DIFFERENCE_ERROR_CONTRACT_VERSION,
         "exact_difference_hartree": -1.0,
         "compiled_pf_difference_hartree": estimate,
         "signed_difference_error_hartree": estimate + 1.0,
-        "absolute_difference_error_hartree": abs(estimate + 1.0),
+        "absolute_difference_error_hartree": aggregate_error,
+        "sum_absolute_species_error_hartree": sum_absolute_error,
+        "contract_error_hartree": (
+            sum_absolute_error if contract == "individual_errors" else aggregate_error
+        ),
+        "error_cancellation_fraction": 1.0 - aggregate_error / sum_absolute_error,
+        "passes_individual_errors_contract": True,
+        "passes_error_cancellation_contract": True,
         "species": {"fixture_species": species},
     }
 
@@ -89,6 +104,10 @@ def _complete_lane(
         "instance": instance,
         "replicate": replicate,
         "kind": kind,
+        "difference_error_contract": replicate if kind == "difference" else None,
+        "difference_error_contract_version": (
+            DIFFERENCE_ERROR_CONTRACT_VERSION if kind == "difference" else None
+        ),
         "source": str(source),
         "iterations_target": 1,
     }
@@ -197,7 +216,7 @@ def test_completed_reaction_campaign_exports_both_contracts(tmp_path: Path) -> N
     source = campaign / "reaction.json"
     _write_json(source, {"name": "Fixture reaction", "terms": []})
     rows = []
-    for contract in ("equal_share", "reaction_aware"):
+    for contract in DIFFERENCE_ERROR_CONTRACTS:
         lane_relative = Path("lanes/diff_energy/fixture") / contract
         _complete_lane(
             campaign / lane_relative,
@@ -206,14 +225,15 @@ def test_completed_reaction_campaign_exports_both_contracts(tmp_path: Path) -> N
             replicate=contract,
             kind="difference",
             source=source,
-            baseline=_reaction_result(100, -0.999),
-            candidate=_reaction_result(80, -0.9995),
+            baseline=_reaction_result(100, -0.999, contract),
+            candidate=_reaction_result(80, -0.9995, contract),
         )
         rows.append(
             {
                 "family": "diff_energy",
                 "instance": "fixture",
                 "replicate": contract,
+                "difference_error_contract": contract,
                 "lane_dir": lane_relative.as_posix(),
             }
         )
@@ -225,7 +245,7 @@ def test_completed_reaction_campaign_exports_both_contracts(tmp_path: Path) -> N
     candidates, pooled = _validate_reactions(output)
 
     assert len(candidates) == 4
-    assert set(pooled["fixture"]) >= {"equal_share", "reaction_aware", "reaction"}
+    assert set(pooled["fixture"]) >= {*DIFFERENCE_ERROR_CONTRACTS, "reaction"}
     reaction_rows = [row for row in candidates if row["reaction_key"] == "fixture"]
     assert "T95 (sum U x M x R)" in _reaction_summary("fixture", reaction_rows, pooled["fixture"])
     assert "T95 (sum U x M x R)" in _reaction_extended("fixture", reaction_rows, pooled["fixture"])

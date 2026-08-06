@@ -7,6 +7,8 @@ from pathlib import Path
 
 import pytest
 
+from hsopt.compiled_unitary import DIFFERENCE_ERROR_CONTRACTS
+
 from hsopt.tgate_opt import reporting as reports
 
 
@@ -139,7 +141,7 @@ def test_reaction_summary_and_extended_reports_compile(tmp_path: Path) -> None:
         }
     )
     rows = []
-    for contract in ("equal_share", "reaction_aware"):
+    for contract in DIFFERENCE_ERROR_CONTRACTS:
         for iteration, t_count in ((0, 1000), (1, 800)):
             rows.append(
                 {
@@ -158,21 +160,31 @@ def test_reaction_summary_and_extended_reports_compile(tmp_path: Path) -> None:
                     "pf_reaction_energy_hartree": "-0.999",
                     "signed_reaction_error_hartree": "0.001",
                     "absolute_reaction_error_hartree": "0.001",
+                    "sum_absolute_species_error_hartree": "0.0014",
+                    "contract_error_hartree": (
+                        "0.0014" if contract == "individual_errors" else "0.001"
+                    ),
                     "max_species_absolute_error_hartree": "0.0005",
                     "passes_contract": "true",
                 }
             )
     selection = {
-        "selected_source_contract": "equal_share",
+        "selected_source_contract": DIFFERENCE_ERROR_CONTRACTS[0],
         "selected_source_iteration": 1,
         "total_t_gate_count": 800,
         "absolute_reaction_error_hartree": 0.001,
+        "sum_absolute_species_error_hartree": 0.0014,
+        "contract_error_hartree": 0.0014,
         "max_species_absolute_error_hartree": 0.0005,
     }
     pooled = {
         "reaction": "H2 -> 2H",
-        "equal_share": selection,
-        "reaction_aware": {**selection, "selected_source_contract": "reaction_aware"},
+        DIFFERENCE_ERROR_CONTRACTS[0]: selection,
+        DIFFERENCE_ERROR_CONTRACTS[1]: {
+            **selection,
+            "selected_source_contract": DIFFERENCE_ERROR_CONTRACTS[1],
+            "contract_error_hartree": 0.001,
+        },
     }
     outputs = {
         "reaction-summary.pdf": reports._reaction_summary("fixture", rows, pooled),

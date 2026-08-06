@@ -20,6 +20,9 @@ ENERGY_FIELDS = (
     "compiled_pf_difference_hartree",
     "signed_difference_error_hartree",
     "absolute_difference_error_hartree",
+    "sum_absolute_species_error_hartree",
+    "contract_error_hartree",
+    "error_cancellation_gain_hartree",
 )
 EXACT_METADATA_FIELDS = (
     "evaluation_contract_version",
@@ -49,6 +52,10 @@ COMPILED_FIELDS = (
     "t_count",
     "score",
     "passes_chemical_accuracy",
+    "difference_error_contract",
+    "difference_error_contract_version",
+    "passes_individual_errors_contract",
+    "passes_error_cancellation_contract",
     "synthesis_epsilon_histogram",
     "scheduled_rotation_count",
     "skipped_rotation_count",

@@ -22,6 +22,8 @@ from collections import defaultdict
 from pathlib import Path
 from typing import Any, Iterable, Mapping, Sequence
 
+from ..compiled_unitary import DIFFERENCE_ERROR_CONTRACTS
+
 
 HAMLIB_LANES = 82
 HAMLIB_RUNS = 5
@@ -494,12 +496,13 @@ def _reaction_summary(
                     _species_signature(item["species_json"]),
                     _reaction_qpe_cost(item),
                     _number(1000.0 * reaction_error, 5),
-                    _number(1000.0 * _float(item["max_species_absolute_error_hartree"]), 5),
+                    _number(1000.0 * _float(item["sum_absolute_species_error_hartree"]), 5),
+                    _number(1000.0 * _float(item["contract_error_hartree"]), 5),
                     reduction_text,
                 ]
             )
     pooled_rows = []
-    for selection in ("equal_share", "reaction_aware"):
+    for selection in DIFFERENCE_ERROR_CONTRACTS:
         item = pooled[selection]
         pooled_rows.append(
             [
@@ -508,7 +511,8 @@ def _reaction_summary(
                 item["selected_source_iteration"],
                 _reaction_qpe_cost(item),
                 _number(1000.0 * _float(item["absolute_reaction_error_hartree"]), 5),
-                _number(1000.0 * _float(item["max_species_absolute_error_hartree"]), 5),
+                _number(1000.0 * _float(item["sum_absolute_species_error_hartree"]), 5),
+                _number(1000.0 * _float(item["contract_error_hartree"]), 5),
             ]
         )
     body = latex_escape(
@@ -516,28 +520,30 @@ def _reaction_summary(
         "Lane incumbents are shown separately from the pooled paper selections."
     )
     body += "\n" + _longtable(
-        r"llp{3.8cm}p{7.3cm}rrrr",
+        r"llp{3.4cm}p{6.3cm}rrrrr",
         (
             "Contract",
             "A/R",
             "Protocol",
             "PF parameters by species",
             "T95 (sum U x M x R)",
-            "|dE reaction| (mHa)",
-            "max |dE species| (mHa)",
+            "|sum nu dE| (mHa)",
+            "sum |nu dE| (mHa)",
+            "contract error (mHa)",
             "Reduction",
         ),
         table_rows,
     )
     body += "\n\\textbf{Pooled paper selections}\n" + _longtable(
-        r"llllrr",
+        r"llllrrr",
         (
             "Selection",
             "Source contract",
             "Iteration",
             "T95 (sum U x M x R)",
-            "|dE reaction| (mHa)",
-            "max |dE species| (mHa)",
+            "|sum nu dE| (mHa)",
+            "sum |nu dE| (mHa)",
+            "contract error (mHa)",
         ),
         pooled_rows,
     )
@@ -567,6 +573,8 @@ def _reaction_extended(
                     _number(row["exact_reaction_energy_hartree"], 9),
                     _number(row["pf_reaction_energy_hartree"], 9),
                     _number(1000.0 * abs(signed), 5),
+                    _number(1000.0 * _float(row["sum_absolute_species_error_hartree"]), 5),
+                    _number(1000.0 * _float(row["contract_error_hartree"]), 5),
                 ]
             )
         else:
@@ -589,7 +597,8 @@ def _reaction_extended(
                     _species_signature(row["species_json"]),
                     _reaction_qpe_cost(row),
                     _number(1000.0 * signed, 5),
-                    _number(1000.0 * _float(row["max_species_absolute_error_hartree"]), 5),
+                    _number(1000.0 * _float(row["sum_absolute_species_error_hartree"]), 5),
+                    _number(1000.0 * _float(row["contract_error_hartree"]), 5),
                     _yes(row["passes_contract"]),
                     row.get("decision_reason") or "--",
                 ]
@@ -599,7 +608,7 @@ def _reaction_extended(
         "recomputed from the normalized per-species evaluator results."
     )
     body += "\n\\textbf{Initial product formulas}\n" + _longtable(
-        r"lp{11cm}rrrr",
+        r"lp{9cm}rrrrrr",
         (
             "Contract",
             "PF parameters by species",
@@ -607,11 +616,13 @@ def _reaction_extended(
             "Exact E_rxn",
             "PF E_rxn",
             "|Delta E_rxn| mHa",
+            "sum |nu dE| mHa",
+            "contract error mHa",
         ),
         baseline_rows,
     )
     body += "\n\\textbf{Mutation log}\n" + _longtable(
-        r"lllp{5.5cm}p{5.5cm}rrrll",
+        r"lllp{5cm}p{5cm}rrrrll",
         (
             "Contract",
             "Iter.",
@@ -620,7 +631,8 @@ def _reaction_extended(
             "Attempted PF settings",
             "T95 (sum U x M x R)",
             "signed dE (mHa)",
-            "max species error (mHa)",
+            "sum |nu dE| (mHa)",
+            "contract error (mHa)",
             "Pass",
             "Reason",
         ),
@@ -745,25 +757,33 @@ def _reaction_reportlab_content(
         )
         summary_lines.append(
             f"{contract} | initial | T95={_reaction_qpe_cost(baseline)} | "
-            f"|dE reaction|={_number(1000.0 * abs(_reaction_error(baseline)), 6)} mHa | "
-            f"max |dE species|="
-            f"{_number(1000.0 * _float(baseline['max_species_absolute_error_hartree']), 6)} mHa"
+            f"|sum nu dE|={_number(1000.0 * abs(_reaction_error(baseline)), 6)} mHa | "
+            f"sum |nu dE|="
+            f"{_number(1000.0 * _float(baseline['sum_absolute_species_error_hartree']), 6)} mHa | "
+            f"contract error="
+            f"{_number(1000.0 * _float(baseline['contract_error_hartree']), 6)} mHa"
         )
         summary_lines.append(
             f"{contract} | final after accepted iter {item_iteration(final)} | "
             f"T95={_reaction_qpe_cost(final)} | "
-            f"|dE reaction|={_number(1000.0 * abs(_reaction_error(final)), 6)} mHa | "
+            f"|sum nu dE|={_number(1000.0 * abs(_reaction_error(final)), 6)} mHa | "
+            f"sum |nu dE|="
+            f"{_number(1000.0 * _float(final['sum_absolute_species_error_hartree']), 6)} mHa | "
+            f"contract error={_number(1000.0 * _float(final['contract_error_hartree']), 6)} mHa | "
             f"reduction={_number(reduction, 6)}% | "
             f"accepted/rejected={accepted}/{len(proposals) - accepted}"
         )
     pooled_lines = []
-    for selection in ("equal_share", "reaction_aware"):
+    for selection in DIFFERENCE_ERROR_CONTRACTS:
         item = pooled[selection]
         pooled_lines.append(
             f"{selection} <- {item['selected_source_contract']} iter "
             f"{item['selected_source_iteration']} | T95={_reaction_qpe_cost(item)} | "
-            f"|dE reaction|="
-            f"{_number(1000.0 * _float(item['absolute_reaction_error_hartree']), 6)} mHa"
+            f"|sum nu dE|="
+            f"{_number(1000.0 * _float(item['absolute_reaction_error_hartree']), 6)} mHa | "
+            f"sum |nu dE|="
+            f"{_number(1000.0 * _float(item['sum_absolute_species_error_hartree']), 6)} mHa | "
+            f"contract error={_number(1000.0 * _float(item['contract_error_hartree']), 6)} mHa"
         )
     if not extended:
         return intro, [
@@ -790,6 +810,9 @@ def _reaction_reportlab_content(
             f"{'accepted' if _yes(row['accepted']) == 'yes' else 'rejected'} | "
             f"T95={_reaction_qpe_cost(row)} | "
             f"signed dE={_number(1000.0 * signed, 6)} mHa | "
+            f"sum |nu dE|="
+            f"{_number(1000.0 * _float(row['sum_absolute_species_error_hartree']), 6)} mHa | "
+            f"contract error={_number(1000.0 * _float(row['contract_error_hartree']), 6)} mHa | "
             f"pass={_yes(row.get('passes_contract'))} | "
             f"{row.get('mutation_summary') or '--'} | "
             f"reason={row.get('decision_reason') or '--'} | "
@@ -904,7 +927,7 @@ def _export_shape(export_dir: Path, family: str) -> dict[str, Any]:
             "replicates": (
                 [f"run_{index:02d}" for index in range(1, HAMLIB_RUNS + 1)]
                 if family == "abs_energy"
-                else ["equal_share", "reaction_aware"]
+                else list(DIFFERENCE_ERROR_CONTRACTS)
             ),
         }
     manifest = json.loads(path.read_text(encoding="utf-8"))

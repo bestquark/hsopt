@@ -7,7 +7,12 @@ import json
 from pathlib import Path
 from typing import Any, Sequence
 
-from .compiled_unitary import evaluate_difference, evaluate_molecule, load_problem
+from .compiled_unitary import (
+    DIFFERENCE_ERROR_CONTRACTS,
+    evaluate_difference,
+    evaluate_molecule,
+    load_problem,
+)
 
 
 def _write_result(result: dict[str, Any], output: Path | None) -> None:
@@ -89,6 +94,12 @@ def evaluate_difference_directory(
     parser.add_argument("--reaction", type=Path)
     parser.add_argument("--policy-file", type=Path, default=experiment_dir / "initial_pf.py")
     parser.add_argument("--exact-reference", type=Path, required=True)
+    parser.add_argument(
+        "--error-contract",
+        choices=DIFFERENCE_ERROR_CONTRACTS,
+        required=True,
+        help=("individual_errors: sum_s |nu_s dE_s|; error_cancellation: |sum_s nu_s dE_s|"),
+    )
     parser.add_argument("--backend", choices=("numpy", "cupynumeric"), default="cupynumeric")
     parser.add_argument("--output", type=Path)
     args = parser.parse_args(argv)
@@ -109,10 +120,13 @@ def evaluate_difference_directory(
         raise ValueError(
             f"{reaction_path} does not match the sealed reaction terms for {definition['instance']}"
         )
+    if args.error_contract not in definition["contracts"]:
+        raise ValueError(f"reaction-error contract {args.error_contract!r} is not sealed")
 
     result = evaluate_difference(
         reaction_path,
         args.policy_file,
+        error_contract=args.error_contract,
         backend=args.backend,
         reference_path=args.exact_reference,
     )

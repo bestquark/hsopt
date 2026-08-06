@@ -668,10 +668,14 @@ The score multiplies the directly compiled T count of one product-formula
 evolution by the paper's full-evolution QPE query bound at the remaining
 chemical-accuracy precision, then by enough independent attempts for 95%
 confidence. The confidence calculation includes both the resolved HF peak
-weight and the paper's one-half phase-estimation success guarantee. It is
-feasible only when the decoded energy is within chemical accuracy of the
-cached exact ground energy. Small resolved HF peak weight is therefore
-penalized by a larger repetition cost; it is not an energy average.
+weight and the paper's one-half phase-estimation success guarantee. An
+absolute-energy lane is feasible only when its decoded energy error is within
+chemical accuracy. A reaction lane names one immutable feedback contract:
+individual_errors uses sum_s |nu_s delta E_s|, while error_cancellation uses
+|sum_s nu_s delta E_s|. Both reaction metrics are reported, but only the named
+difference_error_contract determines feasibility and acceptance in that
+isolated lane. Small resolved HF peak weight is therefore penalized by a
+larger repetition cost; it is not an energy average.
 
 Make one coherent deterministic mutation intended to lower the
 confidence-adjusted T cost while remaining accurate. Preserve the
@@ -715,7 +719,13 @@ def agent_feedback(feedback: dict[str, Any]) -> dict[str, Any]:
         "compiled_pf_difference_hartree",
         "absolute_energy_error_mha",
         "absolute_difference_error_mha",
+        "difference_error_contract",
+        "sum_absolute_species_error_mha",
+        "contract_error_mha",
+        "error_cancellation_fraction",
         "passes_chemical_accuracy",
+        "passes_individual_errors_contract",
+        "passes_error_cancellation_contract",
         "compiled_evolution_t_count",
         "per_attempt_t_count",
         "per_qpe_run_t_count",
@@ -748,6 +758,8 @@ def agent_feedback(feedback: dict[str, Any]) -> dict[str, Any]:
                     "n_qubits",
                     "electrons",
                     "absolute_energy_error_mha",
+                    "signed_reaction_error_contribution_hartree",
+                    "absolute_reaction_error_contribution_hartree",
                     "passes_chemical_accuracy",
                     "compiled_evolution_t_count",
                     "per_attempt_t_count",

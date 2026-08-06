@@ -9,6 +9,8 @@ import json
 from pathlib import Path, PurePosixPath
 from typing import Any
 
+from .compiled_unitary import DIFFERENCE_ERROR_CONTRACTS, DIFFERENCE_ERROR_CONTRACT_VERSION
+
 
 ABS_FAMILY = "abs_energy"
 DIFF_FAMILY = "diff_energy"
@@ -177,7 +179,8 @@ def reaction_definitions(
             "product": str(source["product"]),
             "rationale": str(source["rationale"]),
             "terms": terms,
-            "contracts": ["equal_share", "reaction_aware"],
+            "contracts": list(DIFFERENCE_ERROR_CONTRACTS),
+            "contract_version": DIFFERENCE_ERROR_CONTRACT_VERSION,
             "reaction_error_target_hartree": float(manifest["reaction_target_hartree"]),
             "initial_pf_generator": "experiments/generate_initial_pf.py",
             "evaluator": "hsopt.compiled_unitary.evaluate_difference",

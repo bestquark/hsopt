@@ -7,7 +7,19 @@ import json
 from pathlib import Path
 from typing import Any, Sequence
 
-from hsopt.compiled_unitary import evaluate_difference
+from hsopt.compiled_unitary import (
+    DIFFERENCE_ERROR_CONTRACTS,
+    DIFFERENCE_ERROR_CONTRACT_CANCELLATION,
+    DIFFERENCE_ERROR_CONTRACT_INDIVIDUAL,
+    evaluate_difference_error_cancellation,
+    evaluate_difference_individual_errors,
+)
+
+
+EVALUATORS = {
+    DIFFERENCE_ERROR_CONTRACT_INDIVIDUAL: evaluate_difference_individual_errors,
+    DIFFERENCE_ERROR_CONTRACT_CANCELLATION: evaluate_difference_error_cancellation,
+}
 
 
 def _write_result(result: dict[str, Any], output: Path | None) -> None:
@@ -38,6 +50,15 @@ def main(argv: Sequence[str] | None = None) -> int:
     parser.add_argument("--policy-file", type=Path)
     parser.add_argument("--baseline", choices=("loose", "tight"), default="loose")
     parser.add_argument("--exact-reference", type=Path, required=True)
+    parser.add_argument(
+        "--error-contract",
+        choices=DIFFERENCE_ERROR_CONTRACTS,
+        required=True,
+        help=(
+            "individual_errors enforces sum_s |nu_s dE_s| < chemical accuracy; "
+            "error_cancellation enforces |sum_s nu_s dE_s| < chemical accuracy"
+        ),
+    )
     parser.add_argument("--backend", choices=("numpy", "cupynumeric"), default="cupynumeric")
     parser.add_argument("--output", type=Path)
     args = parser.parse_args(argv)
@@ -56,8 +77,12 @@ def main(argv: Sequence[str] | None = None) -> int:
         raise ValueError(
             f"{reaction_path} does not match the sealed reaction terms for {definition['instance']}"
         )
+    if args.error_contract not in definition["contracts"]:
+        raise ValueError(
+            f"{args.error_contract!r} is not sealed by {experiment_dir / 'definition.json'}"
+        )
 
-    result = evaluate_difference(
+    result = EVALUATORS[args.error_contract](
         reaction_path,
         (args.policy_file or experiment_dir / f"initial_pf_{args.baseline}.py").resolve(),
         backend=args.backend,

@@ -10,6 +10,7 @@ from typing import Any, Mapping
 
 import matplotlib.pyplot as plt
 import numpy as np
+from matplotlib.lines import Line2D
 
 from _paper_plot import (
     CHEMICAL_ACCURACY_HARTREE,
@@ -37,17 +38,19 @@ OUTPUT_NAME = "reaction_cancellation_budget.pdf"
 class ReactionRecord:
     key: str
     label: str
-    equal_share_error_fraction: float
-    reaction_aware_error_fraction: float
-    equal_share_t95_millions: float
-    reaction_aware_t95_millions: float
+    individual_aggregate_error_fraction: float
+    individual_sum_absolute_error_fraction: float
+    cancellation_aggregate_error_fraction: float
+    cancellation_sum_absolute_error_fraction: float
+    individual_t95_millions: float
+    cancellation_t95_millions: float
 
     @property
     def decrease_percent(self) -> float:
         return (
             100.0
-            * (self.equal_share_t95_millions - self.reaction_aware_t95_millions)
-            / self.equal_share_t95_millions
+            * (self.individual_t95_millions - self.cancellation_t95_millions)
+            / self.individual_t95_millions
         )
 
 
@@ -71,17 +74,17 @@ def load_records(export_dir: Path, *, expected_reactions: int) -> list[ReactionR
     records: list[ReactionRecord] = []
     for key in ordered_keys:
         row = by_key[key]
-        equal_share = _selection(row, "equal_share")
-        reaction_aware = _selection(row, "reaction_aware")
-        equal_t95 = 1.0e-6 * as_float(
-            equal_share["confidence_adjusted_t_gate_count"],
-            label=f"{key} equal-share T95",
+        individual = _selection(row, "individual_errors")
+        cancellation = _selection(row, "error_cancellation")
+        individual_t95 = 1.0e-6 * as_float(
+            individual["confidence_adjusted_t_gate_count"],
+            label=f"{key} individual-errors T95",
         )
-        reaction_t95 = 1.0e-6 * as_float(
-            reaction_aware["confidence_adjusted_t_gate_count"],
-            label=f"{key} reaction-aware T95",
+        cancellation_t95 = 1.0e-6 * as_float(
+            cancellation["confidence_adjusted_t_gate_count"],
+            label=f"{key} error-cancellation T95",
         )
-        if equal_t95 <= 0.0 or reaction_t95 <= 0.0:
+        if individual_t95 <= 0.0 or cancellation_t95 <= 0.0:
             raise ValueError(f"{key} has a nonpositive T95")
         records.append(
             ReactionRecord(
@@ -90,18 +93,28 @@ def load_records(export_dir: Path, *, expected_reactions: int) -> list[ReactionR
                     key,
                     str(row.get("reaction", key)).replace("_", r"\_"),
                 ),
-                equal_share_error_fraction=as_float(
-                    equal_share["absolute_reaction_error_hartree"],
-                    label=f"{key} equal-share error",
+                individual_aggregate_error_fraction=as_float(
+                    individual["absolute_reaction_error_hartree"],
+                    label=f"{key} individual-errors aggregate error",
                 )
                 / CHEMICAL_ACCURACY_HARTREE,
-                reaction_aware_error_fraction=as_float(
-                    reaction_aware["absolute_reaction_error_hartree"],
-                    label=f"{key} reaction-aware error",
+                individual_sum_absolute_error_fraction=as_float(
+                    individual["sum_absolute_species_error_hartree"],
+                    label=f"{key} individual-errors sum-absolute error",
                 )
                 / CHEMICAL_ACCURACY_HARTREE,
-                equal_share_t95_millions=equal_t95,
-                reaction_aware_t95_millions=reaction_t95,
+                cancellation_aggregate_error_fraction=as_float(
+                    cancellation["absolute_reaction_error_hartree"],
+                    label=f"{key} cancellation aggregate error",
+                )
+                / CHEMICAL_ACCURACY_HARTREE,
+                cancellation_sum_absolute_error_fraction=as_float(
+                    cancellation["sum_absolute_species_error_hartree"],
+                    label=f"{key} cancellation sum-absolute error",
+                )
+                / CHEMICAL_ACCURACY_HARTREE,
+                individual_t95_millions=individual_t95,
+                cancellation_t95_millions=cancellation_t95,
             )
         )
     return records
@@ -117,28 +130,56 @@ def plot(records: list[ReactionRecord], output_path: Path) -> None:
         layout="constrained",
     )
     y = np.arange(len(records), dtype=float)
-    height = 0.34
+    height = 0.36
     labels = [record.label for record in records]
-
-    ax_error.barh(
-        y - height / 2,
-        [record.equal_share_error_fraction for record in records],
-        height,
+    individual_y = y - height / 2
+    cancellation_y = y + height / 2
+    for record, y_individual, y_cancellation in zip(
+        records, individual_y, cancellation_y, strict=True
+    ):
+        ax_error.hlines(
+            y_individual,
+            record.individual_aggregate_error_fraction,
+            record.individual_sum_absolute_error_fraction,
+            color=LIGHT_GRAPHITE,
+            linewidth=2.4,
+            zorder=2,
+        )
+        ax_error.hlines(
+            y_cancellation,
+            record.cancellation_aggregate_error_fraction,
+            record.cancellation_sum_absolute_error_fraction,
+            color=NVIDIA_GREEN,
+            linewidth=2.4,
+            zorder=2,
+        )
+    ax_error.scatter(
+        [record.individual_aggregate_error_fraction for record in records],
+        individual_y,
         color=LIGHT_GRAPHITE,
-        edgecolor="white",
-        linewidth=0.7,
-        label=r"equal-share seed",
-        zorder=3,
+        marker="o",
+        zorder=4,
     )
-    ax_error.barh(
-        y + height / 2,
-        [record.reaction_aware_error_fraction for record in records],
-        height,
+    ax_error.scatter(
+        [record.individual_sum_absolute_error_fraction for record in records],
+        individual_y,
+        color=LIGHT_GRAPHITE,
+        marker="x",
+        zorder=4,
+    )
+    ax_error.scatter(
+        [record.cancellation_aggregate_error_fraction for record in records],
+        cancellation_y,
         color=NVIDIA_GREEN,
-        edgecolor="white",
-        linewidth=0.7,
-        label=r"reaction-aware seed",
-        zorder=3,
+        marker="o",
+        zorder=4,
+    )
+    ax_error.scatter(
+        [record.cancellation_sum_absolute_error_fraction for record in records],
+        cancellation_y,
+        color=NVIDIA_GREEN,
+        marker="x",
+        zorder=4,
     )
     ax_error.axvline(
         1.0,
@@ -149,17 +190,37 @@ def plot(records: list[ReactionRecord], output_path: Path) -> None:
     )
     max_error = max(
         1.0,
-        *(record.equal_share_error_fraction for record in records),
-        *(record.reaction_aware_error_fraction for record in records),
+        *(record.individual_sum_absolute_error_fraction for record in records),
+        *(record.cancellation_sum_absolute_error_fraction for record in records),
     )
     ax_error.set_xlim(0.0, 1.06 * max_error)
-    ax_error.set_xlabel(r"$|\Delta E_{\mathrm{rxn}}|/\varepsilon_{\mathrm{chem}}$")
+    ax_error.set_xlabel(r"Error $/\varepsilon_{\mathrm{chem}}$")
     ax_error.set_yticks(y)
     ax_error.set_yticklabels(labels)
     ax_error.invert_yaxis()
     ax_error.grid(True, axis="x", color="0.86", linewidth=0.7)
     ax_error.set_axisbelow(True)
     ax_error.legend(
+        handles=[
+            Line2D([0], [0], color=LIGHT_GRAPHITE, linewidth=2.4, label="componentwise"),
+            Line2D([0], [0], color=NVIDIA_GREEN, linewidth=2.4, label="cancellation"),
+            Line2D(
+                [0],
+                [0],
+                color=GRAPHITE,
+                marker="o",
+                linestyle="none",
+                label=r"$|\sum_s \nu_s\delta E_s|$",
+            ),
+            Line2D(
+                [0],
+                [0],
+                color=GRAPHITE,
+                marker="x",
+                linestyle="none",
+                label=r"$\sum_s |\nu_s\delta E_s|$",
+            ),
+        ],
         loc="lower center",
         bbox_to_anchor=(0.5, 1.005),
         ncol=2,
@@ -167,40 +228,40 @@ def plot(records: list[ReactionRecord], output_path: Path) -> None:
         columnspacing=0.9,
     )
 
-    equal_counts = [record.equal_share_t95_millions for record in records]
-    reaction_counts = [record.reaction_aware_t95_millions for record in records]
+    individual_counts = [record.individual_t95_millions for record in records]
+    cancellation_counts = [record.cancellation_t95_millions for record in records]
     ax_t95.barh(
         y - height / 2,
-        equal_counts,
+        individual_counts,
         height,
         color=LIGHT_GRAPHITE,
         edgecolor="white",
         linewidth=0.7,
-        label=r"equal-share seed",
+        label=r"componentwise",
         zorder=3,
     )
     bars = ax_t95.barh(
         y + height / 2,
-        reaction_counts,
+        cancellation_counts,
         height,
         color=NVIDIA_GREEN,
         edgecolor="white",
         linewidth=0.7,
-        label=r"reaction-aware seed",
+        label=r"cancellation",
         zorder=3,
     )
     ax_t95.set_xlabel(r"$T_{95}$ (millions)")
     ax_t95.set_yticks(y)
     ax_t95.set_yticklabels([])
     ax_t95.invert_yaxis()
-    max_count = max(equal_counts + reaction_counts)
+    max_count = max(individual_counts + cancellation_counts)
     ax_t95.set_xlim(0.0, 1.25 * max_count)
     ax_t95.grid(True, axis="x", color="0.86", linewidth=0.7)
     ax_t95.set_axisbelow(True)
     gains = [record.decrease_percent for record in records]
     for bar, record in zip(bars, records):
         ax_t95.text(
-            max(record.equal_share_t95_millions, record.reaction_aware_t95_millions)
+            max(record.individual_t95_millions, record.cancellation_t95_millions)
             + 0.018 * max_count,
             bar.get_y() + bar.get_height() / 2,
             rf"{record.decrease_percent:.1f}\%",

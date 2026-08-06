@@ -9,14 +9,17 @@ import pytest
 
 from hsopt.baseline_t_gate_drop import (
     OUTPUT_NAME,
+    REACTION_OUTPUT_TEMPLATE,
     BaselineTGateDropError,
     materialize_baseline_t_gate_drop,
 )
+from hsopt.compiled_unitary import DIFFERENCE_ERROR_CONTRACTS
 
 
 CSV_FIELDS = (
     "family",
     "instance",
+    "difference_error_contract",
     "task_id",
     "t95",
     "passes_chemical_accuracy",
@@ -62,17 +65,43 @@ def _census(
     tasks = []
     absolute_reference_sha256 = ("3" if variant == "tight" else "c") * 64
     reaction_reference_sha256 = ("4" if variant == "tight" else "d") * 64
-    for family, instance, t95, source_sha256, reference_sha256 in (
-        ("abs_energy", "molecule", absolute_t95, "a" * 64, absolute_reference_sha256),
-        ("diff_energy", "reaction", reaction_t95, "b" * 64, reaction_reference_sha256),
-    ):
-        task_id = f"{label}-{family}"
+    observations = [
+        (
+            "abs_energy",
+            "molecule",
+            None,
+            absolute_t95,
+            "a" * 64,
+            absolute_reference_sha256,
+        ),
+        *[
+            (
+                "diff_energy",
+                "reaction",
+                contract,
+                reaction_t95,
+                "b" * 64,
+                reaction_reference_sha256,
+            )
+            for contract in DIFFERENCE_ERROR_CONTRACTS
+        ],
+    ]
+    for (
+        family,
+        instance,
+        difference_error_contract,
+        t95,
+        source_sha256,
+        reference_sha256,
+    ) in observations:
+        task_id = f"{label}-{family}-{difference_error_contract or 'absolute'}"
         policy_sha256 = ("e" if variant == "loose" else "f") * 64
         result_sha256 = ("1" if family == "abs_energy" else "2") * 64
         tasks.append(
             {
                 "family": family,
                 "instance": instance,
+                "difference_error_contract": difference_error_contract,
                 "task_id": task_id,
                 "source_sha256": source_sha256,
                 "policy_sha256": policy_sha256,
@@ -84,6 +113,7 @@ def _census(
             {
                 "family": family,
                 "instance": instance,
+                "difference_error_contract": difference_error_contract or "",
                 "task_id": task_id,
                 "t95": t95,
                 "passes_chemical_accuracy": (family != "diff_energy" or reaction_passes),
@@ -161,12 +191,16 @@ def test_materializes_one_objective_comparable_number_per_experiment(tmp_path: P
     assert result["status"] == "materialized"
     assert result["objective"] == "confidence_adjusted_t_count"
     assert result["instance_count"] == 2
+    assert result["comparison_count"] == 3
     assert (
         repository / "experiments/abs_energy/molecule" / OUTPUT_NAME
     ).read_text() == "40.000000\n"
-    assert (
-        repository / "experiments/diff_energy/reaction" / OUTPUT_NAME
-    ).read_text() == "20.000000\n"
+    for contract in DIFFERENCE_ERROR_CONTRACTS:
+        assert (
+            repository
+            / "experiments/diff_energy/reaction"
+            / REACTION_OUTPUT_TEMPLATE.format(contract=contract)
+        ).read_text() == "20.000000\n"
     assert json.loads(audit.read_text())["records"][0]["loose_t95"] == 1000
 
     checked = _materialize(loose, tight, repository, check=True, audit_output=audit)

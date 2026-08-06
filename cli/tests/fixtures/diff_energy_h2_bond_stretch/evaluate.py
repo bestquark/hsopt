@@ -6,7 +6,7 @@ import argparse
 import json
 from pathlib import Path
 
-from hsopt.compiled_unitary import evaluate_difference
+from hsopt.compiled_unitary import DIFFERENCE_ERROR_CONTRACTS, evaluate_difference
 from hsopt.exact_queue import enqueue
 
 
@@ -18,6 +18,11 @@ def main() -> int:
     parser.add_argument("--policy-file", type=Path, default=HERE / "initial_pf.py")
     parser.add_argument("--backend", choices=("cupynumeric", "numpy"), default="cupynumeric")
     parser.add_argument("--queue-dir", type=Path)
+    parser.add_argument(
+        "--error-contract",
+        choices=DIFFERENCE_ERROR_CONTRACTS,
+        required=True,
+    )
     args = parser.parse_args()
     if args.queue_dir:
         result = enqueue(
@@ -25,11 +30,13 @@ def main() -> int:
             kind="difference",
             source=HERE / "reaction.json",
             policy=args.policy_file,
+            difference_error_contract=args.error_contract,
         )
     else:
         result = evaluate_difference(
             HERE / "reaction.json",
             args.policy_file,
+            error_contract=args.error_contract,
             backend=args.backend,
         )
     print(json.dumps(result, indent=2, sort_keys=True))

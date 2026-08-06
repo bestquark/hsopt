@@ -11,9 +11,12 @@ from decimal import Decimal, ROUND_HALF_EVEN
 from pathlib import Path
 from typing import Any, Mapping
 
+from .compiled_unitary import DIFFERENCE_ERROR_CONTRACTS
+
 
 FAMILIES = ("abs_energy", "diff_energy")
 OUTPUT_NAME = "baseline_t_gate_drop_percent.txt"
+REACTION_OUTPUT_TEMPLATE = "baseline_t_gate_drop_{contract}_percent.txt"
 OBJECTIVE_FIELD = "t95"
 PERCENT_QUANTUM = Decimal("0.000001")
 
@@ -26,6 +29,7 @@ class BaselineTGateDropError(RuntimeError):
 class CensusObservation:
     family: str
     instance: str
+    difference_error_contract: str | None
     task_id: str
     source_sha256: str
     policy_sha256: str
@@ -46,7 +50,7 @@ class Census:
     results_manifest_path: Path
     csv_path: Path
     campaign_variant: str | None
-    observations: dict[tuple[str, str], CensusObservation]
+    observations: dict[tuple[str, str, str | None], CensusObservation]
 
 
 def _read_json(path: Path) -> dict[str, Any]:
@@ -139,7 +143,7 @@ def _load_census(root: Path) -> Census:
             raise BaselineTGateDropError(f"{manifest_path}: duplicate task {task_id}")
         tasks_by_id[task_id] = task
 
-    observations: dict[tuple[str, str], CensusObservation] = {}
+    observations: dict[tuple[str, str, str | None], CensusObservation] = {}
     with csv_path.open(encoding="utf-8", newline="") as stream:
         rows = list(csv.DictReader(stream))
     if len(rows) != int(results_manifest.get("row_count", -1)) or len(rows) != len(tasks_by_id):
@@ -155,7 +159,23 @@ def _load_census(root: Path) -> Census:
             raise BaselineTGateDropError(f"{csv_path}: unsupported family {family!r}")
         if task.get("family") != family or task.get("instance") != instance:
             raise BaselineTGateDropError(f"{csv_path}: task identity disagrees with manifest")
-        key = (family, instance)
+        raw_difference_contract = str(row.get("difference_error_contract") or "")
+        difference_error_contract = raw_difference_contract or None
+        if family == "diff_energy":
+            if difference_error_contract not in DIFFERENCE_ERROR_CONTRACTS:
+                raise BaselineTGateDropError(
+                    f"{csv_path}: {instance} has unknown reaction-error contract "
+                    f"{difference_error_contract!r}"
+                )
+        elif difference_error_contract is not None:
+            raise BaselineTGateDropError(
+                f"{csv_path}: absolute experiment {instance} has a reaction-error contract"
+            )
+        if task.get("difference_error_contract") != difference_error_contract:
+            raise BaselineTGateDropError(
+                f"{csv_path}: task reaction-error contract disagrees with result row"
+            )
+        key = (family, instance, difference_error_contract)
         if key in observations:
             raise BaselineTGateDropError(f"{csv_path}: duplicate experiment {key}")
         policy_sha256 = _digest(row.get("policy_sha256"), label=f"{key} policy hash")
@@ -169,6 +189,7 @@ def _load_census(root: Path) -> Census:
         observations[key] = CensusObservation(
             family=family,
             instance=instance,
+            difference_error_contract=difference_error_contract,
             task_id=task_id,
             source_sha256=_digest(task.get("source_sha256"), label=f"{key} source hash"),
             policy_sha256=policy_sha256,
@@ -200,7 +221,7 @@ def _load_census(root: Path) -> Census:
     )
 
 
-def _expected_instances(repository_root: Path) -> set[tuple[str, str]]:
+def _expected_instances(repository_root: Path) -> set[tuple[str, str, str | None]]:
     experiments = repository_root / "experiments"
     expected: set[tuple[str, str]] = set()
     for family, descriptor in (
@@ -210,11 +231,15 @@ def _expected_instances(repository_root: Path) -> set[tuple[str, str]]:
         family_root = experiments / family
         if not family_root.is_dir():
             raise BaselineTGateDropError(f"missing experiment family: {family_root}")
-        expected.update(
-            (family, path.parent.name)
-            for path in family_root.glob(f"*/{descriptor}")
-            if path.is_file()
-        )
+        for path in family_root.glob(f"*/{descriptor}"):
+            if not path.is_file():
+                continue
+            if family == "abs_energy":
+                expected.add((family, path.parent.name, None))
+            else:
+                expected.update(
+                    (family, path.parent.name, contract) for contract in DIFFERENCE_ERROR_CONTRACTS
+                )
     if not expected:
         raise BaselineTGateDropError(f"no experiment instances found under {experiments}")
     return expected
@@ -238,7 +263,7 @@ def materialize_baseline_t_gate_drop(
     check: bool = False,
     audit_output: Path | None = None,
 ) -> dict[str, Any]:
-    """Write one signed loose-to-tight T95 percentage per complete experiment."""
+    """Write one signed loose-to-tight T95 percentage per scientific contract."""
 
     repository_root = repository_root.expanduser().resolve()
     loose_placement = _safe_component(loose_placement, label="loose placement")
@@ -298,8 +323,13 @@ def materialize_baseline_t_gate_drop(
                 f"{key}: both baselines must pass chemical accuracy before comparison"
             )
         percentage, encoded = _format_percent(loose_row.t95, tight_row.t95)
-        family, instance = key
-        output = repository_root / "experiments" / family / instance / OUTPUT_NAME
+        family, instance, difference_error_contract = key
+        output_name = (
+            OUTPUT_NAME
+            if difference_error_contract is None
+            else REACTION_OUTPUT_TEMPLATE.format(contract=difference_error_contract)
+        )
+        output = repository_root / "experiments" / family / instance / output_name
         if check:
             if not output.is_file() or output.read_text(encoding="utf-8") != encoded:
                 raise BaselineTGateDropError(f"stale baseline T-gate drop: {output}")
@@ -309,6 +339,7 @@ def materialize_baseline_t_gate_drop(
             {
                 "family": family,
                 "instance": instance,
+                "difference_error_contract": difference_error_contract,
                 "placement": loose_placement,
                 "execution_backend": loose_row.backend,
                 "execution_accelerator": loose_row.accelerator,
@@ -334,7 +365,7 @@ def materialize_baseline_t_gate_drop(
         temporary.replace(output)
 
     result = {
-        "schema": 1,
+        "schema": 2,
         "status": "verified" if check else "materialized",
         "objective": "confidence_adjusted_t_count",
         "definition": "100 * (T95_loose - T95_tight) / T95_loose",
@@ -346,7 +377,8 @@ def materialize_baseline_t_gate_drop(
         "tight_census_manifest_sha256": _sha256(tight.manifest_path),
         "tight_results_manifest_sha256": _sha256(tight.results_manifest_path),
         "repository_root": str(repository_root),
-        "instance_count": len(records),
+        "instance_count": len({(row["family"], row["instance"]) for row in records}),
+        "comparison_count": len(records),
         "records": records,
     }
     if audit_output is not None:

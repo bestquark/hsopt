@@ -33,6 +33,13 @@ QPE_DIMENSIONLESS_EVOLUTION_TIME = 1.0
 QPE_PHASE_ESTIMATION_ALPHA = 8.0 * math.pi
 QPE_SINGLE_RUN_PHASE_SUCCESS_LOWER_BOUND = 0.5
 EVALUATION_CONTRACT_VERSION = "normalized_hamiltonian_qpe_t_count_v2"
+DIFFERENCE_ERROR_CONTRACT_INDIVIDUAL = "individual_errors"
+DIFFERENCE_ERROR_CONTRACT_CANCELLATION = "error_cancellation"
+DIFFERENCE_ERROR_CONTRACTS = (
+    DIFFERENCE_ERROR_CONTRACT_INDIVIDUAL,
+    DIFFERENCE_ERROR_CONTRACT_CANCELLATION,
+)
+DIFFERENCE_ERROR_CONTRACT_VERSION = "reaction_error_contracts_v1"
 QPE_TARGET_CONFIDENCE = 0.95
 # Match the established HF-reference spectral evaluator. This suppresses
 # floating-point zero-weight eigenvectors; it is not a physical p_min or an
@@ -1518,10 +1525,22 @@ def evaluate_difference(
     reaction_path: Path,
     policy_path: Path,
     *,
+    error_contract: str,
     backend: str = "cupynumeric",
     reference_path: Path | None = None,
 ) -> dict[str, Any]:
-    """Evaluate a signed energy difference from independently compiled unitaries."""
+    """Evaluate a reaction under one explicit, immutable error contract.
+
+    ``individual_errors`` enforces the conservative triangle-inequality metric
+    ``sum_s |nu_s (E_pf,s - E_exact,s)|``. ``error_cancellation`` instead
+    enforces the physically aggregated signed reaction error
+    ``|sum_s nu_s (E_pf,s - E_exact,s)|``.
+    """
+
+    if error_contract not in DIFFERENCE_ERROR_CONTRACTS:
+        raise ValueError(
+            f"error_contract must be one of {DIFFERENCE_ERROR_CONTRACTS}, got {error_contract!r}"
+        )
 
     evaluation_started = time.perf_counter()
     reaction_path = reaction_path.resolve()
@@ -1570,9 +1589,27 @@ def evaluate_difference(
 
     signed_error = compiled_difference - exact_difference
     absolute_error = abs(signed_error)
-    passes = absolute_error < CHEMICAL_ACCURACY_HARTREE
+    signed_species_contributions = {
+        species: species_coefficients[species]
+        * (
+            float(result["compiled_pf_energy_hartree"])
+            - float(result["exact_ground_energy_hartree"])
+        )
+        for species, result in species_results.items()
+    }
+    sum_absolute_species_error = math.fsum(
+        abs(value) for value in signed_species_contributions.values()
+    )
+    individual_errors_pass = sum_absolute_species_error < CHEMICAL_ACCURACY_HARTREE
+    error_cancellation_pass = absolute_error < CHEMICAL_ACCURACY_HARTREE
+    if error_contract == DIFFERENCE_ERROR_CONTRACT_INDIVIDUAL:
+        contract_error = sum_absolute_species_error
+        passes = individual_errors_pass
+    else:
+        contract_error = absolute_error
+        passes = error_cancellation_pass
     reaction_qpe_precision = (
-        CHEMICAL_ACCURACY_HARTREE - absolute_error if passes else CHEMICAL_ACCURACY_HARTREE
+        CHEMICAL_ACCURACY_HARTREE - contract_error if passes else CHEMICAL_ACCURACY_HARTREE
     )
     confidence_adjusted_t_count = 0
     per_attempt_t_count = 0
@@ -1593,6 +1630,10 @@ def evaluate_difference(
             "equal_absolute_reaction_contribution_under_triangle_inequality"
         )
         result["reaction_coefficient"] = species_coefficients[species]
+        result["signed_reaction_error_contribution_hartree"] = signed_species_contributions[species]
+        result["absolute_reaction_error_contribution_hartree"] = abs(
+            signed_species_contributions[species]
+        )
         confidence_adjusted_t_count += int(species_qpe_cost["confidence_adjusted_t_count"])
         per_attempt_t_count += int(species_qpe_cost["per_attempt_t_count"])
     union_bound_confidence = max(
@@ -1609,6 +1650,8 @@ def evaluate_difference(
     return {
         "status": "ok",
         "evaluation_contract_version": EVALUATION_CONTRACT_VERSION,
+        "difference_error_contract": error_contract,
+        "difference_error_contract_version": DIFFERENCE_ERROR_CONTRACT_VERSION,
         "observable": "compiled_unitary_signed_energy_difference",
         "reaction": reaction["name"],
         "reaction_path": str(reaction_path),
@@ -1622,8 +1665,20 @@ def evaluate_difference(
         "signed_difference_error_hartree": signed_error,
         "absolute_difference_error_hartree": absolute_error,
         "absolute_difference_error_mha": 1000.0 * absolute_error,
+        "sum_absolute_species_error_hartree": sum_absolute_species_error,
+        "sum_absolute_species_error_mha": 1000.0 * sum_absolute_species_error,
+        "contract_error_hartree": contract_error,
+        "contract_error_mha": 1000.0 * contract_error,
+        "error_cancellation_gain_hartree": sum_absolute_species_error - absolute_error,
+        "error_cancellation_fraction": (
+            1.0 - absolute_error / sum_absolute_species_error
+            if sum_absolute_species_error > 0.0
+            else 0.0
+        ),
         "chemical_accuracy_hartree": CHEMICAL_ACCURACY_HARTREE,
         "passes_chemical_accuracy": passes,
+        "passes_individual_errors_contract": individual_errors_pass,
+        "passes_error_cancellation_contract": error_cancellation_pass,
         "qpe_energy_precision_hartree": reaction_qpe_precision,
         "qpe_energy_precision_allocation": (
             "equal_absolute_species_contribution_under_triangle_inequality"
@@ -1648,7 +1703,43 @@ def evaluate_difference(
         },
         "evaluation_contract": (
             "minimize the summed confidence-adjusted species QPE T cost with at "
-            "least 95% union-bound confidence, subject to signed reaction-energy "
-            "error being within chemical accuracy"
+            "least 95% union-bound confidence, subject to the explicitly selected "
+            f"{error_contract} reaction-energy metric being within chemical accuracy"
         ),
     }
+
+
+def evaluate_difference_individual_errors(
+    reaction_path: Path,
+    policy_path: Path,
+    *,
+    backend: str = "cupynumeric",
+    reference_path: Path | None = None,
+) -> dict[str, Any]:
+    """Enforce ``sum_s |nu_s (E_pf,s - E_exact,s)| < chemical accuracy``."""
+
+    return evaluate_difference(
+        reaction_path,
+        policy_path,
+        error_contract=DIFFERENCE_ERROR_CONTRACT_INDIVIDUAL,
+        backend=backend,
+        reference_path=reference_path,
+    )
+
+
+def evaluate_difference_error_cancellation(
+    reaction_path: Path,
+    policy_path: Path,
+    *,
+    backend: str = "cupynumeric",
+    reference_path: Path | None = None,
+) -> dict[str, Any]:
+    """Enforce ``|sum_s nu_s (E_pf,s - E_exact,s)| < chemical accuracy``."""
+
+    return evaluate_difference(
+        reaction_path,
+        policy_path,
+        error_contract=DIFFERENCE_ERROR_CONTRACT_CANCELLATION,
+        backend=backend,
+        reference_path=reference_path,
+    )

@@ -7,6 +7,7 @@ from pathlib import Path
 import pytest
 
 from hsopt.campaign_scope import reduce_hamlib_replicates
+from hsopt.compiled_unitary import DIFFERENCE_ERROR_CONTRACTS
 
 
 def write_json(path: Path, payload: object) -> None:
@@ -45,7 +46,7 @@ def test_reduce_hamlib_replicates_preserves_histories_and_archives_queue_work(
             "replicate": contract,
             "lane_dir": f"lanes/diff_energy/reaction/{contract}",
         }
-        for contract in ("equal_share", "reaction_aware")
+        for contract in DIFFERENCE_ERROR_CONTRACTS
     ]
     write_json(
         root / "campaign.json",
@@ -56,7 +57,7 @@ def test_reduce_hamlib_replicates_preserves_histories_and_archives_queue_work(
             "hamlib": {"instances": 1, "replicates": 5},
             "reactions": {
                 "instances": 1,
-                "contracts": ["equal_share", "reaction_aware"],
+                "contracts": list(DIFFERENCE_ERROR_CONTRACTS),
             },
             "lanes": abs_lanes + reaction_lanes,
         },
@@ -95,8 +96,7 @@ def test_reduce_hamlib_replicates_preserves_histories_and_archives_queue_work(
         "run_03",
     ]
     assert [row["replicate"] for row in campaign["lanes"] if row["family"] == "diff_energy"] == [
-        "equal_share",
-        "reaction_aware",
+        *DIFFERENCE_ERROR_CONTRACTS,
     ]
 
     change_root = root / "scope_changes" / result["change_id"]

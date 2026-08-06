@@ -15,6 +15,8 @@ import pytest
 
 from hsopt.compiled_unitary import (
     DENSE_EVALUATOR_MAX_QUBITS,
+    DIFFERENCE_ERROR_CONTRACT_CANCELLATION,
+    DIFFERENCE_ERROR_CONTRACT_INDIVIDUAL,
     EVALUATION_CONTRACT_VERSION,
     QPE_TARGET_CONFIDENCE,
     TARGET_STATE_DEFINITION,
@@ -29,6 +31,8 @@ from hsopt.compiled_unitary import (
     _qpe_repetitions,
     _product_formula_schedule,
     _select_lowest_hf_accessible_peak,
+    evaluate_difference,
+    evaluate_exact_difference_reference,
     evaluate_exact_reference,
     evaluate_molecule,
     load_policy,
@@ -56,6 +60,48 @@ REPO = Path(__file__).resolve().parents[2]
 ABSOLUTE = REPO / "cli" / "tests" / "fixtures" / "abs_energy_h2"
 DIFFERENCE = REPO / "cli" / "tests" / "fixtures" / "diff_energy_h2_bond_stretch"
 GENERATOR = REPO / "experiments" / "generate_initial_pf.py"
+
+
+def test_reaction_error_contracts_measure_the_same_species_without_mixing(
+    tmp_path: Path,
+) -> None:
+    reference = evaluate_exact_difference_reference(
+        DIFFERENCE / "reaction.json",
+        backend="numpy",
+    )
+    reference_path = tmp_path / "exact-reference.json"
+    reference_path.write_text(json.dumps(reference) + "\n", encoding="utf-8")
+    results = {
+        contract: evaluate_difference(
+            DIFFERENCE / "reaction.json",
+            DIFFERENCE / "initial_pf.py",
+            error_contract=contract,
+            backend="numpy",
+            reference_path=reference_path,
+        )
+        for contract in (
+            DIFFERENCE_ERROR_CONTRACT_INDIVIDUAL,
+            DIFFERENCE_ERROR_CONTRACT_CANCELLATION,
+        )
+    }
+
+    individual = results[DIFFERENCE_ERROR_CONTRACT_INDIVIDUAL]
+    cancellation = results[DIFFERENCE_ERROR_CONTRACT_CANCELLATION]
+    assert individual["species"].keys() == cancellation["species"].keys()
+    assert individual["sum_absolute_species_error_hartree"] == pytest.approx(
+        cancellation["sum_absolute_species_error_hartree"]
+    )
+    assert individual["absolute_difference_error_hartree"] == pytest.approx(
+        cancellation["absolute_difference_error_hartree"]
+    )
+    assert individual["contract_error_hartree"] == pytest.approx(
+        individual["sum_absolute_species_error_hartree"]
+    )
+    assert cancellation["contract_error_hartree"] == pytest.approx(
+        cancellation["absolute_difference_error_hartree"]
+    )
+    assert individual["contract_error_hartree"] >= cancellation["contract_error_hartree"]
+    assert individual["difference_error_contract"] != cancellation["difference_error_contract"]
 
 
 def _encoded_problem(problem: dict[str, object]) -> dict[str, object]:

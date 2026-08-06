@@ -67,19 +67,17 @@ The evaluator:
 1. compiles every scheduled Pauli rotation with PyGridSynth;
 2. constructs and diagonalizes the actual compiled one-step unitary;
 3. repeats its eigenphase exactly according to `repetitions()`;
-4. selects the lowest-energy peak with numerically resolved weight from the
-   fixed Hartree--Fock input;
+4. selects the lowest-energy peak with resolved weight from the fixed Hartree--Fock input;
 5. compares it with the cached exact ground energy; and
-6. assigns the remaining one-kcal/mol budget to QPE precision and multiplies
-   the directly compiled one-evolution T count by the paper's
-   `ceil(8*pi/(target_time*epsilon_QPE))` full-evolution query bound; and
-7. multiplies that QPE-run cost by enough attempts for 95% confidence,
-   accounting for both HF peak weight and the paper's one-half
-   phase-estimation success guarantee.
+6. assigns the remaining one-kcal/mol budget to QPE precision and applies the
+   paper's `ceil(8*pi/(target_time*epsilon_QPE))` query bound; and
+7. adds enough attempts for 95% confidence from HF weight and phase-estimation success.
 
-For a reaction, the signed energy is assembled from independently evaluated
-species. The five-percent failure budget is shared across unique species and
-their confidence-adjusted T costs are summed.
+For a reaction, independently evaluated species share the failure budget and
+their confidence-adjusted T costs are summed. `individual_errors` requires
+`sum_s |nu_s (E_pf,s - E_exact,s)| < epsilon_chem`; `error_cancellation` requires
+`|sum_s nu_s (E_pf,s - E_exact,s)| < epsilon_chem`. Both values are recorded,
+but lane identity, feasibility, history, exports, and plots use one contract.
 
 Once a lane is feasible, accept only a strict T95 reduction that remains within
 1 kcal/mol. Before feasibility, the loop may retain exact-error progress.
@@ -92,6 +90,9 @@ Once a lane is feasible, accept only a strict T95 reduction that remains within
   allocation and evaluator.
 - Compute the exact reference once per unique Hamiltonian and reuse it during
   tight calibration, iteration 0, and every mutation evaluation.
+- Reaction exact references may be shared across contracts, but candidate task
+  IDs, mutation histories, incumbents, and results must never be shared or
+  replayed across `individual_errors` and `error_cancellation`.
 - The mutation sandbox receives only the selected policy as `candidate.py`; it
   must not receive or read the sibling baseline initializer.
 - Keep loose and tight supervisors, mutation pools, queues, evaluator workers,
@@ -108,13 +109,11 @@ Once a lane is feasible, accept only a strict T95 reduction that remains within
   validation campaign replays those exact archived candidates without invoking
   the agent and is audited for numerical parity.
 
-After the independent iteration-0 census exists for complete same-placement
-loose and tight baselines, run `hsopt-baseline-drop`. It writes one
-`baseline_t_gate_drop_percent.txt` number per checked-in experiment folder,
-using `100 * (T95_loose - T95_tight) / T95_loose`. Require identical census
-grids, source and reference hashes, evaluator contracts, backends,
-accelerators, placement labels, and chemical-accuracy passes; never pool CPU,
-A100, and L4 observations.
+After complete same-placement loose and tight iteration-0 censuses, run
+`hsopt-baseline-drop`. Absolute folders get `baseline_t_gate_drop_percent.txt`;
+reactions get `baseline_t_gate_drop_<contract>_percent.txt`, using
+`100 * (T95_loose - T95_tight) / T95_loose`. Require matching grids, hashes,
+contracts, backends, accelerators, placement, and accuracy; never pool hardware.
 
 For campaign orchestration, invoke the installed commands (`hsopt-campaign`,
 `hsopt-supervisor`, `hsopt-export-exact`, and `hsopt-reports`) through `uv run`;

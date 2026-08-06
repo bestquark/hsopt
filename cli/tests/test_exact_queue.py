@@ -15,7 +15,11 @@ from hsopt.exact_queue import (
     requeue_missing,
     run_batch,
 )
-from hsopt.compiled_unitary import evaluate_exact_difference_reference
+from hsopt.compiled_unitary import (
+    DIFFERENCE_ERROR_CONTRACT_CANCELLATION,
+    DIFFERENCE_ERROR_CONTRACT_INDIVIDUAL,
+    evaluate_exact_difference_reference,
+)
 from hsopt.nvpark_queue import _system_memory_mib, submit_batch, submit_ready
 
 
@@ -130,6 +134,7 @@ def test_difference_reference_is_rebound_to_the_staged_reaction(
         source=DIFFERENCE / "reaction.json",
         policy=DIFFERENCE / "initial_pf.py",
         reference=reference_path,
+        difference_error_contract=DIFFERENCE_ERROR_CONTRACT_CANCELLATION,
     )
     task = tmp_path / "queue" / "pending" / candidate["task_id"]
     staged_reference = json.loads((task / "reference.json").read_text())
@@ -141,6 +146,30 @@ def test_difference_reference_is_rebound_to_the_staged_reaction(
     finished = run_batch(batch, backend="numpy")
     assert finished["succeeded"] == 1
     assert finished["failed"] == 0
+
+
+def test_difference_contracts_have_distinct_queue_identities(tmp_path: Path) -> None:
+    queued = {
+        contract: enqueue(
+            tmp_path,
+            kind="difference",
+            source=DIFFERENCE / "reaction.json",
+            policy=DIFFERENCE / "initial_pf.py",
+            difference_error_contract=contract,
+        )
+        for contract in (
+            DIFFERENCE_ERROR_CONTRACT_INDIVIDUAL,
+            DIFFERENCE_ERROR_CONTRACT_CANCELLATION,
+        )
+    }
+
+    assert (
+        queued[DIFFERENCE_ERROR_CONTRACT_INDIVIDUAL]["task_id"]
+        != queued[DIFFERENCE_ERROR_CONTRACT_CANCELLATION]["task_id"]
+    )
+    for contract, record in queued.items():
+        task = tmp_path / "pending" / record["task_id"] / "task.json"
+        assert json.loads(task.read_text())["difference_error_contract"] == contract
 
 
 def test_nvpark_submission_requests_only_one_small_gpu_allocation(

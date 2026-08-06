@@ -7,7 +7,7 @@ from threading import Lock
 from pathlib import Path
 
 from hsopt.campaign_setup import initialize_campaign
-from hsopt.compiled_unitary import evaluate_exact_reference
+from hsopt.compiled_unitary import DIFFERENCE_ERROR_CONTRACTS, evaluate_exact_reference
 from hsopt.exact_loop import initialize_lane, reconcile_lane
 from hsopt.exact_queue import enqueue_reference, merge_batch, prepare_batch, run_batch
 from hsopt.exact_supervisor import (
@@ -599,17 +599,37 @@ def test_campaign_reuses_one_calibrated_reference_for_all_replicate_baselines(
     assert len({row["reference_sha256"] for row in campaign["lanes"]}) == 2
     assert all(row["baseline_task_id"] is not None for row in campaign["lanes"])
     assert (tmp_path / "campaign/policies/abs_energy/h2/initial_pf.py").is_file()
-    assert (tmp_path / "campaign/policies/diff_energy/stretch/equal_share/initial_pf.py").is_file()
-    assert (
-        tmp_path / "campaign/policies/diff_energy/stretch/reaction_aware/initial_pf.py"
-    ).is_file()
+    for contract in DIFFERENCE_ERROR_CONTRACTS:
+        assert (
+            tmp_path / f"campaign/policies/diff_energy/stretch/{contract}/initial_pf.py"
+        ).is_file()
     queue = Path(campaign["queue_dir"])
-    assert len(list((queue / "pending").iterdir())) == 2
+    assert len(list((queue / "pending").iterdir())) == 3
     for row in campaign["lanes"]:
         state = json.loads((tmp_path / "campaign" / row["lane_dir"] / "state.json").read_text())
         assert state["pending_kind"] == "baseline"
         assert state["iterations_completed"] == 0
         assert (tmp_path / "campaign" / row["lane_dir"] / "exact_reference.json").is_file()
+
+    reaction_only = initialize_campaign(
+        hamlib_inputs=hamlib_inputs,
+        reaction_inputs=reaction_inputs,
+        calibration_root=tmp_path / "calibrations",
+        generator=REPO / "experiments" / "generate_initial_pf.py",
+        campaign_root=tmp_path / "reaction-only-campaign",
+        iterations=50,
+        expected_reaction_instances=1,
+        baseline="tight",
+        reaction_only=True,
+    )
+    assert reaction_only["included_families"] == ["diff_energy"]
+    assert reaction_only["hamlib"]["instances"] == 0
+    assert reaction_only["hamlib"]["replicates"] == 0
+    assert len(reaction_only["lanes"]) == 2
+    assert {row["difference_error_contract"] for row in reaction_only["lanes"]} == set(
+        DIFFERENCE_ERROR_CONTRACTS
+    )
+    assert len(list((Path(reaction_only["queue_dir"]) / "pending").iterdir())) == 2
 
 
 def test_finalizer_runs_both_requested_export_and_report_pairs_once(

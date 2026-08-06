@@ -13,6 +13,8 @@ from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any, Iterable, Mapping
 
+from .compiled_unitary import DIFFERENCE_ERROR_CONTRACT_VERSION
+
 
 FAMILIES = ("abs_energy", "diff_energy")
 SAFE_COMPONENT = frozenset("abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789._-")
@@ -168,6 +170,16 @@ def _validate_lane(
             raise ExactExportError(f"completed lane lacks {required}: {lane_dir}")
     if manifest.get("family") != campaign_row.get("family"):
         raise ExactExportError(f"lane family disagrees with campaign: {lane_dir}")
+    if manifest.get("family") == "diff_energy":
+        contract = manifest.get("difference_error_contract")
+        if contract != manifest.get("replicate") or contract != campaign_row.get(
+            "difference_error_contract"
+        ):
+            raise ExactExportError(
+                f"reaction-error contract disagrees across lane records: {lane_dir}"
+            )
+        if manifest.get("difference_error_contract_version") != (DIFFERENCE_ERROR_CONTRACT_VERSION):
+            raise ExactExportError(f"reaction-error contract version is stale: {lane_dir}")
     for iteration in range(1, target + 1):
         iteration_dir = lane_dir / "iterations" / f"{iteration:04d}"
         for required in ("candidate.py", "result.json", "decision.json", "mutation_result.json"):
@@ -338,6 +350,13 @@ def _reaction_row(
     decision: Mapping[str, Any] | None,
     iteration_dir: Path | None,
 ) -> dict[str, Any]:
+    if result.get("difference_error_contract") != contract:
+        raise ExactExportError(
+            f"{instance}/{contract} contains result for reaction-error contract "
+            f"{result.get('difference_error_contract')!r}"
+        )
+    if result.get("difference_error_contract_version") != DIFFERENCE_ERROR_CONTRACT_VERSION:
+        raise ExactExportError(f"{instance}/{contract} contains a stale reaction-error result")
     accepted = iteration == 0 or bool((decision or {}).get("accepted"))
     species_errors = [
         float(item["absolute_energy_error_hartree"])
@@ -347,6 +366,8 @@ def _reaction_row(
     row = {
         "reaction_key": instance,
         "source_contract": contract,
+        "difference_error_contract": contract,
+        "difference_error_contract_version": DIFFERENCE_ERROR_CONTRACT_VERSION,
         "source_lane": f"{instance}_{contract}",
         "iteration": iteration,
         "accepted": str(accepted).lower(),
@@ -367,6 +388,15 @@ def _reaction_row(
         "pf_reaction_energy_hartree": result.get("compiled_pf_difference_hartree", ""),
         "signed_reaction_error_hartree": result.get("signed_difference_error_hartree", ""),
         "absolute_reaction_error_hartree": result.get("absolute_difference_error_hartree", ""),
+        "sum_absolute_species_error_hartree": result.get("sum_absolute_species_error_hartree", ""),
+        "contract_error_hartree": result.get("contract_error_hartree", ""),
+        "error_cancellation_fraction": result.get("error_cancellation_fraction", ""),
+        "passes_individual_errors_contract": str(
+            bool(result.get("passes_individual_errors_contract"))
+        ).lower(),
+        "passes_error_cancellation_contract": str(
+            bool(result.get("passes_error_cancellation_contract"))
+        ).lower(),
         "max_species_absolute_error_hartree": max(species_errors, default=math.nan),
         "passes_contract": str(bool(result.get("passes_chemical_accuracy"))).lower(),
         "task_id": result.get("task_id", (decision or {}).get("task_id", "")),
@@ -496,6 +526,7 @@ def export_family(campaign_root: Path, family: str, output_dir: Path) -> dict[st
                 reaction_final[(instance, replicate)] = {
                     "baseline_variant": baseline_variant,
                     "selected_source_contract": replicate,
+                    "difference_error_contract": incumbent["difference_error_contract"],
                     "selected_source_iteration": incumbent_iteration,
                     "per_attempt_t_gate_count": incumbent["t_count"],
                     "confidence_adjusted_t_gate_count": _confidence_cost(incumbent),
@@ -503,6 +534,11 @@ def export_family(campaign_root: Path, family: str, output_dir: Path) -> dict[st
                     "absolute_reaction_error_hartree": incumbent[
                         "absolute_difference_error_hartree"
                     ],
+                    "sum_absolute_species_error_hartree": incumbent[
+                        "sum_absolute_species_error_hartree"
+                    ],
+                    "contract_error_hartree": incumbent["contract_error_hartree"],
+                    "error_cancellation_fraction": incumbent["error_cancellation_fraction"],
                     "max_species_absolute_error_hartree": max(
                         float(item["absolute_energy_error_hartree"])
                         for item in incumbent["species"].values()
@@ -617,6 +653,8 @@ def export_family(campaign_root: Path, family: str, output_dir: Path) -> dict[st
                     "baseline_variant",
                     "reaction_key",
                     "source_contract",
+                    "difference_error_contract",
+                    "difference_error_contract_version",
                     "source_lane",
                     "iteration",
                     "accepted",
@@ -631,6 +669,11 @@ def export_family(campaign_root: Path, family: str, output_dir: Path) -> dict[st
                     "pf_reaction_energy_hartree",
                     "signed_reaction_error_hartree",
                     "absolute_reaction_error_hartree",
+                    "sum_absolute_species_error_hartree",
+                    "contract_error_hartree",
+                    "error_cancellation_fraction",
+                    "passes_individual_errors_contract",
+                    "passes_error_cancellation_contract",
                     "max_species_absolute_error_hartree",
                     "passes_contract",
                     "task_id",

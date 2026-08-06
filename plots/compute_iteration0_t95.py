@@ -1,11 +1,10 @@
 #!/usr/bin/env python3
 """Run an independent, immutable iteration-0 T95 census.
 
-The census snapshots one initial policy and exact reference per physical
-benchmark, evaluates it through ``hsopt.exact_queue``, and never reads or
-changes an autoresearch incumbent.  Absolute-energy replicates and reaction
-contracts are validated for byte-identical iteration-0 inputs before they are
-deduplicated.
+The census snapshots one initial policy and exact reference per scientific
+contract, evaluates it through ``hsopt.exact_queue``, and never reads or
+changes an autoresearch incumbent. Absolute-energy replicates are deduplicated;
+reaction contracts remain separate even when their iteration-0 files match.
 """
 
 from __future__ import annotations
@@ -20,7 +19,11 @@ from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any
 
-from hsopt.compiled_unitary import EVALUATION_CONTRACT_VERSION
+from hsopt.compiled_unitary import (
+    DIFFERENCE_ERROR_CONTRACTS,
+    DIFFERENCE_ERROR_CONTRACT_VERSION,
+    EVALUATION_CONTRACT_VERSION,
+)
 from hsopt.exact_queue import enqueue, queue_status
 from hsopt.nvpark_queue import (
     DEFAULT_ACCOUNT,
@@ -36,11 +39,12 @@ from hsopt.nvpark_queue import (
 EXPECTED_ABSOLUTE = 82
 EXPECTED_REACTIONS = 10
 DEFAULT_JOBS = 4
-DEFAULT_REMOTE_ROOT = "/lustre/fs12/portfolios/nvr/users/lmantilla/hsopt-iteration0-t95-census-v1"
+DEFAULT_REMOTE_ROOT = "/lustre/fs12/portfolios/nvr/users/lmantilla/hsopt-iteration0-t95-census-v2"
 CSV_FIELDS = (
     "family",
     "instance",
     "kind",
+    "difference_error_contract",
     "task_id",
     "n_qubits",
     "max_n_qubits",
@@ -50,6 +54,9 @@ CSV_FIELDS = (
     "t95",
     "passes_chemical_accuracy",
     "absolute_error_mha",
+    "absolute_signed_sum_error_mha",
+    "sum_absolute_species_error_mha",
+    "error_cancellation_fraction",
     "qpe_repetitions",
     "species_qpe_repetitions",
     "evaluation_wall_seconds",
@@ -116,6 +123,16 @@ def _lane_inputs(campaign_root: Path, lane: dict[str, Any]) -> dict[str, Any]:
         raise ValueError(f"{lane_dir}: lane and manifest instance disagree")
     if manifest.get("evaluation_contract_version") != EVALUATION_CONTRACT_VERSION:
         raise ValueError(f"{lane_dir}: evaluator contract does not match the current evaluator")
+    difference_error_contract = manifest.get("difference_error_contract")
+    if expected_kind == "difference":
+        if difference_error_contract != lane.get("replicate"):
+            raise ValueError(f"{lane_dir}: lane and manifest reaction-error contracts disagree")
+        if difference_error_contract not in DIFFERENCE_ERROR_CONTRACTS:
+            raise ValueError(f"{lane_dir}: unknown reaction-error contract")
+        if manifest.get("difference_error_contract_version") != (DIFFERENCE_ERROR_CONTRACT_VERSION):
+            raise ValueError(f"{lane_dir}: unknown reaction-error contract version")
+    elif difference_error_contract is not None:
+        raise ValueError(f"{lane_dir}: absolute lane declares a reaction-error contract")
     for path in (source, policy, reference):
         if not path.is_file():
             raise FileNotFoundError(path)
@@ -140,6 +157,7 @@ def _lane_inputs(campaign_root: Path, lane: dict[str, Any]) -> dict[str, Any]:
         "policy": policy,
         "reference": reference,
         "reference_scientific_sha256": _reference_scientific_sha256(reference),
+        "difference_error_contract": difference_error_contract,
         **hashes,
     }
 
@@ -229,44 +247,56 @@ def prepare_census(
         source_paths = {str(record["source"].resolve()) for record in inputs}
         if len(source_paths) != 1:
             raise ValueError(f"{instance}: source path differs across iteration-0 lanes")
-        preferred = "run_01" if family == "abs_energy" else "equal_share"
         lane_by_replicate = {
             str(lane["replicate"]): inputs[index] for index, lane in enumerate(instance_lanes)
         }
-        selected = lane_by_replicate.get(preferred, inputs[0])
         kind = "absolute" if family == "abs_energy" else "difference"
-        queued = enqueue(
-            queue_dir,
-            kind=kind,
-            source=selected["source"],
-            policy=selected["policy"],
-            reference=selected["reference"],
-        )
-        shape = _source_shape(kind, selected["source"])
-        records.append(
-            {
-                "family": family,
-                "instance": instance,
-                "kind": kind,
-                "task_id": queued["task_id"],
-                "source_original": str(selected["source"]),
-                "source_sha256": selected["source_sha256"],
-                "policy_original": str(selected["policy"]),
-                "policy_sha256": selected["policy_sha256"],
-                "reference_original": str(selected["reference"]),
-                "reference_sha256": selected["reference_sha256"],
-                "reference_scientific_sha256": selected["reference_scientific_sha256"],
-                "source_lane_count": len(instance_lanes),
-                **shape,
-            }
-        )
+        if family == "abs_energy":
+            selections = [(None, lane_by_replicate.get("run_01", inputs[0]))]
+        else:
+            if set(lane_by_replicate) != set(DIFFERENCE_ERROR_CONTRACTS):
+                raise ValueError(
+                    f"{instance}: expected reaction contracts {DIFFERENCE_ERROR_CONTRACTS}, "
+                    f"found {tuple(sorted(lane_by_replicate))}"
+                )
+            selections = [
+                (contract, lane_by_replicate[contract]) for contract in DIFFERENCE_ERROR_CONTRACTS
+            ]
+        for difference_error_contract, selected in selections:
+            queued = enqueue(
+                queue_dir,
+                kind=kind,
+                source=selected["source"],
+                policy=selected["policy"],
+                reference=selected["reference"],
+                difference_error_contract=difference_error_contract,
+            )
+            shape = _source_shape(kind, selected["source"])
+            records.append(
+                {
+                    "family": family,
+                    "instance": instance,
+                    "kind": kind,
+                    "difference_error_contract": difference_error_contract,
+                    "task_id": queued["task_id"],
+                    "source_original": str(selected["source"]),
+                    "source_sha256": selected["source_sha256"],
+                    "policy_original": str(selected["policy"]),
+                    "policy_sha256": selected["policy_sha256"],
+                    "reference_original": str(selected["reference"]),
+                    "reference_sha256": selected["reference_sha256"],
+                    "reference_scientific_sha256": selected["reference_scientific_sha256"],
+                    "source_lane_count": len(instance_lanes) if family == "abs_energy" else 1,
+                    **shape,
+                }
+            )
 
     task_ids = [record["task_id"] for record in records]
     if len(set(task_ids)) != len(records):
         duplicates = [task_id for task_id, count in Counter(task_ids).items() if count > 1]
         raise ValueError(f"distinct instances collapsed to duplicate tasks: {duplicates}")
     payload = {
-        "schema": 1,
+        "schema": 2,
         "created_at": _now(),
         "purpose": "immutable_iteration0_t95_census",
         "evaluation_contract_version": EVALUATION_CONTRACT_VERSION,
@@ -277,11 +307,12 @@ def prepare_census(
         "counts": {
             "absolute": counts.get("abs_energy", 0),
             "reactions": counts.get("diff_energy", 0),
+            "reaction_contracts": sum(record["family"] == "diff_energy" for record in records),
             "total": len(records),
         },
         "deduplication": (
-            "three absolute replicates and two reaction contracts are reduced only "
-            "after source, initial policy, and exact-reference hashes agree"
+            "absolute replicates are reduced only after source, initial policy, and "
+            "exact-reference hashes agree; reaction-error contracts are never deduplicated"
         ),
         "tasks": records,
     }
@@ -477,16 +508,23 @@ def _result_row(
             {name: int(item["qpe_repetitions"]) for name, item in sorted(species.items())},
             sort_keys=True,
         )
-        error_mha = float(result["absolute_difference_error_mha"])
+        error_mha = float(result["contract_error_mha"])
+        signed_sum_error_mha: float | str = float(result["absolute_difference_error_mha"])
+        sum_absolute_error_mha: float | str = float(result["sum_absolute_species_error_mha"])
+        cancellation_fraction: float | str = float(result["error_cancellation_fraction"])
     else:
         eigensolve = float(result["timing_seconds"]["compiled_unitary_eigensolve"])
         qpe_repetitions = int(result["qpe_repetitions"])
         species_qpe = ""
         error_mha = float(result["absolute_energy_error_mha"])
+        signed_sum_error_mha = ""
+        sum_absolute_error_mha = ""
+        cancellation_fraction = ""
     return {
         "family": record["family"],
         "instance": record["instance"],
         "kind": record["kind"],
+        "difference_error_contract": record.get("difference_error_contract") or "",
         "task_id": record["task_id"],
         "n_qubits": record["n_qubits"],
         "max_n_qubits": record["max_n_qubits"],
@@ -496,6 +534,9 @@ def _result_row(
         "t95": int(result["confidence_adjusted_t_count"]),
         "passes_chemical_accuracy": bool(result["passes_chemical_accuracy"]),
         "absolute_error_mha": error_mha,
+        "absolute_signed_sum_error_mha": signed_sum_error_mha,
+        "sum_absolute_species_error_mha": sum_absolute_error_mha,
+        "error_cancellation_fraction": cancellation_fraction,
         "qpe_repetitions": qpe_repetitions,
         "species_qpe_repetitions": species_qpe,
         "evaluation_wall_seconds": float(result["evaluation_wall_seconds"]),
@@ -526,6 +567,13 @@ def export_census(census_root: Path, output_dir: Path | None = None) -> dict[str
             raise ValueError(f"{result_path}: result is not successful")
         if result.get("evaluation_contract_version") != EVALUATION_CONTRACT_VERSION:
             raise ValueError(f"{result_path}: evaluator contract changed")
+        if result.get("difference_error_contract") != record.get("difference_error_contract"):
+            raise ValueError(f"{result_path}: reaction-error contract changed")
+        if (
+            record.get("difference_error_contract") is not None
+            and result.get("difference_error_contract_version") != DIFFERENCE_ERROR_CONTRACT_VERSION
+        ):
+            raise ValueError(f"{result_path}: reaction-error contract version changed")
         rows.append(_result_row(record, result, result_path))
     if missing:
         raise RuntimeError(f"census is incomplete: {len(missing)} tasks have no completed result")

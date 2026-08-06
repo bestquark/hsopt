@@ -8,6 +8,8 @@ import sys
 from pathlib import Path
 
 from hsopt.compiled_unitary import (
+    DIFFERENCE_ERROR_CONTRACTS,
+    DIFFERENCE_ERROR_CONTRACT_VERSION,
     EVALUATION_CONTRACT_VERSION,
     evaluate_exact_difference_reference,
     evaluate_exact_reference,
@@ -55,12 +57,16 @@ def _lane(
     lane_reference.write_bytes(reference.read_bytes())
     kind = "absolute" if family == "abs_energy" else "difference"
     manifest = {
-        "schema": 2,
+        "schema": 3,
         "evaluation_contract_version": EVALUATION_CONTRACT_VERSION,
         "family": family,
         "instance": instance,
         "replicate": replicate,
         "kind": kind,
+        "difference_error_contract": replicate if kind == "difference" else None,
+        "difference_error_contract_version": (
+            DIFFERENCE_ERROR_CONTRACT_VERSION if kind == "difference" else None
+        ),
         "source": str(source.resolve()),
         "source_sha256": _sha256(source),
         "initial_policy_sha256": _sha256(lane_policy),
@@ -110,7 +116,7 @@ def _campaign(tmp_path: Path) -> Path:
             policy=DIFFERENCE / "initial_pf.py",
             reference=difference_reference,
         )
-        for replicate in ("equal_share", "reaction_aware")
+        for replicate in DIFFERENCE_ERROR_CONTRACTS
     )
     _write_json(
         campaign / "campaign.json",
@@ -133,16 +139,21 @@ def test_census_deduplicates_iteration_zero_and_exports_exact_t95(tmp_path: Path
         expected_reactions=1,
     )
 
-    assert manifest["counts"] == {"absolute": 1, "reactions": 1, "total": 2}
+    assert manifest["counts"] == {
+        "absolute": 1,
+        "reactions": 1,
+        "reaction_contracts": 2,
+        "total": 3,
+    }
     assert manifest["baseline_variant"] is None
     assert all(len(record["reference_scientific_sha256"]) == 64 for record in manifest["tasks"])
-    assert {record["source_lane_count"] for record in manifest["tasks"]} == {2}
+    assert {record["source_lane_count"] for record in manifest["tasks"]} == {1, 2}
     batches = CENSUS.prepare_balanced_batches(census, jobs=2)
     assert len(batches) == 2
-    assert sorted(len(_read_json(batch / "batch.json")["task_ids"]) for batch in batches) == [1, 1]
+    assert sorted(len(_read_json(batch / "batch.json")["task_ids"]) for batch in batches) == [1, 2]
     assert CENSUS.census_status(census)["by_family"] == {
         "abs_energy": {"batched": 1},
-        "diff_energy": {"batched": 1},
+        "diff_energy": {"batched": 2},
     }
 
     for batch in batches:
@@ -151,12 +162,18 @@ def test_census_deduplicates_iteration_zero_and_exports_exact_t95(tmp_path: Path
         merge_batch(census / "queue", batch)
     summary = CENSUS.export_census(census)
 
-    assert summary["row_count"] == 2
+    assert summary["row_count"] == 3
     with (census / "results" / "iteration0_t95.csv").open(encoding="utf-8") as stream:
         rows = list(csv.DictReader(stream))
     assert {row["family"] for row in rows} == {"abs_energy", "diff_energy"}
     assert all(int(row["t95"]) > 0 for row in rows)
     assert all(row["execution_accelerator"] == "cpu" for row in rows)
+    reaction_rows = [row for row in rows if row["family"] == "diff_energy"]
+    assert {row["difference_error_contract"] for row in reaction_rows} == set(
+        DIFFERENCE_ERROR_CONTRACTS
+    )
+    assert all(row["absolute_signed_sum_error_mha"] for row in reaction_rows)
+    assert all(row["sum_absolute_species_error_mha"] for row in reaction_rows)
 
 
 def _read_json(path: Path) -> dict[str, object]:
