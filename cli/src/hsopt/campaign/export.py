@@ -13,7 +13,7 @@ from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any, Iterable, Mapping
 
-from .compiled_unitary import DIFFERENCE_ERROR_CONTRACT_VERSION
+from ..evaluation.compiled_unitary import DIFFERENCE_ERROR_CONTRACT_VERSION
 
 
 FAMILIES = ("abs_energy", "diff_energy")

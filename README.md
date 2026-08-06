@@ -175,9 +175,19 @@ hsopt/
 ├── plots/                      Publication-plot source code
 ├── skills/hsopt/               Compact agent instructions and references
 └── cli/
-    ├── src/hsopt/              Installable evaluator and campaign CLI
+    ├── src/hsopt/
+    │   ├── campaign/           Lane lifecycle, queues, supervisor, and exports
+    │   ├── cluster/            NVPark/Slurm execution adapter
+    │   ├── evaluation/         Fixed compiled-unitary judge and diagnostics
+    │   ├── sandbox/            OpenShell/OpenCode mutation boundary
+    │   ├── view/               Mutation ledger and final-report views
+    │   └── tgate_opt/          Generic mutation execution helpers
     └── tests/                  Scientific-contract tests and compact fixtures
 ```
+
+The complete Reiher baseline derivation and policy renderer share the single
+`experiments/generate_initial_pf.py` source. The installable campaign package
+only contains a thin loader for invoking it.
 
 ## Installation
 
@@ -447,6 +457,7 @@ and virtual environments outside the repository.
 | `hsopt-export-exact` | Produce a strict checksummed export from a completed campaign |
 | `hsopt-reports` | Compile summary and extended PDFs from a strict export |
 | `hsopt-exact-parity` | Certify cross-backend CPU/A100 replay parity |
+| `hsopt-view` | Export or serve the read-only mutation-history grid from a campaign directory |
 
 Run any command with `--help` for its complete interface.
 
@@ -526,7 +537,7 @@ boundary, production ordering, and A100/CPU replay rules.
 ### OpenShell + OpenCode mutation agent
 
 The implementation and its tests have one explicit home:
-[`cli/src/hsopt/openshell_agent.py`](cli/src/hsopt/openshell_agent.py) owns
+[`cli/src/hsopt/sandbox/openshell.py`](cli/src/hsopt/sandbox/openshell.py) owns
 host setup, disposable sandbox creation, OpenCode permissions, cleanup, and
 tool/security telemetry; [`cli/README.md`](cli/README.md) documents that
 boundary and every emitted audit file.

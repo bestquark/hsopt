@@ -7,7 +7,7 @@ import json
 from pathlib import Path
 from typing import Any, Sequence
 
-from hsopt.compiled_unitary import (
+from hsopt.evaluation.compiled_unitary import (
     DIFFERENCE_ERROR_CONTRACTS,
     DIFFERENCE_ERROR_CONTRACT_CANCELLATION,
     DIFFERENCE_ERROR_CONTRACT_INDIVIDUAL,

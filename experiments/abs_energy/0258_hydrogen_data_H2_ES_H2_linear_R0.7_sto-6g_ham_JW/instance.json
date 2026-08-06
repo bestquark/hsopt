@@ -7,7 +7,7 @@
     "reason": "fits_state_and_sector_dense_estimates"
   },
   "electrons": 2,
-  "evaluator": "hsopt.compiled_unitary.evaluate_molecule",
+  "evaluator": "hsopt.evaluation.compiled_unitary.evaluate_molecule",
   "family": "abs_energy",
   "hamiltonian_one_norm": 1.9999937423313927,
   "initial_pf_generator": "experiments/generate_initial_pf.py",

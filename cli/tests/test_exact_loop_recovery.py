@@ -3,14 +3,14 @@ from __future__ import annotations
 import json
 from pathlib import Path
 
-from hsopt.exact_loop import (
+from hsopt.campaign.loop import (
     LEGACY_INACCURATE_BASELINE_ERROR,
     _accept_candidate,
     initialize_lane,
     propose_replay_lane,
     reconcile_lane,
 )
-from hsopt.compiled_unitary import EVALUATION_CONTRACT_VERSION
+from hsopt.evaluation.compiled_unitary import EVALUATION_CONTRACT_VERSION
 
 
 REPO = Path(__file__).resolve().parents[2]

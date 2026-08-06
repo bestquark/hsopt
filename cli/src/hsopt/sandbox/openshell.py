@@ -16,7 +16,7 @@ from datetime import UTC, datetime
 from pathlib import Path, PurePosixPath
 from typing import Any, Sequence
 
-from .compiled_unitary import validate_policy_source
+from ..evaluation.compiled_unitary import validate_policy_source
 
 
 NVIDIA_PROVIDER = "hsopt-nvidia"
@@ -26,9 +26,9 @@ OPENCODE_MODEL = "openshell/nemotron-3-super-v3"
 OPENCODE_AGENT = "hsopt-mutation"
 ONLINE_TOOLS = frozenset({"webfetch", "websearch", "codesearch"})
 RESEARCH_CONTAMINATION_MARKERS = ("bestquark", "hsopt", "initial_pf")
-REPOSITORY_ROOT = Path(__file__).resolve().parents[3]
+REPOSITORY_ROOT = Path(__file__).resolve().parents[4]
 HSOPT_SKILL_PATH = REPOSITORY_ROOT / "skills" / "hsopt" / "SKILL.md"
-EVALUATOR_SOURCE_PATH = Path(__file__).resolve().with_name("compiled_unitary.py")
+EVALUATOR_SOURCE_PATH = Path(__file__).resolve().parents[1] / "evaluation" / "compiled_unitary.py"
 SANDBOX_CONTEXT_ROOT = PurePosixPath("/sandbox/work")
 READABLE_CONTEXT_FILES = frozenset({"candidate.py", "evaluate.py", "problem.json", "reaction.json"})
 OPENCODE_NETWORK_BINARIES = (

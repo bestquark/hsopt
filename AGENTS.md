@@ -1,9 +1,9 @@
 # hsopt Exact-Unitary Campaign Notes
 
 The production paper workflow is the exact compiled-unitary pipeline in
-`cli/src/hsopt/compiled_unitary.py`,
-`cli/src/hsopt/exact_queue.py`, and
-`cli/src/hsopt/exact_loop.py`. All checked-in benchmark fixtures,
+`cli/src/hsopt/evaluation/compiled_unitary.py`,
+`cli/src/hsopt/campaign/queue.py`, and
+`cli/src/hsopt/campaign/loop.py`. All checked-in benchmark fixtures,
 paper protocols, and support files live under `experiments/`.
 
 Use `$hsopt` for product-formula T-gate optimization and `$ssh` for NVPark
@@ -97,12 +97,11 @@ OpenCode/OpenShell logs plus redacted tool-action and metrics summaries.
 Treat these as fixed during a campaign unless the user explicitly changes the
 benchmark framework:
 
-- `cli/src/hsopt/compiled_unitary.py`
-- `cli/src/hsopt/exact_queue.py`
-- `cli/src/hsopt/exact_loop.py`
-- `cli/src/hsopt/paper_baseline.py`
-- `cli/src/hsopt/paper_baseline_batch.py`
-- `experiments/generate_initial_pf.py`
+- `cli/src/hsopt/evaluation/compiled_unitary.py`
+- `cli/src/hsopt/campaign/queue.py`
+- `cli/src/hsopt/campaign/loop.py`
+- `cli/src/hsopt/campaign/baseline_batch.py`
+- `experiments/generate_initial_pf.py` (the sole baseline definition and policy generator)
 
 Campaign histories belong outside the checkout. After every lane completes,
 run `hsopt-export-exact` for `abs_energy` and `diff_energy`, then run

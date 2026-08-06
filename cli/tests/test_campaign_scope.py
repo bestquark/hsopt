@@ -6,8 +6,8 @@ from pathlib import Path
 
 import pytest
 
-from hsopt.campaign_scope import reduce_hamlib_replicates
-from hsopt.compiled_unitary import DIFFERENCE_ERROR_CONTRACTS
+from hsopt.campaign.scope import reduce_hamlib_replicates
+from hsopt.evaluation.compiled_unitary import DIFFERENCE_ERROR_CONTRACTS
 
 
 def write_json(path: Path, payload: object) -> None:

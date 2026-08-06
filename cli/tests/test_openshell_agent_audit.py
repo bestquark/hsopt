@@ -7,8 +7,8 @@ from pathlib import Path
 
 import pytest
 
-import hsopt.openshell_agent as openshell_agent
-from hsopt.openshell_agent import (
+import hsopt.sandbox.openshell as openshell_agent
+from hsopt.sandbox.openshell import (
     _configure_research_network,
     _has_completed_candidate_edit,
     _run_logged,

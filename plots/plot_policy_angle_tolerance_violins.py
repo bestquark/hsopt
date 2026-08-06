@@ -21,7 +21,7 @@ from _paper_plot import (
     apply_paper_style,
     external_output_dir,
 )
-from hsopt.rotation_diagnostics import (
+from hsopt.evaluation.rotation_diagnostics import (
     comparison_histograms,
     rotation_samples,
 )

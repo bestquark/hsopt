@@ -4,7 +4,7 @@
     "individual_errors",
     "error_cancellation"
   ],
-  "evaluator": "hsopt.compiled_unitary.evaluate_difference",
+  "evaluator": "hsopt.evaluation.compiled_unitary.evaluate_difference",
   "family": "diff_energy",
   "initial_pf_generator": "experiments/generate_initial_pf.py",
   "instance": "hco_hoc_cation",

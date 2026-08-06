@@ -3,7 +3,7 @@ from __future__ import annotations
 import math
 from pathlib import Path
 
-from hsopt.rotation_diagnostics import comparison_histograms, rotation_samples
+from hsopt.evaluation.rotation_diagnostics import comparison_histograms, rotation_samples
 
 
 REPO = Path(__file__).resolve().parents[2]

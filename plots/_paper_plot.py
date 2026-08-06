@@ -14,7 +14,7 @@ import matplotlib as mpl
 import matplotlib.pyplot as plt
 import numpy as np
 
-from hsopt.tgate_opt.reporting import verify_strict_export
+from hsopt.view.reporting import verify_strict_export
 
 
 CHEMICAL_ACCURACY_HARTREE = 1.0 / 627.5094740631

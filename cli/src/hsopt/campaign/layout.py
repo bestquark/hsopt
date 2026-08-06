@@ -9,7 +9,10 @@ import json
 from pathlib import Path, PurePosixPath
 from typing import Any
 
-from .compiled_unitary import DIFFERENCE_ERROR_CONTRACTS, DIFFERENCE_ERROR_CONTRACT_VERSION
+from ..evaluation.compiled_unitary import (
+    DIFFERENCE_ERROR_CONTRACTS,
+    DIFFERENCE_ERROR_CONTRACT_VERSION,
+)
 
 
 ABS_FAMILY = "abs_energy"
@@ -113,7 +116,7 @@ def absolute_definitions(
                 "estimated_sector_workspace_gib": float(row["estimated_sector_workspace_gib"]),
             },
             "initial_pf_generator": "experiments/generate_initial_pf.py",
-            "evaluator": "hsopt.compiled_unitary.evaluate_molecule",
+            "evaluator": "hsopt.evaluation.compiled_unitary.evaluate_molecule",
         }
     return definitions
 
@@ -183,7 +186,7 @@ def reaction_definitions(
             "contract_version": DIFFERENCE_ERROR_CONTRACT_VERSION,
             "reaction_error_target_hartree": float(manifest["reaction_target_hartree"]),
             "initial_pf_generator": "experiments/generate_initial_pf.py",
-            "evaluator": "hsopt.compiled_unitary.evaluate_difference",
+            "evaluator": "hsopt.evaluation.compiled_unitary.evaluate_difference",
         }
     return definitions
 
@@ -371,7 +374,7 @@ def sync_layout(
 
 
 def _parser() -> argparse.ArgumentParser:
-    repo_root = Path(__file__).resolve().parents[3]
+    repo_root = Path(__file__).resolve().parents[4]
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument(
         "--abs-manifest",

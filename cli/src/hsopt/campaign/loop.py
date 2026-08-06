@@ -15,13 +15,13 @@ from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any
 
-from .compiled_unitary import (
+from ..evaluation.compiled_unitary import (
     DIFFERENCE_ERROR_CONTRACTS,
     DIFFERENCE_ERROR_CONTRACT_VERSION,
     EVALUATION_CONTRACT_VERSION,
 )
-from .exact_queue import enqueue
-from .openshell_agent import mutate
+from ..sandbox.openshell import mutate
+from .queue import enqueue
 
 
 REPLAY_ENERGY_ATOL_HARTREE = 1.0e-10

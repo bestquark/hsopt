@@ -7,7 +7,7 @@ import json
 from pathlib import Path
 from typing import Any, Sequence
 
-from hsopt.compiled_unitary import evaluate_molecule, load_problem
+from hsopt.evaluation.compiled_unitary import evaluate_molecule, load_problem
 
 
 def _write_result(result: dict[str, Any], output: Path | None) -> None:

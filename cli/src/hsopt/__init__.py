@@ -1,4 +1,8 @@
-"""Hamiltonian-simulation T-gate optimization helpers."""
+"""Hamiltonian-simulation T-gate optimization runtime.
+
+The package is organized by responsibility: campaign orchestration, cluster
+adapters, evaluation, sandboxing, and read-only views.
+"""
 
 from __future__ import annotations
 

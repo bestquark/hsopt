@@ -20,7 +20,7 @@ from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any
 
-from .compiled_unitary import (
+from ..evaluation.compiled_unitary import (
     DIFFERENCE_ERROR_CONTRACTS,
     DIFFERENCE_ERROR_CONTRACT_VERSION,
     EVALUATION_CONTRACT_VERSION,

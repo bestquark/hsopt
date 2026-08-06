@@ -7,9 +7,9 @@ from pathlib import Path
 
 import pytest
 
-from hsopt.compiled_unitary import DIFFERENCE_ERROR_CONTRACTS
+from hsopt.evaluation.compiled_unitary import DIFFERENCE_ERROR_CONTRACTS
 
-from hsopt.tgate_opt import reporting as reports
+from hsopt.view import reporting as reports
 
 
 def _hamlib_summary_row() -> dict[str, str]:

@@ -6,7 +6,7 @@ import subprocess
 from concurrent.futures import ThreadPoolExecutor
 from pathlib import Path
 
-from hsopt.exact_queue import (
+from hsopt.campaign.queue import (
     enqueue,
     enqueue_reference,
     merge_batch,
@@ -15,12 +15,12 @@ from hsopt.exact_queue import (
     requeue_missing,
     run_batch,
 )
-from hsopt.compiled_unitary import (
+from hsopt.evaluation.compiled_unitary import (
     DIFFERENCE_ERROR_CONTRACT_CANCELLATION,
     DIFFERENCE_ERROR_CONTRACT_INDIVIDUAL,
     evaluate_exact_difference_reference,
 )
-from hsopt.nvpark_queue import _system_memory_mib, submit_batch, submit_ready
+from hsopt.cluster.nvpark import _system_memory_mib, submit_batch, submit_ready
 
 
 REPO = Path(__file__).resolve().parents[2]
@@ -189,7 +189,7 @@ def test_nvpark_submission_requests_only_one_small_gpu_allocation(
         stdout = "12345\n" if command[:2] == ["ssh", "nvlogin"] and "sbatch" in command[-1] else ""
         return subprocess.CompletedProcess(command, 0, stdout=stdout, stderr="")
 
-    monkeypatch.setattr("hsopt.nvpark_queue._run", fake_run)
+    monkeypatch.setattr("hsopt.cluster.nvpark._run", fake_run)
     submission = submit_batch(
         Path(prepared["batch_dir"]),
         repo_dir=REPO,
@@ -227,7 +227,7 @@ def test_submit_ready_uses_threshold_as_the_batch_size(
         )
 
     monkeypatch.setattr(
-        "hsopt.nvpark_queue.submit_batch",
+        "hsopt.cluster.nvpark.submit_batch",
         lambda batch_dir, **kwargs: {
             "status": "submitted",
             "batch_id": batch_dir.name,
@@ -265,7 +265,7 @@ def test_submit_ready_balances_difference_tasks_when_absolute_work_is_available(
             )
 
     monkeypatch.setattr(
-        "hsopt.nvpark_queue.submit_batch",
+        "hsopt.cluster.nvpark.submit_batch",
         lambda batch_dir, **kwargs: {"status": "submitted", "job_id": "12345"},
     )
     submitted = submit_ready(
@@ -295,7 +295,7 @@ def test_submit_ready_fills_from_differences_when_no_absolute_work_remains(
         )
 
     monkeypatch.setattr(
-        "hsopt.nvpark_queue.submit_batch",
+        "hsopt.cluster.nvpark.submit_batch",
         lambda batch_dir, **kwargs: {"status": "submitted", "job_id": "12345"},
     )
     submitted = submit_ready(
@@ -328,7 +328,7 @@ def test_nvpark_cupynumeric_submission_uses_cpu_partition_without_a_gpu(
         stdout = "54321\n" if command[:2] == ["ssh", "nvlogin"] and "sbatch" in command[-1] else ""
         return subprocess.CompletedProcess(command, 0, stdout=stdout, stderr="")
 
-    monkeypatch.setattr("hsopt.nvpark_queue._run", fake_run)
+    monkeypatch.setattr("hsopt.cluster.nvpark._run", fake_run)
     submission = submit_batch(
         Path(prepared["batch_dir"]),
         repo_dir=REPO,
@@ -377,7 +377,7 @@ def test_nvpark_cpu_submission_can_use_pinned_cupynumeric_runtime(
         stdout = "54321\n" if command[:2] == ["ssh", "nvlogin"] and "sbatch" in command[-1] else ""
         return subprocess.CompletedProcess(command, 0, stdout=stdout, stderr="")
 
-    monkeypatch.setattr("hsopt.nvpark_queue._run", fake_run)
+    monkeypatch.setattr("hsopt.cluster.nvpark._run", fake_run)
     submission = submit_batch(
         Path(prepared["batch_dir"]),
         repo_dir=REPO,
@@ -402,8 +402,8 @@ def test_nvpark_cpu_submission_can_use_pinned_cupynumeric_runtime(
     sbatch = next(command[-1] for command in calls if "sbatch" in command[-1])
     runtime_root = f"/lustre/test/hsopt-exact/sources/{submission['source_id']}/cli/src"
     assert f"PYTHONPATH={runtime_root}" in sbatch
-    assert f"{runtime_python} -m hsopt.exact_queue" in sbatch
-    assert "uv run --no-sync python -m hsopt.exact_queue" not in sbatch
+    assert f"{runtime_python} -m hsopt.campaign.queue" in sbatch
+    assert "uv run --no-sync python -m hsopt.campaign.queue" not in sbatch
 
 
 def test_terminal_batch_requeues_only_tasks_without_results(tmp_path: Path) -> None:

@@ -2,7 +2,7 @@
 """Run an independent, immutable iteration-0 T95 census.
 
 The census snapshots one initial policy and exact reference per scientific
-contract, evaluates it through ``hsopt.exact_queue``, and never reads or
+contract, evaluates it through ``hsopt.campaign.queue``, and never reads or
 changes an autoresearch incumbent. Absolute-energy replicates are deduplicated;
 reaction contracts remain separate even when their iteration-0 files match.
 """
@@ -19,13 +19,13 @@ from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any
 
-from hsopt.compiled_unitary import (
+from hsopt.evaluation.compiled_unitary import (
     DIFFERENCE_ERROR_CONTRACTS,
     DIFFERENCE_ERROR_CONTRACT_VERSION,
     EVALUATION_CONTRACT_VERSION,
 )
-from hsopt.exact_queue import enqueue, queue_status
-from hsopt.nvpark_queue import (
+from hsopt.campaign.queue import enqueue, queue_status
+from hsopt.cluster.nvpark import (
     DEFAULT_ACCOUNT,
     DEFAULT_HOST,
     DEFAULT_PARTITION,

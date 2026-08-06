@@ -7,13 +7,13 @@ from pathlib import Path
 
 import pytest
 
-from hsopt.baseline_t_gate_drop import (
+from hsopt.view.baseline_drop import (
     OUTPUT_NAME,
     REACTION_OUTPUT_TEMPLATE,
     BaselineTGateDropError,
     materialize_baseline_t_gate_drop,
 )
-from hsopt.compiled_unitary import DIFFERENCE_ERROR_CONTRACTS
+from hsopt.evaluation.compiled_unitary import DIFFERENCE_ERROR_CONTRACTS
 
 
 CSV_FIELDS = (

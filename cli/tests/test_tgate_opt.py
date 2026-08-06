@@ -17,8 +17,23 @@ def test_agent_skill_is_separate_from_runtime_package() -> None:
     skill_words = " ".join(skill.split())
 
     assert runtime.is_dir()
-    assert (runtime / "compiled_unitary.py").is_file()
-    assert (runtime / "openshell_agent.py").is_file()
+    assert sorted(path.name for path in runtime.glob("*.py")) == ["__init__.py"]
+    assert {
+        "campaign",
+        "cluster",
+        "evaluation",
+        "sandbox",
+        "tgate_opt",
+        "view",
+    } <= {path.name for path in runtime.iterdir() if path.is_dir()}
+    assert (runtime / "evaluation" / "compiled_unitary.py").is_file()
+    assert (runtime / "sandbox" / "openshell.py").is_file()
+    assert not (runtime / "paper_baseline.py").exists()
+    generator = REPO_ROOT / "experiments" / "generate_initial_pf.py"
+    generator_source = generator.read_text(encoding="utf-8")
+    assert "def calibrate_problem(" in generator_source
+    assert "def optimize_paper_error_allocation(" in generator_source
+    assert "def render(" in generator_source
     assert (REPO_ROOT / "cli" / "tests").is_dir()
     assert not (REPO_ROOT / "src").exists()
     assert not (REPO_ROOT / "tests").exists()

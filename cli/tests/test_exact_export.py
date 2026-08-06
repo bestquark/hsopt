@@ -3,12 +3,12 @@ from __future__ import annotations
 import json
 from pathlib import Path
 
-from hsopt.compiled_unitary import (
+from hsopt.evaluation.compiled_unitary import (
     DIFFERENCE_ERROR_CONTRACTS,
     DIFFERENCE_ERROR_CONTRACT_VERSION,
 )
-from hsopt.exact_export import export_family
-from hsopt.tgate_opt.reporting import (
+from hsopt.campaign.export import export_family
+from hsopt.view.reporting import (
     _hamlib_extended,
     _hamlib_summary,
     _reaction_extended,

@@ -18,14 +18,20 @@ from typing import Any
 
 import numpy as np
 
-from .compiled_unitary import (
+from ..evaluation.compiled_unitary import (
     DIFFERENCE_ERROR_CONTRACTS,
     DIFFERENCE_ERROR_CONTRACT_VERSION,
     assemble_exact_difference_reference,
     qpe_phase_encoding,
 )
-from .exact_loop import initialize_lane
-from .paper_baseline import BASELINE_VARIANTS, calibration_mode_for_baseline, verify_calibration
+from .baseline import baseline_module
+from .loop import initialize_lane
+
+
+_BASELINE = baseline_module()
+BASELINE_VARIANTS = _BASELINE.BASELINE_VARIANTS
+calibration_mode_for_baseline = _BASELINE.calibration_mode_for_baseline
+verify_calibration = _BASELINE.verify_calibration
 
 
 HAMLIB_BASE_URL = "https://portal.nersc.gov/cfs/m888/dcamps/hamlib/chemistry/electronic"

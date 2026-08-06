@@ -13,7 +13,7 @@ from pathlib import Path
 import numpy as np
 import pytest
 
-from hsopt.compiled_unitary import (
+from hsopt.evaluation.compiled_unitary import (
     DENSE_EVALUATOR_MAX_QUBITS,
     DIFFERENCE_ERROR_CONTRACT_CANCELLATION,
     DIFFERENCE_ERROR_CONTRACT_INDIVIDUAL,
@@ -40,26 +40,26 @@ from hsopt.compiled_unitary import (
     qpe_phase_encoding,
     validate_policy_source,
 )
-from hsopt.campaign_setup import normalize_materialized_inputs
-from hsopt.experiment_evaluator import evaluate_absolute_directory
-from hsopt.paper_baseline import (
-    BENCHMARK_TOTAL_ERROR_HARTREE,
-    PAPER_ALLOCATION_METHOD,
-    PAPER_SYNTHESIS_DELTA_0,
-    PAPER_SYNTHESIS_GAMMA,
-    _double_commutator_bound,
-    calibrate_problem,
-    optimize_paper_error_allocation,
-    seal_calibration,
-)
-from hsopt.paper_baseline_batch import build_manifest, generate_policies, run_batch
-from hsopt.repository_layout import sync_layout
+from hsopt.campaign.setup import normalize_materialized_inputs
+from hsopt.evaluation.experiment import evaluate_absolute_directory
+from hsopt.campaign.baseline import baseline_module
+from hsopt.campaign.baseline_batch import build_manifest, generate_policies, run_batch
+from hsopt.campaign.layout import sync_layout
 
 
 REPO = Path(__file__).resolve().parents[2]
 ABSOLUTE = REPO / "cli" / "tests" / "fixtures" / "abs_energy_h2"
 DIFFERENCE = REPO / "cli" / "tests" / "fixtures" / "diff_energy_h2_bond_stretch"
 GENERATOR = REPO / "experiments" / "generate_initial_pf.py"
+_BASELINE = baseline_module()
+BENCHMARK_TOTAL_ERROR_HARTREE = _BASELINE.BENCHMARK_TOTAL_ERROR_HARTREE
+PAPER_ALLOCATION_METHOD = _BASELINE.PAPER_ALLOCATION_METHOD
+PAPER_SYNTHESIS_DELTA_0 = _BASELINE.PAPER_SYNTHESIS_DELTA_0
+PAPER_SYNTHESIS_GAMMA = _BASELINE.PAPER_SYNTHESIS_GAMMA
+_double_commutator_bound = _BASELINE._double_commutator_bound
+calibrate_problem = _BASELINE.calibrate_problem
+optimize_paper_error_allocation = _BASELINE.optimize_paper_error_allocation
+seal_calibration = _BASELINE.seal_calibration
 
 
 def test_reaction_error_contracts_measure_the_same_species_without_mixing(
@@ -167,8 +167,8 @@ def test_checked_in_benchmark_layout_matches_the_82_and_10_registries() -> None:
         assert evaluator.is_file()
         assert not list(root.glob("*/evaluate.py"))
         source = evaluator.read_text(encoding="utf-8")
-        assert "from hsopt.compiled_unitary import" in source
-        assert "hsopt.experiment_evaluator" not in source
+        assert "from hsopt.evaluation.compiled_unitary import" in source
+        assert "hsopt.evaluation.experiment" not in source
 
 
 def test_normalize_materialized_inputs_copies_only_fresh_phase_encoded_inputs(
@@ -1005,7 +1005,7 @@ def test_absolute_baseline_uses_cached_exact_reference_and_compiled_eigenphase(
     # Candidate peak selection must not depend on the exact ground-state vector.
     reference.pop("exact_ground_state")
     monkeypatch.setattr(
-        "hsopt.compiled_unitary.evaluate_exact_reference",
+        "hsopt.evaluation.compiled_unitary.evaluate_exact_reference",
         lambda *args, **kwargs: (_ for _ in ()).throw(
             AssertionError("the candidate evaluator recomputed U_exact")
         ),

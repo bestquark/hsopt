@@ -7,14 +7,14 @@ import json
 import sys
 from pathlib import Path
 
-from hsopt.compiled_unitary import (
+from hsopt.evaluation.compiled_unitary import (
     DIFFERENCE_ERROR_CONTRACTS,
     DIFFERENCE_ERROR_CONTRACT_VERSION,
     EVALUATION_CONTRACT_VERSION,
     evaluate_exact_difference_reference,
     evaluate_exact_reference,
 )
-from hsopt.exact_queue import merge_batch, run_batch
+from hsopt.campaign.queue import merge_batch, run_batch
 
 
 REPO = Path(__file__).resolve().parents[2]

@@ -11,7 +11,7 @@ from decimal import Decimal, ROUND_HALF_EVEN
 from pathlib import Path
 from typing import Any, Mapping
 
-from .compiled_unitary import DIFFERENCE_ERROR_CONTRACTS
+from ..evaluation.compiled_unitary import DIFFERENCE_ERROR_CONTRACTS
 
 
 FAMILIES = ("abs_energy", "diff_energy")

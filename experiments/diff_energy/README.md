@@ -20,7 +20,7 @@ scientific metadata for the 21 external species, while
 `inputs/problem_cache.sha256` pins their external JSON/NPZ Hamiltonian caches.
 `hsopt-campaign prepare-reactions` converts those checksummed caches into ten
 external reaction directories consumed by the fixed evaluator in
-`cli/src/hsopt/compiled_unitary.py`.
+`cli/src/hsopt/evaluation/compiled_unitary.py`.
 
 The ten directories beside `inputs/` make that production set visible on
 GitHub. Each `definition.json` records the signed reaction terms and the

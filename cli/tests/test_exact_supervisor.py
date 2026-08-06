@@ -6,11 +6,11 @@ import time
 from threading import Lock
 from pathlib import Path
 
-from hsopt.campaign_setup import initialize_campaign
-from hsopt.compiled_unitary import DIFFERENCE_ERROR_CONTRACTS, evaluate_exact_reference
-from hsopt.exact_loop import initialize_lane, reconcile_lane
-from hsopt.exact_queue import enqueue_reference, merge_batch, prepare_batch, run_batch
-from hsopt.exact_supervisor import (
+from hsopt.campaign.setup import initialize_campaign
+from hsopt.evaluation.compiled_unitary import DIFFERENCE_ERROR_CONTRACTS, evaluate_exact_reference
+from hsopt.campaign.loop import initialize_lane, reconcile_lane
+from hsopt.campaign.queue import enqueue_reference, merge_batch, prepare_batch, run_batch
+from hsopt.campaign.supervisor import (
     _finalize_campaign,
     _run_mutation_proposals,
     slurm_state,
@@ -86,7 +86,7 @@ def test_mutation_workers_run_distinct_lanes_concurrently(monkeypatch) -> None:
             active -= 1
         return {"status": "proposed", "candidate": str(lane_dir / "candidate.py")}
 
-    monkeypatch.setattr("hsopt.exact_supervisor.propose_lane", fake_propose)
+    monkeypatch.setattr("hsopt.campaign.supervisor.propose_lane", fake_propose)
     lanes = [Path(f"/lane-{index}") for index in range(4)]
 
     results = _run_mutation_proposals(lanes, workers=4, timeout_seconds=123)
@@ -106,7 +106,7 @@ def test_mutation_callback_observes_fast_result_before_slowest_worker(
             time.sleep(0.1)
         return {"status": "proposed", "candidate": str(lane_dir / "candidate.py")}
 
-    monkeypatch.setattr("hsopt.exact_supervisor.propose_lane", fake_propose)
+    monkeypatch.setattr("hsopt.campaign.supervisor.propose_lane", fake_propose)
     lanes = [Path("/slow"), Path("/fast")]
 
     results = _run_mutation_proposals(
@@ -188,12 +188,12 @@ def test_supervisor_submits_new_batch_immediately_when_mutation_completes(
             "resources": {"partition": "cpu", "gpus": 0},
         }
 
-    monkeypatch.setattr("hsopt.exact_supervisor.queue_status", fake_queue_status)
+    monkeypatch.setattr("hsopt.campaign.supervisor.queue_status", fake_queue_status)
     monkeypatch.setattr(
-        "hsopt.exact_supervisor._run_mutation_proposals",
+        "hsopt.campaign.supervisor._run_mutation_proposals",
         fake_mutations,
     )
-    monkeypatch.setattr("hsopt.exact_supervisor.submit_ready", fake_submit_ready)
+    monkeypatch.setattr("hsopt.campaign.supervisor.submit_ready", fake_submit_ready)
 
     status = supervise_once(
         root,
@@ -228,11 +228,11 @@ def test_supervisor_collects_and_reconciles_a_completed_baseline(
     )
 
     monkeypatch.setattr(
-        "hsopt.exact_supervisor.remote_status",
+        "hsopt.campaign.supervisor.remote_status",
         lambda path: {"job_id": "12345", "rows": ["12345|COMPLETED|00:00:02||"]},
     )
     monkeypatch.setattr(
-        "hsopt.exact_supervisor.collect_batch",
+        "hsopt.campaign.supervisor.collect_batch",
         lambda queue_dir, path: {
             **merge_batch(queue_dir, path),
             "job_id": "12345",
@@ -278,7 +278,7 @@ def test_supervisor_forces_a_partial_batch_when_every_lane_is_waiting(
         (batch_dir / "submission.json").write_text(json.dumps(submission) + "\n")
         return {**prepared, **submission}
 
-    monkeypatch.setattr("hsopt.exact_supervisor.submit_ready", fake_submit_ready)
+    monkeypatch.setattr("hsopt.campaign.supervisor.submit_ready", fake_submit_ready)
 
     status = supervise_once(
         root,
@@ -329,7 +329,7 @@ def test_idle_replay_supervisor_forces_its_partial_gpu_batch(
         (batch_dir / "submission.json").write_text(json.dumps(submission) + "\n")
         return {**prepared, **submission}
 
-    monkeypatch.setattr("hsopt.exact_supervisor.submit_ready", fake_submit_ready)
+    monkeypatch.setattr("hsopt.campaign.supervisor.submit_ready", fake_submit_ready)
 
     status = supervise_once(
         root,
@@ -399,7 +399,7 @@ def test_replay_supervisor_enqueues_every_ready_canonical_lane(
         }
 
     monkeypatch.setattr(
-        "hsopt.exact_supervisor.propose_replay_lane",
+        "hsopt.campaign.supervisor.propose_replay_lane",
         fake_propose_replay,
     )
 
@@ -569,13 +569,13 @@ def test_campaign_reuses_one_calibrated_reference_for_all_replicate_baselines(
             backend="numpy",
         )
 
-    monkeypatch.setattr("hsopt.campaign_setup._generate_policy", fake_generate_policy)
+    monkeypatch.setattr("hsopt.campaign.setup._generate_policy", fake_generate_policy)
     monkeypatch.setattr(
-        "hsopt.campaign_setup._calibration_catalog",
+        "hsopt.campaign.setup._calibration_catalog",
         lambda _root, **_kwargs: {},
     )
     monkeypatch.setattr(
-        "hsopt.campaign_setup._calibrated_exact_reference",
+        "hsopt.campaign.setup._calibrated_exact_reference",
         lambda source, _catalog: problem_references[str(source.resolve())],
     )
     campaign = initialize_campaign(
@@ -651,8 +651,8 @@ def test_finalizer_runs_both_requested_export_and_report_pairs_once(
         output.mkdir(parents=True)
         (output / "report_manifest.json").write_text("{}\n")
 
-    monkeypatch.setattr("hsopt.exact_supervisor.export_family", fake_export)
-    monkeypatch.setattr("hsopt.exact_supervisor.generate_reports", fake_reports)
+    monkeypatch.setattr("hsopt.campaign.supervisor.export_family", fake_export)
+    monkeypatch.setattr("hsopt.campaign.supervisor.generate_reports", fake_reports)
     result = _finalize_campaign(
         campaign,
         hamlib_export_dir=tmp_path / "exports/hamlib",
@@ -686,8 +686,8 @@ def test_finalizer_allows_reaction_only_export_and_report_pair(
         output.mkdir(parents=True)
         (output / "report_manifest.json").write_text("{}\n")
 
-    monkeypatch.setattr("hsopt.exact_supervisor.export_family", fake_export)
-    monkeypatch.setattr("hsopt.exact_supervisor.generate_reports", fake_reports)
+    monkeypatch.setattr("hsopt.campaign.supervisor.export_family", fake_export)
+    monkeypatch.setattr("hsopt.campaign.supervisor.generate_reports", fake_reports)
     result = _finalize_campaign(
         campaign,
         hamlib_export_dir=None,

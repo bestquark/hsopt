@@ -22,7 +22,7 @@ from collections import defaultdict
 from pathlib import Path
 from typing import Any, Iterable, Mapping, Sequence
 
-from ..compiled_unitary import DIFFERENCE_ERROR_CONTRACTS
+from ..evaluation.compiled_unitary import DIFFERENCE_ERROR_CONTRACTS
 
 
 HAMLIB_LANES = 82

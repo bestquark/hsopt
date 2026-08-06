@@ -6,8 +6,8 @@ import argparse
 import json
 from pathlib import Path
 
-from hsopt.compiled_unitary import evaluate_molecule
-from hsopt.exact_queue import enqueue
+from hsopt.evaluation.compiled_unitary import evaluate_molecule
+from hsopt.campaign.queue import enqueue
 
 
 HERE = Path(__file__).resolve().parent

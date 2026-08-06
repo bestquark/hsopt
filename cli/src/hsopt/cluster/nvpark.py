@@ -13,7 +13,7 @@ from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any, Sequence
 
-from .exact_queue import merge_batch, prepare_batch, queue_status
+from ..campaign.queue import merge_batch, prepare_batch, queue_status
 
 
 DEFAULT_HOST = "nvlogin"
@@ -167,8 +167,8 @@ def _evaluator_source_id(repo_dir: Path) -> str:
     digest = hashlib.sha256()
     runtime = repo_dir / "cli" / "src" / "hsopt"
     paths = [
-        runtime / "compiled_unitary.py",
-        runtime / "exact_queue.py",
+        runtime / "evaluation" / "compiled_unitary.py",
+        runtime / "campaign" / "queue.py",
     ]
     for path in paths:
         digest.update(str(path.relative_to(repo_dir)).encode())
@@ -305,7 +305,7 @@ def submit_batch(
             ]
         )
     batch_parts.append(
-        f"{evaluator_python} -m hsopt.exact_queue run-batch "
+        f"{evaluator_python} -m hsopt.campaign.queue run-batch "
         f"--batch-dir {shlex.quote(remote_batch)} --backend {backend} "
         f"--accelerator {accelerator}"
     )

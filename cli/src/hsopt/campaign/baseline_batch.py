@@ -13,7 +13,15 @@ import traceback
 from pathlib import Path
 from typing import Any, Mapping
 
-from hsopt.paper_baseline import BASELINE_VARIANTS, calibration_mode_for_baseline
+from .baseline import baseline_module
+
+
+_BASELINE = baseline_module()
+BASELINE_VARIANTS = _BASELINE.BASELINE_VARIANTS
+calibration_mode_for_baseline = _BASELINE.calibration_mode_for_baseline
+calibrate_problem = _BASELINE.calibrate_problem
+seal_calibration = _BASELINE.seal_calibration
+verify_calibration = _BASELINE.verify_calibration
 
 PAPER_BETA_REFERENCE_ERROR_HARTREE = 1.0e-4
 BENCHMARK_TOTAL_ERROR_HARTREE = 1.0 / 627.5094740631
@@ -147,8 +155,6 @@ def run_batch(
     max_qubits: int | None = None,
 ) -> dict[str, Any]:
     """Run one deterministic shard, safely skipping sealed outputs."""
-
-    from hsopt.paper_baseline import calibrate_problem, seal_calibration, verify_calibration
 
     if shard_count <= 0 or not 0 <= shard_index < shard_count:
         raise ValueError("shard index must satisfy 0 <= index < shard count")
@@ -344,8 +350,6 @@ def audit_batch(
     require_exact_reference: bool = True,
 ) -> dict[str, Any]:
     """Require one sealed source-matching result for every manifest row."""
-
-    from hsopt.paper_baseline import verify_calibration
 
     manifest_path = manifest_path.resolve()
     output_dir = output_dir.resolve()

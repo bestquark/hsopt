@@ -5,8 +5,8 @@ from pathlib import Path
 
 import pytest
 
-from hsopt.compiled_unitary import EVALUATION_CONTRACT_VERSION
-from hsopt.exact_parity import ParityAuditPending, audit_campaigns
+from hsopt.evaluation.compiled_unitary import EVALUATION_CONTRACT_VERSION
+from hsopt.campaign.parity import ParityAuditPending, audit_campaigns
 
 
 def _write_json(path: Path, payload: object) -> None:
