@@ -665,3 +665,37 @@ def test_finalizer_runs_both_requested_export_and_report_pairs_once(
     assert [family for family, _, _ in reports] == ["abs_energy", "diff_energy"]
     assert result["status"] == "complete"
     assert (campaign / "supervisor/finalization.json").is_file()
+
+
+def test_finalizer_allows_reaction_only_export_and_report_pair(
+    tmp_path: Path,
+    monkeypatch,
+) -> None:
+    campaign = tmp_path / "campaign"
+    campaign.mkdir()
+    exports: list[str] = []
+    reports: list[str] = []
+
+    def fake_export(root: Path, family: str, output: Path) -> None:
+        assert root == campaign
+        exports.append(family)
+        output.mkdir(parents=True)
+
+    def fake_reports(family: str, export: Path, output: Path) -> None:
+        reports.append(family)
+        output.mkdir(parents=True)
+        (output / "report_manifest.json").write_text("{}\n")
+
+    monkeypatch.setattr("hsopt.exact_supervisor.export_family", fake_export)
+    monkeypatch.setattr("hsopt.exact_supervisor.generate_reports", fake_reports)
+    result = _finalize_campaign(
+        campaign,
+        hamlib_export_dir=None,
+        hamlib_report_dir=None,
+        reactions_export_dir=tmp_path / "exports/reactions",
+        reactions_report_dir=tmp_path / "reports/reactions",
+    )
+
+    assert exports == ["diff_energy"]
+    assert reports == ["diff_energy"]
+    assert list(result["families"]) == ["diff_energy"]

@@ -278,17 +278,21 @@ def _lane_summary(lane_dirs: list[Path]) -> tuple[dict[str, Any], list[Path]]:
 def _finalize_campaign(
     campaign_root: Path,
     *,
-    hamlib_export_dir: Path,
-    hamlib_report_dir: Path,
-    reactions_export_dir: Path,
-    reactions_report_dir: Path,
+    hamlib_export_dir: Path | None,
+    hamlib_report_dir: Path | None,
+    reactions_export_dir: Path | None,
+    reactions_report_dir: Path | None,
 ) -> dict[str, Any]:
-    """Create both checksummed exports and both report trees exactly once."""
+    """Create each requested checksummed export/report pair exactly once."""
 
-    pairs = (
-        ("abs_energy", hamlib_export_dir, hamlib_report_dir),
-        ("diff_energy", reactions_export_dir, reactions_report_dir),
+    pairs = _configured_final_pairs(
+        hamlib_export_dir,
+        hamlib_report_dir,
+        reactions_export_dir,
+        reactions_report_dir,
     )
+    if not pairs:
+        raise ValueError("at least one final export/report pair must be configured")
     records: dict[str, Any] = {}
     for family, export_dir, report_dir in pairs:
         export_dir = export_dir.expanduser().absolute()
@@ -320,6 +324,28 @@ def _finalize_campaign(
     }
     _write_json(campaign_root / "supervisor" / "finalization.json", result)
     return result
+
+
+def _configured_final_pairs(
+    hamlib_export_dir: Path | None,
+    hamlib_report_dir: Path | None,
+    reactions_export_dir: Path | None,
+    reactions_report_dir: Path | None,
+) -> list[tuple[str, Path, Path]]:
+    """Validate independent family pairs without coupling unrelated campaigns."""
+
+    configured: list[tuple[str, Path, Path]] = []
+    for family, export_dir, report_dir in (
+        ("abs_energy", hamlib_export_dir, hamlib_report_dir),
+        ("diff_energy", reactions_export_dir, reactions_report_dir),
+    ):
+        if (export_dir is None) != (report_dir is None):
+            raise ValueError(
+                f"{family} final export and report directories must be configured together"
+            )
+        if export_dir is not None and report_dir is not None:
+            configured.append((family, export_dir, report_dir))
+    return configured
 
 
 def supervise_once(
@@ -699,15 +725,13 @@ def supervise_once(
                 },
             )
             _append_event(campaign_root, "campaign_complete", lanes=lane_metrics["total"])
-        final_paths = (
+        final_pairs = _configured_final_pairs(
             hamlib_export_dir,
             hamlib_report_dir,
             reactions_export_dir,
             reactions_report_dir,
         )
-        if any(path is not None for path in final_paths):
-            if not all(path is not None for path in final_paths):
-                raise ValueError("all four final export/report directories must be configured")
+        if final_pairs:
             finalization_path = campaign_root / "supervisor" / "finalization.json"
             if not finalization_path.is_file() and active_jobs == 0:
                 try:
@@ -791,16 +815,12 @@ def main() -> int:
             "threshold, max-active-jobs, mutation-workers, "
             "max-difference-tasks-per-batch, and max-batch-attempts must be positive"
         )
-    final_paths = (
+    _configured_final_pairs(
         args.final_hamlib_export_dir,
         args.final_hamlib_report_dir,
         args.final_reactions_export_dir,
         args.final_reactions_report_dir,
     )
-    if any(path is not None for path in final_paths) and not all(
-        path is not None for path in final_paths
-    ):
-        raise ValueError("all four final export/report directories must be configured")
     options = {
         "repo_dir": args.repo_dir,
         "threshold": args.threshold,
