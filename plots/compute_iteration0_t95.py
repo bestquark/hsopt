@@ -280,7 +280,7 @@ def prepare_census(
             "total": len(records),
         },
         "deduplication": (
-            "five absolute replicates and two reaction contracts are reduced only "
+            "three absolute replicates and two reaction contracts are reduced only "
             "after source, initial policy, and exact-reference hashes agree"
         ),
         "tasks": records,

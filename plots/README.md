@@ -92,7 +92,7 @@ databases, and logs remain outside the Git checkout.
 ## Independent iteration-0 T95 census
 
 `compute_iteration0_t95.py` measures the plotted baseline costs outside the
-autoresearch loops. It first verifies that the five absolute-energy lanes (or
+autoresearch loops. It first verifies that the three absolute-energy lanes (or
 two reaction lanes) have identical source, `initial_pf.py`, and exact-reference
 hashes. It then snapshots one task per physical benchmark and runs that task
 through the same fixed `hsopt.exact_queue` evaluator used at autoresearch

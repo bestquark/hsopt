@@ -564,7 +564,7 @@ def initialize_campaign(
     calibration_root: Path,
     generator: Path,
     campaign_root: Path,
-    hamlib_replicates: int = 5,
+    hamlib_replicates: int = 3,
     iterations: int = 50,
     expected_hamlib_instances: int = HAMLIB82_INSTANCES,
     expected_reaction_instances: int = REACTION_INSTANCES,
@@ -734,7 +734,7 @@ def _parser() -> argparse.ArgumentParser:
     initialize.add_argument("--calibration-root", type=Path, required=True)
     initialize.add_argument("--generator", type=Path, required=True)
     initialize.add_argument("--campaign-root", type=Path, required=True)
-    initialize.add_argument("--hamlib-replicates", type=int, default=5)
+    initialize.add_argument("--hamlib-replicates", type=int, default=3)
     initialize.add_argument("--iterations", type=int, default=50)
     initialize.add_argument("--baseline", choices=BASELINE_VARIANTS, default="loose")
     initialize.add_argument(

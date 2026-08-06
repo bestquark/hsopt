@@ -100,8 +100,8 @@ Once a lane is feasible, accept only a strict T95 reduction that remains within
   but a worker must never alternate between baseline queues.
 - Iteration 0 measures the immutable generated baseline.
 - Iterations 1--50 mutate the external incumbent sequentially.
-- The production grid is 82 absolute-energy instances times five lanes, plus
-  ten reactions times two lanes: 430 lanes and 21,500 mutations.
+- The production grid is 82 absolute-energy instances times three lanes, plus
+  ten reactions times two lanes: 266 lanes and 13,300 mutations.
 - Candidate histories, evaluator results, OpenCode/OpenShell transcripts,
   tool metrics, and sandbox rejections remain in the external campaign root.
 - The canonical A100 campaign creates the single mutation trace. Any CPU

@@ -243,9 +243,9 @@ Every optimization lane follows the same order:
 5. Export and report only after every expected lane is complete.
 
 The current dense production selection contains exactly 82 HamLib
-Hamiltonians through 12 qubits, with five mutation lanes per Hamiltonian. It
+Hamiltonians through 12 qubits, with three mutation lanes per Hamiltonian. It
 also contains ten reactions with two policy contracts each.
-This gives 430 lanes and 21,500 mutation evaluations, plus iteration 0 for
+This gives 266 lanes and 13,300 mutation evaluations, plus iteration 0 for
 every lane.
 
 Set an absolute data root before initializing a campaign:
@@ -362,9 +362,22 @@ uv run hsopt-campaign initialize \
   --generator experiments/generate_initial_pf.py \
   --campaign-root "$HSOPT_DATA_ROOT/exact/production-gpu82-v1" \
   --baseline loose \
-  --hamlib-replicates 5 \
+  --hamlib-replicates 3 \
   --iterations 50
 ```
+
+To narrow an older five-replicate campaign without deleting its existing
+histories, first stop its supervisor and local evaluator workers, then run:
+
+```bash
+uv run hsopt-campaign-scope \
+  --campaign-root /path/to/existing-campaign \
+  --hamlib-replicates 3
+```
+
+The command retains the predetermined `run_01`--`run_03` lanes, leaves all
+`run_04`/`run_05` histories in place, archives their uncollected queue work,
+and writes a checksummed scope-change record. Reaction contracts are unchanged.
 
 The canonical campaign runs compiled-unitary construction and dense
 eigendecomposition through cuPyNumeric on one A100 per Slurm job. PyGridSynth
