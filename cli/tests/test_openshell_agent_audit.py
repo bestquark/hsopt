@@ -94,6 +94,31 @@ def test_opencode_audit_counts_unique_redacted_tool_calls(tmp_path: Path) -> Non
     assert "secret file contents" not in json.dumps(actions)
 
 
+def test_opencode_audit_records_skill_name_without_payload(tmp_path: Path) -> None:
+    log = tmp_path / "opencode.jsonl"
+    log.write_text(
+        json.dumps(
+            {
+                "type": "tool_use",
+                "part": {
+                    "callID": "call-skill",
+                    "tool": "skill",
+                    "state": {
+                        "status": "completed",
+                        "input": {"name": "hsopt", "private": "not published"},
+                    },
+                },
+            }
+        )
+        + "\n"
+    )
+
+    _, actions = summarize_opencode_events(log)
+
+    assert actions[0]["target"] == "hsopt"
+    assert "private" not in json.dumps(actions)
+
+
 def test_completed_candidate_edit_is_a_terminal_agent_event(tmp_path: Path) -> None:
     log = tmp_path / "opencode.jsonl"
     log.write_text(

@@ -37,6 +37,30 @@ def _read_text(path: Path) -> str | None:
         return None
 
 
+def _read_agent_actions(path: Path) -> list[dict[str, Any]]:
+    """Read the runner's redacted per-tool timeline without raw tool payloads."""
+
+    try:
+        lines = path.read_text(encoding="utf-8", errors="replace").splitlines()
+    except OSError:
+        return []
+    actions: list[dict[str, Any]] = []
+    for line in lines:
+        try:
+            action = json.loads(line)
+        except json.JSONDecodeError:
+            continue
+        if not isinstance(action, dict):
+            continue
+        actions.append(
+            {
+                key: action.get(key)
+                for key in ("timestamp", "tool", "target", "status", "duration_ms", "online")
+            }
+        )
+    return actions
+
+
 def _public_result(result: dict[str, Any]) -> dict[str, Any]:
     """Keep the useful scalar evaluator fields without duplicating matrices."""
 
@@ -78,6 +102,7 @@ def _lane_record(campaign_root: Path, entry: dict[str, Any], default_target: int
                 "result": _public_result(result),
                 "mutation": _read_json(iteration_dir / "mutation_result.json"),
                 "agent_audit": _read_json(iteration_dir / "agent_audit.json"),
+                "agent_actions": _read_agent_actions(iteration_dir / "agent_actions.jsonl"),
             }
         )
 
@@ -190,6 +215,11 @@ _PAGE = r"""<!doctype html>
     dt { color:var(--muted); } dd { margin:0; overflow-wrap:anywhere; }
     pre { margin-top:14px; padding:12px; overflow:auto; background:#090d13; border:1px solid var(--line);
       border-radius:7px; font:11px/1.5 ui-monospace,SFMono-Regular,Menlo,monospace; white-space:pre; }
+    .actions { margin-top:14px; padding:12px; border:1px solid var(--line); border-radius:7px; background:#0b1119; }
+    .actions h3 { margin:0 0 9px; font-size:12px; } .action { display:grid; grid-template-columns:74px 1fr auto;
+      gap:9px; padding:7px 0; border-top:1px solid rgba(39,49,67,.6); }
+    .action:first-of-type { border-top:0; } .action-tool { color:#a9d68f; font-family:ui-monospace,monospace; }
+    .action-target { overflow-wrap:anywhere; } .action-meta { color:var(--muted); font-size:11px; white-space:nowrap; }
     .empty { padding:40px; color:var(--muted); text-align:center; }
     @media (max-width:900px) { main { grid-template-columns:1fr; } aside { position:relative; top:0; height:auto;
       min-height:340px; border-left:0; border-top:1px solid var(--line); } .lane { grid-template-columns:190px max-content; } }
@@ -206,6 +236,15 @@ _PAGE = r"""<!doctype html>
 <script>
 const initial=JSON.parse(document.querySelector('#initial-data').textContent); let model=initial;
 const esc=s=>String(s??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+function actionLabel(action){
+  const tool=String(action.tool||'tool'); const target=action.target?String(action.target):'';
+  const verb={read:'Read file',websearch:'Web search',webfetch:'Fetched online source',codesearch:'Code search',skill:'Loaded skill',edit:'Edited file',write:'Wrote file',apply_patch:'Patched file'}[tool]||tool;
+  return `${verb}${target?` · ${target}`:''}`;
+}
+function actionTimeline(actions){
+  if(!actions?.length)return '<div class="actions"><h3>Agent actions</h3><div class="muted">No action timeline was archived for this proposal.</div></div>';
+  return `<div class="actions"><h3>Agent actions · ${actions.length}</h3>${actions.map((a,i)=>`<div class="action"><span class="action-tool">${i+1}. ${esc(a.tool||'tool')}</span><span class="action-target">${esc(actionLabel(a))}</span><span class="action-meta">${esc(a.status||'unknown')}${Number.isFinite(Number(a.duration_ms))?` · ${(Number(a.duration_ms)/1000).toFixed(2)}s`:''}</span></div>`).join('')}</div>`;
+}
 function detail(lane,cell){
   const baseline=!cell; const d=baseline?{}:cell.decision||{}; const result=baseline?lane.baseline_result:cell.result||{};
   const source=baseline?lane.baseline_source:cell.candidate_source;
@@ -214,7 +253,7 @@ function detail(lane,cell){
     <dt>Accepted</dt><dd>${baseline?'baseline':String(d.accepted??'undecided')}</dd>
     <dt>Reason</dt><dd>${esc(d.acceptance_reason??'—')}</dd><dt>Score</dt><dd>${esc(d.candidate_score??result.score??'—')}</dd>
     <dt>T count</dt><dd>${esc(result.t_count??'—')}</dd><dt>T95</dt><dd>${esc(result.confidence_adjusted_t_count??'—')}</dd>
-    <dt>Task</dt><dd>${esc(d.task_id??result.task_id??'—')}</dd></dl><pre>${esc(source??'# No proposal has been archived for this iteration.')}</pre>`;
+    <dt>Task</dt><dd>${esc(d.task_id??result.task_id??'—')}</dd></dl>${baseline?'':actionTimeline(cell.agent_actions)}<pre>${esc(source??'# No proposal has been archived for this iteration.')}</pre>`;
 }
 function render(){
   const q=document.querySelector('#search').value.toLowerCase(), family=document.querySelector('#family').value;

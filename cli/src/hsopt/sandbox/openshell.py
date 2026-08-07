@@ -218,9 +218,11 @@ def _safe_tool_target(tool: str, payload: Any) -> str | None:
 
     if not isinstance(payload, dict):
         return None
-    for key in ("filePath", "path", "url", "query"):
+    for key in ("filePath", "path", "url", "query", "name"):
         value = payload.get(key)
         if not isinstance(value, str) or not value:
+            continue
+        if key == "name" and tool != "skill":
             continue
         if key in {"filePath", "path"}:
             normalized = value.replace("\\", "/")

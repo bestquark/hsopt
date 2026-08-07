@@ -43,6 +43,34 @@ def test_mutation_history_uses_lane_decisions_and_marks_current_best(tmp_path: P
     (first / "candidate.py").write_text("POLICY = 'rejected'\n", encoding="utf-8")
     _write_json(second / "decision.json", {"accepted": True, "candidate_score": 90})
     (second / "candidate.py").write_text("POLICY = 'best'\n", encoding="utf-8")
+    (second / "agent_actions.jsonl").write_text(
+        "\n".join(
+            [
+                json.dumps(
+                    {
+                        "timestamp": 1_786_000_000_000,
+                        "tool": "read",
+                        "target": "candidate.py",
+                        "status": "completed",
+                        "duration_ms": 12,
+                        "online": False,
+                    }
+                ),
+                json.dumps(
+                    {
+                        "timestamp": 1_786_000_000_050,
+                        "tool": "websearch",
+                        "target": "second-order product formula ordering",
+                        "status": "completed",
+                        "duration_ms": 420,
+                        "online": True,
+                    }
+                ),
+            ]
+        )
+        + "\n",
+        encoding="utf-8",
+    )
     (third / "candidate.py").parent.mkdir(parents=True, exist_ok=True)
     (third / "candidate.py").write_text("POLICY = 'awaiting evaluation'\n", encoding="utf-8")
 
@@ -65,6 +93,24 @@ def test_mutation_history_uses_lane_decisions_and_marks_current_best(tmp_path: P
     assert viewed_lane["current_best_iteration"] == 2
     assert viewed_lane["iterations"][1]["is_current_best"] is True
     assert viewed_lane["iterations"][1]["candidate_source"] == "POLICY = 'best'\n"
+    assert viewed_lane["iterations"][1]["agent_actions"] == [
+        {
+            "timestamp": 1_786_000_000_000,
+            "tool": "read",
+            "target": "candidate.py",
+            "status": "completed",
+            "duration_ms": 12,
+            "online": False,
+        },
+        {
+            "timestamp": 1_786_000_000_050,
+            "tool": "websearch",
+            "target": "second-order product formula ordering",
+            "status": "completed",
+            "duration_ms": 420,
+            "online": True,
+        },
+    ]
 
     output = tmp_path / "viewer"
     write_mutation_history(campaign, output)
