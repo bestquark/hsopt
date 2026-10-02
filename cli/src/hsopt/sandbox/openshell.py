@@ -65,7 +65,7 @@ def _run(
     command: Sequence[str],
     *,
     check: bool = True,
-    timeout: int | None = None,
+    timeout: int | float | None = None,
 ) -> subprocess.CompletedProcess[str]:
     return subprocess.run(
         list(command),
@@ -147,6 +147,67 @@ def _run_setup_command(sandbox_name: str, command: Sequence[str], run_dir: Path)
     finally:
         with (run_dir / "setup_commands.jsonl").open("a", encoding="utf-8") as stream:
             stream.write(json.dumps(audit, sort_keys=True) + "\n")
+
+
+def _download_candidate(sandbox_name: str, run_dir: Path, *, timeout_seconds: int) -> None:
+    """Retry only known SSH probe/tar failures while downloading the same file.
+
+    Every accepted transfer must return zero. At most three transport attempts
+    share the original download timeout; no agent turn or proposal is repeated.
+    Candidate validation still runs afterwards, including duplicate rejection.
+    """
+    if timeout_seconds <= 0:
+        raise ValueError("candidate download timeout must be positive")
+    candidate = run_dir / "candidate.py"
+    command = [
+        "openshell",
+        "sandbox",
+        "download",
+        sandbox_name,
+        "/sandbox/work/candidate.py",
+        str(candidate),
+    ]
+    deadline = time.monotonic() + timeout_seconds
+    for attempt in range(1, 4):
+        started = time.monotonic()
+        remaining = deadline - started
+        if remaining <= 0:
+            raise subprocess.TimeoutExpired(command, timeout_seconds)
+        audit: dict[str, Any] = {
+            "schema": 1,
+            "transfer_protocol": "candidate-download-v1",
+            "at": datetime.now(UTC).isoformat(),
+            "attempt": attempt,
+            "status": "failed",
+            "will_retry": False,
+        }
+        try:
+            result = _run(command, check=False, timeout=remaining)
+            audit["returncode"] = result.returncode
+            if result.returncode == 0:
+                audit["candidate_sha256"] = hashlib.sha256(candidate.read_bytes()).hexdigest()
+                audit["status"] = "downloaded"
+                return
+            reason = re.search(
+                r"(?m)(?:^|[ \t])ssh (probe|tar create) exited with status exit status: 1[ \t]*$",
+                result.stderr,
+            )
+            audit["retry_reason"] = reason[1] if reason and result.returncode == 1 else None
+            audit["will_retry"] = bool(
+                audit["retry_reason"] and attempt < 3 and time.monotonic() < deadline
+            )
+            if not audit["will_retry"]:
+                raise subprocess.CalledProcessError(
+                    result.returncode, command, output=result.stdout, stderr=result.stderr
+                )
+        except Exception as exc:
+            audit["error_type"] = type(exc).__name__
+            raise
+        finally:
+            audit["seconds"] = time.monotonic() - started
+            with (run_dir / "candidate_downloads.jsonl").open("a", encoding="utf-8") as stream:
+                stream.write(json.dumps(audit, sort_keys=True) + "\n")
+        time.sleep(min(0.1, max(0.0, deadline - time.monotonic())))
 
 
 def _configure_research_network(sandbox_name: str) -> dict[str, Any]:
@@ -1407,17 +1468,7 @@ def _mutate_once(
         _raise_inference_error(run_dir / "opencode.jsonl")
         if returncode != 0 and not stopped_after_edit:
             raise RuntimeError(f"OpenCode exited with status {returncode}")
-        _run(
-            [
-                "openshell",
-                "sandbox",
-                "download",
-                sandbox_name,
-                "/sandbox/work/candidate.py",
-                str(candidate),
-            ],
-            timeout=timeout_seconds,
-        )
+        _download_candidate(sandbox_name, run_dir, timeout_seconds=timeout_seconds)
     finally:
         if created and not (run_dir / "agent_audit.json").is_file():
             _capture_openshell_logs(sandbox_name, run_dir / "openshell.log")

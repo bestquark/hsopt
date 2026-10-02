@@ -43,6 +43,11 @@ the selected lane context; it does not receive this complete CLI source tree.
   both the OpenShell exit code and a nonce-verified command-completion receipt.
   Missing receipts and actual command failures stop setup; this does not retry
   commands or change the agent's edit/attempt budgets;
+- candidate downloads record `candidate_downloads.jsonl`. Known SSH probe/tar
+  exit-status failures receive at most three transfers of the same file within
+  the original download timeout. Success requires a zero exit code, followed by
+  the unchanged policy and agent-action checks. Transfers do not rerun OpenCode,
+  grant another edit, or reset a lane's proposal-attempt budget;
 - `hsopt-openshell audit --run-dir <mutation-run>` deterministically rebuilds
   the redacted action and metric files from the two raw logs.
 
