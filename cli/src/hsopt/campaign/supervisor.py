@@ -5,6 +5,7 @@ from __future__ import annotations
 import argparse
 import fcntl
 import json
+import math
 import os
 import time
 from collections import Counter
@@ -31,10 +32,12 @@ from ..cluster.nvpark import (
     submit_batch,
     submit_ready,
 )
+from ..cluster.live_results import collect_running_results
 from ..view.reporting import generate_reports, verify_strict_export
 from .export import export_family
 from .loop import propose_lane, propose_replay_lane, reconcile_lane
 from .queue import queue_status, requeue_missing
+from ..sandbox.mutation_retry import mutation_readiness
 
 
 TERMINAL_SLURM_STATES = frozenset(
@@ -240,6 +243,8 @@ def _lane_summary(lane_dirs: list[Path]) -> tuple[dict[str, Any], list[Path]]:
             status = "needs_attention"
         elif state.get("pending_task_id") is not None:
             status = "waiting_evaluation"
+        elif (readiness := mutation_readiness(lane_dir)) is not None:
+            status = str(readiness["status"])
         else:
             status = "ready"
             ready.append(lane_dir)
@@ -348,6 +353,71 @@ def _configured_final_pairs(
     return configured
 
 
+def _pending_runtime_estimate(
+    queue_dir: Path,
+    lane_dirs: list[Path],
+    *,
+    expected_count: int,
+    backend: str,
+    accelerator: str,
+) -> dict[str, Any] | None:
+    """Estimate a whole underfilled batch from this campaign's measured timings.
+
+    Require a measured mutation, then use the shorter of the incumbent and
+    latest scored evaluation when both are available. Cold iteration-0 timings
+    alone can greatly overestimate later candidates and must not authorize a
+    tiny early batch. This is an estimate, not a runtime guarantee.
+    Unknown tasks, references, baselines, and cross-backend timings cannot
+    authorize an early batch. Never load or execute candidate policy code.
+    """
+    pending = {p.name for p in (queue_dir / "pending").iterdir() if p.is_dir()}
+    if len(pending) != expected_count or len(pending) < 2:
+        return None
+    observations: dict[str, float] = {}
+    try:
+        for lane in lane_dirs:
+            state = _read_json(lane / "state.json")
+            task_id = state.get("pending_task_id")
+            if task_id not in pending:
+                continue
+            if state.get("pending_kind") != "proposal" or task_id in observations:
+                return None
+            iteration = int(state["iterations_completed"])
+            if iteration < 1:
+                return None
+            latest = lane / "iterations" / f"{iteration:04d}" / "result.json"
+            paths = [lane / "incumbent_result.json", latest]
+            timings = []
+            latest_seconds = None
+            for path in paths:
+                if not path.is_file():
+                    continue
+                result = _read_json(path)
+                if (
+                    result.get("status") != "ok"
+                    or result.get("execution_backend", result.get("backend")) != backend
+                    or result.get("execution_accelerator") != accelerator
+                ):
+                    continue
+                seconds = float(result["evaluation_wall_seconds"])
+                if math.isfinite(seconds) and seconds > 0:
+                    timings.append(seconds)
+                    if path == latest:
+                        latest_seconds = seconds
+            if latest_seconds is None:
+                return None
+            observations[task_id] = min(timings)
+    except (OSError, ValueError, TypeError, KeyError):
+        return None
+    if set(observations) != pending:
+        return None
+    return {
+        "seconds": sum(observations.values()),
+        "method": "sum_min_incumbent_and_latest_evaluation",
+        "task_seconds": observations,
+    }
+
+
 def supervise_once(
     campaign_root: Path,
     *,
@@ -375,9 +445,13 @@ def supervise_once(
     hamlib_report_dir: Path | None = None,
     reactions_export_dir: Path | None = None,
     reactions_report_dir: Path | None = None,
+    collect_live_results: bool = False,
+    idle_batch_min_estimated_seconds: float = 0,
 ) -> dict[str, Any]:
     """Run one idempotent collect/reconcile/submit/mutate cycle."""
 
+    if not math.isfinite(idle_batch_min_estimated_seconds) or idle_batch_min_estimated_seconds < 0:
+        raise ValueError("idle-batch-min-estimated-seconds must be finite and nonnegative")
     campaign_root = campaign_root.resolve()
     repo_dir = repo_dir.resolve()
     _, queue_dir, lane_dirs = _campaign_paths(campaign_root)
@@ -466,6 +540,27 @@ def supervise_once(
             )
         else:
             active_jobs += 1
+            if collect_live_results and state in {"RUNNING", "COMPLETING"}:
+                try:
+                    collected = collect_running_results(queue_dir, batch_dir)
+                    if collected["newly_merged"]:
+                        _append_event(
+                            campaign_root,
+                            "batch_results_available",
+                            batch_id=batch_dir.name,
+                            job_id=job_id,
+                            slurm_state=state,
+                            task_ids=collected["newly_merged"],
+                            missing=len(collected["missing"]),
+                        )
+                except Exception as exc:
+                    _append_event(
+                        campaign_root,
+                        "batch_live_collection_error",
+                        batch_id=batch_dir.name,
+                        job_id=job_id,
+                        error=_safe_error(exc),
+                    )
             batch_rows.append(
                 {
                     "batch_id": batch_dir.name,
@@ -566,8 +661,28 @@ def supervise_once(
             if pending == 0:
                 break
             force_partial = pending < threshold and (
-                not ready_lanes_now or (replay_campaign_root is not None and active_jobs == 0)
+                (
+                    not ready_lanes_now
+                    and (active_jobs == 0 or idle_batch_min_estimated_seconds == 0)
+                )
+                or (replay_campaign_root is not None and active_jobs == 0)
             )
+            # Coalesce small arrivals unless their measured duration warrants
+            # another available job slot; never exceed max_active_jobs above.
+            # With no active job, still drain the final tail to avoid deadlock.
+            runtime_estimate = None
+            if pending < threshold and not force_partial and idle_batch_min_estimated_seconds > 0:
+                runtime_estimate = _pending_runtime_estimate(
+                    queue_dir,
+                    lane_dirs,
+                    expected_count=pending,
+                    backend=backend,
+                    accelerator=accelerator,
+                )
+                force_partial = (
+                    runtime_estimate is not None
+                    and runtime_estimate["seconds"] >= idle_batch_min_estimated_seconds
+                )
             if pending < threshold and not force_partial:
                 break
             try:
@@ -601,6 +716,7 @@ def supervise_once(
                 job_id=submitted["job_id"],
                 tasks=submitted["task_count"],
                 forced_partial=force_partial,
+                idle_runtime_estimate=runtime_estimate,
                 resources=submitted["resources"],
             )
 
@@ -694,6 +810,8 @@ def supervise_once(
             "mutation_timeout_seconds": mutation_timeout_seconds,
             "max_batch_attempts": max_batch_attempts,
             "mutations_enabled": mutations_enabled,
+            "collect_live_results": collect_live_results,
+            "idle_batch_min_estimated_seconds": idle_batch_min_estimated_seconds,
             "host": host,
             "remote_root": remote_root,
             "account": account,
@@ -773,6 +891,17 @@ def _parser() -> argparse.ArgumentParser:
     parser.add_argument("--mutation-timeout-seconds", type=int, default=900)
     parser.add_argument("--max-batch-attempts", type=int, default=3)
     parser.add_argument("--no-mutations", action="store_true")
+    parser.add_argument(
+        "--collect-live-results",
+        action="store_true",
+        help="reconcile completed tasks while their Slurm batch is still running",
+    )
+    parser.add_argument(
+        "--idle-batch-min-estimated-seconds",
+        type=float,
+        default=0,
+        help="with a spare job slot, allow a partial batch with this much measured historical work (0 disables)",
+    )
     parser.add_argument("--host", default=DEFAULT_HOST)
     parser.add_argument("--remote-root", default=DEFAULT_REMOTE_ROOT)
     parser.add_argument("--account", default=DEFAULT_ACCOUNT)
@@ -830,6 +959,8 @@ def main() -> int:
         "mutation_timeout_seconds": args.mutation_timeout_seconds,
         "max_batch_attempts": args.max_batch_attempts,
         "mutations_enabled": not args.no_mutations,
+        "collect_live_results": args.collect_live_results,
+        "idle_batch_min_estimated_seconds": args.idle_batch_min_estimated_seconds,
         "host": args.host,
         "remote_root": args.remote_root,
         "account": args.account,

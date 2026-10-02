@@ -21,6 +21,11 @@ from ..evaluation.compiled_unitary import (
     EVALUATION_CONTRACT_VERSION,
 )
 from ..sandbox.openshell import mutate
+from ..sandbox.mutation_retry import (
+    clear_mutation_retry,
+    mutation_readiness,
+    record_mutation_failure,
+)
 from .queue import enqueue
 
 
@@ -458,6 +463,9 @@ def reconcile_lane(lane_dir: Path) -> dict[str, Any]:
         _write_json(iteration_dir / "result.json", result)
         error_type = str(result.get("error_type") or "EvaluatorError")
         error = str(result.get("error") or "candidate evaluation failed")
+        record_mutation_failure(
+            lane_dir, RuntimeError(f"{error_type}: {error}"), iteration=iteration
+        )
         state.update(
             {
                 "pending_kind": None,
@@ -542,6 +550,7 @@ def reconcile_lane(lane_dir: Path) -> dict[str, Any]:
         ),
     }
     _write_json(iteration_dir / "decision.json", decision)
+    clear_mutation_retry(lane_dir)
     state.update(
         {
             "iterations_completed": iteration,
@@ -568,6 +577,10 @@ def propose_lane(lane_dir: Path, *, timeout_seconds: int = 900) -> dict[str, Any
         return reconciled
     if state["iterations_completed"] >= manifest["iterations_target"]:
         return {"status": "complete", **state}
+
+    readiness = mutation_readiness(lane_dir)
+    if readiness is not None:
+        return readiness
 
     iteration = state["iterations_completed"] + 1
     iteration_dir = lane_dir / "iterations" / f"{iteration:04d}"

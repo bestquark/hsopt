@@ -15,6 +15,46 @@ and one plotting-source tree, [`plots/`](plots/). Raw campaigns, databases,
 Hamiltonian collections, caches, scheduler logs, and agent transcripts stay
 outside the Git checkout.
 
+## Quick start on your own computer
+
+The checked-in H2 examples run on a CPU with NumPy on macOS or Linux. They
+include their Hamiltonians and policies; no NVIDIA account, GPU, SSH access,
+API key, or external campaign data is needed. Install
+[`uv`](https://docs.astral.sh/uv/getting-started/installation/), then run:
+
+```bash
+git clone https://github.com/bestquark/hsopt.git
+cd hsopt
+uv sync --locked --python 3.12
+uv run python cli/tests/fixtures/abs_energy_h2/evaluate.py --backend numpy
+uv run python cli/tests/fixtures/diff_energy_h2_bond_stretch/evaluate.py \
+  --error-contract error_cancellation --backend numpy
+```
+
+Each command prints a JSON result. Look for `passes_chemical_accuracy: true`,
+the energy error, and `confidence_adjusted_t_count` (the optimization score).
+These commands evaluate the supplied policies; they do not invoke an AI agent.
+
+To try a policy change, copy the fixture policy to an external directory and
+pass it with `--policy-file`:
+
+```bash
+mkdir -p ../hsopt-demo
+cp cli/tests/fixtures/abs_energy_h2/initial_pf.py ../hsopt-demo/candidate.py
+# Edit ../hsopt-demo/candidate.py, then evaluate it:
+uv run python cli/tests/fixtures/abs_energy_h2/evaluate.py \
+  --backend numpy --policy-file ../hsopt-demo/candidate.py
+```
+
+The [product-formula interface](#product-formula-policy) below describes the
+editable policy. Automated mutations additionally require the
+[OpenShell agent setup](#openshell--opencode-mutation-agent). Full paper
+campaigns require separately prepared inputs and suitable compute resources;
+the production data and private deployment scripts are not bundled here.
+
+GitHub Actions checks installation, every command's `--help`, the two CPU
+examples, and the test suite on macOS and Linux with Python 3.12.
+
 ## Objective
 
 For each physical Hamiltonian,
@@ -197,7 +237,7 @@ HSOpt requires Python 3.12 or newer and uses
 ```bash
 git clone https://github.com/bestquark/hsopt.git
 cd hsopt
-uv sync
+uv sync --locked --python 3.12
 ```
 
 Install the optional cuPyNumeric/Legate dependencies on a supported Linux

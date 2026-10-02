@@ -6,6 +6,8 @@ import time
 from threading import Lock
 from pathlib import Path
 
+import pytest
+
 from hsopt.campaign.setup import initialize_campaign
 from hsopt.evaluation.compiled_unitary import DIFFERENCE_ERROR_CONTRACTS, evaluate_exact_reference
 from hsopt.campaign.loop import initialize_lane, reconcile_lane
@@ -20,6 +22,156 @@ from hsopt.campaign.supervisor import (
 
 REPO = Path(__file__).resolve().parents[2]
 ABSOLUTE = REPO / "cli" / "tests" / "fixtures" / "abs_energy_h2"
+
+
+@pytest.mark.parametrize(
+    "minimum,estimate,active_jobs,should_submit",
+    [
+        (0, 1800, 0, False),
+        (0, 1800, 1, False),
+        (1200, 1800, 0, True),
+        (1200, 1200, 0, True),
+        (1200, 300, 0, False),
+        (1200, None, 0, False),
+        (1200, 1800, 1, True),
+        (1200, 1199, 1, False),
+        (1200, None, 1, False),
+        (1200, 1800, 4, False),
+    ],
+)
+def test_runtime_flush_is_opt_in_and_requires_substantial_work_and_spare_capacity(
+    tmp_path,
+    monkeypatch,
+    minimum,
+    estimate,
+    active_jobs,
+    should_submit,
+):
+    root, queue, lane = _campaign(tmp_path)
+    for index in range(active_jobs):
+        batch = queue / "batches" / f"active-{index}"
+        batch.mkdir()
+        (batch / "batch.json").write_text(json.dumps({"task_ids": []}))
+        (batch / "submission.json").write_text(json.dumps({"job_id": str(123 + index)}))
+    pending, submitted, estimates = 2, [], []
+
+    def fake_estimate(*args, **kwargs):
+        estimates.append(kwargs)
+        return None if estimate is None else {"seconds": estimate, "task_seconds": {}}
+
+    def fake_submit(*args, **kwargs):
+        nonlocal pending
+        submitted.append(kwargs)
+        pending = 0
+        return {
+            "status": "submitted",
+            "batch_id": "idle",
+            "job_id": "456",
+            "task_count": 2,
+            "resources": {"gpus": 1},
+        }
+
+    def running_status(batch_dir):
+        job_id = json.loads((batch_dir / "submission.json").read_text())["job_id"]
+        return {"job_id": job_id, "rows": [f"{job_id}|RUNNING|00:01:00||"]}
+
+    monkeypatch.setattr("hsopt.campaign.supervisor.remote_status", running_status)
+    monkeypatch.setattr(
+        "hsopt.campaign.supervisor._lane_summary",
+        lambda _: (
+            {"total": 1, "by_status": {"ready": 1}},
+            [lane],
+        ),
+    )
+    monkeypatch.setattr("hsopt.campaign.supervisor.queue_status", lambda _: {"pending": pending})
+    monkeypatch.setattr("hsopt.campaign.supervisor._pending_runtime_estimate", fake_estimate)
+    monkeypatch.setattr("hsopt.campaign.supervisor.submit_ready", fake_submit)
+    status = supervise_once(
+        root,
+        repo_dir=REPO,
+        mutations_enabled=False,
+        idle_batch_min_estimated_seconds=minimum,
+    )
+    assert len(submitted) == int(should_submit)
+    assert status["active_jobs"] == active_jobs + int(should_submit)
+    assert status["configuration"]["idle_batch_min_estimated_seconds"] == minimum
+    if minimum == 0 or active_jobs == 4:
+        assert estimates == []
+    else:
+        assert estimates
+    if should_submit:
+        assert submitted[0]["threshold"] == 15
+        assert submitted[0]["force"] is True
+        events = [
+            json.loads(line) for line in (root / "supervisor/events.jsonl").read_text().splitlines()
+        ]
+        assert events[-1]["idle_runtime_estimate"]["seconds"] == estimate
+
+
+@pytest.mark.parametrize(
+    "active,pending_count,minimum,expected_submission",
+    [
+        (True, 1, 1200, False),
+        (True, 14, 1200, False),
+        (True, 15, 1200, True),
+        (False, 1, 1200, True),
+        (True, 1, 0, True),
+    ],
+)
+def test_duration_aware_queue_coalesces_active_tail_without_stalling_final_tail(
+    tmp_path,
+    monkeypatch,
+    active,
+    pending_count,
+    minimum,
+    expected_submission,
+):
+    root, queue, _ = _campaign(tmp_path)
+    if active:
+        batch = queue / "batches/active"
+        batch.mkdir()
+        (batch / "batch.json").write_text(json.dumps({"task_ids": []}))
+        (batch / "submission.json").write_text(json.dumps({"job_id": "123"}))
+    pending, submitted = pending_count, []
+
+    def submit(*args, **kwargs):
+        nonlocal pending
+        submitted.append(kwargs)
+        pending = 0
+        return {
+            "status": "submitted",
+            "batch_id": "tail",
+            "job_id": "456",
+            "task_count": pending_count,
+            "resources": {"gpus": 1},
+        }
+
+    monkeypatch.setattr(
+        "hsopt.campaign.supervisor.remote_status",
+        lambda _: {
+            "job_id": "123",
+            "rows": ["123|RUNNING|00:01:00||"],
+        },
+    )
+    monkeypatch.setattr(
+        "hsopt.campaign.supervisor._lane_summary",
+        lambda _: (
+            {"total": 1, "by_status": {"waiting_evaluation": 1}},
+            [],
+        ),
+    )
+    monkeypatch.setattr("hsopt.campaign.supervisor.queue_status", lambda _: {"pending": pending})
+    monkeypatch.setattr("hsopt.campaign.supervisor.submit_ready", submit)
+    status = supervise_once(
+        root,
+        repo_dir=REPO,
+        mutations_enabled=False,
+        idle_batch_min_estimated_seconds=minimum,
+    )
+    assert len(submitted) == int(expected_submission)
+    assert status["active_jobs"] == int(active) + int(expected_submission)
+    if submitted:
+        assert submitted[0]["force"] is (pending_count < 15)
 
 
 def _campaign(tmp_path: Path) -> tuple[Path, Path, Path]:
@@ -251,6 +403,63 @@ def test_supervisor_collects_and_reconciles_a_completed_baseline(
     assert (lane / "baseline_result.json").is_file()
     assert status["lanes"]["by_status"] == {"ready": 1}
     assert status["queue"]["completed"] == 1
+
+
+def test_live_collection_advances_lane_but_keeps_slurm_slot_active(tmp_path, monkeypatch):
+    root, queue, lane = _campaign(tmp_path)
+    batch = Path(prepare_batch(queue)["batch_dir"])
+    run_batch(batch, backend="numpy")
+    task_id = json.loads((batch / "batch.json").read_text())["task_ids"][0]
+    (batch / "submission.json").write_text(json.dumps({"job_id": "12345"}))
+    monkeypatch.setattr(
+        "hsopt.campaign.supervisor.remote_status",
+        lambda _: {"job_id": "12345", "rows": ["12345|RUNNING|00:05:00||"]},
+    )
+    calls = []
+
+    def collect(queue_dir, batch_dir):
+        calls.append(batch_dir)
+        return {**merge_batch(queue_dir, batch_dir), "newly_merged": [task_id]}
+
+    monkeypatch.setattr("hsopt.campaign.supervisor.collect_running_results", collect)
+    default = supervise_once(root, repo_dir=REPO, mutations_enabled=False)
+    assert not calls
+    assert default["lanes"]["by_status"] == {"waiting_evaluation": 1}
+    status = supervise_once(root, repo_dir=REPO, mutations_enabled=False, collect_live_results=True)
+    assert calls == [batch]
+    assert status["active_jobs"] == 1
+    assert status["batches"][0]["state"] == "RUNNING"
+    assert not (batch / "collected.json").exists()
+    assert (lane / "baseline_result.json").exists()
+    assert status["lanes"]["by_status"] == {"ready": 1}
+    assert "batch_results_available" in (root / "supervisor/events.jsonl").read_text()
+
+
+def test_live_collection_failure_keeps_work_active(tmp_path, monkeypatch):
+    root, queue, _ = _campaign(tmp_path)
+    batch = Path(prepare_batch(queue)["batch_dir"])
+    (batch / "submission.json").write_text(json.dumps({"job_id": "12345"}))
+    monkeypatch.setattr(
+        "hsopt.campaign.supervisor.remote_status",
+        lambda _: {"job_id": "12345", "rows": ["12345|RUNNING|00:05:00||"]},
+    )
+
+    def failed_transfer(*_args):
+        raise TimeoutError("temporary observation failure")
+
+    def forbidden(*_args, **_kwargs):
+        raise AssertionError("live work must not be finalized, requeued, or mutated")
+
+    monkeypatch.setattr("hsopt.campaign.supervisor.collect_running_results", failed_transfer)
+    monkeypatch.setattr("hsopt.campaign.supervisor.collect_batch", forbidden)
+    monkeypatch.setattr("hsopt.campaign.supervisor.requeue_missing", forbidden)
+    monkeypatch.setattr("hsopt.campaign.supervisor.propose_lane", forbidden)
+    status = supervise_once(root, repo_dir=REPO, collect_live_results=True)
+    assert status["active_jobs"] == 1
+    assert status["batches"][0]["state"] == "RUNNING"
+    assert status["lanes"]["by_status"] == {"waiting_evaluation": 1}
+    assert not (batch / "collected.json").exists()
+    assert "batch_live_collection_error" in (root / "supervisor/events.jsonl").read_text()
 
 
 def test_supervisor_forces_a_partial_batch_when_every_lane_is_waiting(
