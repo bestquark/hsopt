@@ -77,6 +77,78 @@ def _run(
     )
 
 
+def _run_setup_command(sandbox_name: str, command: Sequence[str], run_dir: Path) -> None:
+    """Verify a host setup command independently of OpenShell's SSH exit status.
+
+    OpenShell 0.0.89 has returned 1 for marker commands explicitly exiting 0.
+    A nonce-bound receipt captures the actual setup command's status before
+    the wrapper exits. Never apply this to agent execution or accept a missing
+    receipt, a command failure, or another transport error as success.
+    """
+    args = list(command)
+    if len(args) < 3 or (args[0], args[1]) not in {
+        ("mkdir", "-p"),
+        ("chmod", "0444"),
+        ("chmod", "755"),
+    }:
+        raise ValueError("verified setup only supports mkdir/chmod")
+    if any(
+        not path.startswith("/sandbox/")
+        or PurePosixPath(path) == PurePosixPath("/sandbox")
+        or ".." in PurePosixPath(path).parts
+        for path in args[2:]
+    ):
+        raise ValueError("setup paths must remain inside /sandbox")
+    marker = "HSOPT_SETUP_" + uuid.uuid4().hex
+    invocation = [
+        "openshell",
+        "sandbox",
+        "exec",
+        "--name",
+        sandbox_name,
+        "--no-tty",
+        "--timeout",
+        "30",
+        "--",
+        "sh",
+        "-c",
+        'marker="$1"; shift; "$@"; status=$?; printf "\\n%s=%s\\n" "$marker" "$status"; '
+        'exit "$status"',
+        "hsopt-setup",
+        marker,
+        *args,
+    ]
+    audit: dict[str, Any] = {
+        "schema": 1,
+        "receipt_protocol": "host-setup-v1",
+        "at": datetime.now(UTC).isoformat(),
+        "command": args,
+        "receipt_valid": False,
+        "command_returncode": None,
+    }
+    try:
+        result = _run(invocation, check=False, timeout=45)
+        audit["transport_returncode"] = result.returncode
+        match = re.fullmatch(r"\n" + re.escape(marker) + r"=([0-9]{1,3})\n", result.stdout)
+        status = int(match[1]) if match else None
+        audit["receipt_valid"] = status is not None and status <= 255
+        audit["command_returncode"] = status
+        if not audit["receipt_valid"] or result.returncode not in (0, 1, status):
+            raise AgentRuntimeError(
+                "OpenShell setup command completion could not be verified",
+                retryable=True,
+                category="sandbox_transport",
+            )
+        if status != 0:
+            raise subprocess.CalledProcessError(status, args, stderr=result.stderr)
+    except Exception as exc:
+        audit["error_type"] = type(exc).__name__
+        raise
+    finally:
+        with (run_dir / "setup_commands.jsonl").open("a", encoding="utf-8") as stream:
+            stream.write(json.dumps(audit, sort_keys=True) + "\n")
+
+
 def _configure_research_network(sandbox_name: str) -> dict[str, Any]:
     """Best-effort, binary-scoped egress for optional literature research."""
 
@@ -133,22 +205,7 @@ def _stdin_prompt_command(command: Sequence[str], run_dir: Path) -> list[str]:
     prompt_file.write_text(args[-1], encoding="utf-8")
     remote = f"/sandbox/{prompt_file.name}"
     _run(["openshell", "sandbox", "upload", sandbox_name, str(prompt_file), remote], timeout=45)
-    _run(
-        [
-            "openshell",
-            "sandbox",
-            "exec",
-            "--name",
-            sandbox_name,
-            "--timeout",
-            "30",
-            "--",
-            "chmod",
-            "0444",
-            remote,
-        ],
-        timeout=45,
-    )
+    _run_setup_command(sandbox_name, ["chmod", "0444", remote], run_dir)
     return [
         *args[: separator + 1],
         "sh",
@@ -1195,16 +1252,9 @@ def _mutate_once(
             run_dir / "research_network.json",
             _configure_research_network(sandbox_name),
         )
-        _run(
+        _run_setup_command(
+            sandbox_name,
             [
-                "openshell",
-                "sandbox",
-                "exec",
-                "--name",
-                sandbox_name,
-                "--timeout",
-                "30",
-                "--",
                 "mkdir",
                 "-p",
                 "/sandbox/work/.opencode/skills/hsopt",
@@ -1217,7 +1267,7 @@ def _mutate_once(
                     }
                 ),
             ],
-            timeout=45,
+            run_dir,
         )
         _run(
             [
@@ -1243,22 +1293,7 @@ def _mutate_once(
                 ],
                 timeout=timeout_seconds,
             )
-            _run(
-                [
-                    "openshell",
-                    "sandbox",
-                    "exec",
-                    "--name",
-                    sandbox_name,
-                    "--timeout",
-                    "30",
-                    "--",
-                    "chmod",
-                    "0444",
-                    remote,
-                ],
-                timeout=45,
-            )
+            _run_setup_command(sandbox_name, ["chmod", "0444", remote], run_dir)
         _run(
             [
                 "openshell",
@@ -1292,22 +1327,7 @@ def _mutate_once(
             ],
             timeout=timeout_seconds,
         )
-        _run(
-            [
-                "openshell",
-                "sandbox",
-                "exec",
-                "--name",
-                sandbox_name,
-                "--timeout",
-                "30",
-                "--",
-                "chmod",
-                "755",
-                "/sandbox/work/.local/bin/rg",
-            ],
-            timeout=45,
-        )
+        _run_setup_command(sandbox_name, ["chmod", "755", "/sandbox/work/.local/bin/rg"], run_dir)
         command = [
             "openshell",
             "sandbox",

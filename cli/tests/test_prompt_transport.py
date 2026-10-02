@@ -10,6 +10,9 @@ def test_long_unicode_prompt_is_staged_without_truncation(tmp_path, monkeypatch)
     prompt = 'Hamiltonian Δ; "quotes"; $HOME; $(touch NEVER); `false`\n' * 4000
     calls = []
     monkeypatch.setattr(openshell, "_run", lambda command, **kwargs: calls.append(command))
+    monkeypatch.setattr(
+        openshell, "_run_setup_command", lambda name, args, path: calls.append(args)
+    )
     command = [
         "openshell",
         "sandbox",
@@ -54,6 +57,7 @@ def test_long_unicode_prompt_is_staged_without_truncation(tmp_path, monkeypatch)
 
 def test_each_turn_retains_its_own_prompt_bytes(tmp_path, monkeypatch):
     monkeypatch.setattr(openshell, "_run", lambda *args, **kwargs: None)
+    monkeypatch.setattr(openshell, "_run_setup_command", lambda *args: None)
     prefix = ["openshell", "sandbox", "exec", "--name", "test", "--", "opencode", "run"]
     first = openshell._stdin_prompt_command([*prefix, "read only"], tmp_path)
     second = openshell._stdin_prompt_command(

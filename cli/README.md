@@ -39,6 +39,10 @@ the selected lane context; it does not receive this complete CLI source tree.
 - every mutation automatically preserves raw `opencode.jsonl` and
   `openshell.log`, plus redacted `agent_actions.jsonl`,
   `opencode_metrics.json`, `openshell_metrics.json`, and `agent_audit.json`;
+- host `mkdir`/`chmod` setup operations record `setup_commands.jsonl`, including
+  both the OpenShell exit code and a nonce-verified command-completion receipt.
+  Missing receipts and actual command failures stop setup; this does not retry
+  commands or change the agent's edit/attempt budgets;
 - `hsopt-openshell audit --run-dir <mutation-run>` deterministically rebuilds
   the redacted action and metric files from the two raw logs.
 

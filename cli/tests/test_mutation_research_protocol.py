@@ -260,6 +260,7 @@ def test_cleanup_timeout_does_not_hide_permanent_inference_error(tmp_path, monke
         return 0, False
 
     monkeypatch.setattr(openshell, "_run", run)
+    monkeypatch.setattr(openshell, "_run_setup_command", lambda *args: None)
     monkeypatch.setattr(openshell, "_run_logged", logged)
     monkeypatch.setattr(openshell, "_capture_openshell_logs", lambda *args: None)
     monkeypatch.setattr(openshell, "_terminate_sandbox_opencode", lambda *args: None)
@@ -363,6 +364,7 @@ def test_host_unlocks_edit_only_after_preparation_receipts(
         return 0, False
 
     monkeypatch.setattr(openshell, "_run", run)
+    monkeypatch.setattr(openshell, "_run_setup_command", lambda *args: None)
     monkeypatch.setattr(openshell, "_run_logged", logged)
     monkeypatch.setattr(openshell, "_capture_openshell_logs", lambda *args: None)
     monkeypatch.setattr(openshell, "_terminate_sandbox_opencode", lambda *args: None)
