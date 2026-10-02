@@ -33,7 +33,8 @@ the selected lane context; it does not receive this complete CLI source tree.
   provider without copying `NVIDIA_API_KEY` into a sandbox;
 - `hsopt-openshell mutate` creates one disposable OpenShell sandbox, installs
   the compact skill, exposes only `candidate.py`, the fixed evaluator, and the
-  selected benchmark JSON, invokes OpenCode once, downloads the candidate, and
+  selected benchmark JSON, runs a read-only preparation phase followed by an
+  editing continuation in the same OpenCode session, downloads the candidate, and
   removes the sandbox;
 - every mutation automatically preserves raw `opencode.jsonl` and
   `openshell.log`, plus redacted `agent_actions.jsonl`,
@@ -44,6 +45,23 @@ the selected lane context; it does not receive this complete CLI source tree.
 The redacted metrics count tools by name, online tool calls, web searches,
 inference steps, tokens, OpenShell network/process events, and denied events.
 They never copy tool outputs, credentials, or request payloads into the summary.
+
+Before editing is enabled, the host verifies that the agent read the policy,
+the generated `research_context.json`, and every required benchmark input.
+Context includes recent lane feedback and the supported policy API. Duplicate
+policies and formatting-only changes are rejected before evaluation.
+
+Transient failures use bounded retries and backoff. A permanent inference
+failure blocks new mutations while evaluation collection continues. After
+repairing the cause, resume explicitly with an audit reason:
+
+```bash
+uv run hsopt-openshell resume --path /path/to/campaign --reason "Inference configuration repaired"
+```
+
+`hsopt-supervisor --collect-live-results` can collect completed tasks while
+the rest of a Slurm batch runs. `--idle-batch-min-estimated-seconds` enables
+partial batches based on measured evaluation time; both features are opt-in.
 
 ## Mutation-history view
 

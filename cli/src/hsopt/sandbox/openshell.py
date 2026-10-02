@@ -17,6 +17,14 @@ from pathlib import Path, PurePosixPath
 from typing import Any, Sequence
 
 from ..evaluation.compiled_unitary import validate_policy_source
+from .mutation_retry import AgentRuntimeError, record_mutation_failure, resume_mutations
+from .research_context import (
+    MUTATION_PROTOCOL_VERSION,
+    POLICY_CONTRACT,
+    benchmark_summary,
+    duplicate_policy,
+    lane_history,
+)
 
 
 NVIDIA_PROVIDER = "hsopt-nvidia"
@@ -24,6 +32,7 @@ NVIDIA_BASE_URL = "https://inference-api.nvidia.com/v1"
 NEMOTRON_MODEL = "nvidia/nvidia/nemotron-3-super-v3"
 OPENCODE_MODEL = "openshell/nemotron-3-super-v3"
 OPENCODE_AGENT = "hsopt-mutation"
+MODEL_OUTPUT_LIMIT = 16384
 ONLINE_TOOLS = frozenset({"webfetch", "websearch", "codesearch"})
 RESEARCH_CONTAMINATION_MARKERS = ("bestquark", "hsopt", "initial_pf")
 REPOSITORY_ROOT = Path(__file__).resolve().parents[4]
@@ -113,12 +122,13 @@ def _run_logged(
     stderr_path: Path,
     timeout: int,
     completed_edit_grace_seconds: float | None = None,
+    append: bool = False,
 ) -> tuple[int, bool]:
     """Run a command with logs visible to external monitors while it is active."""
 
     with (
-        stdout_path.open("w", encoding="utf-8") as stdout,
-        stderr_path.open("w", encoding="utf-8") as stderr,
+        stdout_path.open("a" if append else "w", encoding="utf-8") as stdout,
+        stderr_path.open("a" if append else "w", encoding="utf-8") as stderr,
     ):
         process = subprocess.Popen(
             list(command),
@@ -252,6 +262,7 @@ def summarize_opencode_events(path: Path) -> tuple[dict[str, Any], list[dict[str
     if not path.is_file():
         return {
             "schema": 1,
+            "raw_log_present": False,
             "tool_calls": 0,
             "by_tool": {},
             "by_status": {},
@@ -324,10 +335,17 @@ def summarize_opencode_events(path: Path) -> tuple[dict[str, Any], list[dict[str
     by_status = Counter(str(action["status"]) for action in actions)
     metrics = {
         "schema": 1,
+        "raw_log_present": True,
         "tool_calls": sum(by_tool.values()),
         "by_tool": dict(sorted(by_tool.items())),
         "by_status": dict(sorted(by_status.items())),
         "online_tool_calls": sum(by_tool[tool] for tool in ONLINE_TOOLS),
+        "successful_online_tool_calls": sum(
+            action["online"] and action["status"] == "completed" for action in actions
+        ),
+        "by_tool_status": dict(
+            sorted(Counter(f"{action['tool']}:{action['status']}" for action in actions).items())
+        ),
         "web_searches": by_tool["websearch"],
         "inference_steps": inference_steps,
         "errors": errors,
@@ -349,7 +367,12 @@ def _has_completed_candidate_edit(path: Path) -> bool:
     )
 
 
-def _validate_agent_action_contract(path: Path) -> None:
+def _validate_agent_action_contract(
+    path: Path,
+    *,
+    required_reads: Sequence[str] = (),
+    preparation: bool = False,
+) -> None:
     """Reject a sandbox turn that did anything outside the one-file contract."""
 
     _, actions = summarize_opencode_events(path)
@@ -364,6 +387,7 @@ def _validate_agent_action_contract(path: Path) -> None:
     }
     mutation_tools = {"edit", "write", "apply_patch", "patch"}
     mutation_actions = []
+    completed_reads: set[str] = set()
     for action in actions:
         tool = str(action["tool"])
         if tool not in allowed_tools:
@@ -377,17 +401,117 @@ def _validate_agent_action_contract(path: Path) -> None:
             )
             if target not in READABLE_CONTEXT_FILES and not safe_json:
                 raise RuntimeError("OpenCode attempted to read outside the mutation context")
+            if action["status"] == "completed":
+                completed_reads.add(target)
         if tool in ONLINE_TOOLS and action["target"] is not None:
             research_target = str(action["target"]).casefold()
             if any(marker in research_target for marker in RESEARCH_CONTAMINATION_MARKERS):
                 raise RuntimeError("OpenCode research attempted to inspect HSOpt baseline data")
         if tool in mutation_tools:
+            if preparation:
+                raise RuntimeError("OpenCode attempted to edit during read-only preparation")
+            missing = set(required_reads) - completed_reads
+            if missing:
+                raise RuntimeError(
+                    "Read required benchmark context before editing: " + ", ".join(sorted(missing))
+                )
             mutation_actions.append(action)
             if action["target"] != "candidate.py":
                 raise RuntimeError("OpenCode attempted to mutate outside candidate.py")
+    if preparation:
+        missing = set(required_reads) - completed_reads
+        if missing:
+            raise RuntimeError("Preparation missing required reads: " + ", ".join(sorted(missing)))
+        return
     completed_mutations = [action for action in mutation_actions if action["status"] == "completed"]
     if len(mutation_actions) != 1 or len(completed_mutations) != 1:
         raise RuntimeError("OpenCode must complete exactly one candidate.py mutation")
+
+
+def _raise_inference_error(path: Path) -> None:
+    """A zero shell exit status does not imply a successful OpenCode/API turn."""
+    if not path.is_file():
+        return
+    for line in path.read_text(encoding="utf-8", errors="replace").splitlines():
+        try:
+            event = json.loads(line)
+        except json.JSONDecodeError:
+            continue
+        if event.get("type") != "error":
+            continue
+        error = event.get("error") or {}
+        data = error.get("data") or {}
+        message = str(
+            data.get("message") or error.get("message") or error.get("name") or "OpenCode error"
+        )
+        status = data.get("statusCode")
+        retryable = data.get("isRetryable") is not False and status not in {400, 401, 403, 404, 422}
+        # The inference connector wraps database saturation as Authentication Error.
+        # Recognize only this specific backend condition; real auth/configuration
+        # failures must still stop the campaign instead of retrying credentials.
+        if (
+            "error querying the database" in message.casefold()
+            and "too many clients already" in message.casefold()
+        ):
+            retryable = True
+        if "max_tokens cannot exceed" in message:
+            retryable = False
+        raise AgentRuntimeError(message[:600], retryable=retryable)
+
+
+def _prepare_mutation_context(
+    command, *, run_dir: Path, required_reads, prompt: str, deadline: float
+):
+    """Finish missing read receipts in the same read-only session, within the budget."""
+    session = None
+    for attempt in range(3):
+        remaining = int(deadline - time.monotonic())
+        if remaining <= 0:
+            raise RuntimeError("Mutation time budget exhausted during preparation")
+        turn = [*command[:-1], *(["--session", session] if session else []), prompt]
+        turn[turn.index("--timeout") + 1] = str(remaining)
+        returncode, _ = _run_logged(
+            turn,
+            stdout_path=run_dir / "opencode.jsonl",
+            stderr_path=run_dir / "opencode.stderr",
+            timeout=remaining + 30,
+            append=attempt > 0,
+        )
+        _raise_inference_error(run_dir / "opencode.jsonl")
+        if returncode != 0:
+            raise RuntimeError(f"OpenCode preparation exited with status {returncode}")
+        # Still reject edits, forbidden tools, and out-of-context reads immediately.
+        _validate_agent_action_contract(run_dir / "opencode.jsonl", preparation=True)
+        metrics, actions = summarize_opencode_events(run_dir / "opencode.jsonl")
+        if len(metrics["sessions"]) != 1:
+            raise RuntimeError("Preparation must identify exactly one OpenCode session")
+        session = metrics["sessions"][0]
+        completed = {
+            a["target"] for a in actions if a["tool"] == "read" and a["status"] == "completed"
+        }
+        missing = sorted(set(required_reads) - completed)
+        if not missing:
+            _write_json(
+                run_dir / "preparation_result.json",
+                {
+                    "status": "ready",
+                    "session": session,
+                    "required_reads": required_reads,
+                    "read_only_turns": attempt + 1,
+                    "metrics": metrics,
+                },
+            )
+            return session
+        prompt = (
+            "Editing is STILL DISABLED. The host is missing successful read receipts for: "
+            + json.dumps(["/sandbox/work/" + p for p in missing])
+            + ". Your next tool calls must read EACH listed file. Use read with limit=80 "
+            "to inspect its header, then page additional ranges as needed. Do not substitute "
+            "the summaries for reading these files. Do not edit, write, or patch. "
+            "Only after these reads, return your hypothesis."
+        )
+        (run_dir / f"preparation_followup_{attempt + 1}.md").write_text(prompt)
+    raise RuntimeError("Preparation missing required reads: " + ", ".join(missing))
 
 
 _OCSF_RE = re.compile(r"\bOCSF\s+(?P<class>[A-Z]+):(?P<activity>[A-Z_]+)")
@@ -539,10 +663,10 @@ def configure_inference() -> dict[str, Any]:
     }
 
 
-def opencode_config() -> dict[str, Any]:
-    """Return an edit-only OpenCode config for one isolated candidate file."""
+def opencode_config(*, preparation: bool = False) -> dict[str, Any]:
+    """Configure read-only preparation or one isolated candidate edit."""
 
-    return {
+    config = {
         "$schema": "https://opencode.ai/config.json",
         "autoupdate": False,
         "share": "disabled",
@@ -559,6 +683,7 @@ def opencode_config() -> dict[str, Any]:
                 "models": {
                     "nemotron-3-super-v3": {
                         "name": "NVIDIA Nemotron 3 Super v3",
+                        "limit": {"context": 131072, "output": MODEL_OUTPUT_LIMIT},
                     }
                 },
             }
@@ -574,7 +699,12 @@ def opencode_config() -> dict[str, Any]:
                 # before the single edit while still bounding the model/tool loop.
                 "steps": 20,
                 "prompt": (
-                    "Perform exactly one candidate.py policy mutation. Before "
+                    "Editing is now enabled. Your FIRST tool call in THIS continuation must read "
+                    "candidate.py AGAIN: OpenCode resets its file-read timestamps between processes, "
+                    "even when the conversation is resumed. Then perform exactly one candidate.py "
+                    "policy mutation. Verify that you have read "
+                    "research_context.json, and every required benchmark JSON listed there. "
+                    "Read them before editing; missing reads invalidate the proposal. Before "
                     "editing, you may optionally use skill, websearch, webfetch, "
                     "or codesearch for product-formula research. Read candidate.py, "
                     "the read-only evaluate.py implementation, and the read-only "
@@ -636,9 +766,34 @@ def opencode_config() -> dict[str, Any]:
         },
     }
 
+    if preparation:
+        agent = config["agent"][OPENCODE_AGENT]
+        agent["permission"]["edit"] = "deny"
+        agent["prompt"] = (
+            "This is the read-only preparation stage of an HSOpt mutation. "
+            "Read candidate.py, research_context.json, and EVERY file in required_reads. "
+            "The host verifies successful read receipts before enabling editing. "
+            "Do not attempt edit, write, or patch in this stage. Analyze the concrete "
+            "Hamiltonians, policy API, prior rejected proposals, and a new scientific "
+            "hypothesis. Optional general product-formula web research is allowed. "
+            "Do not search for HSOpt or sibling baselines. Finish with a brief hypothesis; "
+            "a separate continuation will enable exactly one candidate.py edit."
+        )
+    return config
 
-def mutation_prompt(feedback: dict[str, Any] | None = None) -> str:
-    prompt = """You are proposing one HSOpt product-formula policy mutation.
+
+def mutation_prompt(
+    feedback: dict[str, Any] | None = None,
+    *,
+    context: dict[str, Any] | None = None,
+) -> str:
+    prompt = """Editing is now enabled after verified read-only preparation.
+Your FIRST tool call in THIS continuation MUST read /sandbox/work/candidate.py
+AGAIN, even though you read it during preparation. OpenCode resets its file-read
+timestamps between processes, so an edit without this fresh read will fail.
+After that fresh read, make exactly one candidate.py edit and return final text.
+
+You are proposing one HSOpt product-formula policy mutation.
 
 The working directory contains:
 
@@ -646,8 +801,13 @@ The working directory contains:
 - evaluate.py: the exact fixed evaluator implementation used for scoring;
 - problem.json for an absolute-energy lane, or reaction.json plus its referenced
   Hamiltonian JSON files for a difference-energy lane.
+- research_context.json: compact Hamiltonian summaries, the exact policy API,
+  lane-local proposal history, and the required-read list.
 
-Read those files as needed so the mutation can use the concrete Hamiltonian
+Before editing, successfully read candidate.py, research_context.json, and ALL
+benchmark files listed in required_reads. Large raw JSON files may require
+paging with read(offset=..., limit=...); inspect the relevant coefficient ranges.
+Read those files so the mutation can use the concrete Hamiltonian
 coefficients, Pauli labels, term metadata, and evaluator interface. The
 evaluator and JSON inputs are read-only. Edit only candidate.py.
 
@@ -690,11 +850,45 @@ declared order. synthesis_epsilon() selects the PyGridSynth tolerance for each
 returned rotation. Inspect evaluate.py for the exact accepted types, angle
 convention, schedule validation, and synthesis-tolerance constraints.
 
+build_step() is called ONCE per species; the returned schedule is repeated
+unchanged. Counters cannot alternate successive calls. Put every stage of a
+composition inside that one schedule. Each returned alpha implements
+exp(+i alpha P), with Rz(-2*alpha). You may choose custom angles independently
+by Pauli label, coefficient, support, or species, including negative substeps.
+The synthesis tolerance is a separate per-rotation choice. These freedoms do
+not change the Hamiltonian or exact energy target.
+
+Use recent rejected proposals and failures to choose a new hypothesis. Do not
+repeat an already scored policy or make a formatting-only edit. Prefer a
+coherent change that tests a formula, ordering, term-dependent angle, or
+precision hypothesis over repeatedly changing one scalar without evidence.
+When useful, compare PF1/PF2/higher-order compositions, commuting groups,
+term-dependent angle corrections, and mixed synthesis precisions. None is
+required to win. In your final text state the hypothesis and changed controls.
+Only import math; no generators, private attributes (self._foo), set, getattr,
+hasattr, isinstance, or external helpers. Use only the builtins explicitly
+listed in research_context.json. Summary-only fields such as nonidentity_one_norm
+are NOT keys of problem; derive quantities from problem['terms'] when needed.
+Preserve valid Python indentation: four spaces per level, methods inside the
+class, method bodies another four spaces deeper. Prefer one write of the COMPLETE
+candidate.py file (plain Python, no Markdown fences or diff markers) if replacing
+multiple blocks. Preserve all four interface methods and every unchanged section.
+Check bracket balance and indentation mentally before your single edit.
+The compact API is in research_context.json so reading
+the entire evaluate.py is unnecessary; its read output can be truncated.
+Use read for local files; webfetch accepts only HTTP(S) URLs.
+
 Do not change any Hamiltonian, evaluator, source data, or benchmark definition.
 Do not fabricate an evaluation result. Read the available context as needed.
 Call one edit or write tool exactly once. After that tool succeeds, immediately
 return a final text response without rewriting the file.
 """
+    if context is not None:
+        prompt += (
+            "\nRequired context and policy contract (immutable):\n"
+            + json.dumps(context, sort_keys=True)
+            + "\n"
+        )
     if feedback is None:
         return prompt
     return (
@@ -710,6 +904,8 @@ def agent_feedback(feedback: dict[str, Any]) -> dict[str, Any]:
 
     scalar_keys = (
         "status",
+        "signed_energy_error_hartree",
+        "chemical_accuracy_hartree",
         "observable",
         "problem",
         "reaction",
@@ -849,16 +1045,59 @@ def _mutate_once(
     feedback = json.loads(feedback_file.read_text(encoding="utf-8"))
     prompt_feedback = agent_feedback(feedback)
     _write_json(run_dir / "agent_feedback.json", prompt_feedback)
-    prompt = mutation_prompt(prompt_feedback)
+    required_reads = [
+        "candidate.py",
+        "research_context.json",
+        *[
+            relative.as_posix()
+            for _, relative in context_files
+            if relative.as_posix() != "evaluate.py"
+        ],
+    ]
+    if any(relative.as_posix() == "research_context.json" for _, relative in context_files):
+        raise ValueError("benchmark path collides with research_context.json")
+    research_context = {
+        "mutation_protocol_version": MUTATION_PROTOCOL_VERSION,
+        "required_reads": required_reads,
+        "policy_contract": POLICY_CONTRACT,
+        "benchmark": benchmark_summary(source, kind),
+        "history": lane_history(policy_file.parent, run_dir),
+    }
+    _write_json(run_dir / "research_context.json", research_context)
+    context_files.append(
+        (run_dir / "research_context.json", PurePosixPath("research_context.json"))
+    )
+    prompt = mutation_prompt(prompt_feedback, context=research_context)
+    _write_json(
+        run_dir / "mutation_protocol.json",
+        {
+            "version": MUTATION_PROTOCOL_VERSION,
+            "required_reads": required_reads,
+            "context_sha256": _sha256(run_dir / "research_context.json"),
+            "prompt_sha256": hashlib.sha256(prompt.encode()).hexdigest(),
+            "model_output_limit": MODEL_OUTPUT_LIMIT,
+        },
+    )
     (run_dir / "opencode.json").write_text(
         json.dumps(opencode_config(), indent=2) + "\n",
         encoding="utf-8",
     )
+    _write_json(run_dir / "opencode.preparation.json", opencode_config(preparation=True))
+    preparation_prompt = (
+        "Read-only preparation. Editing is disabled until the host verifies all reads. "
+        "Successfully read each of these files before returning: "
+        + json.dumps(required_reads)
+        + ". Inspect research_context.json for the exact hook contract, Hamiltonian "
+        "summaries, and previous proposals. Choose a new scientific hypothesis. "
+        "Do not edit yet. End with a brief explanation of the planned mutation."
+    )
+    (run_dir / "preparation_prompt.md").write_text(preparation_prompt, encoding="utf-8")
     (run_dir / "prompt.md").write_text(prompt, encoding="utf-8")
     _write_json(
         run_dir / "sandbox_context.json",
         {
             "schema": 1,
+            "mutation_protocol_version": MUTATION_PROTOCOL_VERSION,
             "kind": kind,
             "files": [
                 {
@@ -976,7 +1215,7 @@ def _mutate_once(
                 "sandbox",
                 "upload",
                 sandbox_name,
-                str(run_dir / "opencode.json"),
+                str(run_dir / "opencode.preparation.json"),
                 "/sandbox/opencode.json",
             ],
             timeout=timeout_seconds,
@@ -1058,18 +1297,44 @@ def _mutate_once(
         ]
         stopped_after_edit = False
         try:
-            returncode, stopped_after_edit = _run_logged(
+            deadline = time.monotonic() + timeout_seconds
+            session = _prepare_mutation_context(
                 command,
+                run_dir=run_dir,
+                required_reads=required_reads,
+                prompt=preparation_prompt,
+                deadline=deadline,
+            )
+            _run(
+                [
+                    "openshell",
+                    "sandbox",
+                    "upload",
+                    sandbox_name,
+                    str(run_dir / "opencode.json"),
+                    "/sandbox/opencode.json",
+                ],
+                timeout=45,
+            )
+            remaining = int(deadline - time.monotonic())
+            if remaining <= 0:
+                raise RuntimeError("Mutation time budget exhausted during preparation")
+            continuation = [*command[:-1], "--session", session, prompt]
+            continuation[continuation.index("--timeout") + 1] = str(remaining)
+            returncode, stopped_after_edit = _run_logged(
+                continuation,
                 stdout_path=run_dir / "opencode.jsonl",
                 stderr_path=run_dir / "opencode.stderr",
-                timeout=timeout_seconds + 30,
+                timeout=remaining + 30,
                 completed_edit_grace_seconds=10,
+                append=True,
             )
         finally:
             if stopped_after_edit:
                 _terminate_sandbox_opencode(sandbox_name)
             _capture_openshell_logs(sandbox_name, run_dir / "openshell.log")
             audit = write_agent_audit(run_dir)
+        _raise_inference_error(run_dir / "opencode.jsonl")
         if returncode != 0 and not stopped_after_edit:
             raise RuntimeError(f"OpenCode exited with status {returncode}")
         _run(
@@ -1084,18 +1349,33 @@ def _mutate_once(
             timeout=timeout_seconds,
         )
     finally:
+        if created and not (run_dir / "agent_audit.json").is_file():
+            _capture_openshell_logs(sandbox_name, run_dir / "openshell.log")
+            write_agent_audit(run_dir)
         if created and not keep_sandbox:
-            _terminate_sandbox_opencode(sandbox_name)
-            _run(
-                ["openshell", "sandbox", "delete", sandbox_name],
-                check=False,
-                timeout=45,
-            )
+            cleanup_errors = []
+            for cleanup in (
+                lambda: _terminate_sandbox_opencode(sandbox_name),
+                lambda: _run(
+                    ["openshell", "sandbox", "delete", sandbox_name],
+                    check=False,
+                    timeout=45,
+                ),
+            ):
+                try:
+                    cleanup()
+                except (OSError, subprocess.SubprocessError) as exc:
+                    cleanup_errors.append(f"{type(exc).__name__}: {exc}"[:500])
+            if cleanup_errors:
+                _write_json(run_dir / "cleanup_errors.json", {"errors": cleanup_errors})
 
-    _validate_agent_action_contract(run_dir / "opencode.jsonl")
+    _validate_agent_action_contract(run_dir / "opencode.jsonl", required_reads=required_reads)
     _validate_candidate(candidate)
-    if candidate.read_bytes() == (run_dir / "candidate.before.py").read_bytes():
-        raise RuntimeError("OpenCode completed without changing candidate.py")
+    duplicate = duplicate_policy(candidate, policy_file)
+    if duplicate:
+        raise RuntimeError(
+            f"Duplicate policy: matches {duplicate}; propose a new scientific change"
+        )
     return {
         "status": "mutated",
         "sandbox": sandbox_name,
@@ -1145,11 +1425,23 @@ def mutate(
                     "finished_at": datetime.now(UTC).isoformat(),
                     "error_type": type(exc).__name__,
                     "error": str(exc)[:500],
+                    "stderr": re.sub(
+                        r"(?:nvapi-|sk-)[A-Za-z0-9_-]+|Bearer\s+\S+",
+                        "[REDACTED]",
+                        str(getattr(exc, "stderr", "") or ""),
+                    )[:1000],
+                    "retryable": bool(getattr(exc, "retryable", True)),
+                    "error_category": str(getattr(exc, "category", "mutation_contract")),
+                    "mutation_protocol_version": MUTATION_PROTOCOL_VERSION,
                     "agent_audit": (
                         "agent_audit.json" if (run_dir / "agent_audit.json").is_file() else None
                     ),
                 },
             )
+            if run_dir.name.isdigit():
+                record_mutation_failure(
+                    policy_file.resolve().parent, exc, iteration=int(run_dir.name)
+                )
         raise
     _write_json(
         run_dir / "mutation_result.json",
@@ -1157,6 +1449,7 @@ def mutate(
             "schema": 1,
             "status": "mutated",
             "started_at": started_at,
+            "mutation_protocol_version": MUTATION_PROTOCOL_VERSION,
             "finished_at": datetime.now(UTC).isoformat(),
             "model": result["model"],
             "candidate": "candidate.py",
@@ -1192,6 +1485,13 @@ def _parser() -> argparse.ArgumentParser:
         help="rebuild redacted tool and OpenShell metrics from one mutation run",
     )
     audit_parser.add_argument("--run-dir", type=Path, required=True)
+    resume_parser = subparsers.add_parser(
+        "resume", help="resume mutations after repairing a recorded runtime failure"
+    )
+    resume_parser.add_argument(
+        "--path", type=Path, required=True, help="campaign root or lane directory"
+    )
+    resume_parser.add_argument("--reason", required=True)
     return parser
 
 
@@ -1209,6 +1509,8 @@ def main() -> int:
             timeout_seconds=args.timeout_seconds,
             keep_sandbox=args.keep_sandbox,
         )
+    elif args.command == "resume":
+        result = resume_mutations(args.path.resolve(), reason=args.reason)
     else:
         result = write_agent_audit(args.run_dir.resolve())
     print(json.dumps(result, indent=2, sort_keys=True))

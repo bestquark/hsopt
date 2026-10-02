@@ -5,23 +5,34 @@ description: Run or inspect exact compiled-unitary T-gate autoresearch for HSOpt
 
 # HSOpt product-formula autoresearch
 
-Use this skill for the HSOpt mutation loop. The repository runtime is ordinary
-package code under `cli/src/hsopt/`; this file is only the compact agent contract.
+The repository runtime is ordinary package code under `cli/src/hsopt/`.
+This skill defines the mutation contract.
 
 ## Mutation workspace
 
-An isolated mutation workspace contains:
+`candidate.py` is the only editable file. `evaluate.py`, benchmark JSON,
+prior feedback, and `research_context.json` are read-only. The context contains
+the supported API, Hamiltonian statistics, and this lane's recent proposals.
 
-- `candidate.py`: the only editable file;
-- `evaluate.py`: the read-only evaluator implementation;
-- `problem.json`, or `reaction.json` plus referenced Hamiltonian JSON files:
-  read-only benchmark inputs;
-- immutable feedback from the preceding exact evaluation.
+Before editing, successfully read `candidate.py`, `research_context.json`, and
+all benchmark files in `required_reads`, including every reaction species.
+The host verifies receipts before resuming the same session with editing enabled;
+it may request up to two additional read-only turns within the original budget.
+Reread `candidate.py` in the editing continuation because OpenCode resets its
+file-read timestamps between processes. Page raw JSON when summaries are
+insufficient; reading all of `evaluate.py` is optional.
 
-Read these files as often as useful. Optional literature/code/web searches are
-allowed. `import math` is allowed in `candidate.py`; other imports and external
-runtime access are not. Make exactly one coherent edit to `candidate.py`, then
-stop. Never fabricate an evaluation.
+Use rejected proposals and failures to choose a new hypothesis. Previously
+scored policies and formatting-only changes are rejected before evaluation.
+Optional literature/code/web searches are allowed. Use `read` for local files
+and `webfetch` for HTTP(S) URLs. Make one coherent edit, explain it, then stop.
+Never fabricate an evaluation. Prefer a complete plain Python `write` for
+multi-block edits; retain four-space indentation and all four interface methods.
+
+Only `import math` and the briefing's `available_builtins` are allowed.
+Private attributes, generators, top-level helpers, `set`, `getattr`, `hasattr`,
+`isinstance`, other imports, and external runtime access are unavailable.
+Context statistics are not extra `problem` keys; inspect the actual JSON.
 
 ## Editable policy
 
@@ -35,8 +46,8 @@ class ProductFormula:
     def synthesis_epsilon(self, term, angle): ...
 ```
 
-`problem` and every `term` are plain dictionaries. A term includes its trusted
-Pauli `label`, numerical `coefficient`, `support_size`, and X/Y/Z counts.
+`problem` and `term` are dictionaries. Terms have `label`, `coefficient`,
+`support_size`, and X/Y/Z counts.
 
 `repetitions()` returns a positive integer. The evaluator sets
 `step_time = problem["target_time"] / repetitions()`.
@@ -51,27 +62,28 @@ pairs for one stationary step. `angle` is the real alpha in
 trusted Hamiltonian and repeats the exact returned schedule. The method may
 define PF1, PF2/Strang, a higher-order composition, grouping, reordered terms,
 or another stationary recurrence; no declared `formula_order` is required.
+It is called **once** per species: encode all stages in the schedule, with at most
+16 times the Hamiltonian term count; an internal counter cannot alternate steps.
+
+Angles may vary by label, coefficient, support, or species, including negative
+substeps and corrections. The judge compiles `Rz(-2 * angle)` and scores energy;
+custom schedules are not certified for full-unitary fidelity.
 
 `synthesis_epsilon()` returns a finite PyGridSynth operator-norm tolerance
 strictly between zero and one for each scheduled rotation. It may depend on the
 term and angle.
 
-Inspect `evaluate.py` and the concrete JSON inputs rather than guessing the
-runtime types or coefficients. Do not change the Hamiltonian, electron sector,
-target time, exact reference, evaluator, or benchmark definition.
+Do not change the Hamiltonian, electron sector, target time, exact reference,
+evaluator, or benchmark definition.
 
 ## Fixed score
 
 The evaluator:
-
-1. compiles every scheduled Pauli rotation with PyGridSynth;
-2. constructs and diagonalizes the actual compiled one-step unitary;
-3. repeats its eigenphase exactly according to `repetitions()`;
-4. selects the lowest-energy peak with resolved weight from the fixed Hartree--Fock input;
-5. compares it with the cached exact ground energy; and
-6. assigns the remaining one-kcal/mol budget to QPE precision and applies the
-   paper's `ceil(8*pi/(target_time*epsilon_QPE))` query bound; and
-7. adds enough attempts for 95% confidence from HF weight and phase-estimation success.
+1. compiles scheduled rotations with PyGridSynth and diagonalizes the compiled step;
+2. repeats eigenphases exactly according to `repetitions()`;
+3. scores the lowest HF-accessible energy against the cached exact ground energy;
+4. assigns the remaining one-kcal/mol budget to QPE, using the paper bound
+   `ceil(8*pi/(target_time*epsilon_QPE))` and enough attempts for 95% confidence.
 
 For a reaction, independently evaluated species share the failure budget and
 their confidence-adjusted T costs are summed. `individual_errors` requires
@@ -84,41 +96,33 @@ Once a lane is feasible, accept only a strict T95 reduction that remains within
 
 ## Campaign invariants
 
-- Select exactly one generated paper PF2 baseline per campaign: `loose` uses
-  the rigorous Eq. (19) beta upper bound; `tight` uses the numeric beta measured
-  against the cached exact energy at 0.1 mHa. Both use the same Eq. (34)
-  allocation and evaluator.
-- Compute the exact reference once per unique Hamiltonian and reuse it during
-  tight calibration, iteration 0, and every mutation evaluation.
-- Reaction exact references may be shared across contracts, but candidate task
-  IDs, mutation histories, incumbents, and results must never be shared or
-  replayed across `individual_errors` and `error_cancellation`.
-- The mutation sandbox receives only the selected policy as `candidate.py`; it
-  must not receive or read the sibling baseline initializer.
-- Keep loose and tight supervisors, mutation pools, queues, evaluator workers,
-  and output roots separate. Each evaluator worker accepts exactly one
-  baseline-tagged campaign root; a hardware lock may coordinate a shared GPU,
-  but a worker must never alternate between baseline queues.
-- Iteration 0 measures the immutable generated baseline.
-- Iterations 1--50 mutate the external incumbent sequentially.
-- The production grid is 82 absolute-energy instances times three lanes, plus
-  ten reactions times two lanes: 266 lanes and 13,300 mutations.
-- Candidate histories, evaluator results, OpenCode/OpenShell transcripts,
-  tool metrics, and sandbox rejections remain in the external campaign root.
-- The canonical A100 campaign creates the single mutation trace. Any CPU
-  validation campaign replays those exact archived candidates without invoking
-  the agent and is audited for numerical parity.
+- Select one generated PF2 baseline: `loose` uses the rigorous Eq. (19) beta
+  bound; `tight` measures beta against cached exact energy at 0.1 mHa.
+  Both use Eq. (34) allocation and the same fixed evaluator.
+- Cache the exact reference once per Hamiltonian; reuse it in tight calibration,
+  iteration 0, and every mutation. Measure the unchanged baseline at iteration 0.
+- Keep both reaction contracts and loose/tight campaigns separate: histories,
+  task IDs, mutation pools, queues, workers, incumbents, exports, and plots.
+  Exact references and hardware locks may be shared; candidate histories may not.
+- Expose only the selected baseline as `candidate.py`, never its sibling.
+  Each worker accepts one baseline-tagged root and never alternates baseline queues.
+- Mutate external incumbents sequentially for iterations 1--50. The production
+  grid is 82 absolute-energy instances × three lanes plus ten reactions × two
+  contracts: 266 lanes, 13,300 mutations. Histories and transcripts stay external.
+- Record `mutation_protocol.json` and context/prompt hashes. Label protocol
+  changes in analyses. Permanent inference failures block campaign mutations;
+  transient/invalid proposals get backoff and at most three attempts per iteration.
+  Repair the cause, then explicitly run `hsopt-openshell resume --path <root>
+  --reason <repair>`. Evaluation collection continues during a mutation block.
+- The canonical A100 campaign owns the mutation trace; CPU validation replays
+  archived candidates without another agent pass and requires numerical parity.
 
-After complete same-placement loose and tight iteration-0 censuses, run
-`hsopt-baseline-drop`. Absolute folders get `baseline_t_gate_drop_percent.txt`;
-reactions get `baseline_t_gate_drop_<contract>_percent.txt`, using
-`100 * (T95_loose - T95_tight) / T95_loose`. Require matching grids, hashes,
-contracts, backends, accelerators, placement, and accuracy; never pool hardware.
+After complete matched loose/tight iteration-0 censuses, `hsopt-baseline-drop`
+records `100 * (T95_loose - T95_tight) / T95_loose` per experiment/contract.
+Require matching grids, hashes, contracts, backends, accelerators, placement,
+and accuracy; never pool hardware.
 
-For campaign orchestration, invoke the installed commands (`hsopt-campaign`,
-`hsopt-supervisor`, `hsopt-export-exact`, and `hsopt-reports`) through `uv run`;
-do not execute package files by path. OpenShell host setup and telemetry use
-`hsopt-openshell` and are documented in `cli/README.md`. For repository layout,
-read `references/layout.md`; for Slurm resources use the current repository
-`README.md` and the `$ssh` skill. Treat `cli/src/hsopt/` and family evaluators
-as fixed infrastructure during a campaign.
+Invoke package commands through `uv run`. See `cli/README.md` for OpenShell
+setup/telemetry, `references/layout.md` for layout, and the repository README
+and `$ssh` skill for Slurm resources. Treat `cli/src/hsopt/` and family
+evaluators as fixed infrastructure during a campaign.
