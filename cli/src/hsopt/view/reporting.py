@@ -517,7 +517,7 @@ def _reaction_summary(
         )
     body = latex_escape(
         f"Reaction {pooled['reaction']}. A/R denotes accepted/rejected mutations. "
-        "Lane incumbents are shown separately from the pooled paper selections."
+        "Each final policy is the incumbent of its own error-contract trajectory."
     )
     body += "\n" + _longtable(
         r"llp{3.4cm}p{6.3cm}rrrrr",
@@ -534,10 +534,10 @@ def _reaction_summary(
         ),
         table_rows,
     )
-    body += "\n\\textbf{Pooled paper selections}\n" + _longtable(
+    body += "\n\\textbf{Final policies by contract}\n" + _longtable(
         r"llllrrr",
         (
-            "Selection",
+            "Contract",
             "Source contract",
             "Iteration",
             "T95 (sum U x M x R)",
@@ -741,7 +741,10 @@ def _reaction_reportlab_content(
     *,
     extended: bool,
 ) -> tuple[str, list[tuple[str, list[str]]]]:
-    intro = f"Reaction {pooled['reaction']} ({reaction_key})."
+    intro = (
+        f"Reaction {pooled['reaction']} ({reaction_key}). "
+        "Each final policy is the incumbent of its own error-contract trajectory."
+    )
     by_contract: dict[str, list[Mapping[str, str]]] = defaultdict(list)
     for row in rows:
         by_contract[row["source_contract"]].append(row)
@@ -788,7 +791,7 @@ def _reaction_reportlab_content(
     if not extended:
         return intro, [
             ("Initial and final incumbents", summary_lines),
-            ("Pooled selections", pooled_lines),
+            ("Final policies by contract", pooled_lines),
         ]
 
     mutation_lines = []
@@ -823,7 +826,7 @@ def _reaction_reportlab_content(
     return intro, [
         ("Initial and final incumbents", summary_lines),
         ("Mutation log", mutation_lines),
-        ("Pooled selections", pooled_lines),
+        ("Final policies by contract", pooled_lines),
     ]
 
 

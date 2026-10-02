@@ -127,8 +127,7 @@ def test_fixture_summary_and_extended_reports_compile(tmp_path: Path) -> None:
     )
 
 
-@pytest.mark.skipif(shutil.which("latexmk") is None, reason="latexmk is not installed")
-def test_reaction_summary_and_extended_reports_compile(tmp_path: Path) -> None:
+def _reaction_fixture() -> tuple[list[dict[str, str]], dict]:
     species = json.dumps(
         {
             "H2": {
@@ -186,6 +185,26 @@ def test_reaction_summary_and_extended_reports_compile(tmp_path: Path) -> None:
             "contract_error_hartree": 0.001,
         },
     }
+    return rows, pooled
+
+
+@pytest.mark.parametrize("extended", [False, True])
+def test_reaction_report_labels_describe_separate_contracts(extended: bool) -> None:
+    rows, final = _reaction_fixture()
+    before = json.dumps([rows, final], sort_keys=True)
+    tex = reports._reaction_summary("fixture", rows, final)
+    intro, sections = reports._reaction_reportlab_content("fixture", rows, final, extended=extended)
+    assert "Final policies by contract" in tex
+    assert "pooled" not in tex.lower()
+    assert "incumbent of its own error-contract trajectory" in intro
+    assert "Final policies by contract" in {heading for heading, _ in sections}
+    assert all("pooled" not in heading.lower() for heading, _ in sections)
+    assert json.dumps([rows, final], sort_keys=True) == before
+
+
+@pytest.mark.skipif(shutil.which("latexmk") is None, reason="latexmk is not installed")
+def test_reaction_summary_and_extended_reports_compile(tmp_path: Path) -> None:
+    rows, pooled = _reaction_fixture()
     outputs = {
         "reaction-summary.pdf": reports._reaction_summary("fixture", rows, pooled),
         "reaction-extended.pdf": reports._reaction_extended("fixture", rows, pooled),
