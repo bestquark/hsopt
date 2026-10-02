@@ -380,7 +380,16 @@ def test_host_unlocks_edit_only_after_preparation_receipts(
 
 
 @pytest.mark.parametrize("status", [401, 500])
-def test_database_capacity_error_is_transient_not_campaign_auth_failure(tmp_path, status):
+@pytest.mark.parametrize(
+    "database_error",
+    [
+        "sorry, too many clients already",
+        "remaining connection slots are reserved for roles with the SUPERUSER attribute",
+    ],
+)
+def test_database_capacity_error_is_transient_not_campaign_auth_failure(
+    tmp_path, status, database_error
+):
     log = tmp_path / "opencode.jsonl"
     write(
         log,
@@ -390,7 +399,8 @@ def test_database_capacity_error_is_transient_not_campaign_auth_failure(tmp_path
                 "data": {
                     "statusCode": status,
                     "isRetryable": False,
-                    "message": "Authentication Error, Error in connector: Error querying the database: FATAL: sorry, too many clients already",
+                    "message": "Authentication Error, Error in connector: Error querying the database: FATAL: "
+                    + database_error,
                 }
             },
         },
@@ -404,7 +414,15 @@ def test_database_capacity_error_is_transient_not_campaign_auth_failure(tmp_path
     assert mutation_readiness(other) is None
 
 
-def test_real_auth_error_still_blocks(tmp_path):
+@pytest.mark.parametrize(
+    "message",
+    [
+        "Authentication Error: invalid API key",
+        "Authentication Error: remaining connection slots are reserved for roles with the SUPERUSER attribute",
+        "Authentication Error, Error querying the database: password authentication failed",
+    ],
+)
+def test_real_auth_error_still_blocks(tmp_path, message):
     log = tmp_path / "opencode.jsonl"
     write(
         log,
@@ -413,7 +431,7 @@ def test_real_auth_error_still_blocks(tmp_path):
             "error": {
                 "data": {
                     "statusCode": 401,
-                    "message": "Authentication Error: invalid API key",
+                    "message": message,
                 }
             },
         },

@@ -495,9 +495,13 @@ def _raise_inference_error(path: Path) -> None:
         # The inference connector wraps database saturation as Authentication Error.
         # Recognize only this specific backend condition; real auth/configuration
         # failures must still stop the campaign instead of retrying credentials.
-        if (
-            "error querying the database" in message.casefold()
-            and "too many clients already" in message.casefold()
+        normalized = message.casefold()
+        database_capacity_errors = (
+            "too many clients already",
+            "remaining connection slots are reserved for roles with the superuser attribute",
+        )
+        if "error querying the database" in normalized and any(
+            capacity_error in normalized for capacity_error in database_capacity_errors
         ):
             retryable = True
         if "max_tokens cannot exceed" in message:
