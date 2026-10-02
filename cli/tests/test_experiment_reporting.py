@@ -202,6 +202,43 @@ def test_reaction_report_labels_describe_separate_contracts(extended: bool) -> N
     assert json.dumps([rows, final], sort_keys=True) == before
 
 
+@pytest.mark.parametrize("extended", [False, True])
+def test_reaction_reports_resolve_legacy_cost_from_selected_incumbent(extended: bool) -> None:
+    rows, final = _reaction_fixture()
+    for row in rows:
+        row["per_attempt_t_gate_count"] = "400" if row["iteration"] == "1" else "500"
+        row["compiled_evolution_t_gate_count"] = "40"
+    for contract in DIFFERENCE_ERROR_CONTRACTS:
+        final[contract]["per_attempt_t_gate_count"] = 40  # Legacy mislabeled field.
+    before = json.dumps([rows, final], sort_keys=True)
+    tex = reports._reaction_summary("fixture", rows, final)
+    _, sections = reports._reaction_reportlab_content("fixture", rows, final, extended=extended)
+    selected_lines = dict(sections)["Final policies by contract"]
+    assert all("800 (per-attempt 400)" in line for line in selected_lines)
+    assert "800 (per-attempt 400)" in tex
+    assert "per-attempt 40)" not in tex
+    assert all(
+        "PF2/custom/stationary trotter r=8" in line
+        for line in dict(sections)["PF parameters by species"]
+    )
+    assert json.dumps([rows, final], sort_keys=True) == before
+
+
+@pytest.mark.parametrize("fault", ["contract", "iteration", "cost"])
+def test_reaction_selection_requires_matching_incumbent(fault: str) -> None:
+    rows, final = _reaction_fixture()
+    contract = DIFFERENCE_ERROR_CONTRACTS[0]
+    if fault == "contract":
+        final[contract]["selected_source_contract"] = DIFFERENCE_ERROR_CONTRACTS[1]
+    elif fault == "iteration":
+        final[contract]["selected_source_iteration"] = 0
+    else:
+        rows[1]["total_t_gate_count"] = str(2**54)
+        final[contract]["total_t_gate_count"] = 2**54 + 1
+    with pytest.raises(reports.ReportValidationError, match="reaction final selection"):
+        reports._reaction_selection_row(rows, contract, final[contract])
+
+
 @pytest.mark.skipif(shutil.which("latexmk") is None, reason="latexmk is not installed")
 def test_reaction_summary_and_extended_reports_compile(tmp_path: Path) -> None:
     rows, pooled = _reaction_fixture()

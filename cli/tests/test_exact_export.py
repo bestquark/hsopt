@@ -226,7 +226,11 @@ def test_completed_reaction_campaign_exports_both_contracts(tmp_path: Path) -> N
             kind="difference",
             source=source,
             baseline=_reaction_result(100, -0.999, contract),
-            candidate=_reaction_result(80, -0.9995, contract),
+            candidate={
+                **_reaction_result(80, -0.9995, contract),
+                "t_count": 8,
+                "per_attempt_t_count": 40,
+            },
         )
         rows.append(
             {
@@ -246,6 +250,11 @@ def test_completed_reaction_campaign_exports_both_contracts(tmp_path: Path) -> N
 
     assert len(candidates) == 4
     assert set(pooled["fixture"]) >= {*DIFFERENCE_ERROR_CONTRACTS, "reaction"}
+    for contract in DIFFERENCE_ERROR_CONTRACTS:
+        selection = pooled["fixture"][contract]
+        assert selection["compiled_evolution_t_gate_count"] == 8
+        assert selection["per_attempt_t_gate_count"] == 40
+        assert selection["total_t_gate_count"] == 80
     reaction_rows = [row for row in candidates if row["reaction_key"] == "fixture"]
     assert "T95 (sum U x M x R)" in _reaction_summary("fixture", reaction_rows, pooled["fixture"])
     assert "T95 (sum U x M x R)" in _reaction_extended("fixture", reaction_rows, pooled["fixture"])

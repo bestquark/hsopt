@@ -179,7 +179,7 @@ def _reaction_qpe_cost(row: Mapping[str, object]) -> str:
     cost = row.get("total_t_gate_count")
     raw = row.get("per_attempt_t_gate_count")
     if value_present(raw):
-        return f"{cost} (raw {raw})"
+        return f"{cost} (per-attempt {raw})"
     return str(cost or "--")
 
 
@@ -420,11 +420,15 @@ def _species_signature(raw: object) -> str:
         if value_present(item.get("confidence_adjusted_t_gate_count")):
             qpe = (
                 f"/T95={item['confidence_adjusted_t_gate_count']}"
-                f"(raw={item.get('per_attempt_t_gate_count')},"
+                f"(per-attempt={item.get('per_attempt_t_gate_count')},"
                 f"R={item.get('qpe_repetitions')},"
                 f"p={_number(item.get('qpe_peak_probability_from_hf'), 4)})"
             )
-        parts.append(f"{name}:PF{item.get('formula_order')}/{_order(order)}/{schedule_text}{qpe}")
+        epsilon = _number(item.get("uniform_epsilon"), 4)
+        parts.append(
+            f"{name}:{_pf(item.get('formula_order'))}/{_order(order)}/{schedule_text}"
+            f"/eps_uniform={epsilon}{qpe}"
+        )
     return "; ".join(parts)
 
 
@@ -439,6 +443,25 @@ def _reaction_incumbents(
         if _yes(row["accepted"]) == "yes":
             incumbent = row
     return ordered[0], incumbent
+
+
+def _reaction_selection_row(
+    rows: Sequence[Mapping[str, str]], contract: str, selection: Mapping[str, Any]
+) -> Mapping[str, str]:
+    """Resolve presentation costs from the selected contract's recorded incumbent.
+
+    Older reaction_summary.json exports mislabeled the compiled evolution cost
+    as per_attempt_t_gate_count. Their candidate_log.csv has the correct fields;
+    read those without modifying the immutable, checksummed source export.
+    """
+    if selection["selected_source_contract"] != contract:
+        raise ReportValidationError("reaction final selection crosses error contracts")
+    _, incumbent = _reaction_incumbents([row for row in rows if row["source_contract"] == contract])
+    if int(incumbent["iteration"]) != int(selection["selected_source_iteration"]):
+        raise ReportValidationError("reaction final selection is not the recorded incumbent")
+    if int(incumbent["total_t_gate_count"]) != int(selection["total_t_gate_count"]):
+        raise ReportValidationError("reaction final selection T95 differs from its incumbent")
+    return incumbent
 
 
 def _reaction_error(row: Mapping[str, str]) -> float:
@@ -504,12 +527,13 @@ def _reaction_summary(
     pooled_rows = []
     for selection in DIFFERENCE_ERROR_CONTRACTS:
         item = pooled[selection]
+        selected_row = _reaction_selection_row(rows, selection, item)
         pooled_rows.append(
             [
                 selection,
                 item["selected_source_contract"],
                 item["selected_source_iteration"],
-                _reaction_qpe_cost(item),
+                _reaction_qpe_cost(selected_row),
                 _number(1000.0 * _float(item["absolute_reaction_error_hartree"]), 5),
                 _number(1000.0 * _float(item["sum_absolute_species_error_hartree"]), 5),
                 _number(1000.0 * _float(item["contract_error_hartree"]), 5),
@@ -749,6 +773,7 @@ def _reaction_reportlab_content(
     for row in rows:
         by_contract[row["source_contract"]].append(row)
     summary_lines = []
+    policy_lines = []
     for contract in sorted(by_contract):
         baseline, final = _reaction_incumbents(by_contract[contract])
         proposals = [item for item in by_contract[contract] if _integer(item["iteration"]) > 0]
@@ -776,12 +801,17 @@ def _reaction_reportlab_content(
             f"reduction={_number(reduction, 6)}% | "
             f"accepted/rejected={accepted}/{len(proposals) - accepted}"
         )
+        for label, item in (("initial", baseline), ("final", final)):
+            policy_lines.append(
+                f"{contract} | {label} | {_species_signature(item['species_json'])}"
+            )
     pooled_lines = []
     for selection in DIFFERENCE_ERROR_CONTRACTS:
         item = pooled[selection]
+        selected_row = _reaction_selection_row(rows, selection, item)
         pooled_lines.append(
             f"{selection} <- {item['selected_source_contract']} iter "
-            f"{item['selected_source_iteration']} | T95={_reaction_qpe_cost(item)} | "
+            f"{item['selected_source_iteration']} | T95={_reaction_qpe_cost(selected_row)} | "
             f"|sum nu dE|="
             f"{_number(1000.0 * _float(item['absolute_reaction_error_hartree']), 6)} mHa | "
             f"sum |nu dE|="
@@ -791,6 +821,7 @@ def _reaction_reportlab_content(
     if not extended:
         return intro, [
             ("Initial and final incumbents", summary_lines),
+            ("PF parameters by species", policy_lines),
             ("Final policies by contract", pooled_lines),
         ]
 
@@ -825,6 +856,7 @@ def _reaction_reportlab_content(
         )
     return intro, [
         ("Initial and final incumbents", summary_lines),
+        ("PF parameters by species", policy_lines),
         ("Mutation log", mutation_lines),
         ("Final policies by contract", pooled_lines),
     ]

@@ -528,7 +528,8 @@ def export_family(campaign_root: Path, family: str, output_dir: Path) -> dict[st
                     "selected_source_contract": replicate,
                     "difference_error_contract": incumbent["difference_error_contract"],
                     "selected_source_iteration": incumbent_iteration,
-                    "per_attempt_t_gate_count": incumbent["t_count"],
+                    "compiled_evolution_t_gate_count": incumbent["t_count"],
+                    "per_attempt_t_gate_count": incumbent.get("per_attempt_t_count", ""),
                     "confidence_adjusted_t_gate_count": _confidence_cost(incumbent),
                     "total_t_gate_count": _confidence_cost(incumbent),
                     "absolute_reaction_error_hartree": incumbent[
