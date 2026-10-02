@@ -115,6 +115,51 @@ def _write_opencode_file_list_shim(path: Path) -> None:
     path.chmod(0o755)
 
 
+def _stdin_prompt_command(command: Sequence[str], run_dir: Path) -> list[str]:
+    """Stage OpenCode prompts as stdin, outside OpenShell's 32-KiB argv limit.
+
+    OpenCode 1.2.18 reads non-TTY stdin. A fixed shell redirection transports
+    the complete UTF-8 prompt without shell interpolation or argv quoting.
+    Keep the staged bytes with the audit artifacts; never truncate feedback.
+    """
+    args = list(command)
+    if args[:3] != ["openshell", "sandbox", "exec"] or "--" not in args:
+        return args
+    separator = args.index("--")
+    if args[separator + 1 : separator + 3] != ["opencode", "run"]:
+        return args
+    sandbox_name = args[args.index("--name") + 1]
+    prompt_file = run_dir / f"transport-prompt-{uuid.uuid4().hex[:12]}.txt"
+    prompt_file.write_text(args[-1], encoding="utf-8")
+    remote = f"/sandbox/{prompt_file.name}"
+    _run(["openshell", "sandbox", "upload", sandbox_name, str(prompt_file), remote], timeout=45)
+    _run(
+        [
+            "openshell",
+            "sandbox",
+            "exec",
+            "--name",
+            sandbox_name,
+            "--timeout",
+            "30",
+            "--",
+            "chmod",
+            "0444",
+            remote,
+        ],
+        timeout=45,
+    )
+    return [
+        *args[: separator + 1],
+        "sh",
+        "-c",
+        'prompt_file="$1"; shift; exec "$@" < "$prompt_file"',
+        "hsopt-prompt",
+        remote,
+        *args[separator + 1 : -1],
+    ]
+
+
 def _run_logged(
     command: Sequence[str],
     *,
@@ -126,6 +171,7 @@ def _run_logged(
 ) -> tuple[int, bool]:
     """Run a command with logs visible to external monitors while it is active."""
 
+    command = _stdin_prompt_command(command, stdout_path.parent)
     with (
         stdout_path.open("a" if append else "w", encoding="utf-8") as stdout,
         stderr_path.open("a" if append else "w", encoding="utf-8") as stderr,
