@@ -158,6 +158,13 @@ Slurm operations use the site's governed broker. The existing `hsopt-nvpark`
 adapter uses SSH/rsync and native Slurm; it has not been converted to the broker
 and requires a site-permitted native submission path.
 
+For that adapter, set `HSOPT_CLUSTER_USER` if your cluster username differs
+from your local username. Its default remote directory is
+`/lustre/fsw/portfolios/nvr/users/<user>/autoresearch/hsopt_workdir/runs/evaluation`.
+Set `HSOPT_REMOTE_ROOT` before starting the CLI, or pass `--remote-root`, to
+select your site's filesystem and a distinct campaign directory. Existing
+campaign services retain their explicit per-campaign remote roots.
+
 ## Export and plot results
 
 Wait for every expected lane to finish. Run `hsopt-export-exact` and

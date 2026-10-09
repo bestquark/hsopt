@@ -331,7 +331,7 @@ every lane.
 Set an absolute data root before initializing a campaign:
 
 ```bash
-export HSOPT_DATA_ROOT=/absolute/path/to/hsopt-data
+export HSOPT_DATA_ROOT=/absolute/path/to/hsopt_workdir/data
 ```
 
 When an existing materialization contains the physical Pauli coefficients but
