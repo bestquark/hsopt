@@ -7,8 +7,9 @@
     "energy_recovery": "E_hartree = c0 + lambda * principal_phase"
   },
   "source": {
-    "description": "Compact metadata extracted from the externally stored, checksummed reaction Hamiltonian caches.",
-    "checksum_manifest": "problem_cache.sha256"
+    "description": "Historical reaction-cache inventory using the archived incorrect two-electron conversion. Fresh physical generation computes its own metadata and checksums from species.json.",
+    "checksum_manifest": "problem_cache.sha256",
+    "hamiltonian_convention": "historical-replay"
   },
   "species": {
     "acetylene": {

@@ -1,4 +1,4 @@
-"""Download HamLib archives and materialize the exact paper reaction cache."""
+"""Download HamLib archives or generate the fixed reaction species from source."""
 
 from __future__ import annotations
 
@@ -7,7 +7,6 @@ import csv
 import hashlib
 import json
 import shutil
-import tarfile
 import tempfile
 import urllib.parse
 import urllib.request
@@ -101,45 +100,6 @@ def download_hamlib(
     }
 
 
-def materialize_reactions(bundle: Path, checksum_manifest: Path, output_root: Path) -> dict:
-    """Install the original reaction coefficients without regenerating chemistry."""
-    checksums = _checksums(checksum_manifest)
-    expected = {}
-    for relative, digest in checksums.items():
-        path = PurePosixPath(relative)
-        if len(path.parts) != 2 or path.parts[0] != "problem_cache":
-            raise ValueError(f"invalid reaction-cache path: {relative}")
-        expected[path.name] = digest
-    output_root = output_root.expanduser().resolve()
-    if output_root.exists():
-        actual = {p.name for p in output_root.iterdir()}
-        if actual != set(expected):
-            raise ValueError("existing reaction cache has missing or additional entries")
-        for name, digest in expected.items():
-            if not (output_root / name).is_file() or _sha256(output_root / name) != digest:
-                raise ValueError(f"existing reaction-cache checksum mismatch: {name}")
-        return {"output_root": str(output_root), "files_verified": len(expected)}
-    output_root.parent.mkdir(parents=True, exist_ok=True)
-    with tempfile.TemporaryDirectory(dir=output_root.parent) as temporary:
-        staging = Path(temporary) / "problem_cache"
-        staging.mkdir()
-        with tarfile.open(bundle, "r:gz") as archive:
-            members = archive.getmembers()
-            if len(members) != len(expected) or {m.name for m in members} != set(expected):
-                raise ValueError("reaction bundle differs from the checked-in checksum manifest")
-            for member in members:
-                if not member.isfile():
-                    raise ValueError(f"reaction bundle contains a non-file: {member.name}")
-                payload = archive.extractfile(member)
-                assert payload is not None
-                with payload, (staging / member.name).open("wb") as handle:
-                    shutil.copyfileobj(payload, handle)
-                if _sha256(staging / member.name) != expected[member.name]:
-                    raise ValueError(f"reaction bundle checksum mismatch: {member.name}")
-        staging.rename(output_root)
-    return {"output_root": str(output_root), "files_verified": len(expected)}
-
-
 def _repo_root() -> Path:
     for parent in (Path.cwd(), *Path(__file__).resolve().parents):
         if (parent / "experiments/abs_energy/inputs/instances.csv").is_file():
@@ -154,8 +114,17 @@ def main() -> int:
     hamlib = commands.add_parser("hamlib", help="download the selected, checksummed archives")
     hamlib.add_argument("--output-root", type=Path, required=True)
     hamlib.add_argument("--base-url", default=HAMLIB_URL, help="upstream or an exact-data mirror")
-    reactions = commands.add_parser("reactions", help="extract the checksummed paper species")
+    reactions = commands.add_parser(
+        "reactions", help="generate reaction species from fixed geometries"
+    )
     reactions.add_argument("--output-root", type=Path, required=True)
+    reactions.add_argument(
+        "--convention", choices=("physical", "historical-replay"), default="physical"
+    )
+    reactions.add_argument(
+        "--species", nargs="+", help="generate a subset for a bounded smoke check"
+    )
+    reactions.add_argument("--threads", type=int, default=1, help="PySCF CPU threads (default: 1)")
     args = parser.parse_args()
     repo = args.repo_root.expanduser().resolve() if args.repo_root else _repo_root()
     if args.command == "hamlib":
@@ -167,9 +136,18 @@ def main() -> int:
             base_url=args.base_url,
         )
     else:
+        from hsopt.data.reactions import generate_reactions
+
+        if args.output_root.expanduser().resolve().is_relative_to(repo):
+            parser.error("generated reaction data must live outside the Git checkout")
         inputs = repo / "experiments/diff_energy/inputs"
-        result = materialize_reactions(
-            inputs / "reaction_cache.tar.gz", inputs / "problem_cache.sha256", args.output_root
+        result = generate_reactions(
+            inputs / "species.json",
+            inputs / "reactions.json",
+            args.output_root,
+            convention=args.convention,
+            species=args.species,
+            threads=args.threads,
         )
     print(json.dumps(result, indent=2))
     return 0

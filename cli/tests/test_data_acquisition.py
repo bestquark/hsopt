@@ -1,13 +1,11 @@
-"""Input acquisition must preserve the paper's exact, checksummed payloads."""
+"""HamLib downloads must preserve the selected, checksummed payloads."""
 
 import hashlib
-import io
-import tarfile
 from pathlib import Path
 
 import pytest
 
-from hsopt.data.acquire import download_hamlib, materialize_reactions, selected_archives
+from hsopt.data.acquire import download_hamlib, selected_archives
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
 
@@ -60,38 +58,6 @@ def test_selected_archives_cover_every_checked_in_instance():
     inputs = REPO_ROOT / "experiments/abs_energy/inputs"
     selected = selected_archives(inputs / "instances.csv", inputs / "hamlib_zip_sha256.txt")
     assert len(selected) == 60
-
-
-def test_original_reaction_payload_is_available_without_omni(tmp_path):
-    inputs = REPO_ROOT / "experiments/diff_energy/inputs"
-    output = tmp_path / "reaction-cache"
-    result = materialize_reactions(
-        inputs / "reaction_cache.tar.gz", inputs / "problem_cache.sha256", output
-    )
-    assert result["files_verified"] == 42
-    assert len(list(output.glob("*.json"))) == 21
-    assert len(list(output.glob("*.npz"))) == 21
-    assert (
-        materialize_reactions(
-            inputs / "reaction_cache.tar.gz", inputs / "problem_cache.sha256", output
-        )
-        == result
-    )
-
-
-def test_bad_reaction_payload_does_not_leave_a_partial_cache(tmp_path):
-    checksum = tmp_path / "checksums.txt"
-    checksum.write_text(hashlib.sha256(b"original").hexdigest() + "  problem_cache/h2.json\n")
-    bundle = tmp_path / "changed.tar.gz"
-    with tarfile.open(bundle, "w:gz") as archive:
-        blob = b"changed"
-        member = tarfile.TarInfo("h2.json")
-        member.size = len(blob)
-        archive.addfile(member, io.BytesIO(blob))
-    output = tmp_path / "reaction-cache"
-    with pytest.raises(ValueError, match="reaction bundle checksum mismatch"):
-        materialize_reactions(bundle, checksum, output)
-    assert not output.exists()
 
 
 def test_checksum_paths_cannot_escape_the_data_root(tmp_path):

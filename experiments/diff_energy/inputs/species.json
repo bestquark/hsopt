@@ -1,0 +1,238 @@
+{
+  "schema": 1,
+  "recipe": {
+    "geometry_unit": "Angstrom",
+    "mean_field": "RHF",
+    "active_space_selection": "frontier_rhf_orbitals",
+    "localization": "pipek_mezey_split_occ_vir",
+    "population_method": "meta_lowdin",
+    "scf_conv_tol": 1e-09,
+    "scf_max_cycle": 50,
+    "localization_conv_tol": 1e-06,
+    "localization_max_cycle": 100,
+    "localization_max_iters": 20,
+    "localization_exponent": 2,
+    "spin_orbital_order": "interleaved_alpha_beta",
+    "pauli_label_order": "qubit_0_leftmost",
+    "integral_cutoff": 1e-14,
+    "pauli_cutoff": 1e-12
+  },
+  "provenance": {
+    "description": "Fixed species recovered from the reactions10_paper_20260722_rightsize source snapshot; every geometry, charge, multiplicity, basis and active space matches its original cached metadata.",
+    "original_registry_sha256": "d0418514b85f175751aba5341c633d1d04f25433563dba29ecd7749029ce7fdc",
+    "original_chemistry_sha256": "f03307d41a4bf70fd2aeff0257e4710af750db0da770ab82726ce8bd03c875b6",
+    "historical_checksums": "problem_cache.sha256"
+  },
+  "species": {
+    "acetylene": {
+      "display_name": "Acetylene reaction PF",
+      "geometry": "H 0.000000 0.000000 0.000000\nC 0.000000 0.000000 1.060000\nC 0.000000 0.000000 2.263000\nH 0.000000 0.000000 3.323000",
+      "active_electrons": 6,
+      "active_orbitals": 5,
+      "charge": 0,
+      "multiplicity": 1,
+      "basis": "sto-3g",
+      "localization": "pipek_mezey_split_occ_vir"
+    },
+    "ch4": {
+      "display_name": "CH4 reaction PF",
+      "geometry": "C 0.000000 0.000000 0.000000\nH 0.629000 0.629000 0.629000\nH -0.629000 -0.629000 0.629000\nH -0.629000 0.629000 -0.629000\nH 0.629000 -0.629000 -0.629000",
+      "active_electrons": 6,
+      "active_orbitals": 5,
+      "charge": 0,
+      "multiplicity": 1,
+      "basis": "sto-3g",
+      "localization": "pipek_mezey_split_occ_vir"
+    },
+    "cl2": {
+      "display_name": "Cl2 reaction PF",
+      "geometry": "Cl 0.000000 0.000000 0.000000\nCl 0.000000 0.000000 1.987000",
+      "active_electrons": 8,
+      "active_orbitals": 5,
+      "charge": 0,
+      "multiplicity": 1,
+      "basis": "sto-3g",
+      "localization": "pipek_mezey_split_occ_vir"
+    },
+    "co": {
+      "display_name": "CO reaction PF",
+      "geometry": "C 0.000000 0.000000 0.000000\nO 0.000000 0.000000 1.128000",
+      "active_electrons": 6,
+      "active_orbitals": 5,
+      "charge": 0,
+      "multiplicity": 1,
+      "basis": "sto-3g",
+      "localization": "pipek_mezey_split_occ_vir"
+    },
+    "co2": {
+      "display_name": "CO2 reaction PF",
+      "geometry": "O 0.000000 0.000000 -1.160000\nC 0.000000 0.000000 0.000000\nO 0.000000 0.000000 1.160000",
+      "active_electrons": 6,
+      "active_orbitals": 5,
+      "charge": 0,
+      "multiplicity": 1,
+      "basis": "sto-3g",
+      "localization": "pipek_mezey_split_occ_vir"
+    },
+    "f2": {
+      "display_name": "F2 reaction PF",
+      "geometry": "F 0.000000 0.000000 0.000000\nF 0.000000 0.000000 1.412000",
+      "active_electrons": 8,
+      "active_orbitals": 5,
+      "charge": 0,
+      "multiplicity": 1,
+      "basis": "sto-3g",
+      "localization": "pipek_mezey_split_occ_vir"
+    },
+    "h2": {
+      "display_name": "H2 reaction PF",
+      "geometry": "H 0.000000 0.000000 0.000000\nH 0.000000 0.000000 0.740000",
+      "active_electrons": 2,
+      "active_orbitals": 2,
+      "charge": 0,
+      "multiplicity": 1,
+      "basis": "sto-3g",
+      "localization": "pipek_mezey_split_occ_vir"
+    },
+    "h2co": {
+      "display_name": "H2CO reaction PF",
+      "geometry": "C 0.000000 0.000000 0.000000\nO 1.210000 0.000000 0.000000\nH -0.583257 0.932969 0.000000\nH -0.583257 -0.932969 0.000000",
+      "active_electrons": 8,
+      "active_orbitals": 5,
+      "charge": 0,
+      "multiplicity": 1,
+      "basis": "sto-3g",
+      "localization": "pipek_mezey_split_occ_vir"
+    },
+    "h2o": {
+      "display_name": "H2O reaction PF",
+      "geometry": "O 0.000000 0.000000 0.000000\nH 0.756950 0.000000 0.585882\nH -0.756950 0.000000 0.585882",
+      "active_electrons": 6,
+      "active_orbitals": 5,
+      "charge": 0,
+      "multiplicity": 1,
+      "basis": "sto-3g",
+      "localization": "pipek_mezey_split_occ_vir"
+    },
+    "hcl": {
+      "display_name": "HCl reaction PF",
+      "geometry": "H 0.000000 0.000000 0.000000\nCl 0.000000 0.000000 1.275000",
+      "active_electrons": 8,
+      "active_orbitals": 5,
+      "charge": 0,
+      "multiplicity": 1,
+      "basis": "sto-3g",
+      "localization": "pipek_mezey_split_occ_vir"
+    },
+    "hcn": {
+      "display_name": "HCN reaction PF",
+      "geometry": "H 0.000000 0.000000 0.000000\nC 0.000000 0.000000 1.064000\nN 0.000000 0.000000 2.220000",
+      "active_electrons": 6,
+      "active_orbitals": 5,
+      "charge": 0,
+      "multiplicity": 1,
+      "basis": "sto-3g",
+      "localization": "pipek_mezey_split_occ_vir"
+    },
+    "hco_plus": {
+      "display_name": "HCO+ reaction PF",
+      "geometry": "H 0.000000 0.000000 0.000000\nC 0.000000 0.000000 1.100000\nO 0.000000 0.000000 2.228000",
+      "active_electrons": 6,
+      "active_orbitals": 5,
+      "charge": 1,
+      "multiplicity": 1,
+      "basis": "sto-3g",
+      "localization": "pipek_mezey_split_occ_vir"
+    },
+    "hcoh": {
+      "display_name": "HCOH reaction PF",
+      "geometry": "C 0.000000 0.000000 0.000000\nO 1.320000 0.000000 0.000000\nH -0.464880 0.996938 0.000000\nH 1.571038 0.936917 0.000000",
+      "active_electrons": 8,
+      "active_orbitals": 5,
+      "charge": 0,
+      "multiplicity": 1,
+      "basis": "sto-3g",
+      "localization": "pipek_mezey_split_occ_vir"
+    },
+    "hf": {
+      "display_name": "HF reaction PF",
+      "geometry": "H 0.000000 0.000000 0.000000\nF 0.000000 0.000000 0.917000",
+      "active_electrons": 8,
+      "active_orbitals": 5,
+      "charge": 0,
+      "multiplicity": 1,
+      "basis": "sto-3g",
+      "localization": "pipek_mezey_split_occ_vir"
+    },
+    "hnc": {
+      "display_name": "HNC reaction PF",
+      "geometry": "H 0.000000 0.000000 0.000000\nN 0.000000 0.000000 1.064000\nC 0.000000 0.000000 2.220000",
+      "active_electrons": 6,
+      "active_orbitals": 5,
+      "charge": 0,
+      "multiplicity": 1,
+      "basis": "sto-3g",
+      "localization": "pipek_mezey_split_occ_vir"
+    },
+    "hno": {
+      "display_name": "HNO reaction PF",
+      "geometry": "N 0.000000 0.000000 0.000000\nO 1.212000 0.000000 0.000000\nH -0.328480 1.010985 0.000000",
+      "active_electrons": 8,
+      "active_orbitals": 5,
+      "charge": 0,
+      "multiplicity": 1,
+      "basis": "sto-3g",
+      "localization": "pipek_mezey_split_occ_vir"
+    },
+    "hoc_plus": {
+      "display_name": "HOC+ reaction PF",
+      "geometry": "H 0.000000 0.000000 0.000000\nO 0.000000 0.000000 0.950000\nC 0.000000 0.000000 2.078000",
+      "active_electrons": 6,
+      "active_orbitals": 5,
+      "charge": 1,
+      "multiplicity": 1,
+      "basis": "sto-3g",
+      "localization": "pipek_mezey_split_occ_vir"
+    },
+    "n2": {
+      "display_name": "N2 reaction PF",
+      "geometry": "N 0.000000 0.000000 0.000000\nN 0.000000 0.000000 1.098000",
+      "active_electrons": 6,
+      "active_orbitals": 5,
+      "charge": 0,
+      "multiplicity": 1,
+      "basis": "sto-3g",
+      "localization": "pipek_mezey_split_occ_vir"
+    },
+    "nh3": {
+      "display_name": "NH3 reaction PF",
+      "geometry": "N 0.000000 0.000000 0.000000\nH 0.000000 0.937000 0.382000\nH 0.812000 -0.469000 0.382000\nH -0.812000 -0.469000 0.382000",
+      "active_electrons": 6,
+      "active_orbitals": 5,
+      "charge": 0,
+      "multiplicity": 1,
+      "basis": "sto-3g",
+      "localization": "pipek_mezey_split_occ_vir"
+    },
+    "noh": {
+      "display_name": "NOH reaction PF",
+      "geometry": "N 0.000000 0.000000 0.000000\nO 1.212000 0.000000 0.000000\nH 0.960942 0.936917 0.000000",
+      "active_electrons": 8,
+      "active_orbitals": 5,
+      "charge": 0,
+      "multiplicity": 1,
+      "basis": "sto-3g",
+      "localization": "pipek_mezey_split_occ_vir"
+    },
+    "vinylidene": {
+      "display_name": "Vinylidene reaction PF",
+      "geometry": "C 0.000000 0.000000 0.000000\nC 1.310000 0.000000 0.000000\nH -0.540000 0.935307 0.000000\nH -0.540000 -0.935307 0.000000",
+      "active_electrons": 6,
+      "active_orbitals": 5,
+      "charge": 0,
+      "multiplicity": 1,
+      "basis": "sto-3g",
+      "localization": "pipek_mezey_split_occ_vir"
+    }
+  }
+}

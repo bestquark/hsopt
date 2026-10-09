@@ -55,9 +55,12 @@ The [product-formula interface](#product-formula-policy) below describes the
 editable policy. Automated mutations additionally require the
 [OpenShell agent setup](#openshell--opencode-mutation-agent). Full paper
 campaigns require separately prepared inputs and suitable compute resources;
-large HamLib archives are downloaded explicitly, and the exact reaction inputs
-are supplied as a compact checksummed bundle. Historical run outputs and
-site deployment state remain external.
+large HamLib archives are downloaded explicitly. Reaction Hamiltonians and
+metadata are generated from the 21 fixed species definitions using the optional
+`chemistry` dependencies; see the [reaction-generation recipe](experiments/diff_energy/inputs/README.md).
+The corrected two-electron conversion is the default. Historical replay uses
+an explicit separate mode, and corrected inputs require fresh calibration and
+campaign results. Historical run outputs and site deployment state remain external.
 
 GitHub Actions checks installation, every command's `--help`, the two CPU
 examples, and the test suite on macOS and Linux with Python 3.12.

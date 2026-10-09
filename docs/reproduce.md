@@ -41,14 +41,30 @@ The HamLib command selects only the public NERSC archives required by the
 checked-in instance registry and verifies every SHA-256 checksum. Repeating
 it skips verified archives; changed data raises an error.
 
-The 21 reaction species are included in `reaction_cache.tar.gz`: the original
-42 JSON/NPZ files, with their geometries, active spaces, localization, and
-coefficients. Extraction verifies the existing `problem_cache.sha256` manifest.
-It needs neither a private storage path nor a new chemistry calculation.
+Reaction inputs are built from `experiments/diff_energy/inputs/species.json`
+and `reactions.json`: 21 fixed geometries, charges, basis/active-space choices,
+and ten balanced reactions. Install the locked optional chemistry dependencies.
+The generator runs closed-shell RHF, selects frontier active orbitals, localizes
+occupied and virtual blocks separately, obtains frozen-core CAS integrals, and
+maps them to Jordan--Wigner Pauli coefficients. It also writes the compact
+metadata and fresh SHA-256 manifest; no old checkout or private cache is needed.
+
+**The historical generator had a sign/factor error in its two-electron
+conversion.** New generation defaults to the corrected physical Hamiltonian.
+Use fresh reaction inputs, exact references, loose/tight policies, and campaign
+roots below. Existing campaign caches and checked-in historical metadata do
+not establish physical chemistry results for the corrected dataset. See the
+[recipe and historical-replay limitations](../experiments/diff_energy/inputs/README.md).
 
 ```bash
+uv sync --locked --extra chemistry
+export HSOPT_GENERATED_REACTIONS="$HSOPT_DATA_ROOT/raw/reactions-physical"
+export HSOPT_PREPARED_REACTIONS="$HSOPT_DATA_ROOT/prepared/diff_energy-physical"
+export HSOPT_CALIBRATIONS="$HSOPT_DATA_ROOT/calibrations/physical"
+export HSOPT_POLICIES="$HSOPT_DATA_ROOT/policies/physical"
 uv run hsopt-data hamlib --output-root "$HSOPT_DATA_ROOT/raw/hamlib"
-uv run hsopt-data reactions --output-root "$HSOPT_DATA_ROOT/raw/reactions"
+uv run --extra chemistry hsopt-data reactions \
+  --output-root "$HSOPT_GENERATED_REACTIONS"
 uv run hsopt-campaign prepare-hamlib \
   --active-manifest experiments/abs_energy/inputs/instances.csv \
   --checksum-manifest experiments/abs_energy/inputs/hamlib_zip_sha256.txt \
@@ -56,12 +72,15 @@ uv run hsopt-campaign prepare-hamlib \
   --output-root "$HSOPT_DATA_ROOT/prepared/abs_energy"
 uv run hsopt-campaign prepare-reactions \
   --reaction-manifest experiments/diff_energy/inputs/reactions.json \
-  --cache-checksums experiments/diff_energy/inputs/problem_cache.sha256 \
-  --cache-root "$HSOPT_DATA_ROOT/raw/reactions" \
-  --output-root "$HSOPT_DATA_ROOT/prepared/diff_energy"
+  --cache-checksums "$HSOPT_GENERATED_REACTIONS/problem_cache.sha256" \
+  --cache-root "$HSOPT_GENERATED_REACTIONS/problem_cache" \
+  --output-root "$HSOPT_PREPARED_REACTIONS"
 ```
 
-Preparation requires a fresh output directory and does not replace campaign inputs.
+Generation defaults to one CPU thread. For a small installation check, use
+`--species h2` and a different fresh output directory; that partial cache cannot
+prepare the ten-reaction campaign. Neither generation nor preparation replaces
+an existing campaign input directory. All generated files stay outside the checkout.
 
 ## Inspect Hamiltonians and coefficients
 
@@ -90,25 +109,25 @@ benchmark calculations, rather than installation checks.
 ```bash
 uv run hsopt-paper-baseline-batch build-manifest \
   --abs-inputs "$HSOPT_DATA_ROOT/prepared/abs_energy" \
-  --reaction-inputs "$HSOPT_DATA_ROOT/prepared/diff_energy" \
-  --output "$HSOPT_DATA_ROOT/calibrations/manifest.json"
+  --reaction-inputs "$HSOPT_PREPARED_REACTIONS" \
+  --output "$HSOPT_CALIBRATIONS/manifest.json"
 uv run hsopt-paper-baseline-batch run \
-  "$HSOPT_DATA_ROOT/calibrations/manifest.json" \
-  --output-dir "$HSOPT_DATA_ROOT/calibrations/loose" \
+  "$HSOPT_CALIBRATIONS/manifest.json" \
+  --output-dir "$HSOPT_CALIBRATIONS/loose" \
   --backend numpy --mode hamiltonian_bound
 uv run hsopt-paper-baseline-batch run \
-  "$HSOPT_DATA_ROOT/calibrations/manifest.json" \
-  --output-dir "$HSOPT_DATA_ROOT/calibrations/tight" \
+  "$HSOPT_CALIBRATIONS/manifest.json" \
+  --output-dir "$HSOPT_CALIBRATIONS/tight" \
   --backend numpy --mode empirical_exact \
-  --exact-reference-root "$HSOPT_DATA_ROOT/calibrations/loose"
+  --exact-reference-root "$HSOPT_CALIBRATIONS/loose"
 for baseline in loose tight; do
   uv run hsopt-paper-baseline-batch audit \
-    "$HSOPT_DATA_ROOT/calibrations/manifest.json" \
-    --output-dir "$HSOPT_DATA_ROOT/calibrations/$baseline" --baseline "$baseline"
+    "$HSOPT_CALIBRATIONS/manifest.json" \
+    --output-dir "$HSOPT_CALIBRATIONS/$baseline" --baseline "$baseline"
   uv run hsopt-paper-baseline-batch generate \
-    "$HSOPT_DATA_ROOT/calibrations/manifest.json" \
-    --calibration-dir "$HSOPT_DATA_ROOT/calibrations/$baseline" \
-    --output-dir "$HSOPT_DATA_ROOT/policies/$baseline" \
+    "$HSOPT_CALIBRATIONS/manifest.json" \
+    --calibration-dir "$HSOPT_CALIBRATIONS/$baseline" \
+    --output-dir "$HSOPT_POLICIES/$baseline" \
     --generator "$PWD/experiments/generate_initial_pf.py" --baseline "$baseline"
 done
 ```
@@ -131,10 +150,10 @@ uv run hsopt-openshell configure
 for baseline in loose tight; do
   uv run hsopt-campaign initialize \
     --hamlib-inputs "$HSOPT_DATA_ROOT/prepared/abs_energy" \
-    --reaction-inputs "$HSOPT_DATA_ROOT/prepared/diff_energy" \
-    --calibration-root "$HSOPT_DATA_ROOT/calibrations/$baseline" \
+    --reaction-inputs "$HSOPT_PREPARED_REACTIONS" \
+    --calibration-root "$HSOPT_CALIBRATIONS/$baseline" \
     --generator "$PWD/experiments/generate_initial_pf.py" \
-    --campaign-root "$HSOPT_WORKDIR/runs/$baseline" \
+    --campaign-root "$HSOPT_WORKDIR/runs/physical/$baseline" \
     --baseline "$baseline" --hamlib-replicates 3 --iterations 50
 done
 ```
