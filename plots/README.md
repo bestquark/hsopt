@@ -16,7 +16,7 @@ and visual style while reading the new exact-unitary data contracts:
 
 All result plots verify the strict export completion marker and every declared
 SHA-256 checksum before reading data. They never read a live campaign database.
-The current 91-instance manifest supplies stable dataset metadata, while the
+The current 82-instance manifest supplies stable dataset metadata, while the
 coefficient plot reads the immutable prepared Hamiltonian JSON files. Scripts
 refuse to write generated figures inside either immutable input tree.
 
@@ -64,7 +64,7 @@ uv run python plots/plot_baseline_tolerance.py \
 ```
 
 Pass `--full-census /path/to/census.json` to
-`plot_hamlib_active_spaces.py` to place the current 91-instance selection over
+`plot_hamlib_active_spaces.py` to place the current 82-instance selection over
 the full HamLib context. The accepted JSON format may contain either
 `active_space_counts_by_nqubits` or a lane list; a CSV with an `nqubits` or
 `n_qubits` column is also accepted.

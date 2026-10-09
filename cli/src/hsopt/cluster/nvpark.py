@@ -3,8 +3,10 @@
 from __future__ import annotations
 
 import argparse
+import getpass
 import hashlib
 import json
+import os
 import shlex
 import subprocess
 import uuid
@@ -17,7 +19,11 @@ from ..campaign.queue import merge_batch, prepare_batch, queue_status
 
 
 DEFAULT_HOST = "nvlogin"
-DEFAULT_REMOTE_ROOT = "/lustre/fs12/portfolios/nvr/users/lmantilla/hsopt-exact"
+DEFAULT_REMOTE_ROOT = os.environ.get("HSOPT_REMOTE_ROOT") or (
+    "/lustre/fsw/portfolios/nvr/users/"
+    f"{os.environ.get('HSOPT_CLUSTER_USER') or getpass.getuser()}"
+    "/autoresearch/hsopt_workdir/runs/evaluation"
+)
 DEFAULT_ACCOUNT = "nvr_qualg_lmbm"
 DEFAULT_PARTITION = "polar4"
 DEFAULT_QOS = "normal"

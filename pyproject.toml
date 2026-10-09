@@ -14,6 +14,7 @@ dependencies = [
 
 [project.scripts]
 hsopt = "hsopt.campaign.loop:main"
+hsopt-data = "hsopt.data.acquire:main"
 hsopt-baseline-drop = "hsopt.view.baseline_drop:main"
 hsopt-exact = "hsopt.campaign.queue:main"
 hsopt-exact-parity = "hsopt.campaign.parity:main"
@@ -32,6 +33,10 @@ hsopt-view = "hsopt.view.mutation_history:main"
 t-autoresearch = "hsopt.tgate_opt.t_autoresearch_cli:main"
 
 [project.optional-dependencies]
+chemistry = [
+  "openfermion>=1.7.1,<2",
+  "pyscf>=2.5,<3",
+]
 cupynumeric = [
   "legate>=25.10.0; sys_platform == 'linux'",
   "nvidia-cupynumeric>=25.10.0",

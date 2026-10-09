@@ -507,6 +507,14 @@ def prepare_reactions(
                 }
             )
             relative_problem = Path("hamiltonians") / f"{species}.json"
+            if "hamiltonian_convention" in metadata:
+                problem["source"]["generation"] = {
+                    "hamiltonian_convention": metadata["hamiltonian_convention"],
+                    "geometry_unit": metadata["geometry_unit"],
+                    "charge": metadata["charge"],
+                    "multiplicity": metadata["multiplicity"],
+                    "source": metadata["source"],
+                }
             _write_json(reaction_dir / relative_problem, problem)
             reaction_terms.append(
                 {
