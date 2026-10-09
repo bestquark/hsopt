@@ -15,6 +15,11 @@ and one plotting-source tree, [`plots/`](plots/). Raw campaigns, databases,
 Hamiltonian collections, caches, scheduler logs, and agent transcripts stay
 outside the Git checkout.
 
+Follow [Reproduce the paper workflow](docs/reproduce.md) from a fresh clone:
+acquire and verify inputs, inspect Hamiltonians, generate loose/tight policies,
+set up OpenShell, run mutations, and reproduce plots. Keep generated files in
+one external `hsopt_workdir/`.
+
 ## Quick start on your own computer
 
 The checked-in H2 examples run on a CPU with NumPy on macOS or Linux. They
@@ -50,7 +55,9 @@ The [product-formula interface](#product-formula-policy) below describes the
 editable policy. Automated mutations additionally require the
 [OpenShell agent setup](#openshell--opencode-mutation-agent). Full paper
 campaigns require separately prepared inputs and suitable compute resources;
-the production data and private deployment scripts are not bundled here.
+large HamLib archives are downloaded explicitly, and the exact reaction inputs
+are supplied as a compact checksummed bundle. Historical run outputs and
+site deployment state remain external.
 
 GitHub Actions checks installation, every command's `--help`, the two CPU
 examples, and the test suite on macOS and Linux with Python 3.12.

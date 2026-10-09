@@ -14,6 +14,7 @@ dependencies = [
 
 [project.scripts]
 hsopt = "hsopt.campaign.loop:main"
+hsopt-data = "hsopt.data.acquire:main"
 hsopt-baseline-drop = "hsopt.view.baseline_drop:main"
 hsopt-exact = "hsopt.campaign.queue:main"
 hsopt-exact-parity = "hsopt.campaign.parity:main"

@@ -7,11 +7,17 @@ Two compact JSON files define the fixed ten-reaction campaign:
 - `problem_metadata.json`: basis, active-space, term-count, qubit-count, and
   the norm-based phase-encoding contract for each unique species Hamiltonian.
 
-The 21 JSON/NPZ Hamiltonian-cache pairs are intentionally external. They total
-about 6.8 MiB and are verified before use against
-`problem_cache.sha256`. Pass the `problem_cache/` directory itself explicitly
-when preparing a campaign; it must contain exactly the 42 declared files and
-no extras.
+`reaction_cache.tar.gz` contains the original 21 JSON/NPZ Hamiltonian-cache
+pairs. They total about 6.8 MiB before compression and preserve the exact input
+checksums. Materialize them outside the checkout with:
+
+```bash
+uv run hsopt-data reactions --output-root ../data/raw/reactions
+```
+
+Extraction verifies all 42 files against `problem_cache.sha256`. Pass that
+output directory to `hsopt-campaign prepare-reactions`; it must contain exactly
+the declared files and no extras.
 
 The sibling reaction directories expose this registry as one
 `definition.json` per reaction, including the applicable cache checksums.
