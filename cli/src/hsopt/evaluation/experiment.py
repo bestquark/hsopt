@@ -15,6 +15,46 @@ from .compiled_unitary import (
 )
 
 
+def main(argv: Sequence[str] | None = None) -> int:
+    """Evaluate a policy using exact compilation or an explicitly selected proxy."""
+    from . import METHODS, evaluate_difference, evaluate_molecule
+
+    parser = argparse.ArgumentParser(description=main.__doc__)
+    source = parser.add_mutually_exclusive_group(required=True)
+    source.add_argument("--problem", type=Path)
+    source.add_argument("--reaction", type=Path)
+    parser.add_argument("--policy-file", type=Path, required=True)
+    parser.add_argument("--method", choices=METHODS, default="exact")
+    parser.add_argument("--exact-reference", type=Path)
+    parser.add_argument(
+        "--reference-size", type=int, help="BCH reference determinant cap (default 32)"
+    )
+    parser.add_argument("--error-contract", choices=DIFFERENCE_ERROR_CONTRACTS)
+    parser.add_argument("--backend", choices=("numpy", "cupynumeric"), default="cupynumeric")
+    parser.add_argument("--output", type=Path)
+    args = parser.parse_args(argv)
+    if args.method == "exact" and args.exact_reference is None:
+        parser.error("--exact-reference is required for exact evaluation")
+    if args.reaction is not None and args.error_contract is None:
+        parser.error("--error-contract is required for a reaction")
+    if args.problem is not None and args.error_contract is not None:
+        parser.error("--error-contract applies only to a reaction")
+    options = {
+        "method": args.method,
+        "backend": args.backend,
+        "reference_path": args.exact_reference,
+        "reference_size": args.reference_size,
+    }
+    if args.problem is not None:
+        result = evaluate_molecule(args.problem, args.policy_file, **options)
+    else:
+        result = evaluate_difference(
+            args.reaction, args.policy_file, error_contract=args.error_contract, **options
+        )
+    _write_result(result, args.output)
+    return 0
+
+
 def _write_result(result: dict[str, Any], output: Path | None) -> None:
     encoded = json.dumps(result, indent=2, sort_keys=True) + "\n"
     if output is None:

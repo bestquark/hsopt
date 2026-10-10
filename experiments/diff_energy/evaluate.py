@@ -1,4 +1,4 @@
-"""Evaluate one sealed signed-energy experiment with the fixed exact evaluator."""
+"""Evaluate one sealed signed-energy experiment (exact by default)."""
 
 from __future__ import annotations
 
@@ -7,19 +7,8 @@ import json
 from pathlib import Path
 from typing import Any, Sequence
 
-from hsopt.evaluation.compiled_unitary import (
-    DIFFERENCE_ERROR_CONTRACTS,
-    DIFFERENCE_ERROR_CONTRACT_CANCELLATION,
-    DIFFERENCE_ERROR_CONTRACT_INDIVIDUAL,
-    evaluate_difference_error_cancellation,
-    evaluate_difference_individual_errors,
-)
-
-
-EVALUATORS = {
-    DIFFERENCE_ERROR_CONTRACT_INDIVIDUAL: evaluate_difference_individual_errors,
-    DIFFERENCE_ERROR_CONTRACT_CANCELLATION: evaluate_difference_error_cancellation,
-}
+from hsopt.evaluation import METHODS, evaluate_difference
+from hsopt.evaluation.compiled_unitary import DIFFERENCE_ERROR_CONTRACTS
 
 
 def _write_result(result: dict[str, Any], output: Path | None) -> None:
@@ -49,7 +38,9 @@ def main(argv: Sequence[str] | None = None) -> int:
     )
     parser.add_argument("--policy-file", type=Path)
     parser.add_argument("--baseline", choices=("loose", "tight"), default="loose")
-    parser.add_argument("--exact-reference", type=Path, required=True)
+    parser.add_argument("--method", choices=METHODS, default="exact")
+    parser.add_argument("--exact-reference", type=Path)
+    parser.add_argument("--reference-size", type=int, help="BCH reference determinant cap")
     parser.add_argument(
         "--error-contract",
         choices=DIFFERENCE_ERROR_CONTRACTS,
@@ -62,6 +53,8 @@ def main(argv: Sequence[str] | None = None) -> int:
     parser.add_argument("--backend", choices=("numpy", "cupynumeric"), default="cupynumeric")
     parser.add_argument("--output", type=Path)
     args = parser.parse_args(argv)
+    if args.method == "exact" and args.exact_reference is None:
+        parser.error("--exact-reference is required for exact evaluation")
 
     experiment_dir = args.experiment_dir.resolve()
     definition = json.loads((experiment_dir / "definition.json").read_text(encoding="utf-8"))
@@ -82,11 +75,14 @@ def main(argv: Sequence[str] | None = None) -> int:
             f"{args.error_contract!r} is not sealed by {experiment_dir / 'definition.json'}"
         )
 
-    result = EVALUATORS[args.error_contract](
+    result = evaluate_difference(
         reaction_path,
         (args.policy_file or experiment_dir / f"initial_pf_{args.baseline}.py").resolve(),
+        method=args.method,
+        error_contract=args.error_contract,
         backend=args.backend,
-        reference_path=args.exact_reference.resolve(),
+        reference_path=args.exact_reference.resolve() if args.exact_reference else None,
+        reference_size=args.reference_size,
     )
     _write_result(result, args.output)
     return 0

@@ -214,6 +214,9 @@ uv run python experiments/abs_energy/evaluate.py \
   --backend numpy --output /path/to/result.json
 ```
 
+For optional BCH error estimates, select `--method bch`; see the short
+[evaluation guide](cli/src/hsopt/evaluation/README.md). Production campaigns use exact scoring.
+
 ## Repository layout
 
 ```text
