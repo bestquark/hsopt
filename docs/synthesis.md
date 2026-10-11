@@ -6,6 +6,15 @@ budgets, and no wall-clock synthesis timeout. Linux dependencies pin
 `cuda-quantum-cu12==0.16.0.post1`. Dense unitary operations use the separately
 selected NumPy or cuPyNumeric backend.
 
+Distinct rotations are compiled concurrently before matrix construction. The
+default uses every CPU in the process affinity mask (the CPU count on macOS).
+An external runtime can set `HSOPT_SYNTHESIS_WORKERS` to its allocated CPU count
+or a smaller limit when sharing a worker. The setting never widens CPU affinity.
+`HSOPT_SYNTHESIS_WORKERS=1` selects serial compilation. Each result records
+worker count, distinct rotation count and compilation wall time in
+`rotation_synthesis_execution`. Seeds, search budgets and policy-order matrix
+updates remain unchanged; duplicate angles/tolerances are synthesized once.
+
 The literal gate string is reconstructed in matrix-multiplication order,
 including scalar W phase gates. This preserves the phase needed for controlled
 evolution and energy decoding. CUDA-Q's arbitrary-precision `rz_error` verifies

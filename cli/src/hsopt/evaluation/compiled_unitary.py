@@ -12,9 +12,11 @@ import ast
 import hashlib
 import json
 import math
+import os
 import time
 import warnings
 from collections import Counter
+from concurrent.futures import ThreadPoolExecutor
 from functools import lru_cache
 from pathlib import Path
 from types import ModuleType
@@ -628,6 +630,61 @@ def _compile_rz(theta: float, epsilon: float) -> dict[str, Any]:
     }
 
 
+def _synthesis_worker_count() -> int:
+    """Use available CPUs; deployments can cap concurrency for shared workers."""
+    try:
+        available = len(os.sched_getaffinity(0))
+    except AttributeError:
+        available = os.cpu_count() or 1
+    requested = os.environ.get("HSOPT_SYNTHESIS_WORKERS")
+    if requested is None:
+        return max(1, available)
+    try:
+        workers = int(requested)
+    except ValueError as exc:
+        raise ValueError("HSOPT_SYNTHESIS_WORKERS must be a positive integer") from exc
+    if workers <= 0:
+        raise ValueError("HSOPT_SYNTHESIS_WORKERS must be a positive integer")
+    return max(1, min(available, workers))
+
+
+def _compile_rotations(
+    rotations: Sequence[tuple[Mapping[str, Any], float]],
+    product_formula: Any,
+) -> tuple[list[tuple[float, float]], dict[tuple[float, float], dict[str, Any]], dict[str, Any]]:
+    """Compile distinct rotations concurrently, then consume them in policy order.
+
+    CUDA-Q releases the GIL during its native synthesis. No GPU arrays or
+    candidate methods enter worker threads. Per-call seeds/search budgets stay
+    fixed, so scheduling does not alter circuits, tolerances or T counts.
+    """
+    keys = []
+    for term, alpha in rotations:
+        epsilon = float(product_formula.synthesis_epsilon(dict(term), alpha))
+        if not math.isfinite(epsilon) or not 0.0 < epsilon < 1.0:
+            raise ValueError("ProductFormula.synthesis_epsilon() must return a value in (0, 1)")
+        keys.append((float(round(-2.0 * alpha, 15)), epsilon))
+    unique = list(dict.fromkeys(keys))
+    workers = min(_synthesis_worker_count(), len(unique))
+    # Initialize bindings on the calling thread before concurrent native calls.
+    _cudaq_synth()
+    started = time.perf_counter()
+    if workers > 1:
+        with ThreadPoolExecutor(max_workers=workers, thread_name_prefix="hsopt-synthesis") as pool:
+            values = list(pool.map(lambda key: _compile_rz(*key), unique))
+    else:
+        values = [_compile_rz(*key) for key in unique]
+    return (
+        keys,
+        dict(zip(unique, values, strict=True)),
+        {
+            "worker_threads": workers,
+            "unique_rotation_count": len(unique),
+            "wall_seconds": time.perf_counter() - started,
+        },
+    )
+
+
 def _basis_forward(term_pauli: str) -> np.ndarray:
     if term_pauli == "X":
         return _H
@@ -934,6 +991,9 @@ def _build_compiled_step(
 ) -> tuple[Any, dict[str, Any]]:
     product_formula, rotations, schedule_metrics = _product_formula_schedule(problem, policy)
     n_steps = int(schedule_metrics["n_steps"])
+    rotation_keys, compiled_rotations, synthesis_execution = _compile_rotations(
+        rotations, product_formula
+    )
 
     dim = 1 << int(problem["n_qubits"])
     fence_interval = _rotation_fence_interval(dim)
@@ -946,12 +1006,8 @@ def _build_compiled_step(
     compilations: dict[str, dict[str, Any]] = {}
 
     applied_rotations = 0
-    for term, alpha in rotations:
-        epsilon = float(product_formula.synthesis_epsilon(dict(term), alpha))
-        if not math.isfinite(epsilon) or not 0.0 < epsilon < 1.0:
-            raise ValueError("ProductFormula.synthesis_epsilon() must return a value in (0, 1)")
-        theta = float(round(-2.0 * alpha, 15))
-        compiled = _compile_rz(theta, epsilon)
+    for (term, _alpha), (theta, epsilon) in zip(rotations, rotation_keys, strict=True):
+        compiled = compiled_rotations[(theta, epsilon)]
         unitary, workspace = _apply_compiled_rotation(
             unitary,
             workspace,
@@ -998,6 +1054,7 @@ def _build_compiled_step(
         "rotation_fence_interval": fence_interval,
         "synthesis_epsilon_histogram": dict(sorted(epsilon_histogram.items())),
         "rotation_synthesis": _synthesis_metadata(),
+        "rotation_synthesis_execution": synthesis_execution,
         "unique_compilations": sorted(
             compilations.values(),
             key=lambda row: (row["label"], row["theta"], row["epsilon"]),

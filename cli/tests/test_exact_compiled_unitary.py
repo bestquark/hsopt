@@ -25,6 +25,8 @@ from hsopt.evaluation.compiled_unitary import (
     _build_compiled_step,
     _build_exact_product_formula_step,
     _compile_rz,
+    _compile_rotations,
+    _synthesis_worker_count,
     _dense_hamiltonian,
     _fixed_electron_hamiltonian,
     _gate_sequence_matrix,
@@ -41,6 +43,7 @@ from hsopt.evaluation.compiled_unitary import (
     qpe_phase_encoding,
     validate_policy_source,
 )
+from hsopt.evaluation import compiled_unitary as compiled_evaluator
 from hsopt.campaign.setup import normalize_materialized_inputs
 from hsopt.evaluation.experiment import evaluate_absolute_directory
 from hsopt.campaign.baseline import baseline_module
@@ -61,6 +64,49 @@ _double_commutator_bound = _BASELINE._double_commutator_bound
 calibrate_problem = _BASELINE.calibrate_problem
 optimize_paper_error_allocation = _BASELINE.optimize_paper_error_allocation
 seal_calibration = _BASELINE.seal_calibration
+
+
+def test_parallel_synthesis_preserves_serial_circuits_and_mixed_precision(monkeypatch):
+    class Formula:
+        def synthesis_epsilon(self, term, angle):
+            return term["epsilon"]
+
+    rotations = [
+        ({"epsilon": epsilon}, angle)
+        for epsilon in (1e-4, 1e-8, 1e-13)
+        for angle in (0.17, -0.37, 1.21)
+    ]
+    rotations += rotations[:3]
+    monkeypatch.setattr(compiled_evaluator, "_synthesis_worker_count", lambda: 1)
+    _compile_rz.cache_clear()
+    serial_keys, serial, _ = _compile_rotations(rotations, Formula())
+    monkeypatch.setattr(compiled_evaluator, "_synthesis_worker_count", lambda: 4)
+    _compile_rz.cache_clear()
+    parallel_keys, parallel, execution = _compile_rotations(rotations, Formula())
+    assert serial_keys == parallel_keys
+    assert execution["worker_threads"] == 4
+    assert execution["unique_rotation_count"] == 9
+    assert _compile_rz.cache_info().misses == 9
+    for key in serial:
+        assert parallel[key]["gate_string"] == serial[key]["gate_string"]
+        assert parallel[key]["t_count"] == serial[key]["t_count"]
+        assert parallel[key]["operator_error"] == serial[key]["operator_error"]
+        np.testing.assert_array_equal(parallel[key]["matrix"], serial[key]["matrix"])
+
+
+def test_synthesis_worker_count_respects_cpu_affinity_and_override(monkeypatch):
+    monkeypatch.setattr(
+        compiled_evaluator.os, "sched_getaffinity", lambda pid: {1, 3, 5}, raising=False
+    )
+    monkeypatch.delenv("HSOPT_SYNTHESIS_WORKERS", raising=False)
+    assert _synthesis_worker_count() == 3
+    monkeypatch.setenv("HSOPT_SYNTHESIS_WORKERS", "30")
+    assert _synthesis_worker_count() == 3
+    monkeypatch.setenv("HSOPT_SYNTHESIS_WORKERS", "2")
+    assert _synthesis_worker_count() == 2
+    monkeypatch.setenv("HSOPT_SYNTHESIS_WORKERS", "0")
+    with pytest.raises(ValueError, match="positive integer"):
+        _synthesis_worker_count()
 
 
 def test_reaction_error_contracts_measure_the_same_species_without_mixing(
