@@ -8,7 +8,6 @@ so every command still runs as `uv run <command>` from the checkout root.
 cli/
 ├── src/hsopt/
 │   ├── campaign/     Campaign setup, lanes, queue, supervisor, export, and parity
-│   ├── cluster/      NVPark/Slurm submission adapter
 │   ├── evaluation/   Fixed compiled-unitary evaluator and diagnostics
 │   ├── sandbox/      OpenShell/OpenCode isolation and agent telemetry
 │   ├── view/         Read-only mutation history and final report views
@@ -68,9 +67,11 @@ repairing the cause, resume explicitly with an audit reason:
 uv run hsopt-openshell resume --path /path/to/campaign --reason "Inference configuration repaired"
 ```
 
-`hsopt-supervisor --collect-live-results` can collect completed tasks while
-the rest of a Slurm batch runs. `--idle-batch-min-estimated-seconds` enables
-partial batches based on measured evaluation time; both features are opt-in.
+The backend-independent `hsopt-handoff` API delivers completed evaluator
+receipts, records scientific results, and wakes the lane for the next mutation.
+Machine-specific dispatch and monitoring live outside this package; see
+[the runtime contract](../docs/runtime.md).
+
 
 ## Mutation-history view
 

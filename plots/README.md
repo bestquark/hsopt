@@ -95,35 +95,24 @@ databases, and logs remain outside the Git checkout.
 autoresearch loops. It first verifies that the three absolute-energy lanes (or
 two reaction lanes) have identical source, `initial_pf.py`, and exact-reference
 hashes. It then snapshots one task per physical benchmark and runs that task
-through the same fixed `hsopt.exact_queue` evaluator used at autoresearch
+through the same fixed `hsopt.campaign.queue` evaluator used at autoresearch
 iteration 0. It neither reads nor changes an incumbent or candidate policy.
 
-Prepare and submit the canonical 91 + 10 census as four balanced, single-A100
-jobs:
+Prepare the immutable census inputs, then dispatch its pending tasks through
+an external runtime using the same fixed evaluator:
 
 ```bash
-uv run python plots/compute_iteration0_t95.py launch \
-  --campaign-root "$HSOPT_DATA_ROOT/exact/production-cpu91-bound-eq34-v1" \
-  --census-root "$HSOPT_DATA_ROOT/exact/iteration0-t95-census-v1" \
-  --repo-dir "$PWD" \
-  --jobs 4 \
-  --partition polar4 \
-  --backend cupynumeric \
-  --accelerator gpu
+uv run python plots/compute_iteration0_t95.py prepare \
+  --campaign-root "$HSOPT_WORKDIR/runs/my-campaign" \
+  --census-root "$HSOPT_WORKDIR/runs/iteration0-census"
 ```
 
-The dense-eigensolve proxy is used only to balance the 101 immutable tasks
-across jobs; it never enters the score. Collecting is idempotent, and export
+Machine-specific submission and collection belong in the runtime. Export
 refuses partial data:
 
 ```bash
 uv run python plots/compute_iteration0_t95.py status \
-  --census-root "$HSOPT_DATA_ROOT/exact/iteration0-t95-census-v1" \
-  --remote
-
-uv run python plots/compute_iteration0_t95.py collect \
-  --census-root "$HSOPT_DATA_ROOT/exact/iteration0-t95-census-v1"
-
+  --census-root "$HSOPT_WORKDIR/runs/iteration0-census"
 uv run python plots/compute_iteration0_t95.py export \
-  --census-root "$HSOPT_DATA_ROOT/exact/iteration0-t95-census-v1"
+  --census-root "$HSOPT_WORKDIR/runs/iteration0-census"
 ```

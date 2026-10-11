@@ -17,10 +17,11 @@ Current organization:
 - `experiments/{abs_energy,diff_energy}/<instance>/initial_pf_{loose,tight}.py`:
   the two generated iteration-0 policies; a campaign copies exactly one into
   its isolated lane.
-- caller-supplied external `HSOPT_DATA_ROOT`: all campaign workspaces and logs.
+- `cli/src/hsopt/campaign/interface.py`: portable task requests and result delivery;
+  delivery records the result, applies acceptance, and proposes the next mutation.
+- external `hsopt_workdir/data/`: inputs and sealed references/calibrations.
+- external `hsopt_workdir/runs/`: lane histories and the scientific task ledger.
+- external `hsopt_workdir/runtime/`: user-supplied dispatchers and machine setup.
 
-Keep mutable campaign histories outside the repository checkout under
-`$HSOPT_DATA_ROOT/{exact,development,old_experiments,scratch}`. The campaign
-mirrors the two checked-in families under
-`exact/<campaign-id>/lanes/abs_energy/` and
-`exact/<campaign-id>/lanes/diff_energy/`.
+See `docs/runtime.md` for implementing a runtime. Scientific code and plotting
+stay in the checkout; compute-specific code and generated records stay outside.

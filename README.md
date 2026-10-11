@@ -20,12 +20,10 @@ acquire and verify inputs, inspect Hamiltonians, generate loose/tight policies,
 set up OpenShell, run mutations, and reproduce plots. Keep generated files in
 one external `hsopt_workdir/`.
 
-## Quick start on your own computer
+## Quick start
 
-The checked-in H2 examples run on a CPU with NumPy on macOS or Linux. They
-include their Hamiltonians and policies; no NVIDIA account, GPU, SSH access,
-API key, or external campaign data is needed. Install
-[`uv`](https://docs.astral.sh/uv/getting-started/installation/), then run:
+Install [`uv`](https://docs.astral.sh/uv/getting-started/installation/), then
+evaluate the included H2 policies:
 
 ```bash
 git clone https://github.com/bestquark/hsopt.git
@@ -230,7 +228,7 @@ hsopt/
 └── cli/
     ├── src/hsopt/
     │   ├── campaign/           Lane lifecycle, queues, supervisor, and exports
-    │   ├── cluster/            NVPark/Slurm execution adapter
+    │   ├── data/               Dataset acquisition and reaction generation
     │   ├── evaluation/         Fixed compiled-unitary judge and diagnostics
     │   ├── sandbox/            OpenShell/OpenCode mutation boundary
     │   ├── view/               Mutation ledger and final-report views
@@ -311,188 +309,33 @@ remain external datasets supplied to `hsopt-campaign`.
 
 ## Campaign lifecycle
 
-Every optimization lane follows the same order:
+Each lane prepares a fixed exact reference and a selected loose/tight baseline,
+measures iteration 0, then proposes and evaluates mutations sequentially.
+HSOpt records candidates, feedback, and acceptance decisions outside the checkout.
 
-1. Compute and cache $U_{\mathrm{exact}}$ once per unique Hamiltonian. Prepare
-   the selected paper baseline: `loose` derives $\beta(H)$ from the rigorous
-   Eq. (19) Pauli double-commutator upper bound without
-   $E_{\mathrm{exact}}$; `tight` finds the first PF2 step count passing 0.1 mHa
-   against that cached exact energy. Both allocate the 1 kcal/mol
-   Trotter/QPE/synthesis budget using the same rigorous Eq. (32)/(34) calculus
-   with $\alpha=8\pi$, $\gamma=4$, and $\delta_0=11$.
-2. Evaluate the generated paper baseline unchanged as iteration 0. This is
-   the first stage that invokes PyGridSynth and records the realized T count.
-3. Run iterations 1--50 sequentially, retaining every proposal, evaluator
-   result, and accept/reject decision.
-4. Accept only feasible strict improvements in confidence-adjusted $T$ cost.
-5. Export and report only after every expected lane is complete.
+The backend-independent [runtime interface](docs/runtime.md) exchanges immutable
+evaluation requests and result receipts. A runtime dispatches each request to
+its chosen computer, then delivers the receipt to HSOpt. Delivery records the
+result, applies the scientific acceptance rule, and wakes the lane to propose
+its next mutation. Repeated delivery cannot duplicate a mutation or replace a
+recorded result. A lane advances only after its pending evaluation completes.
 
-The current dense production selection contains exactly 82 HamLib
-Hamiltonians through 12 qubits, with three mutation lanes per Hamiltonian. It
-also contains ten reactions with the isolated `individual_errors` and
-`error_cancellation` contracts.
-This gives 266 lanes and 13,300 mutation evaluations, plus iteration 0 for
-every lane.
-
-Set an absolute data root before initializing a campaign:
-
-```bash
-export HSOPT_DATA_ROOT=/absolute/path/to/hsopt_workdir/data
-```
-
-When an existing materialization contains the physical Pauli coefficients but
-predates the norm-based QPE contract, create a fresh input-only tree. This
-copies no exact references, policies, queues, or campaign state:
-
-```bash
-uv run hsopt-campaign normalize-inputs \
-  --abs-inputs "$HSOPT_DATA_ROOT/exact/physical-inputs/abs_energy" \
-  --reaction-inputs "$HSOPT_DATA_ROOT/exact/physical-inputs/diff_energy" \
-  --output-root "$HSOPT_DATA_ROOT/exact/normalized-inputs-v1"
-```
-
-Build the unique-Hamiltonian calibration manifest, run four independent CPU
-shards, and require a complete sealed result set:
-
-```bash
-uv run hsopt-paper-baseline-batch build-manifest \
-  --abs-inputs "$HSOPT_DATA_ROOT/exact/inputs-v2/abs_energy" \
-  --reaction-inputs "$HSOPT_DATA_ROOT/exact/inputs-v1/diff_energy" \
-  --output "$HSOPT_DATA_ROOT/exact/baseline-bound-v1/manifest.json"
-
-for shard in 0 1 2 3; do
-  uv run hsopt-paper-baseline-batch run \
-    "$HSOPT_DATA_ROOT/exact/baseline-bound-v1/manifest.json" \
-    --output-dir "$HSOPT_DATA_ROOT/exact/baseline-bound-v1/results" \
-    --backend numpy --mode hamiltonian_bound \
-    --shard-index "$shard" --shard-count 4
-done
-
-uv run hsopt-paper-baseline-batch audit \
-  "$HSOPT_DATA_ROOT/exact/baseline-bound-v1/manifest.json" \
-  --output-dir "$HSOPT_DATA_ROOT/exact/baseline-bound-v1/results" \
-  --baseline loose
-
-uv run hsopt-paper-baseline-batch generate \
-  "$HSOPT_DATA_ROOT/exact/baseline-bound-v1/manifest.json" \
-  --calibration-dir "$HSOPT_DATA_ROOT/exact/baseline-bound-v1/results" \
-  --output-dir "$HSOPT_DATA_ROOT/exact/baseline-bound-v1/initial-policies" \
-  --generator experiments/generate_initial_pf.py \
-  --baseline loose \
-  --repository-root "$PWD"
-```
-
-On NVPark, run each shard as a separate job on the `cpu` partition with no
-GPU request. The command is resumable: a sealed source-matching result is
-verified and skipped. `hamiltonian_bound` is the canonical baseline: it
-computes the complete Eq. (19) Pauli coefficient sum, not a Monte Carlo
-estimate. The same pass caches one exact reference solely for evaluator reuse;
-that energy does not enter $\beta(H)$.
-The final command refuses incomplete calibration sets, writes a checksummed
-external index, and materializes byte-identical `initial_pf_loose.py` files in
-all 92 checked-in experiment directories. Prepare the tight comparison in a
-separate result tree while reusing those exact references:
-
-```bash
-uv run hsopt-paper-baseline-batch run \
-  "$HSOPT_DATA_ROOT/exact/baseline-bound-v1/manifest.json" \
-  --output-dir "$HSOPT_DATA_ROOT/exact/baseline-tight-v1/results" \
-  --backend cupynumeric --mode empirical_exact \
-  --exact-reference-root "$HSOPT_DATA_ROOT/exact/baseline-bound-v1/results"
-
-uv run hsopt-paper-baseline-batch generate \
-  "$HSOPT_DATA_ROOT/exact/baseline-bound-v1/manifest.json" \
-  --calibration-dir "$HSOPT_DATA_ROOT/exact/baseline-tight-v1/results" \
-  --output-dir "$HSOPT_DATA_ROOT/exact/baseline-tight-v1/initial-policies" \
-  --generator experiments/generate_initial_pf.py \
-  --baseline tight \
-  --repository-root "$PWD"
-```
-
-`--exact-reference-root` prevents a second exact-Hamiltonian diagonalization;
-only the ideal PF2 step search is new. Keep the calibration trees separate so
-one problem hash can have one sealed result per beta definition.
-
-After the independent iteration-0 T95 census has completed for the loose and
-tight baselines on the same backend/placement, materialize the baseline-only
-reduction used for comparison with autoresearch:
-
-```bash
-uv run hsopt-baseline-drop \
-  --loose-census-root "$HSOPT_DATA_ROOT/exact/iteration0-t95-loose-v1" \
-  --tight-census-root "$HSOPT_DATA_ROOT/exact/iteration0-t95-tight-v1" \
-  --loose-placement omni-l4 \
-  --tight-placement omni-l4 \
-  --repository-root "$PWD" \
-  --audit-output "$HSOPT_DATA_ROOT/exact/baseline-t-gate-drop-audit.json"
-```
-
-The census deduplicates absolute-energy replicate lanes only after their
-immutable inputs agree. It never deduplicates the two reaction contracts, so a
-complete census contains 82 absolute tasks plus 20 reaction-contract tasks.
-The comparison command then requires matching complete grids, source hashes,
-exact-reference hashes, evaluator contracts, execution
-backends/accelerators, placement labels, and chemical-accuracy passes. Only
-then does it write `baseline_t_gate_drop_percent.txt` in each absolute-energy
-folder and one
-`baseline_t_gate_drop_<contract>_percent.txt` file for each reaction contract.
-The signed value is
-$100(T_{\mathrm{loose}}-T_{\mathrm{tight}})/T_{\mathrm{loose}}$, where $T$ is
-the confidence-adjusted QPE T count (`T95`) optimized by autoresearch. Thus a
-positive value is a reduction from the loose bound to the tight baseline. For
-reactions, $T$ is the evaluator's summed reaction cost under the named,
-independently evaluated error contract.
-
-```bash
-uv run hsopt-campaign initialize \
-  --hamlib-inputs "$HSOPT_DATA_ROOT/exact/inputs-v2/abs_energy" \
-  --reaction-inputs "$HSOPT_DATA_ROOT/exact/inputs-v1/diff_energy" \
-  --calibration-root "$HSOPT_DATA_ROOT/exact/baseline-bound-v1/results" \
-  --generator experiments/generate_initial_pf.py \
-  --campaign-root "$HSOPT_DATA_ROOT/exact/production-gpu82-v1" \
-  --baseline loose \
-  --hamlib-replicates 3 \
-  --iterations 50
-```
-
-Use `--reaction-only` for a replacement or validation campaign that must start
-both reaction contracts from iteration 0 without duplicating valid
-absolute-energy lanes.
-
-To narrow an older five-replicate campaign without deleting its existing
-histories, first stop its supervisor and local evaluator workers, then run:
-
-```bash
-uv run hsopt-campaign-scope \
-  --campaign-root /path/to/existing-campaign \
-  --hamlib-replicates 3
-```
-
-The command retains the predetermined `run_01`--`run_03` lanes, leaves all
-`run_04`/`run_05` histories in place, archives their uncollected queue work,
-and writes a checksummed scope-change record. Reaction contracts are unchanged.
-
-The canonical campaign runs compiled-unitary construction and dense
-eigendecomposition through cuPyNumeric on one A100 per Slurm job. PyGridSynth
-uses the job's CPU cores before the compiled rotations are applied on the GPU.
-This A100 campaign owns the single stochastic OpenCode/Nemotron mutation trace.
-An optional CPU validation campaign must use the archived A100 candidates in
-the same order with `--no-mutations` and `--replay-campaign-root`; it must not
-run a second independent mutation pass.
-
-Mutable campaign material belongs below the external data root:
+Use one external workspace:
 
 ```text
-$HSOPT_DATA_ROOT/
-├── exact/                       Production inputs and campaigns
-├── development/                 Development campaigns
-├── old_experiments/             Preserved superseded campaigns
-└── scratch/                     Preflight and disposable runs
+hsopt_workdir/
+    hsopt/       Source checkout
+    data/        Prepared inputs and sealed references/calibrations
+    runs/        Task ledger, candidates, results, decisions, and exports
+    figures/     Generated plots
+    runtime/     Dispatchers, machine configuration, environments, and hosting
 ```
 
-Campaign IDs are immutable after work begins. Keep candidate policies, exact
-references, SQLite databases, OpenCode/OpenShell logs, Slurm output, telemetry,
-and virtual environments outside the repository.
+Runtime code chooses machines, resources, batching, retries, and scheduling.
+The repository provides scientific task snapshots and a single-task evaluator;
+it contains no site-specific cluster submission adapter. Keep loose/tight
+campaigns and reaction-error contracts separate. Existing trajectories retain
+their frozen inputs, evaluator versions, and mutation protocol.
 
 ## Main commands
 
@@ -505,7 +348,7 @@ and virtual environments outside the repository.
 | `hsopt-paper-baseline` | Prepare one loose or tight PF2 calibration and exact reference |
 | `hsopt-paper-baseline-batch` | Build, run, and audit resumable calibration shards |
 | `hsopt-campaign` | Prepare external inputs and initialize the complete lane grid |
-| `hsopt-supervisor` | Persistently coordinate mutation, batching, recovery, export, and reports |
+| `hsopt-handoff` | Advance a lane, evaluate a task, or deliver a result and wake the next mutation |
 | `hsopt-openshell` | Run the isolated OpenShell/OpenCode mutation adapter |
 | `hsopt-export-exact` | Produce a strict checksummed export from a completed campaign |
 | `hsopt-reports` | Compile summary and extended PDFs from a strict export |
@@ -543,7 +386,7 @@ The reporting gate emits two PDFs per Hamiltonian or reaction:
 
 LaTeX is used when available; ReportLab provides the portable renderer.
 
-After the A100 campaign and optional CPU replay finish, run the cross-backend
+After the canonical campaign and optional validation replay finish, run the cross-backend
 audit:
 
 ```bash
@@ -585,7 +428,22 @@ npx skills add bestquark/hsopt --skill hsopt -y
 ```
 
 The skill defines the immutable evaluator contract, permitted mutation
-boundary, production ordering, and A100/CPU replay rules.
+boundary, production ordering, and canonical-trace replay rules.
+
+### Evaluation handoff
+
+The agent reads the Hamiltonian and research context, optionally consults
+literature, and proposes a change to `candidate.py`. The host snapshots the
+proposal and fixed inputs into the evaluation queue, dispatches it to the
+configured compute, and records the result and acceptance decision before the
+next mutation. The current OpenShell mutation sandbox returns the proposal;
+the host controller handles submission and result collection.
+
+Dataset acquisition and preparation, the mutation skill, scientific scoring,
+and plot scripts belong in this repository. Machine-specific environments,
+connection settings, dispatchers, and hosted-dashboard state live in
+the external workspace's `runtime/`. See the [runtime interface](docs/runtime.md)
+for the request/result contract and a minimal local runtime.
 
 ### OpenShell + OpenCode mutation agent
 

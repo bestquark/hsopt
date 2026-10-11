@@ -165,24 +165,17 @@ version, sandbox image, inference model, and HSOpt commit with the run.
 Keep raw logs and redacted action summaries. Existing gateways retain their
 campaign's version.
 
-The [campaign lifecycle](../README.md#campaign-lifecycle) provides supervisor
-and evaluator-worker commands. The [runtime guide](../cli/README.md) explains
-the mutation boundary and audit files. Loose and tight campaigns use distinct
-roots; reaction contracts remain isolated within each baseline.
+The [campaign lifecycle](../README.md#campaign-lifecycle) and
+[runtime interface](runtime.md) explain how to advance lanes, execute their
+immutable evaluation requests on any configured compute, deliver results, and
+resume mutations. The runtime owns dispatch, resource selection, staging,
+scheduler polling, and retries. HSOpt owns evaluation, recording, and acceptance.
+The [agent guide](../cli/README.md) explains the mutation boundary and audit files.
 
-Each task freezes the candidate, Hamiltonian inputs, references, and scoring
-contract. Explicitly stage those files and a versioned evaluator on the compute
-system; submitting from Omni does not make Omni's disk visible there. NVIDIA
-Slurm operations use the site's governed broker. The existing `hsopt-nvpark`
-adapter uses SSH/rsync and native Slurm; it has not been converted to the broker
-and requires a site-permitted native submission path.
-
-For that adapter, set `HSOPT_CLUSTER_USER` if your cluster username differs
-from your local username. Its default remote directory is
-`/lustre/fsw/portfolios/nvr/users/<user>/autoresearch/hsopt_workdir/runs/evaluation`.
-Set `HSOPT_REMOTE_ROOT` before starting the CLI, or pass `--remote-root`, to
-select your site's filesystem and a distinct campaign directory. Existing
-campaign services retain their explicit per-campaign remote roots.
+Stage the complete task snapshot and the recorded evaluator version when
+executing remotely; an agent host's disk is not implicitly shared with workers.
+Keep raw logs and redacted action summaries. Existing campaigns retain their
+pinned deployments; upgrading source does not restart or migrate them.
 
 ## Export and plot results
 

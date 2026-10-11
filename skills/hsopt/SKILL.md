@@ -114,7 +114,7 @@ Once a lane is feasible, accept only a strict T95 reduction that remains within
   transient/invalid proposals get backoff and at most three attempts per iteration.
   Repair the cause, then explicitly run `hsopt-openshell resume --path <root>
   --reason <repair>`. Evaluation collection continues during a mutation block.
-- The canonical A100 campaign owns the mutation trace; CPU validation replays
+- The configured canonical campaign owns the mutation trace; validation replays
   archived candidates without another agent pass and requires numerical parity.
 
 After complete matched loose/tight iteration-0 censuses, `hsopt-baseline-drop`
@@ -122,7 +122,8 @@ records `100 * (T95_loose - T95_tight) / T95_loose` per experiment/contract.
 Require matching grids, hashes, contracts, backends, accelerators, placement,
 and accuracy; never pool hardware.
 
-Invoke package commands through `uv run`. See `cli/README.md` for OpenShell
-setup/telemetry, `references/layout.md` for layout, and the repository README
-and `$ssh` skill for Slurm resources. Treat `cli/src/hsopt/` and family
-evaluators as fixed infrastructure during a campaign.
+Use `uv run`; see `cli/README.md` for agent setup and `references/layout.md` for layout.
+The external runtime uses `hsopt-handoff` to dispatch evaluation requests,
+deliver results, record acceptance, and resume mutations; see `docs/runtime.md`.
+Compute configuration belongs to the deployment. Scientific evaluators and
+acceptance rules stay fixed during a campaign.

@@ -25,21 +25,12 @@ from hsopt.evaluation.compiled_unitary import (
     EVALUATION_CONTRACT_VERSION,
 )
 from hsopt.campaign.queue import enqueue, queue_status
-from hsopt.cluster.nvpark import (
-    DEFAULT_ACCOUNT,
-    DEFAULT_HOST,
-    DEFAULT_PARTITION,
-    DEFAULT_QOS,
-    collect_batch,
-    remote_status,
-    submit_batch,
-)
+
 
 
 EXPECTED_ABSOLUTE = 82
 EXPECTED_REACTIONS = 10
 DEFAULT_JOBS = 4
-DEFAULT_REMOTE_ROOT = "/lustre/fs12/portfolios/nvr/users/lmantilla/hsopt-iteration0-t95-census-v2"
 CSV_FIELDS = (
     "family",
     "instance",
@@ -402,42 +393,6 @@ def prepare_balanced_batches(census_root: Path, jobs: int = DEFAULT_JOBS) -> lis
     return [_create_batch(queue_dir, records, index) for index, records in enumerate(bins, start=1)]
 
 
-def submit_census(
-    *,
-    census_root: Path,
-    repo_dir: Path,
-    jobs: int,
-    host: str,
-    remote_root: str,
-    account: str,
-    partition: str,
-    qos: str,
-    cpus: int,
-    memory: str,
-    walltime: str,
-    backend: str,
-    accelerator: str,
-    runtime_python: str | None,
-) -> list[dict[str, Any]]:
-    batches = prepare_balanced_batches(census_root, jobs=jobs)
-    return [
-        submit_batch(
-            batch,
-            repo_dir=repo_dir,
-            host=host,
-            remote_root=remote_root,
-            account=account,
-            partition=partition,
-            qos=qos,
-            cpus=cpus,
-            memory=memory,
-            walltime=walltime,
-            backend=backend,
-            accelerator=accelerator,
-            runtime_python=runtime_python,
-        )
-        for batch in batches
-    ]
 
 
 def _batch_dirs(census_root: Path) -> list[Path]:
@@ -446,16 +401,9 @@ def _batch_dirs(census_root: Path) -> list[Path]:
     )
 
 
-def collect_census(census_root: Path) -> list[dict[str, Any]]:
-    queue_dir = census_root.resolve() / "queue"
-    return [
-        collect_batch(queue_dir, batch)
-        for batch in _batch_dirs(census_root)
-        if (batch / "submission.json").is_file()
-    ]
 
 
-def census_status(census_root: Path, *, query_remote: bool = False) -> dict[str, Any]:
+def census_status(census_root: Path) -> dict[str, Any]:
     census_root = census_root.resolve()
     manifest = _read_json(census_root / "manifest.json")
     phases: dict[str, str] = {}
@@ -480,8 +428,6 @@ def census_status(census_root: Path, *, query_remote: bool = False) -> dict[str,
         }
         if submission.is_file():
             row["submission"] = _read_json(submission)
-            if query_remote:
-                row["remote"] = remote_status(batch)
         batches.append(row)
     return {
         "census_root": str(census_root),
@@ -611,20 +557,6 @@ def _add_counts(parser: argparse.ArgumentParser) -> None:
     parser.add_argument("--expected-reactions", type=int, default=EXPECTED_REACTIONS)
 
 
-def _add_submit_options(parser: argparse.ArgumentParser) -> None:
-    parser.add_argument("--repo-dir", type=Path, default=Path.cwd())
-    parser.add_argument("--jobs", type=int, default=DEFAULT_JOBS)
-    parser.add_argument("--host", default=DEFAULT_HOST)
-    parser.add_argument("--remote-root", default=DEFAULT_REMOTE_ROOT)
-    parser.add_argument("--account", default=DEFAULT_ACCOUNT)
-    parser.add_argument("--partition", default=DEFAULT_PARTITION)
-    parser.add_argument("--qos", default=DEFAULT_QOS)
-    parser.add_argument("--cpus", type=int, default=2)
-    parser.add_argument("--memory", default="16G")
-    parser.add_argument("--walltime", default="04:00:00")
-    parser.add_argument("--backend", choices=("cupynumeric", "numpy"), default="cupynumeric")
-    parser.add_argument("--accelerator", choices=("gpu", "cpu"), default="gpu")
-    parser.add_argument("--runtime-python")
 
 
 def _parser() -> argparse.ArgumentParser:
@@ -636,22 +568,8 @@ def _parser() -> argparse.ArgumentParser:
     prepare.add_argument("--census-root", type=Path, required=True)
     _add_counts(prepare)
 
-    submit = commands.add_parser("submit", help="balance and submit the census batches")
-    submit.add_argument("--census-root", type=Path, required=True)
-    _add_submit_options(submit)
-
-    launch = commands.add_parser("launch", help="prepare and submit in one command")
-    launch.add_argument("--campaign-root", type=Path, required=True)
-    launch.add_argument("--census-root", type=Path, required=True)
-    _add_counts(launch)
-    _add_submit_options(launch)
-
     status = commands.add_parser("status", help="show authoritative census progress")
     status.add_argument("--census-root", type=Path, required=True)
-    status.add_argument("--remote", action="store_true")
-
-    collect = commands.add_parser("collect", help="download and merge available results")
-    collect.add_argument("--census-root", type=Path, required=True)
 
     export = commands.add_parser("export", help="write the complete paper-facing CSV")
     export.add_argument("--census-root", type=Path, required=True)
@@ -659,24 +577,6 @@ def _parser() -> argparse.ArgumentParser:
     return parser
 
 
-def _submission_options(args: argparse.Namespace) -> dict[str, Any]:
-    names = (
-        "census_root",
-        "repo_dir",
-        "jobs",
-        "host",
-        "remote_root",
-        "account",
-        "partition",
-        "qos",
-        "cpus",
-        "memory",
-        "walltime",
-        "backend",
-        "accelerator",
-        "runtime_python",
-    )
-    return {name: getattr(args, name) for name in names}
 
 
 def main() -> int:
@@ -688,23 +588,8 @@ def main() -> int:
             expected_absolute=args.expected_absolute,
             expected_reactions=args.expected_reactions,
         )
-    elif args.command == "submit":
-        result = submit_census(**_submission_options(args))
-    elif args.command == "launch":
-        prepared = prepare_census(
-            campaign_root=args.campaign_root,
-            census_root=args.census_root,
-            expected_absolute=args.expected_absolute,
-            expected_reactions=args.expected_reactions,
-        )
-        result = {
-            "prepared": prepared["counts"],
-            "submissions": submit_census(**_submission_options(args)),
-        }
     elif args.command == "status":
-        result = census_status(args.census_root, query_remote=args.remote)
-    elif args.command == "collect":
-        result = collect_census(args.census_root)
+        result = census_status(args.census_root)
     else:
         result = export_census(args.census_root, args.output_dir)
     _print(result)

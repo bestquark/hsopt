@@ -6,8 +6,8 @@ The production paper workflow is the exact compiled-unitary pipeline in
 `cli/src/hsopt/campaign/loop.py`. All checked-in benchmark fixtures,
 paper protocols, and support files live under `experiments/`.
 
-Use `$hsopt` for product-formula T-gate optimization and `$ssh` for NVPark
-submission or Slurm diagnosis.
+Use `$hsopt` for product-formula T-gate optimization. Execution is provided by
+the external runtime through `hsopt-handoff`; see `docs/runtime.md`.
 
 ## Immutable scientific ordering
 
@@ -69,28 +69,14 @@ campaign.
   `error_cancellation` lane per reaction, 50 mutation iterations per lane.
 - Total: 266 lanes and 13,300 mutation evaluations, excluding iteration 0.
 
-The canonical mutation campaign uses cuPyNumeric on one A100 in the `polar4`
-partition with `normal` QoS, two CPU cores, 16 GB system memory, and a 60000
-MiB Legate framebuffer. PyGridSynth remains CPU-side within that allocation;
-cuPyNumeric uses the A100 for compiled-unitary construction and dense
-eigendecomposition. Batch tasks run sequentially so only one dense task is
-resident on a GPU at a time.
+The deployment chooses evaluation resources and inference configuration.
+Keep scheduler commands, credentials, resource/account defaults, and hardware
+locks in external `runtime/` code. The scientific package must not import it.
 
-The A100 campaign owns the single stochastic OpenCode mutation trace. Any CPU
-validation campaign must use `--no-mutations` and replay the exact archived
-A100 candidate files in order; never run a second independent agent pass.
-Candidate hashes, per-attempt and confidence-adjusted T counts, and
-accept/reject trajectories are required to match. CPU and GPU eigensolvers may
-differ in the last floating-point bits, so compare energy observables at the
-campaign's explicit numerical tolerance rather than claiming bitwise equality.
-
-Do not increase CPUs, GPUs, or RAM merely to improve scheduling priority. A CPU
-validation run must use the `cpu` partition and request no GPU resource.
-
-OpenShell and OpenCode/Nemotron run persistently on Omni. Tight-baseline
-campaigns use separate campaign roots and must not alter active loose campaign
-state. Preserve raw
-OpenCode/OpenShell logs plus redacted tool-action and metrics summaries.
+A canonical campaign owns its stochastic mutation trace. Validation replays
+archived candidates without another independent agent pass. Preserve candidate
+hashes, scoring contracts, exact references, and numerical parity checks.
+Loose/tight roots and reaction contracts remain separate on every backend.
 
 ## Fixed infrastructure
 
@@ -105,6 +91,5 @@ benchmark framework:
 
 Campaign histories belong outside the checkout. After every lane completes,
 run `hsopt-export-exact` for `abs_energy` and `diff_energy`, then run
-`hsopt-reports` on both checksummed exports. The canonical A100 supervisor is
-configured with all four final export/report paths so this completion gate runs
-automatically and idempotently.
+`hsopt-reports` on both checksummed exports. The external deployment must
+invoke this completion gate automatically and idempotently.

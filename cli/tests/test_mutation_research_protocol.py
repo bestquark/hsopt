@@ -7,7 +7,7 @@ from pathlib import Path
 import pytest
 
 from hsopt.campaign.loop import propose_lane
-from hsopt.campaign.supervisor import _lane_summary
+from hsopt.campaign.status import lane_summary as _lane_summary
 from hsopt.sandbox import openshell
 from hsopt.sandbox.mutation_retry import (
     AgentRuntimeError,

@@ -205,6 +205,7 @@ def _copy_lane_records(
         "baseline_result.json",
         "incumbent_result.json",
         "exact_reference.json",
+        "evaluation_requests.json",
     ):
         _copy_if_present(lane_dir / name, destination / name)
     for iteration in range(1, iterations + 1):

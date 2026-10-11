@@ -20,7 +20,7 @@ def test_agent_skill_is_separate_from_runtime_package() -> None:
     assert sorted(path.name for path in runtime.glob("*.py")) == ["__init__.py"]
     assert {
         "campaign",
-        "cluster",
+        "data",
         "evaluation",
         "sandbox",
         "tgate_opt",

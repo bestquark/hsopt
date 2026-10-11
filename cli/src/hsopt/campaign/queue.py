@@ -344,6 +344,64 @@ def prepare_batch(queue_dir: Path, *, limit: int = 40) -> dict[str, Any]:
     }
 
 
+def evaluate_task(
+    task_dir: Path, *, backend: str = "numpy", accelerator: str = "unknown"
+) -> dict[str, Any]:
+    """Run the fixed scientific evaluator on one immutable task snapshot."""
+    task_dir = task_dir.resolve()
+    task_id = json.loads((task_dir / "task.json").read_text())["task_id"]
+    metadata = json.loads((task_dir / "task.json").read_text(encoding="utf-8"))
+    task_started_at = _now()
+    task_started = time.perf_counter()
+    try:
+        source = task_dir / metadata["source"]
+        if metadata.get("stage", "candidate") == "reference":
+            if metadata["kind"] == "absolute":
+                result = evaluate_exact_reference(source, backend=backend)
+            else:
+                result = evaluate_exact_difference_reference(source, backend=backend)
+        else:
+            policy = task_dir / "policy.py"
+            reference = task_dir / str(metadata["reference"]) if metadata.get("reference") else None
+            if metadata["kind"] == "absolute":
+                result = evaluate_molecule(
+                    source,
+                    policy,
+                    backend=backend,
+                    reference_path=reference,
+                )
+            else:
+                result = evaluate_difference(
+                    source,
+                    policy,
+                    error_contract=metadata["difference_error_contract"],
+                    backend=backend,
+                    reference_path=reference,
+                )
+        result["task_id"] = task_id
+    except Exception as exc:  # keep the rest of the batch runnable
+        result = {
+            "status": "error",
+            "task_id": task_id,
+            "evaluation_contract_version": EVALUATION_CONTRACT_VERSION,
+            "difference_error_contract": metadata.get("difference_error_contract"),
+            "difference_error_contract_version": metadata.get("difference_error_contract_version"),
+            "error_type": type(exc).__name__,
+            "error": str(exc),
+            "traceback": traceback.format_exc(),
+        }
+    result.update(
+        {
+            "task_started_at": task_started_at,
+            "task_finished_at": _now(),
+            "task_wall_seconds": time.perf_counter() - task_started,
+            "execution_backend": backend,
+            "execution_accelerator": accelerator,
+        }
+    )
+    return result
+
+
 def run_batch(
     batch_dir: Path,
     *,
@@ -367,61 +425,9 @@ def run_batch(
             succeeded += previous.get("status") == "ok"
             failed += previous.get("status") != "ok"
             continue
-        metadata = json.loads((task_dir / "task.json").read_text(encoding="utf-8"))
-        task_started_at = _now()
-        task_started = time.perf_counter()
-        try:
-            source = task_dir / metadata["source"]
-            if metadata.get("stage", "candidate") == "reference":
-                if metadata["kind"] == "absolute":
-                    result = evaluate_exact_reference(source, backend=backend)
-                else:
-                    result = evaluate_exact_difference_reference(source, backend=backend)
-            else:
-                policy = task_dir / "policy.py"
-                reference = (
-                    task_dir / str(metadata["reference"]) if metadata.get("reference") else None
-                )
-                if metadata["kind"] == "absolute":
-                    result = evaluate_molecule(
-                        source,
-                        policy,
-                        backend=backend,
-                        reference_path=reference,
-                    )
-                else:
-                    result = evaluate_difference(
-                        source,
-                        policy,
-                        error_contract=metadata["difference_error_contract"],
-                        backend=backend,
-                        reference_path=reference,
-                    )
-            result["task_id"] = task_id
-            succeeded += 1
-        except Exception as exc:  # keep the rest of the batch runnable
-            result = {
-                "status": "error",
-                "task_id": task_id,
-                "evaluation_contract_version": EVALUATION_CONTRACT_VERSION,
-                "difference_error_contract": metadata.get("difference_error_contract"),
-                "difference_error_contract_version": metadata.get(
-                    "difference_error_contract_version"
-                ),
-                "error_type": type(exc).__name__,
-                "error": str(exc),
-                "traceback": traceback.format_exc(),
-            }
-            failed += 1
-        result.update(
-            {
-                "task_started_at": task_started_at,
-                "task_finished_at": _now(),
-                "task_wall_seconds": time.perf_counter() - task_started,
-                "execution_backend": backend,
-                "execution_accelerator": accelerator,
-            }
-        )
+        result = evaluate_task(task_dir, backend=backend, accelerator=accelerator)
+        succeeded += result.get("status") == "ok"
+        failed += result.get("status") != "ok"
         _write_json(result_path, result)
 
     manifest["finished_at"] = _now()

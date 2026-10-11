@@ -26,7 +26,6 @@ from .common import (
 from .execution import (
     EvaluationRequest,
     build_local_evaluation,
-    build_slurm_submission,
     merged_environment,
 )
 from .mutation_agents import (
@@ -152,38 +151,12 @@ def cmd_eval(args: argparse.Namespace) -> int:
         script=script,
         epsilon=args.epsilon if args.evaluator == "fidelity" else None,
     )
-    if args.transport == "local":
-        invocation = build_local_evaluation(
-            request,
-            backend=args.backend,
-            python=args.python or sys.executable,
-            legate=args.legate,
-        )
-    else:
-        required = {
-            "--submit-host": args.submit_host,
-            "--remote-repo-root": args.remote_repo_root,
-            "--account": args.account,
-            "--partition": args.partition,
-            "--remote-python": args.remote_python,
-            "--remote-legate": args.remote_legate,
-        }
-        missing = [name for name, value in required.items() if not value]
-        if missing:
-            raise SystemExit(f"Slurm evaluation requires: {', '.join(missing)}")
-        invocation = build_slurm_submission(
-            request,
-            submit_host=args.submit_host,
-            remote_repo_root=args.remote_repo_root,
-            account=args.account,
-            partition=args.partition,
-            python=args.remote_python,
-            legate=args.remote_legate,
-            proxy_jump_host=args.proxy_jump_host,
-            time_limit=args.time_limit,
-            memory=args.memory,
-            cpus_per_task=args.cpus_per_task,
-        )
+    invocation = build_local_evaluation(
+        request,
+        backend=args.backend,
+        python=args.python or sys.executable,
+        legate=args.legate,
+    )
     if args.print_only:
         print(shell_join(invocation.command))
         if invocation.stdin:
@@ -363,20 +336,9 @@ def build_parser() -> argparse.ArgumentParser:
     add_lane_args(evaluate)
     add_evaluator_args(evaluate)
     evaluate.add_argument("--script")
-    evaluate.add_argument("--transport", choices=("local", "slurm"), default="local")
     evaluate.add_argument("--backend", choices=("auto", "numpy", "cupynumeric"), default="auto")
     evaluate.add_argument("--python", help="Local evaluator Python; defaults to this environment.")
     evaluate.add_argument("--legate", help="Local Legate executable for --backend cupynumeric.")
-    evaluate.add_argument("--submit-host")
-    evaluate.add_argument("--proxy-jump-host")
-    evaluate.add_argument("--remote-repo-root")
-    evaluate.add_argument("--account")
-    evaluate.add_argument("--partition")
-    evaluate.add_argument("--remote-python")
-    evaluate.add_argument("--remote-legate")
-    evaluate.add_argument("--time-limit", default="04:00:00")
-    evaluate.add_argument("--memory", default="64G")
-    evaluate.add_argument("--cpus-per-task", type=int, default=8)
     evaluate.add_argument("--print-only", action="store_true")
     evaluate.set_defaults(func=cmd_eval)
 

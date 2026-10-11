@@ -8,7 +8,6 @@ import pytest
 from hsopt.tgate_opt.execution import (
     EvaluationRequest,
     build_local_evaluation,
-    build_slurm_submission,
 )
 from hsopt.tgate_opt.mutation_agents import (
     NEMOTRON_MODEL,
@@ -112,28 +111,3 @@ def test_local_evaluation_can_use_numpy_or_one_local_gpu(tmp_path: Path) -> None
         str(request.evaluator),
     ]
     assert gpu.environment["TROVOLUT_PFS_ARRAY_BACKEND"] == "cupynumeric"
-
-
-def test_slurm_transport_blocks_without_scheduler_polling(tmp_path: Path) -> None:
-    request = EvaluationRequest(
-        evaluator=tmp_path / "evaluate.py",
-        molecule="h2",
-        script=tmp_path / "simple_pf.py",
-    )
-    submission = build_slurm_submission(
-        request,
-        submit_host="nvlogin",
-        remote_repo_root="/lustre/hsopt",
-        account="acct",
-        partition="backfill_gpu",
-        python="/lustre/hsopt/.venv/bin/python",
-        legate="/lustre/hsopt/.venv/bin/legate",
-    )
-
-    assert submission.command[:2] == ["ssh", "nvlogin"]
-    assert "sbatch --wait --parsable" in submission.command[-1]
-    combined = " ".join(submission.command) + submission.stdin
-    assert "squeue" not in combined
-    assert "sacct" not in combined
-    assert "--gres=gpu:1" in submission.command[-1]
-    assert "TROVOLUT_PFS_ARRAY_BACKEND=cupynumeric" in submission.stdin

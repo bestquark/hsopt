@@ -2,13 +2,10 @@ from __future__ import annotations
 
 import os
 import importlib.util
-import shlex
 import shutil
 import sys
 from dataclasses import dataclass
 from pathlib import Path
-
-from .common import REPO_ROOT
 
 
 ARRAY_BACKEND_ENV = "TROVOLUT_PFS_ARRAY_BACKEND"
@@ -81,75 +78,6 @@ def build_local_evaluation(
             )
         command = [legate, "--gpus", "1", "--run-mode", "exec", python, *arguments]
     return EvaluationInvocation("local", selected, command, environment)
-
-
-def _remote_path(path: Path, remote_repo_root: str) -> str:
-    try:
-        relative = path.resolve().relative_to(REPO_ROOT.resolve())
-    except ValueError:
-        relative = Path(path.name)
-    return str(Path(remote_repo_root) / relative)
-
-
-def build_slurm_submission(
-    request: EvaluationRequest,
-    *,
-    submit_host: str,
-    remote_repo_root: str,
-    account: str,
-    partition: str,
-    python: str,
-    legate: str,
-    proxy_jump_host: str | None = None,
-    time_limit: str = "04:00:00",
-    memory: str = "64G",
-    cpus_per_task: int = 8,
-) -> EvaluationInvocation:
-    if not submit_host or any(character.isspace() for character in submit_host):
-        raise ValueError("submit_host must be a nonempty SSH alias without whitespace")
-    if not remote_repo_root.startswith("/"):
-        raise ValueError("remote_repo_root must be absolute")
-    remote_evaluator = _remote_path(request.evaluator, remote_repo_root)
-    remote_script = _remote_path(request.script, remote_repo_root)
-    evaluator_command = [
-        legate,
-        "--gpus",
-        "1",
-        "--run-mode",
-        "exec",
-        python,
-        *_evaluator_arguments(request, evaluator=remote_evaluator, script=remote_script),
-    ]
-    script = "\n".join(
-        [
-            "#!/bin/bash",
-            "set -euo pipefail",
-            f"cd {shlex.quote(remote_repo_root)}",
-            f"export {ARRAY_BACKEND_ENV}=cupynumeric",
-            "export PYTHONUNBUFFERED=1",
-            f"exec {shlex.join(evaluator_command)}",
-            "",
-        ]
-    )
-    remote = shlex.join(
-        [
-            "sbatch",
-            "--wait",
-            "--parsable",
-            f"--account={account}",
-            f"--partition={partition}",
-            "--nodes=1",
-            "--gres=gpu:1",
-            f"--cpus-per-task={cpus_per_task}",
-            f"--mem={memory}",
-            f"--time={time_limit}",
-        ]
-    )
-    command = ["ssh"]
-    if proxy_jump_host:
-        command.extend(["-J", proxy_jump_host])
-    command.extend([submit_host, remote])
-    return EvaluationInvocation("slurm", "cupynumeric", command, {}, script)
 
 
 def merged_environment(invocation: EvaluationInvocation) -> dict[str, str]:
