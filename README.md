@@ -227,7 +227,7 @@ hsopt/
 ├── skills/hsopt/               Compact agent instructions and references
 └── cli/
     ├── src/hsopt/
-    │   ├── campaign/           Lane lifecycle, queues, supervisor, and exports
+    │   ├── campaign/           Scientific lane lifecycle, task records, and exports
     │   ├── data/               Dataset acquisition and reaction generation
     │   ├── evaluation/         Fixed compiled-unitary judge and diagnostics
     │   ├── sandbox/            OpenShell/OpenCode mutation boundary
@@ -343,7 +343,6 @@ their frozen inputs, evaluator versions, and mutation protocol.
 |---|---|
 | `hsopt` / `hsopt-loop` | Initialize, reconcile, inspect, propose, or replay one sequential lane |
 | `hsopt-baseline-drop` | Write the loose-to-tight iteration-0 T95 reduction per experiment |
-| `hsopt-exact` | Enqueue exact references and candidates, prepare batches, run them, and merge results |
 | `hsopt-layout` | Verify or regenerate the checked-in 82-Hamiltonian/10-reaction directory layout |
 | `hsopt-paper-baseline` | Prepare one loose or tight PF2 calibration and exact reference |
 | `hsopt-paper-baseline-batch` | Build, run, and audit resumable calibration shards |

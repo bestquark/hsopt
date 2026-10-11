@@ -7,7 +7,6 @@ from pathlib import Path
 import pytest
 
 from hsopt.campaign.loop import propose_lane
-from hsopt.campaign.status import lane_summary as _lane_summary
 from hsopt.sandbox import openshell
 from hsopt.sandbox.mutation_retry import (
     AgentRuntimeError,
@@ -184,9 +183,6 @@ def test_output_limit_error_is_preserved_and_blocks_other_lanes(tmp_path):
     assert mutation_readiness(other)["status"] == "needs_attention"
     assert "not-for-the-summary" not in json.dumps(mutation_readiness(other))
     assert propose_lane(other)["status"] == "needs_attention"
-    summary, ready = _lane_summary([lane, other])
-    assert not ready
-    assert summary["by_status"]["needs_attention"] == 2
     write(
         tmp_path / "campaign.json",
         {"lanes": [{"lane_dir": "lanes/a"}, {"lane_dir": "lanes/other"}]},

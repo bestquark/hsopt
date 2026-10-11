@@ -1,13 +1,11 @@
-"""Content-addressed queue for exact compiled-unitary evaluations.
+"""Scientific task snapshots and evaluation records.
 
-Each queued task is self-contained: it snapshots the candidate policy and all
-Hamiltonian JSON needed by the evaluator.  A batch evaluates tasks sequentially
-so only one dense unitary is resident at a time.
+Tasks freeze the policy, Hamiltonian inputs, reference, and scoring contract.
+Execution resources, dispatch, and retries belong to the external runtime.
 """
 
 from __future__ import annotations
 
-import argparse
 import fcntl
 import hashlib
 import json
@@ -174,7 +172,7 @@ def enqueue(
             )
     elif difference_error_contract is not None:
         raise ValueError("absolute candidates cannot set difference_error_contract")
-    for phase in (*QUEUE_PHASES, "batches"):
+    for phase in QUEUE_PHASES:
         (queue_dir / phase).mkdir(parents=True, exist_ok=True)
 
     task_id = _task_id(
@@ -232,7 +230,6 @@ def enqueue(
                     else None
                 ),
                 "queued_at": _now(),
-                "batch_attempts": 0,
             }
             _write_json(temporary / "task.json", metadata)
             destination = queue_dir / "pending" / task_id
@@ -253,7 +250,7 @@ def enqueue_reference(
 
     queue_dir = queue_dir.resolve()
     source = source.resolve()
-    for phase in (*QUEUE_PHASES, "batches"):
+    for phase in QUEUE_PHASES:
         (queue_dir / phase).mkdir(parents=True, exist_ok=True)
     task_id = _task_id(kind, source, stage="reference")
     with _enqueue_lock(queue_dir):
@@ -280,7 +277,6 @@ def enqueue_reference(
                 "source": source_name,
                 "source_original": str(source),
                 "queued_at": _now(),
-                "batch_attempts": 0,
             }
             _write_json(temporary / "task.json", metadata)
             destination = queue_dir / "pending" / task_id
@@ -291,66 +287,13 @@ def enqueue_reference(
     return {"status": "queued", "phase": "pending", "task_id": task_id, "path": str(destination)}
 
 
-def queue_status(queue_dir: Path) -> dict[str, Any]:
-    queue_dir = queue_dir.resolve()
-    counts = {
-        phase: len([path for path in (queue_dir / phase).glob("*") if path.is_dir()])
-        for phase in QUEUE_PHASES
-    }
-    batches = [path for path in (queue_dir / "batches").glob("*") if path.is_dir()]
-    counts["batches"] = len(batches)
-    counts["batched_tasks"] = sum(
-        len([path for path in (batch / "tasks").glob("*") if path.is_dir()]) for batch in batches
-    )
-    return {"queue_dir": str(queue_dir), **counts}
-
-
-def prepare_batch(queue_dir: Path, *, limit: int = 40) -> dict[str, Any]:
-    """Move up to ``limit`` pending tasks into an immutable batch directory."""
-
-    if limit <= 0:
-        raise ValueError("limit must be positive")
-    queue_dir = queue_dir.resolve()
-    pending = sorted(path for path in (queue_dir / "pending").glob("*") if path.is_dir())
-    selected = pending[:limit]
-    if not selected:
-        raise RuntimeError("the queue has no pending tasks")
-    batch_id = f"{datetime.now(UTC):%Y%m%dT%H%M%SZ}-{uuid.uuid4().hex[:8]}"
-    batch_dir = queue_dir / "batches" / batch_id
-    tasks_dir = batch_dir / "tasks"
-    results_dir = batch_dir / "results"
-    tasks_dir.mkdir(parents=True)
-    results_dir.mkdir()
-    for task in selected:
-        destination = tasks_dir / task.name
-        task.rename(destination)
-        metadata_path = destination / "task.json"
-        metadata = json.loads(metadata_path.read_text(encoding="utf-8"))
-        metadata["batch_attempts"] = int(metadata.get("batch_attempts", 0)) + 1
-        _write_json(metadata_path, metadata)
-    manifest = {
-        "schema": 1,
-        "batch_id": batch_id,
-        "created_at": _now(),
-        "task_ids": [task.name for task in selected],
-        "result_backend": None,
-    }
-    _write_json(batch_dir / "batch.json", manifest)
-    return {
-        "status": "prepared",
-        "batch_id": batch_id,
-        "batch_dir": str(batch_dir),
-        "task_count": len(selected),
-    }
-
-
 def evaluate_task(
     task_dir: Path, *, backend: str = "numpy", accelerator: str = "unknown"
 ) -> dict[str, Any]:
     """Run the fixed scientific evaluator on one immutable task snapshot."""
     task_dir = task_dir.resolve()
-    task_id = json.loads((task_dir / "task.json").read_text())["task_id"]
     metadata = json.loads((task_dir / "task.json").read_text(encoding="utf-8"))
+    task_id = metadata["task_id"]
     task_started_at = _now()
     task_started = time.perf_counter()
     try:
@@ -379,7 +322,7 @@ def evaluate_task(
                     reference_path=reference,
                 )
         result["task_id"] = task_id
-    except Exception as exc:  # keep the rest of the batch runnable
+    except Exception as exc:  # record the scientific evaluation failure
         result = {
             "status": "error",
             "task_id": task_id,
@@ -402,247 +345,13 @@ def evaluate_task(
     return result
 
 
-def run_batch(
-    batch_dir: Path,
-    *,
-    backend: str = "cupynumeric",
-    accelerator: str = "unknown",
-) -> dict[str, Any]:
-    """Evaluate every task in one batch, sequentially."""
-
-    batch_dir = batch_dir.resolve()
-    manifest_path = batch_dir / "batch.json"
-    manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
-    results_dir = batch_dir / "results"
-    results_dir.mkdir(exist_ok=True)
-    succeeded = 0
-    failed = 0
-    for task_id in manifest["task_ids"]:
-        task_dir = batch_dir / "tasks" / task_id
-        result_path = results_dir / f"{task_id}.json"
-        if result_path.is_file():
-            previous = json.loads(result_path.read_text(encoding="utf-8"))
-            succeeded += previous.get("status") == "ok"
-            failed += previous.get("status") != "ok"
-            continue
-        result = evaluate_task(task_dir, backend=backend, accelerator=accelerator)
-        succeeded += result.get("status") == "ok"
-        failed += result.get("status") != "ok"
-        _write_json(result_path, result)
-
-    manifest["finished_at"] = _now()
-    manifest["result_backend"] = backend
-    manifest["result_accelerator"] = accelerator
-    manifest["succeeded"] = succeeded
-    manifest["failed"] = failed
-    _write_json(manifest_path, manifest)
-    return {
-        "status": "finished",
-        "batch_id": manifest["batch_id"],
-        "task_count": len(manifest["task_ids"]),
-        "succeeded": succeeded,
-        "failed": failed,
-        "backend": backend,
-        "accelerator": accelerator,
-    }
-
-
-def merge_batch(queue_dir: Path, batch_dir: Path) -> dict[str, Any]:
-    """Move evaluated tasks into the queue's completed or failed history."""
-
+def queue_status(queue_dir: Path) -> dict[str, Any]:
+    """Count scientific tasks without selecting an execution strategy."""
     queue_dir = queue_dir.resolve()
-    batch_dir = batch_dir.resolve()
-    manifest = json.loads((batch_dir / "batch.json").read_text(encoding="utf-8"))
-    merged = 0
-    missing = []
-    for task_id in manifest["task_ids"]:
-        result_path = batch_dir / "results" / f"{task_id}.json"
-        if not result_path.is_file():
-            missing.append(task_id)
-            continue
-        result = json.loads(result_path.read_text(encoding="utf-8"))
-        phase = "completed" if result.get("status") == "ok" else "failed"
-        destination = queue_dir / phase / task_id
-        if not destination.exists():
-            (batch_dir / "tasks" / task_id).rename(destination)
-        shutil.copyfile(result_path, destination / "result.json")
-        merged += 1
     return {
-        "status": "merged" if not missing else "partial",
-        "batch_id": manifest["batch_id"],
-        "merged": merged,
-        "missing": missing,
+        "queue_dir": str(queue_dir),
+        **{
+            phase: sum(path.is_dir() for path in (queue_dir / phase).glob("*"))
+            for phase in QUEUE_PHASES
+        },
     }
-
-
-def requeue_missing(
-    queue_dir: Path,
-    batch_dir: Path,
-    *,
-    reason: str,
-    max_attempts: int = 3,
-) -> dict[str, Any]:
-    """Return tasks without result files to pending after a terminal batch failure."""
-
-    queue_dir = queue_dir.resolve()
-    batch_dir = batch_dir.resolve()
-    manifest = json.loads((batch_dir / "batch.json").read_text(encoding="utf-8"))
-    pending_dir = queue_dir / "pending"
-    pending_dir.mkdir(parents=True, exist_ok=True)
-    requeued: list[str] = []
-    exhausted: list[str] = []
-    already_resolved: list[str] = []
-    unavailable: list[str] = []
-    for task_id in manifest["task_ids"]:
-        if (batch_dir / "results" / f"{task_id}.json").is_file():
-            already_resolved.append(task_id)
-            continue
-        task_dir = batch_dir / "tasks" / task_id
-        destination = pending_dir / task_id
-        if destination.is_dir():
-            already_resolved.append(task_id)
-        elif task_dir.is_dir():
-            metadata = json.loads((task_dir / "task.json").read_text(encoding="utf-8"))
-            attempts = int(metadata.get("batch_attempts", 1))
-            if attempts >= max_attempts:
-                failed_dir = queue_dir / "failed" / task_id
-                task_dir.rename(failed_dir)
-                _write_json(
-                    failed_dir / "result.json",
-                    {
-                        "status": "error",
-                        "task_id": task_id,
-                        "error_type": "BatchAttemptsExhausted",
-                        "error": (
-                            f"no evaluator result after {attempts} terminal batch attempts; "
-                            f"last reason: {reason}"
-                        ),
-                    },
-                )
-                exhausted.append(task_id)
-            else:
-                task_dir.rename(destination)
-                requeued.append(task_id)
-        elif any((queue_dir / phase / task_id).is_dir() for phase in QUEUE_PHASES):
-            already_resolved.append(task_id)
-        else:
-            unavailable.append(task_id)
-
-    recovery_path = batch_dir / "recovery.json"
-    history = (
-        json.loads(recovery_path.read_text(encoding="utf-8"))
-        if recovery_path.is_file()
-        else {"schema": 1, "attempts": []}
-    )
-    history["attempts"].append(
-        {
-            "at": _now(),
-            "reason": reason,
-            "requeued": requeued,
-            "exhausted": exhausted,
-            "already_resolved": already_resolved,
-            "unavailable": unavailable,
-        }
-    )
-    _write_json(recovery_path, history)
-    return {
-        "status": "requeued" if not unavailable else "incomplete",
-        "batch_id": manifest["batch_id"],
-        "requeued": requeued,
-        "exhausted": exhausted,
-        "already_resolved": already_resolved,
-        "unavailable": unavailable,
-    }
-
-
-def _parser() -> argparse.ArgumentParser:
-    parser = argparse.ArgumentParser(description=__doc__)
-    subparsers = parser.add_subparsers(dest="command", required=True)
-
-    enqueue_parser = subparsers.add_parser("enqueue")
-    enqueue_parser.add_argument("--queue-dir", type=Path, required=True)
-    enqueue_parser.add_argument("--kind", choices=("absolute", "difference"), required=True)
-    enqueue_parser.add_argument("--source", type=Path, required=True)
-    enqueue_parser.add_argument("--policy", type=Path, required=True)
-    enqueue_parser.add_argument("--reference", type=Path)
-    enqueue_parser.add_argument(
-        "--difference-error-contract",
-        choices=DIFFERENCE_ERROR_CONTRACTS,
-        help="Required for difference candidates; selects the immutable error metric.",
-    )
-
-    reference_parser = subparsers.add_parser("enqueue-reference")
-    reference_parser.add_argument("--queue-dir", type=Path, required=True)
-    reference_parser.add_argument("--kind", choices=("absolute", "difference"), required=True)
-    reference_parser.add_argument("--source", type=Path, required=True)
-
-    status_parser = subparsers.add_parser("status")
-    status_parser.add_argument("--queue-dir", type=Path, required=True)
-
-    prepare_parser = subparsers.add_parser("prepare-batch")
-    prepare_parser.add_argument("--queue-dir", type=Path, required=True)
-    prepare_parser.add_argument("--limit", type=int, default=40)
-
-    run_parser = subparsers.add_parser("run-batch")
-    run_parser.add_argument("--batch-dir", type=Path, required=True)
-    run_parser.add_argument("--backend", choices=("cupynumeric", "numpy"), default="cupynumeric")
-    run_parser.add_argument(
-        "--accelerator",
-        choices=("gpu", "cpu", "unknown"),
-        default="unknown",
-    )
-
-    merge_parser = subparsers.add_parser("merge-batch")
-    merge_parser.add_argument("--queue-dir", type=Path, required=True)
-    merge_parser.add_argument("--batch-dir", type=Path, required=True)
-
-    recover_parser = subparsers.add_parser("recover-batch")
-    recover_parser.add_argument("--queue-dir", type=Path, required=True)
-    recover_parser.add_argument("--batch-dir", type=Path, required=True)
-    recover_parser.add_argument("--reason", required=True)
-    recover_parser.add_argument("--max-attempts", type=int, default=3)
-    return parser
-
-
-def main() -> int:
-    args = _parser().parse_args()
-    if args.command == "enqueue":
-        result = enqueue(
-            args.queue_dir,
-            kind=args.kind,
-            source=args.source,
-            policy=args.policy,
-            reference=args.reference,
-            difference_error_contract=args.difference_error_contract,
-        )
-    elif args.command == "enqueue-reference":
-        result = enqueue_reference(
-            args.queue_dir,
-            kind=args.kind,
-            source=args.source,
-        )
-    elif args.command == "status":
-        result = queue_status(args.queue_dir)
-    elif args.command == "prepare-batch":
-        result = prepare_batch(args.queue_dir, limit=args.limit)
-    elif args.command == "run-batch":
-        result = run_batch(
-            args.batch_dir,
-            backend=args.backend,
-            accelerator=args.accelerator,
-        )
-    elif args.command == "merge-batch":
-        result = merge_batch(args.queue_dir, args.batch_dir)
-    else:
-        result = requeue_missing(
-            args.queue_dir,
-            args.batch_dir,
-            reason=args.reason,
-            max_attempts=args.max_attempts,
-        )
-    print(json.dumps(result, indent=2, sort_keys=True))
-    return 0
-
-
-if __name__ == "__main__":
-    raise SystemExit(main())

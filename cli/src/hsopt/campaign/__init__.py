@@ -1,1 +1,1 @@
-"""Durable campaign state, queues, orchestration, exports, and audits."""
+"""Scientific campaign preparation, mutations, evaluation records, and exports."""

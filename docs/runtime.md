@@ -84,3 +84,8 @@ Retain pinned code and environments for campaigns already running. Synchronizing
 adapters and supervisor services must be installed in the external runtime;
 their former `hsopt-nvpark` and `hsopt-supervisor` commands are no longer part of
 the scientific package.
+
+The old `hsopt-exact` batch commands and `hsopt-campaign-scope` maintenance
+command are also outside the package. New runs use the single-task handoff.
+The scientific ledger can still read historical batch snapshots; it never
+creates, dispatches, merges, or retries batches.

@@ -13,7 +13,6 @@ import argparse
 import csv
 import hashlib
 import json
-import uuid
 from collections import Counter, defaultdict
 from datetime import UTC, datetime
 from pathlib import Path
@@ -27,10 +26,8 @@ from hsopt.evaluation.compiled_unitary import (
 from hsopt.campaign.queue import enqueue, queue_status
 
 
-
 EXPECTED_ABSOLUTE = 82
 EXPECTED_REACTIONS = 10
-DEFAULT_JOBS = 4
 CSV_FIELDS = (
     "family",
     "instance",
@@ -177,8 +174,8 @@ def _source_shape(kind: str, source: Path) -> dict[str, Any]:
         if not species_qubits:
             raise ValueError(f"{source}: reaction has no unique species")
         n_qubits = max(species_qubits)
-    # Dense nonsymmetric eigensolves dominate.  The 8**n proxy is used only
-    # to spread work across jobs; it does not enter the reported T95.
+    # Historical census scheduling hint, retained for manifest compatibility.
+    # It is not a measured runtime model and does not enter the reported T95.
     weight = sum(8**value for value in species_qubits)
     return {
         "n_qubits": n_qubits,
@@ -325,82 +322,10 @@ def prepare_census(
     return payload
 
 
-def _create_batch(queue_dir: Path, records: list[dict[str, Any]], batch_index: int) -> Path:
-    batch_id = f"{datetime.now(UTC):%Y%m%dT%H%M%SZ}-census{batch_index:02d}-{uuid.uuid4().hex[:6]}"
-    batch_dir = queue_dir / "batches" / batch_id
-    tasks_dir = batch_dir / "tasks"
-    results_dir = batch_dir / "results"
-    tasks_dir.mkdir(parents=True)
-    results_dir.mkdir()
-    for record in records:
-        task_id = str(record["task_id"])
-        source = queue_dir / "pending" / task_id
-        if not source.is_dir():
-            raise FileNotFoundError(source)
-        destination = tasks_dir / task_id
-        source.rename(destination)
-        metadata_path = destination / "task.json"
-        metadata = _read_json(metadata_path)
-        metadata["batch_attempts"] = int(metadata.get("batch_attempts", 0)) + 1
-        _write_json(metadata_path, metadata)
-    _write_json(
-        batch_dir / "batch.json",
-        {
-            "schema": 1,
-            "batch_id": batch_id,
-            "created_at": _now(),
-            "task_ids": [record["task_id"] for record in records],
-            "task_kinds": dict(sorted(Counter(record["kind"] for record in records).items())),
-            "census_batch_index": batch_index,
-            "balance_weight": sum(int(record["balance_weight"]) for record in records),
-            "result_backend": None,
-        },
-    )
-    return batch_dir
-
-
-def prepare_balanced_batches(census_root: Path, jobs: int = DEFAULT_JOBS) -> list[Path]:
-    """Greedily spread dense-eigensolve work over a fixed number of jobs."""
-
-    census_root = census_root.resolve()
-    if jobs <= 0:
-        raise ValueError("jobs must be positive")
-    queue_dir = census_root / "queue"
-    existing = sorted(path for path in (queue_dir / "batches").glob("*") if path.is_dir())
-    if existing:
-        return existing
-    manifest = _read_json(census_root / "manifest.json")
-    pending = {path.name for path in (queue_dir / "pending").glob("*") if path.is_dir()}
-    records = [record for record in manifest["tasks"] if record["task_id"] in pending]
-    if len(records) != int(manifest["counts"]["total"]):
-        raise RuntimeError("balanced batches may only be created before the census starts")
-    if jobs > len(records):
-        raise ValueError("jobs cannot exceed the number of census tasks")
-
-    bins: list[list[dict[str, Any]]] = [[] for _ in range(jobs)]
-    loads = [0] * jobs
-    for record in sorted(
-        records,
-        key=lambda item: (
-            -int(item["balance_weight"]),
-            -int(item["max_n_qubits"]),
-            str(item["instance"]),
-        ),
-    ):
-        index = min(range(jobs), key=lambda value: (loads[value], len(bins[value]), value))
-        bins[index].append(record)
-        loads[index] += int(record["balance_weight"])
-    return [_create_batch(queue_dir, records, index) for index, records in enumerate(bins, start=1)]
-
-
-
-
 def _batch_dirs(census_root: Path) -> list[Path]:
     return sorted(
         path for path in (census_root.resolve() / "queue" / "batches").glob("*") if path.is_dir()
     )
-
-
 
 
 def census_status(census_root: Path) -> dict[str, Any]:
@@ -557,8 +482,6 @@ def _add_counts(parser: argparse.ArgumentParser) -> None:
     parser.add_argument("--expected-reactions", type=int, default=EXPECTED_REACTIONS)
 
 
-
-
 def _parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(description=__doc__)
     commands = parser.add_subparsers(dest="command", required=True)
@@ -575,8 +498,6 @@ def _parser() -> argparse.ArgumentParser:
     export.add_argument("--census-root", type=Path, required=True)
     export.add_argument("--output-dir", type=Path)
     return parser
-
-
 
 
 def main() -> int:

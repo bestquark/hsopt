@@ -7,7 +7,7 @@ so every command still runs as `uv run <command>` from the checkout root.
 ```text
 cli/
 ├── src/hsopt/
-│   ├── campaign/     Campaign setup, lanes, queue, supervisor, export, and parity
+│   ├── campaign/     Campaign setup, lanes, task records, exports, and validation
 │   ├── evaluation/   Fixed compiled-unitary evaluator and diagnostics
 │   ├── sandbox/      OpenShell/OpenCode isolation and agent telemetry
 │   ├── view/         Read-only mutation history and final report views

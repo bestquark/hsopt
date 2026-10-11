@@ -14,7 +14,7 @@ from hsopt.evaluation.compiled_unitary import (
     evaluate_exact_difference_reference,
     evaluate_exact_reference,
 )
-from hsopt.campaign.queue import merge_batch, run_batch
+from hsopt.campaign.interface import evaluation_request, run_evaluation
 
 
 REPO = Path(__file__).resolve().parents[2]
@@ -148,18 +148,15 @@ def test_census_deduplicates_iteration_zero_and_exports_exact_t95(tmp_path: Path
     assert manifest["baseline_variant"] is None
     assert all(len(record["reference_scientific_sha256"]) == 64 for record in manifest["tasks"])
     assert {record["source_lane_count"] for record in manifest["tasks"]} == {1, 2}
-    batches = CENSUS.prepare_balanced_batches(census, jobs=2)
-    assert len(batches) == 2
-    assert sorted(len(_read_json(batch / "batch.json")["task_ids"]) for batch in batches) == [1, 2]
     assert CENSUS.census_status(census)["by_family"] == {
-        "abs_energy": {"batched": 1},
-        "diff_energy": {"batched": 2},
+        "abs_energy": {"pending": 1},
+        "diff_energy": {"pending": 2},
     }
-
-    for batch in batches:
-        finished = run_batch(batch, backend="numpy", accelerator="cpu")
-        assert finished["failed"] == 0
-        merge_batch(census / "queue", batch)
+    for task in sorted((census / "queue/pending").iterdir()):
+        receipt = run_evaluation(evaluation_request(task), backend="numpy", accelerator="cpu")
+        assert receipt["result"]["status"] == "ok"
+        _write_json(task / "result.json", receipt["result"])
+        task.rename(census / "queue/completed" / task.name)
     summary = CENSUS.export_census(census)
 
     assert summary["row_count"] == 3
