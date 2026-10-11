@@ -4,7 +4,7 @@ Baseline variant: tight
 Baseline: Reiher et al. LIQUi|>-style numeric-beta/Eq. (34) PF2 (tight), adapted to 1 kcal/mol.
 Calibration SHA-256: 2ea6b845382f43d4e7f551d95515d4a15aae2a90c1dd4d02d80f8624d1248bf5
 Full beta/error derivation and the exact-energy reference are sealed outside
-this mutation file. Iteration 0 measures this code unchanged with PyGridSynth.
+this mutation file. Iteration 0 measures this code unchanged with CUDA-Q.
 """
 
 

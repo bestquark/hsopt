@@ -27,6 +27,7 @@ from hsopt.evaluation.compiled_unitary import (
     _compile_rz,
     _dense_hamiltonian,
     _fixed_electron_hamiltonian,
+    _gate_sequence_matrix,
     _rotation_fence_interval,
     _qpe_repetitions,
     _product_formula_schedule,
@@ -757,13 +758,41 @@ def test_tight_batch_reuses_the_loose_tree_exact_reference(tmp_path: Path) -> No
     assert tight["exact_reference"] == loose["exact_reference"]
 
 
-def test_pygridsynth_compilation_is_reproducible_and_within_tolerance() -> None:
+def test_cudaq_compilation_is_reproducible_and_within_tolerance() -> None:
     first = _compile_rz(0.2718281828, 1.0e-5)
+    _compile_rz.cache_clear()
     second = _compile_rz(0.2718281828, 1.0e-5)
 
     assert first["gate_string"] == second["gate_string"]
     assert first["t_count"] > 0
     assert first["operator_error"] <= 1.0e-5
+    target = np.diag([np.exp(-0.5j * 0.2718281828), np.exp(0.5j * 0.2718281828)])
+    assert np.linalg.norm(target - first["matrix"], ord=2) <= 1.0e-5
+
+
+def test_cudaq_gate_reconstruction_retains_phase_and_multiplication_order() -> None:
+    h = np.array([[1.0, 1.0], [1.0, -1.0]]) / math.sqrt(2.0)
+    s = np.diag([1.0, 1.0j])
+    omega = np.exp(0.25j * math.pi)
+    assert _gate_sequence_matrix("WHS") == pytest.approx(omega * h @ s)
+    assert _gate_sequence_matrix("I") == pytest.approx(np.eye(2))
+    compiled = _compile_rz(math.pi / 2, 1.0e-9)
+    target = np.diag([np.exp(-0.25j * math.pi), np.exp(0.25j * math.pi)])
+    assert compiled["matrix"] == pytest.approx(target, abs=1.0e-9)
+
+
+def test_cudaq_reuses_synthesis_independent_exact_reference() -> None:
+    reference = evaluate_exact_reference(ABSOLUTE / "hamiltonian.json", backend="numpy")
+    reference["evaluation_contract_version"] = "normalized_hamiltonian_qpe_t_count_v2"
+    result = evaluate_molecule(
+        ABSOLUTE / "hamiltonian.json",
+        ABSOLUTE / "initial_pf.py",
+        backend="numpy",
+        reference_result=reference,
+    )
+    assert result["evaluation_contract_version"] == EVALUATION_CONTRACT_VERSION
+    assert result["rotation_synthesis"]["compiler"] == "cudaq.synth.gridsynth"
+    assert result["rotation_synthesis"]["seed"] == 0
 
 
 def test_fixed_electron_hamiltonian_matches_projected_full_matrix() -> None:
@@ -1020,25 +1049,25 @@ def test_absolute_baseline_uses_cached_exact_reference_and_compiled_eigenphase(
     assert result["evaluation_contract_version"] == EVALUATION_CONTRACT_VERSION
     assert result["observable"] == "compiled_unitary_lowest_hf_accessible_eigenphase"
     assert result["exact_ground_energy_hartree"] == pytest.approx(-1.144979079498297)
-    assert result["compiled_pf_energy_hartree"] == pytest.approx(-1.144983078779298)
+    assert result["compiled_pf_energy_hartree"] == pytest.approx(-1.144970630638543, abs=1.0e-10)
     assert result["passes_chemical_accuracy"] is True
     assert result["formula_order"] == 2
     assert result["n_steps"] == 15
     assert result["policy"]["term_order_strategy"] == "lexicographic"
-    assert result["t_count"] == 30_420
+    assert result["t_count"] == 28_980
     assert result["compiled_evolution_t_count"] == result["t_count"]
-    assert result["per_attempt_t_count"] == 938_000_700
+    assert result["per_attempt_t_count"] == 896_119_560
     assert result["qpe_repetitions"] == 5
     assert result["qpe_target_confidence"] == QPE_TARGET_CONFIDENCE
     assert result["qpe_achieved_confidence"] >= QPE_TARGET_CONFIDENCE
-    assert result["qpe_full_evolution_queries"] == 30_835
-    assert result["confidence_adjusted_t_count"] == 4_690_003_500
+    assert result["qpe_full_evolution_queries"] == 30_922
+    assert result["confidence_adjusted_t_count"] == 4_480_597_800
     assert result["score"] == result["confidence_adjusted_t_count"]
     assert result["evaluation_wall_seconds"] > 0.0
     assert result["timing_seconds"]["compiled_unitary_build"] > 0.0
     assert result["timing_seconds"]["compiled_unitary_eigensolve"] > 0.0
     assert result["rotation_fence_interval"] == 32
-    assert result["qpe_success_probability_from_hf"] == pytest.approx(0.9890307462934342)
+    assert result["qpe_success_probability_from_hf"] == pytest.approx(0.9890321606152183)
     assert result["qpe_success_probability_per_attempt"] == pytest.approx(
         0.5 * result["qpe_success_probability_from_hf"]
     )

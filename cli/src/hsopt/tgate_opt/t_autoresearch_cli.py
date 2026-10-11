@@ -96,7 +96,7 @@ Product-formula search guidance:
 - `build_step` returns `(term, angle)` pairs for one stationary step, where
   `angle` is the real `alpha` in `exp(+i * alpha * P)`.
 - `synthesis_epsilon` receives a fresh trusted term dict plus that exact
-  per-application angle and must return a finite PyGridSynth tolerance in
+  per-application angle and must return a finite CUDA-Q tolerance in
   `(0, 1)`. Use those fields to
   allocate looser precision to low-impact rotations and tighter precision where
   accuracy is likely to matter.

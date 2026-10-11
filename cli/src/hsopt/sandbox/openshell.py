@@ -986,7 +986,7 @@ the benchmark. Do not search for this HSOpt repository, its campaign outputs,
 or another baseline initializer. If an optional research tool is unavailable,
 continue with the mutation instead of retrying it.
 
-The fixed evaluator compiles every Pauli rotation with PyGridSynth, constructs
+The fixed evaluator compiles every Pauli rotation with CUDA-Q, constructs
 the actual compiled product-formula unitary, diagonalizes it, and selects the
 lowest-energy eigenphase with resolved weight from the fixed Hartree--Fock
 input. The immutable problem uses the branch-safe encoding
@@ -1014,7 +1014,7 @@ synthesis_epsilon() methods. build_step() is the scientific definition of the
 formula: it may implement PF1, PF2/Strang, a higher-order stationary
 composition, grouping, or another deterministic recurrence. The evaluator
 infers standard PF1/PF2 labels from the returned rotations; it never trusts a
-declared order. synthesis_epsilon() selects the PyGridSynth tolerance for each
+declared order. synthesis_epsilon() selects the CUDA-Q tolerance for each
 returned rotation. Inspect evaluate.py for the exact accepted types, angle
 convention, schedule validation, and synthesis-tolerance constraints.
 

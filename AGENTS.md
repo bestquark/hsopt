@@ -42,7 +42,7 @@ are not acceptance metrics.
 `initial_pf_loose.py` and `initial_pf_tight.py`. Both require sealed calibration
 data and embed the Reiher--Wiebe--Svore--Wecker--Troyer citation,
 lexicographic PF2/Strang structure, `beta(H)` referenced to 0.1 mHa, the
-norm-derived physical target time, and the PyGridSynth tolerance selected by
+norm-derived physical target time, and the CUDA-Q tolerance selected by
 the same paper Eq. (34) Trotter/QPE/rotation-error allocation with a
 1 kcal/mol total target. The exact reference must not affect the loose policy;
 it intentionally selects the numeric beta used by the tight policy.

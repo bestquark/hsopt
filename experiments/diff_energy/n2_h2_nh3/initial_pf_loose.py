@@ -5,7 +5,7 @@ Calibration SHA-256: 3360c6bc1a6241cd2a2f8d37592f97f22863fbe9f9b63322313ab3c0f34
 Calibration SHA-256: 8a203636f38c708b40b9a3e78987ea42698170ee5c688fac0dce59c4159ce5b5
 Calibration SHA-256: 15ebed832e3ada0019e0aae2efbda168b9effb9e9caddfb9abbdf8b5216bc55b
 Full bound/error derivation and the exact-energy reference are sealed outside
-this mutation file. Iteration 0 measures this code unchanged with PyGridSynth.
+this mutation file. Iteration 0 measures this code unchanged with CUDA-Q.
 """
 
 

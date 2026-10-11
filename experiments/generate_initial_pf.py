@@ -618,7 +618,7 @@ def optimize_paper_error_allocation(
         "qpe_step_queries": qpe_step_queries,
         "reference_error_hartree": float(reference_error_hartree),
         "reference_trotter_number_beta": float(beta),
-        "rotation_synthesis": "clifford_plus_t_pygridsynth_at_iteration_zero",
+        "rotation_synthesis": "clifford_plus_t_cudaq_at_iteration_zero",
         "realized_t_count": None,
         "realized_t_count_stage": "iteration_0_exact_compiled_unitary_evaluation",
         "scheduled_rotations": n_steps * rotations_per_step,
@@ -758,7 +758,7 @@ def calibrate_problem(
             "phase_encoding": dict(problem["phase_encoding"]),
             "uses_gamma_delta_synthesis_fit": True,
             "allocation_cost_source": "paper Eq. (34) rigorous gamma/delta_0 model",
-            "realized_t_count_source": "iteration-0 direct PyGridSynth compilation",
+            "realized_t_count_source": "iteration-0 direct CUDA-Q compilation",
         },
         "reference": reference,
         "exact_reference": exact_reference,
@@ -871,7 +871,7 @@ COMMON_PAPER_CONTRACT: dict[str, Any] = {
         "formula_name": "symmetric_second_order_trotter_suzuki",
         "step_structure": "forward_half_except_center_full_then_reverse_half",
         "term_order_strategy": PAPER_TERM_ORDER,
-        "rotation_synthesis": "clifford_plus_t_pygridsynth_at_iteration_zero",
+        "rotation_synthesis": "clifford_plus_t_cudaq_at_iteration_zero",
         "beta_reference_error_hartree": PAPER_BETA_REFERENCE_ERROR_HARTREE,
         "phase_estimation_alpha": PAPER_PHASE_ESTIMATION_ALPHA,
         "synthesis_gamma": PAPER_SYNTHESIS_GAMMA,
@@ -888,7 +888,7 @@ COMMON_PAPER_CONTRACT: dict[str, Any] = {
         "physical_target_time": ("inverse of the nonidentity Pauli one-norm, in Hartree^-1"),
         "energy_recovery": "E_hartree = c0 + lambda * principal_phase",
         "allocation_cost": "supplement Eq. (34) with rigorous gamma=4 and delta_0=11",
-        "realized_t_count": "direct PyGridSynth compilation during iteration 0",
+        "realized_t_count": "direct CUDA-Q compilation during iteration 0",
     },
 }
 BASELINE_CONTRACTS: dict[str, dict[str, Any]] = {
@@ -1169,7 +1169,7 @@ def render(
 {variant_line}Baseline: {contract["display_name"]}, adapted to 1 kcal/mol.
 {calibration_lines}
 Full {derivation_label}/error derivation and the exact-energy reference are sealed outside
-this mutation file. Iteration 0 measures this code unchanged with PyGridSynth.
+this mutation file. Iteration 0 measures this code unchanged with CUDA-Q.
 """
 
 

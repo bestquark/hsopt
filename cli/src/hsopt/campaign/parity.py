@@ -37,6 +37,7 @@ EXACT_METADATA_FIELDS = (
 COMPILED_FIELDS = (
     "status",
     "evaluation_contract_version",
+    "rotation_synthesis",
     "observable",
     "policy",
     "phase_encoding",

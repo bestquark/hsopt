@@ -297,6 +297,10 @@ def evaluate_task(
     task_started_at = _now()
     task_started = time.perf_counter()
     try:
+        if metadata.get("evaluation_contract_version") != EVALUATION_CONTRACT_VERSION:
+            raise ValueError(
+                "queued task uses a different evaluator contract; keep old results separate"
+            )
         source = task_dir / metadata["source"]
         if metadata.get("stage", "candidate") == "reference":
             if metadata["kind"] == "absolute":

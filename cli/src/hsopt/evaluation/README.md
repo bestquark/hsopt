@@ -19,3 +19,6 @@ BCH supports symmetric, first-order-consistent schedules. Its reference cap
 controls cost, not accuracy, and sparse expansions can still be expensive.
 Reaction mode uses `--reaction` plus `--error-contract`. Production mutation
 queues remain exact; proxy estimates alone do not accept a mutation.
+Exact evaluations compile rotations with CUDA-Q Ross--Selinger on CPU, preserving
+global phase and counting the returned T gates. The policy's epsilon is used
+directly, with seed 0 and fixed search budgets recorded in every result.

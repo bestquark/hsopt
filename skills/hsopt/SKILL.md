@@ -69,7 +69,7 @@ Angles may vary by label, coefficient, support, or species, including negative
 substeps and corrections. The judge compiles `Rz(-2 * angle)` and scores energy;
 custom schedules are not certified for full-unitary fidelity.
 
-`synthesis_epsilon()` returns a finite PyGridSynth operator-norm tolerance
+`synthesis_epsilon()` returns a finite CUDA-Q operator-norm tolerance
 strictly between zero and one for each scheduled rotation. It may depend on the
 term and angle.
 
@@ -79,7 +79,7 @@ evaluator, or benchmark definition.
 ## Fixed score
 
 The evaluator:
-1. compiles scheduled rotations with PyGridSynth and diagonalizes the compiled step;
+1. compiles scheduled rotations with CUDA-Q and diagonalizes the compiled step;
 2. repeats eigenphases exactly according to `repetitions()`;
 3. scores the lowest HF-accessible energy against the cached exact ground energy;
 4. assigns the remaining one-kcal/mol budget to QPE, using the paper bound

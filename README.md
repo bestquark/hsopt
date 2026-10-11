@@ -23,7 +23,9 @@ one external `hsopt_workdir/`.
 ## Quick start
 
 Install [`uv`](https://docs.astral.sh/uv/getting-started/installation/), then
-evaluate the included H2 policies:
+evaluate the included H2 policies with Python 3.12. Linux installs the pinned
+CUDA-Q synthesis dependency automatically. On Apple silicon, first follow the
+[CUDA-Q CPU installation](docs/synthesis.md#apple-silicon) after cloning:
 
 ```bash
 git clone https://github.com/bestquark/hsopt.git
@@ -62,6 +64,10 @@ campaign results. Historical run outputs and site deployment state remain extern
 
 GitHub Actions checks installation, every command's `--help`, the two CPU
 examples, and the test suite on macOS and Linux with Python 3.12.
+
+Rotation compilation uses CUDA-Q's CPU Ross--Selinger implementation with seed
+0 and the policy's requested operator-norm tolerance. Results record the compiler
+and search settings under `rotation_synthesis`. See [synthesis and result provenance](docs/synthesis.md).
 
 ## Objective
 
@@ -130,7 +136,7 @@ R_{95}
 T_{95}=R_{95}M_{\mathrm{QPE}}T_U,
 ```
 
-where $T_U$ is the directly synthesized PyGridSynth $T$ count of one compiled
+where $T_U$ is the directly synthesized CUDA-Q $T$ count of one compiled
 product-formula evolution. A molecular candidate is feasible when
 
 $$
@@ -185,7 +191,7 @@ class ProductFormula:
 `build_step()` returns the ordered `(Pauli term, angle)` rotations for one
 stationary step. That returned schedule is authoritative: the evaluator can
 apply it with ideal rotations to construct the exact mathematical PF step or
-compile the same rotations with PyGridSynth. No `formula_order = 2` constraint
+compile the same rotations with CUDA-Q. No `formula_order = 2` constraint
 is imposed. The generated baseline implements PF2/Strang, while mutations may
 replace its recurrence with PF1, a higher-order composition, grouping, or
 another deterministic stationary product formula.

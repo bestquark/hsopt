@@ -5,7 +5,7 @@ Baseline: Reiher et al. LIQUi|>-style numeric-beta/Eq. (34) PF2 (tight), adapted
 Calibration SHA-256: b0c532e7adcafb3ee6b9b6bd9795f34115b28a8054d45e38e062b47853016573
 Calibration SHA-256: 16e3e5febd8c4e3f0977d81cc1772d3883da5c538d3df218d7b6b8c108091483
 Full beta/error derivation and the exact-energy reference are sealed outside
-this mutation file. Iteration 0 measures this code unchanged with PyGridSynth.
+this mutation file. Iteration 0 measures this code unchanged with CUDA-Q.
 """
 
 

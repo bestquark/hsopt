@@ -3,12 +3,14 @@ name = "hsopt"
 version = "0.1.0"
 description = "Agent-driven T-gate optimization for Hamiltonian simulation"
 readme = "README.md"
-requires-python = ">=3.12"
+requires-python = ">=3.12,<3.13"
 dependencies = [
+  "astpretty~=3.0; sys_platform == 'darwin'",
   "h5py>=3.11,<4",
   "numpy>=1.26.4,<2",
-  "pygridsynth>=1.1.0,<2",
+  "cuda-quantum-cu12==0.16.0.post1; sys_platform == 'linux'",
   "reportlab>=4.4,<5",
+  "requests>=2.32.3; sys_platform == 'darwin'",
   "scipy>=1.17.1,<1.18",
 ]
 

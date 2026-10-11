@@ -25,6 +25,14 @@ jobs:
           python-version: "3.12"
       - name: Install locked dependencies
         run: uv sync --locked --extra chemistry
+      - name: Install CUDA-Q CPU synthesis on Apple silicon
+        if: runner.os == 'macOS'
+        run: |
+          curl -fsSL https://github.com/NVIDIA/cuda-quantum/releases/download/0.16.0/install_cuda_quantum_darwin-0.16.0.arm64 -o "$RUNNER_TEMP/cudaq.run"
+          mkdir -p "$RUNNER_TEMP/cudaq-sdk"
+          cd "$RUNNER_TEMP/cudaq-sdk"
+          bash "$RUNNER_TEMP/cudaq.run" --tar xf ./cudaq/cudaq ./cudaq/lib ./cudaq/targets ./cudaq/LICENSE ./cudaq/LICENSES ./cudaq/NOTICE
+          echo "PYTHONPATH=$RUNNER_TEMP/cudaq-sdk/cudaq" >> "$GITHUB_ENV"
       - name: Check formatting
         run: uv run --extra chemistry ruff format --check cli/src cli/tests
       - name: Lint

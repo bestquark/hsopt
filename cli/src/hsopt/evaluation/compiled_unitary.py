@@ -1,7 +1,7 @@
 """Exact compiled-unitary energy evaluation for small chemistry problems.
 
 The scientific observable in this module is an eigenphase of the *compiled*
-product-formula unitary.  PyGridSynth runs on the CPU.  Dense Hamiltonian and
+product-formula unitary. CUDA-Q Ross--Selinger synthesis runs on the CPU. Dense Hamiltonian and
 unitary diagonalizations run through the selected NumPy-compatible array
 backend, normally cuPyNumeric on an NVIDIA GPU.
 """
@@ -32,7 +32,20 @@ PHASE_ENCODING_METHOD = "centered_nonidentity_pauli_one_norm"
 QPE_DIMENSIONLESS_EVOLUTION_TIME = 1.0
 QPE_PHASE_ESTIMATION_ALPHA = 8.0 * math.pi
 QPE_SINGLE_RUN_PHASE_SUCCESS_LOWER_BOUND = 0.5
-EVALUATION_CONTRACT_VERSION = "normalized_hamiltonian_qpe_t_count_v2"
+EVALUATION_CONTRACT_VERSION = "normalized_hamiltonian_qpe_t_count_cudaq_v3"
+# Exact Hamiltonian references contain no approximate rotation synthesis.
+EXACT_REFERENCE_CONTRACT_VERSIONS = (
+    "normalized_hamiltonian_qpe_t_count_v2",
+    EVALUATION_CONTRACT_VERSION,
+)
+SYNTHESIS_OPTIONS = {
+    "seed": 0,
+    "max_factoring_iterations": 500_000,
+    "max_candidate_iterations": 2_000_000,
+    "max_factoring_restarts": 8,
+    "max_odgp_scan_steps": 65_536,
+    "timeout_ms": None,
+}
 DIFFERENCE_ERROR_CONTRACT_INDIVIDUAL = "individual_errors"
 DIFFERENCE_ERROR_CONTRACT_CANCELLATION = "error_cancellation"
 DIFFERENCE_ERROR_CONTRACTS = (
@@ -529,16 +542,50 @@ def _anchored_ground_state(
     )
 
 
-def _patch_pygridsynth() -> None:
-    import pygridsynth.mymath
-    import pygridsynth.ring
+@lru_cache(maxsize=1)
+def _cudaq_synth() -> tuple[Any, str]:
+    with warnings.catch_warnings():
+        warnings.filterwarnings(
+            "ignore", message="The CUDA-Q `sample` and `observe`", category=FutureWarning
+        )
+        try:
+            import cudaq
+            from cudaq import synth
+        except ImportError as exc:
+            raise RuntimeError(
+                "CUDA-Q 0.16 rotation synthesis is required; install the locked Linux "
+                "dependencies or the macOS CPU distribution described in README.md."
+            ) from exc
+    return synth, str(cudaq.__version__)
 
-    def ntz_compat(value: int) -> int:
-        value = int(value)
-        return 0 if value == 0 else (value & -value).bit_length() - 1
 
-    pygridsynth.mymath.ntz = ntz_compat
-    pygridsynth.ring.ntz = ntz_compat
+def _synthesis_metadata() -> dict[str, Any]:
+    _, version = _cudaq_synth()
+    return {
+        "compiler": "cudaq.synth.gridsynth",
+        "version": version,
+        "algorithm": "Ross-Selinger",
+        "epsilon_convention": "requested_operator_norm_tolerance",
+        "global_phase": "retained",
+        **SYNTHESIS_OPTIONS,
+    }
+
+
+def _gate_sequence_matrix(gates: str) -> np.ndarray:
+    """Reconstruct CUDA-Q's literal multiplication order, including scalar W."""
+    omega = np.exp(0.25j * math.pi)
+    alphabet = {
+        "I": _PAULIS["I"],
+        "H": _H,
+        "S": np.diag([1.0, 1.0j]),
+        "T": np.diag([1.0, omega]),
+        "X": _PAULIS["X"],
+        "W": omega * _PAULIS["I"],
+    }
+    matrix = np.eye(2, dtype=np.complex128)
+    for gate in gates:
+        matrix = matrix @ alphabet[gate]
+    return matrix
 
 
 def _rz_matrix(theta: float) -> np.ndarray:
@@ -561,29 +608,23 @@ def _operator_error(target: np.ndarray, approximate: np.ndarray) -> float:
 
 @lru_cache(maxsize=None)
 def _compile_rz(theta: float, epsilon: float) -> dict[str, Any]:
-    """Compile one Rz reproducibly on the CPU with PyGridSynth."""
+    """Compile one Rz reproducibly on the CPU with CUDA-Q Ross--Selinger."""
 
     if not math.isfinite(epsilon) or epsilon <= 0.0:
         raise ValueError(f"synthesis epsilon must be positive, got {epsilon}")
-    _patch_pygridsynth()
-    from pygridsynth import gridsynth_gates
-    from pygridsynth.unitary import DOmegaUnitary
-
-    with warnings.catch_warnings():
-        warnings.filterwarnings("ignore", message=r"pygridsynth is .*", category=UserWarning)
-        gate_string = gridsynth_gates(theta, epsilon)
-
-    exact_matrix = DOmegaUnitary.from_gates(gate_string).to_complex_matrix
-    matrix = np.asarray(
-        [[complex(exact_matrix[row, column]) for column in range(2)] for row in range(2)],
-        dtype=np.complex128,
-    )
+    synth, _ = _cudaq_synth()
+    sequence = synth.gridsynth(theta, epsilon, **SYNTHESIS_OPTIONS)
+    gate_string = str(sequence)
+    matrix = _gate_sequence_matrix(gate_string)
+    operator_error = float(synth.rz_error(theta, sequence))
+    if not math.isfinite(operator_error) or operator_error > epsilon:
+        raise RuntimeError("CUDA-Q synthesis exceeded the requested operator-norm tolerance")
     return {
         "gate_string": gate_string,
         "matrix": matrix,
-        "t_count": gate_string.count("T"),
-        "gate_count": len(gate_string),
-        "operator_error": _operator_error(_rz_matrix(theta), matrix),
+        "t_count": int(sequence.t_count),
+        "gate_count": len(sequence),
+        "operator_error": operator_error,
     }
 
 
@@ -956,6 +997,7 @@ def _build_compiled_step(
         "rotation_chunk_target_bytes": ROTATION_CHUNK_TARGET_BYTES,
         "rotation_fence_interval": fence_interval,
         "synthesis_epsilon_histogram": dict(sorted(epsilon_histogram.items())),
+        "rotation_synthesis": _synthesis_metadata(),
         "unique_compilations": sorted(
             compilations.values(),
             key=lambda row: (row["label"], row["theta"], row["epsilon"]),
@@ -1178,7 +1220,7 @@ def _reference_energy(
 
     if reference.get("observable") != "exact_unitary_ground_eigenphase":
         raise ValueError("reference is not an exact-unitary ground-eigenphase result")
-    if reference.get("evaluation_contract_version") != EVALUATION_CONTRACT_VERSION:
+    if reference.get("evaluation_contract_version") not in EXACT_REFERENCE_CONTRACT_VERSIONS:
         raise ValueError("reference uses a different evaluator contract")
     problem_path = Path(str(problem["_path"]))
     if reference.get("problem_sha256") != _sha256(problem_path):
@@ -1552,7 +1594,7 @@ def evaluate_difference(
     )
     if reference.get("observable") != "exact_unitary_signed_energy_difference":
         raise ValueError("reference is not an exact-unitary signed-difference result")
-    if reference.get("evaluation_contract_version") != EVALUATION_CONTRACT_VERSION:
+    if reference.get("evaluation_contract_version") not in EXACT_REFERENCE_CONTRACT_VERSIONS:
         raise ValueError("reference uses a different evaluator contract")
     if reference.get("reaction_sha256") != _sha256(reaction_path):
         raise ValueError(f"exact reference does not match {reaction_path}")

@@ -4,7 +4,7 @@ Baseline: Reiher et al. Eq. (19)/(34) rigorous PF2, adapted to 1 kcal/mol.
 Calibration SHA-256: c943d548fb448492f24e2a64af7029049be1d38db57221bcc4b449a9b401b9cb
 Calibration SHA-256: f7f41c69d908457c111607aa0aa05d96a2ffae14d46bf0dfcc659c742b1149e3
 Full bound/error derivation and the exact-energy reference are sealed outside
-this mutation file. Iteration 0 measures this code unchanged with PyGridSynth.
+this mutation file. Iteration 0 measures this code unchanged with CUDA-Q.
 """
 
 

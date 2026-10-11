@@ -19,6 +19,7 @@ from ..evaluation.compiled_unitary import (
     DIFFERENCE_ERROR_CONTRACTS,
     DIFFERENCE_ERROR_CONTRACT_VERSION,
     EVALUATION_CONTRACT_VERSION,
+    EXACT_REFERENCE_CONTRACT_VERSIONS,
 )
 from ..sandbox.openshell import mutate
 from ..sandbox.mutation_retry import (
@@ -254,7 +255,7 @@ def initialize_lane(
     if exact_reference_path is not None:
         exact_reference_path = exact_reference_path.resolve()
         reference = _read_json(exact_reference_path)
-        if reference.get("evaluation_contract_version") != EVALUATION_CONTRACT_VERSION:
+        if reference.get("evaluation_contract_version") not in EXACT_REFERENCE_CONTRACT_VERSIONS:
             raise ValueError("precomputed exact reference uses a different evaluator contract")
         if kind == "absolute":
             if reference.get("observable") != "exact_unitary_ground_eigenphase":
@@ -346,6 +347,8 @@ def reconcile_lane(lane_dir: Path) -> dict[str, Any]:
 
     lane_dir = lane_dir.resolve()
     manifest = _read_json(lane_dir / "manifest.json")
+    if manifest.get("evaluation_contract_version") != EVALUATION_CONTRACT_VERSION:
+        raise ValueError("lane uses a different evaluator contract; rescore in a new campaign root")
     state = _read_json(lane_dir / "state.json")
     task_id = state["pending_task_id"]
     if task_id is None:

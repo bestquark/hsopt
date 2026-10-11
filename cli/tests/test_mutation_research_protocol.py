@@ -7,6 +7,7 @@ from pathlib import Path
 import pytest
 
 from hsopt.campaign.loop import propose_lane
+from hsopt.evaluation.compiled_unitary import EVALUATION_CONTRACT_VERSION
 from hsopt.sandbox import openshell
 from hsopt.sandbox.mutation_retry import (
     AgentRuntimeError,
@@ -39,7 +40,12 @@ def lane_at(root: Path, name: str = "a") -> Path:
     lane = root / "lanes" / name
     write(
         lane / "manifest.json",
-        {"queue_dir": str(root / "queue"), "family": "abs_energy", "iterations_target": 50},
+        {
+            "queue_dir": str(root / "queue"),
+            "family": "abs_energy",
+            "iterations_target": 50,
+            "evaluation_contract_version": EVALUATION_CONTRACT_VERSION,
+        },
     )
     write(
         lane / "state.json",

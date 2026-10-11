@@ -6,6 +6,7 @@ from pathlib import Path
 
 from hsopt.campaign.queue import (
     enqueue,
+    evaluate_task,
     queue_status,
 )
 from hsopt.evaluation.compiled_unitary import (
@@ -61,3 +62,20 @@ def test_difference_contracts_have_distinct_queue_identities(tmp_path: Path) -> 
     for contract, record in queued.items():
         task = tmp_path / "pending" / record["task_id"] / "task.json"
         assert json.loads(task.read_text())["difference_error_contract"] == contract
+
+
+def test_old_scoring_contract_is_not_evaluated_as_cudaq(tmp_path: Path) -> None:
+    task = enqueue(
+        tmp_path,
+        kind="absolute",
+        source=ABSOLUTE / "hamiltonian.json",
+        policy=ABSOLUTE / "initial_pf.py",
+    )
+    directory = Path(task["path"])
+    path = directory / "task.json"
+    metadata = json.loads(path.read_text())
+    metadata["evaluation_contract_version"] = "normalized_hamiltonian_qpe_t_count_v2"
+    path.write_text(json.dumps(metadata))
+    result = evaluate_task(directory)
+    assert result["status"] == "error"
+    assert "different evaluator contract" in result["error"]
