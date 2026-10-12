@@ -41,6 +41,14 @@ def phase_enclosure(matrices, n_steps):
     }
 
 
+def _compiled_lanczos_sizes(dim):
+    """Grow the partial search, leaving an independent confirmation at its cap."""
+    if dim < 3:
+        raise RuntimeError("Compiled Lanczos requires a dimension of at least three")
+    sizes = tuple(dict.fromkeys(min(k, dim - 2) for k in (4, 8, 16, 32, 64)))
+    return (*sizes, sizes[-1])
+
+
 def eigensolve(unitary, problem, metrics, *, iterative, target_state=None):
     import cupy as cp
     from cupyx.scipy.sparse.linalg import LinearOperator, eigsh
@@ -96,8 +104,8 @@ def eigensolve(unitary, problem, metrics, *, iterative, target_state=None):
         return hermitian @ vector
 
     try:
-        for attempt, requested in enumerate((4, 8, 16, 32, 64)):
-            k = min(requested, dim - 2)
+        for attempt, k in enumerate(_compiled_lanczos_sizes(dim)):
+            trial_started = time.monotonic()
             seed = 42 + 95 * attempt
             rng = cp.random.RandomState(seed)
             start = rng.standard_normal(dim) + 1j * rng.standard_normal(dim)
@@ -128,7 +136,9 @@ def eigensolve(unitary, problem, metrics, *, iterative, target_state=None):
                         identity_coefficient=problem["identity_coefficient"],
                     )
                 except RuntimeError:
-                    trials.append({"k": k, "resolved": False})
+                    trials.append(
+                        {"k": k, "resolved": False, "seconds": time.monotonic() - trial_started}
+                    )
                     continue
                 selected = peak["selected_eigen_index"]
                 energy = peak["compiled_pf_energy_hartree"]
@@ -140,7 +150,9 @@ def eigensolve(unitary, problem, metrics, *, iterative, target_state=None):
                 # More than half the target norm certifies that no omitted
                 # eigenvector can have a larger overlap with the same target.
                 if probability <= 0.5:
-                    trials.append({"k": k, "resolved": False})
+                    trials.append(
+                        {"k": k, "resolved": False, "seconds": time.monotonic() - trial_started}
+                    )
                     continue
                 energy = ev._decode_energy(
                     metrics["n_steps"] * phases[selected],
@@ -155,6 +167,7 @@ def eigensolve(unitary, problem, metrics, *, iterative, target_state=None):
                 "probability": probability,
                 "residual_hartree": float(residuals[selected]),
                 "max_residual_hartree": float(max(residuals)),
+                "seconds": time.monotonic() - trial_started,
             }
             trials.append(trial)
             if len(trials) < 2:
