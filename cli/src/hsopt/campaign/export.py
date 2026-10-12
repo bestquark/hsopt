@@ -74,6 +74,8 @@ def _audit_fields(iteration_dir: Path) -> dict[str, Any]:
     if not path.is_file():
         return {
             "agent_tool_calls": 0,
+            "agent_terminal_calls": 0,
+            "agent_job_submission_calls": 0,
             "agent_web_searches": 0,
             "agent_online_tool_calls": 0,
             "agent_inference_steps": 0,
@@ -85,6 +87,8 @@ def _audit_fields(iteration_dir: Path) -> dict[str, Any]:
     openshell = audit.get("openshell") or {}
     return {
         "agent_tool_calls": int(opencode.get("tool_calls", 0)),
+        "agent_terminal_calls": int(opencode.get("terminal_calls", 0)),
+        "agent_job_submission_calls": int(opencode.get("job_submission_calls", 0)),
         "agent_web_searches": int(opencode.get("web_searches", 0)),
         "agent_online_tool_calls": int(opencode.get("online_tool_calls", 0)),
         "agent_inference_steps": int(opencode.get("inference_steps", 0)),
@@ -589,6 +593,8 @@ def export_family(campaign_root: Path, family: str, output_dir: Path) -> dict[st
                     "backend",
                     "candidate_sha256",
                     "agent_tool_calls",
+                    "agent_terminal_calls",
+                    "agent_job_submission_calls",
                     "agent_web_searches",
                     "agent_online_tool_calls",
                     "agent_inference_steps",
@@ -682,6 +688,8 @@ def export_family(campaign_root: Path, family: str, output_dir: Path) -> dict[st
                     "backend",
                     "candidate_sha256",
                     "agent_tool_calls",
+                    "agent_terminal_calls",
+                    "agent_job_submission_calls",
                     "agent_web_searches",
                     "agent_online_tool_calls",
                     "agent_inference_steps",

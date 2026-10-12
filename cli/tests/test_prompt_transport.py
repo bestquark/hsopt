@@ -41,6 +41,7 @@ def test_long_unicode_prompt_is_staged_without_truncation(tmp_path, monkeypatch)
         "openshell",
         "sandbox",
         "upload",
+        "--no-git-ignore",
         "hsopt-test",
         str(files[0]),
         "/sandbox/" + files[0].name,

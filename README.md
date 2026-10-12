@@ -458,17 +458,27 @@ host setup, disposable sandbox creation, OpenCode permissions, cleanup, and
 tool/security telemetry; [`cli/README.md`](cli/README.md) documents that
 boundary and every emitted audit file.
 
-[OpenShell](https://docs.nvidia.com/openshell/latest/about/installation) base
-sandboxes include [OpenCode](https://opencode.ai/docs/), so OpenCode does not
-need a second installation inside the sandbox. Install OpenShell on the host,
-verify its gateway, and configure the protected NVIDIA inference route once:
+Use [OpenCode 2](https://opencode.ai/v2/docs/) in an
+[OpenShell](https://docs.nvidia.com/openshell/) sandbox. The deployment installs
+OpenShell on its host, supplies an image with `@opencode/cli@2.0.26`, and imports
+its native inference provider profile. HSOpt uses Nemotron 3.5 Super VL
+(`nvidia/nvidia/nemotron-3.5-super-vl`). The OpenShell proxy keeps the real
+credential on the host and substitutes it only at the approved inference endpoint.
 
 ```bash
-curl -LsSf https://raw.githubusercontent.com/NVIDIA/OpenShell/main/install.sh | sh
 openshell status
-export NVIDIA_API_KEY="your-key"
+export HSOPT_SANDBOX_IMAGE="your-opencode2-image"
+export HSOPT_SANDBOX_POLICY="/path/to/deployment/sandbox-policy.yaml"
+# Import the hsopt-nvidia-native profile and load NVIDIA_API_KEY on the host.
 uv run hsopt-openshell configure
 ```
+
+Image builds, provider profiles, credentials, and deployment audit collectors
+belong in the external `runtime/`. OpenCode runs with a private server using
+`--standalone`; preparation and editing resume the same session. Native v2
+permissions allow only the selected context reads, optional web research, the
+HSOpt skill, and one candidate edit. The host verifies read/edit receipts before
+returning a proposal.
 
 Each mutation writes the raw `opencode.jsonl` and `openshell.log` alongside
 redacted action and metric summaries. Rebuild those summaries without rerunning
@@ -481,9 +491,8 @@ uv run hsopt-openshell audit --run-dir /path/to/mutation-run
 The supervisor then creates one disposable sandbox per proposal, installs
 `skills/hsopt/SKILL.md` as the sandbox's `hsopt` skill, exposes only the
 isolated `candidate.py` mutation target plus bounded research tools, records
-the OpenCode/OpenShell action logs, and deletes the sandbox. OpenCode's
-[standalone installer](https://opencode.ai/docs/) is needed only when using a
-custom image that does not already include it.
+the OpenCode/OpenShell action logs, and deletes the sandbox. Set `HSOPT_AUDIT_COLLECTOR` to a deployment executable accepting the sandbox name
+and mutation directory to collect full supervisor OCSF JSON before cleanup.
 
 Run loose and tight campaigns with distinct supervisors, mutation pools,
 queues, evaluator workers, and output roots. An evaluator worker must accept

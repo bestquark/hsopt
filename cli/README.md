@@ -48,11 +48,24 @@ the selected lane context; it does not receive this complete CLI source tree.
   the unchanged policy and agent-action checks. Transfers do not rerun OpenCode,
   grant another edit, or reset a lane's proposal-attempt budget;
 - `hsopt-openshell audit --run-dir <mutation-run>` deterministically rebuilds
-  the redacted action and metric files from the two raw logs.
+  the redacted action and metric files from the raw logs.
 
 The redacted metrics count tools by name, online tool calls, web searches,
 inference steps, tokens, OpenShell network/process events, and denied events.
 They never copy tool outputs, credentials, or request payloads into the summary.
+Each round also records its actual OpenCode/OpenShell versions and requested model
+in `runtime_versions.json`. Actions are categorized as file reads/edits, terminal,
+web research, skill use, or job submission. Terminal and scheduler tools are denied
+in the mutation sandbox; host dispatch events belong to the external runtime.
+
+With OpenShell 0.1.3, inference calls use the native provider endpoint and a
+proxy credential placeholder. Import the deployment provider profile before
+`hsopt-openshell configure`; the retired `openshell inference` route is not used.
+For full structured network/process/security events, enable OCSF JSON logging on
+the gateway and set `HSOPT_AUDIT_COLLECTOR`. It receives the sandbox name and
+mutation directory, writes `openshell_ocsf.jsonl`, and runs before sandbox deletion.
+`audit_collection.json` records collection failures; absent events never imply
+that a tool or network request occurred.
 
 Before editing is enabled, the host verifies that the agent read the policy,
 the generated `research_context.json`, and every required benchmark input.

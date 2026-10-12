@@ -216,7 +216,7 @@ def test_transient_failure_has_backoff_then_stops_after_three_attempts(tmp_path,
 
 
 def test_known_model_output_limit_is_explicit():
-    model = openshell.opencode_config()["provider"]["openshell"]["models"]["nemotron-3-super-v3"]
+    model = openshell.opencode_config()["providers"]["openshell"]["models"][openshell.NEMOTRON_MODEL]
     assert model["limit"]["output"] == 16384
 
 
@@ -283,9 +283,9 @@ def test_cleanup_timeout_does_not_hide_permanent_inference_error(tmp_path, monke
 
 def test_preparation_disables_edits_and_requires_all_reads(tmp_path):
     config = openshell.opencode_config(preparation=True)
-    assert config["agent"][openshell.OPENCODE_AGENT]["permission"]["edit"] == "deny"
+    assert next(r["effect"] for r in config["agents"][openshell.OPENCODE_AGENT]["permissions"] if r["action"] == "edit") == "deny"
     assert (
-        openshell.opencode_config()["agent"][openshell.OPENCODE_AGENT]["permission"]["edit"]
+        next(r["effect"] for r in openshell.opencode_config()["agents"][openshell.OPENCODE_AGENT]["permissions"] if r["action"] == "edit")
         == "allow"
     )
     log = tmp_path / "events.jsonl"
@@ -331,14 +331,14 @@ def test_host_unlocks_edit_only_after_preparation_receipts(
     run_dir = tmp_path / "trial"
 
     def run(command, **kwargs):
+        if command[:3] == ["openshell", "sandbox", "upload"]:
+            assert "--no-git-ignore" in command
         if (
             command[:3] == ["openshell", "sandbox", "upload"]
             and command[-1] == "/sandbox/opencode.json"
         ):
             uploads.append(
-                json.loads(Path(command[-2]).read_text())["agent"][openshell.OPENCODE_AGENT][
-                    "permission"
-                ]["edit"]
+                next(r["effect"] for r in json.loads(Path(command[-2]).read_text())["agents"][openshell.OPENCODE_AGENT]["permissions"] if r["action"] == "edit")
             )
         if command[:3] == ["openshell", "sandbox", "download"]:
             target = Path(command[-1])

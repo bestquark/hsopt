@@ -119,6 +119,103 @@ def test_opencode_audit_records_skill_name_without_payload(tmp_path: Path) -> No
     assert "private" not in json.dumps(actions)
 
 
+def test_terminal_and_submission_events_keep_status_without_credentials(tmp_path):
+    log = tmp_path / "opencode.jsonl"
+    events = [
+        {"type": "tool_use", "part": {"callID": "terminal", "tool": "bash",
+         "state": {"status": "error", "input": {"command": "API_KEY=private curl example.com"}}}},
+        {"type": "tool_use", "part": {"callID": "submit", "tool": "slurm_submit",
+         "state": {"status": "completed", "input": {"image": "test-image"}}}},
+    ]
+    log.write_text("\n".join(json.dumps(event) for event in events))
+    metrics, actions = summarize_opencode_events(log)
+    assert metrics["by_category"] == {"job_submission": 1, "terminal": 1}
+    assert metrics["by_status"] == {"completed": 1, "error": 1}
+    assert metrics["terminal_calls"] == metrics["job_submission_calls"] == 1
+    assert "private" not in json.dumps(actions)
+
+
+def test_structured_security_events_are_deduplicated_and_legacy_logs_remain_readable(tmp_path):
+    log = tmp_path / "openshell_ocsf.jsonl"
+    event = {"class_uid": 4001, "activity_name": "Open", "action": "Denied",
+             "metadata": {"uid": "event-1"}}
+    log.write_text(json.dumps(event) + "\nOCSF-JSON " + json.dumps(event) + "\n")
+    metrics = summarize_openshell_log(log)
+    assert metrics["network_events"] == metrics["denied_events"] == 1
+    log.write_text("[1.0] [sandbox] [OCSF ] [ocsf] NET:OPEN [MED] DENIED curl\n")
+    assert summarize_openshell_log(log)["denied_events"] == 1
+
+
+def test_current_config_calls_native_endpoint_with_real_model_and_placeholder_key():
+    config = opencode_config()
+    provider = config["providers"]["openshell"]
+    assert provider["settings"]["baseURL"] == "https://inference-api.nvidia.com/v1"
+    assert provider["env"] == ["NVIDIA_API_KEY"]
+    assert openshell_agent.NEMOTRON_MODEL in provider["models"]
+    assert config["model"] == "openshell/" + openshell_agent.NEMOTRON_MODEL
+
+
+def test_v2_tool_ids_paths_and_patch_events_are_audited(tmp_path):
+    log = tmp_path / "opencode.jsonl"
+    events = [
+        {"type": "tool_use", "sessionID": "ses_v2", "part": {
+            "id": "call-v2-read", "partID": "part-read", "tool": "read",
+            "state": {"status": "completed", "input": {"path": "/sandbox/work/problem.json"}},
+        }},
+        {"type": "tool_use", "sessionID": "ses_v2", "part": {
+            "id": "call-v2-patch", "partID": "part-edit", "tool": "patch",
+            "state": {"status": "completed", "input": {"path": "candidate.py"}},
+        }},
+    ]
+    log.write_text("\n".join(json.dumps(event) for event in events))
+    metrics, actions = summarize_opencode_events(log)
+    assert metrics["by_category"] == {"file_read": 1, "file_edit": 1}
+    assert actions[0]["call_id"] == "call-v2-read"
+    assert actions[0]["target"] == "problem.json"
+    assert _has_completed_candidate_edit(log)
+
+
+def test_v2_text_only_step_does_not_claim_complete_token_usage(tmp_path):
+    log = tmp_path / "opencode.jsonl"
+    log.write_text(json.dumps({"type": "step_start", "sessionID": "ses_v2"}) + "\n"
+                   + json.dumps({"type": "text", "part": {"text": "OK"}}))
+    metrics, _ = summarize_opencode_events(log)
+    assert metrics["inference_steps"] == 1
+    assert metrics["finished_inference_steps"] == 0
+    assert metrics["token_usage_complete"] is False
+
+
+def test_edit_without_an_observed_path_is_rejected(tmp_path):
+    log = tmp_path / "opencode.jsonl"
+    log.write_text(json.dumps({"type": "tool_use", "part": {
+        "id": "call-unknown-target", "tool": "edit",
+        "state": {"status": "completed", "input": {}},
+    }}))
+    assert not _has_completed_candidate_edit(log)
+    with pytest.raises(RuntimeError, match="outside candidate.py"):
+        _validate_agent_action_contract(log)
+
+
+def test_gateway_log_timeout_still_collects_structured_events(tmp_path, monkeypatch):
+    import subprocess
+
+    calls = []
+
+    def run(command, **kwargs):
+        calls.append(command)
+        if command[0] == "openshell":
+            raise subprocess.TimeoutExpired(command, 45)
+        return subprocess.CompletedProcess(command, 0, "", "")
+
+    monkeypatch.setattr(openshell_agent, "_run", run)
+    monkeypatch.setenv("HSOPT_AUDIT_COLLECTOR", "/deployment/collector")
+    openshell_agent._capture_openshell_logs("hsopt-test", tmp_path / "openshell.log")
+    assert calls[-1] == ["/deployment/collector", "hsopt-test", str(tmp_path)]
+    result = json.loads((tmp_path / "audit_collection.json").read_text())
+    assert result["gateway_log_error_type"] == "TimeoutExpired"
+    assert result["structured_collector_returncode"] == 0
+
+
 def test_completed_candidate_edit_is_a_terminal_agent_event(tmp_path: Path) -> None:
     log = tmp_path / "opencode.jsonl"
     log.write_text(
@@ -276,42 +373,29 @@ def test_agent_feedback_omits_large_compilation_payloads() -> None:
 
 
 def test_opencode_policy_only_allows_candidate_file_mutations() -> None:
-    agent = opencode_config()["agent"]["hsopt-mutation"]
-    permissions = agent["permission"]
+    agent = opencode_config()["agents"]["hsopt-mutation"]
+    rules = agent["permissions"]
+
+    def effect(action, resource):
+        import fnmatch
+        return next(r["effect"] for r in reversed(rules)
+                    if fnmatch.fnmatchcase(action, r["action"])
+                    and fnmatch.fnmatchcase(resource, r["resource"]))
 
     assert agent["steps"] == 20
-    assert "exactly once" in agent["prompt"]
-    assert "ProductFormula.build_step()" in agent["prompt"]
-    assert "reverse_lexicographic" not in agent["prompt"]
-    assert permissions["*"] == "allow"
-    assert permissions["edit"] == "allow"
-    assert permissions["external_directory"] == {
-        "*": "deny",
-        "/sandbox/work/candidate.py": "allow",
-    }
-    assert permissions["read"] == {
-        "*": "deny",
-        "candidate.py": "allow",
-        "/sandbox/work/candidate.py": "allow",
-        "evaluate.py": "allow",
-        "/sandbox/work/evaluate.py": "allow",
-        "problem.json": "allow",
-        "/sandbox/work/problem.json": "allow",
-        "reaction.json": "allow",
-        "/sandbox/work/reaction.json": "allow",
-        "*.json": "allow",
-        "**/*.json": "allow",
-        "/sandbox/work/**/*.json": "allow",
-    }
-    assert permissions["skill"] == {"*": "deny", "hsopt": "allow"}
-    assert permissions["codesearch"] == "allow"
-    assert permissions["webfetch"] == "allow"
-    assert permissions["websearch"] == "allow"
-    assert permissions["bash"] == "deny"
-    assert permissions["batch"] == "deny"
-    assert permissions["task"] == "deny"
-    assert permissions["todoread"] == "deny"
-    assert permissions["todowrite"] == "deny"
+    assert "exactly once" in agent["system"]
+    assert "ProductFormula.build_step()" in agent["system"]
+    assert effect("edit", "candidate.py") == "allow"
+    assert effect("edit", "problem.json") == "deny"
+    assert effect("read", "candidate.py") == "allow"
+    assert effect("read", "problems/h2.json") == "allow"
+    assert effect("read", "/etc/passwd") == "deny"
+    assert effect("skill", "hsopt") == "allow"
+    assert effect("skill", "other") == "deny"
+    for tool in ("webfetch", "websearch"):
+        assert effect(tool, "https://arxiv.org") == "allow"
+    for tool in ("shell", "subagent", "execute", "question", "external_directory"):
+        assert effect(tool, "*") == "deny"
 
 
 def test_action_contract_allows_repeated_reads_and_research_before_one_mutation(
@@ -514,7 +598,7 @@ def test_research_network_is_optional_and_binary_scoped(
     ]
     assert "mcp.exa.ai:443" in command
     assert "arxiv.org:443:read-only:rest:enforce" in command
-    assert "/usr/lib/node_modules/opencode-ai/bin/.opencode" in command
+    assert "/usr/lib/node_modules/@opencode/cli/bin/opencode.exe" in command
     assert kwargs == {"check": False, "timeout": 75}
 
 

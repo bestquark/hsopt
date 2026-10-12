@@ -10,7 +10,7 @@ from collections import Counter
 from pathlib import Path
 from typing import Any
 
-MUTATION_PROTOCOL_VERSION = "hamiltonian_context_history_v5_stdin_transport"
+MUTATION_PROTOCOL_VERSION = "hamiltonian_context_history_v7_opencode2_model_tool_provenance"
 
 POLICY_CONTRACT = {
     "repetitions": "Return a positive integer; step_time = target_time / repetitions().",

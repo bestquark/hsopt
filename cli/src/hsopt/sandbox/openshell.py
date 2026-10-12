@@ -27,10 +27,10 @@ from .research_context import (
 )
 
 
-NVIDIA_PROVIDER = "hsopt-nvidia"
+NVIDIA_PROVIDER = "hsopt-nvidia-native"
 NVIDIA_BASE_URL = "https://inference-api.nvidia.com/v1"
-NEMOTRON_MODEL = "nvidia/nvidia/nemotron-3-super-v3"
-OPENCODE_MODEL = "openshell/nemotron-3-super-v3"
+NEMOTRON_MODEL = "nvidia/nvidia/nemotron-3.5-super-vl"
+OPENCODE_MODEL = f"openshell/{NEMOTRON_MODEL}"
 OPENCODE_AGENT = "hsopt-mutation"
 MODEL_OUTPUT_LIMIT = 16384
 ONLINE_TOOLS = frozenset({"webfetch", "websearch", "codesearch"})
@@ -41,8 +41,10 @@ EVALUATOR_SOURCE_PATH = Path(__file__).resolve().parents[1] / "evaluation" / "co
 SANDBOX_CONTEXT_ROOT = PurePosixPath("/sandbox/work")
 READABLE_CONTEXT_FILES = frozenset({"candidate.py", "evaluate.py", "problem.json", "reaction.json"})
 OPENCODE_NETWORK_BINARIES = (
-    "/usr/lib/node_modules/opencode-ai/bin/.opencode",
-    "/usr/local/lib/node_modules/opencode-ai/bin/.opencode",
+    "/usr/lib/node_modules/@opencode/cli/bin/opencode.exe",
+    "/usr/local/lib/node_modules/@opencode/cli/bin/opencode.exe",
+    "/usr/lib/node_modules/@opencode/cli-linux-x64/bin/opencode",
+    "/usr/local/lib/node_modules/@opencode/cli-linux-x64/bin/opencode",
 )
 RESEARCH_ENDPOINTS = (
     "mcp.exa.ai:443",
@@ -251,7 +253,7 @@ def _write_opencode_file_list_shim(path: Path) -> None:
 def _stdin_prompt_command(command: Sequence[str], run_dir: Path) -> list[str]:
     """Stage OpenCode prompts as stdin, outside OpenShell's 32-KiB argv limit.
 
-    OpenCode 1.2.18 reads non-TTY stdin. A fixed shell redirection transports
+    OpenCode reads non-TTY stdin. A fixed shell redirection transports
     the complete UTF-8 prompt without shell interpolation or argv quoting.
     Keep the staged bytes with the audit artifacts; never truncate feedback.
     """
@@ -265,7 +267,7 @@ def _stdin_prompt_command(command: Sequence[str], run_dir: Path) -> list[str]:
     prompt_file = run_dir / f"transport-prompt-{uuid.uuid4().hex[:12]}.txt"
     prompt_file.write_text(args[-1], encoding="utf-8")
     remote = f"/sandbox/{prompt_file.name}"
-    _run(["openshell", "sandbox", "upload", sandbox_name, str(prompt_file), remote], timeout=45)
+    _run(["openshell", "sandbox", "upload", "--no-git-ignore", sandbox_name, str(prompt_file), remote], timeout=45)
     _run_setup_command(sandbox_name, ["chmod", "0444", remote], run_dir)
     return [
         *args[: separator + 1],
@@ -387,6 +389,23 @@ def sandbox_context_files(
     return files
 
 
+def _tool_category(tool: str) -> str:
+    """Describe the observed tool without inferring unrecorded activity."""
+    if tool in {"bash", "terminal", "shell", "exec"}:
+        return "terminal"
+    if any(name in tool for name in ("slurm_submit", "submit_job", "slurm_run")):
+        return "job_submission"
+    if tool in {"websearch", "codesearch"}:
+        return "web_search"
+    if tool == "webfetch":
+        return "web_fetch"
+    if tool in {"read", "glob", "grep", "list"}:
+        return "file_read"
+    if tool in {"write", "edit", "apply_patch", "patch"}:
+        return "file_edit"
+    return "skill" if tool == "skill" else "other"
+
+
 def _safe_tool_target(tool: str, payload: Any) -> str | None:
     """Keep an audit-useful target without copying prompts or file contents."""
 
@@ -409,8 +428,13 @@ def _safe_tool_target(tool: str, payload: Any) -> str | None:
                 return normalized
             return f"outside:{PurePosixPath(normalized).name}"
         return value[:200]
-    if tool == "edit":
-        return "candidate.py"
+    if _tool_category(tool) == "terminal":
+        command = payload.get("command")
+        if isinstance(command, str):
+            return re.sub(
+                r"(?:nvapi-|sk-)[A-Za-z0-9_-]+|Bearer\s+\S+|(?i:api[_-]?key|token|password)=\S+",
+                "[REDACTED]", command,
+            )[:200]
     return None
 
 
@@ -422,6 +446,7 @@ def summarize_opencode_events(path: Path) -> tuple[dict[str, Any], list[dict[str
     actions_by_call: dict[str, dict[str, Any]] = {}
     session_ids: set[str] = set()
     inference_steps = 0
+    started_steps = 0
     errors = 0
     if not path.is_file():
         return {
@@ -430,6 +455,9 @@ def summarize_opencode_events(path: Path) -> tuple[dict[str, Any], list[dict[str
             "tool_calls": 0,
             "by_tool": {},
             "by_status": {},
+            "by_category": {},
+            "terminal_calls": 0,
+            "job_submission_calls": 0,
             "online_tool_calls": 0,
             "web_searches": 0,
             "inference_steps": 0,
@@ -451,6 +479,9 @@ def summarize_opencode_events(path: Path) -> tuple[dict[str, Any], list[dict[str
             session_ids.add(session_id)
         kind = event.get("type")
         part = event.get("part") or {}
+        if kind == "step_start":
+            started_steps += 1
+            continue
         if kind == "step_finish":
             inference_steps += 1
             for key, value in (part.get("tokens") or {}).items():
@@ -488,6 +519,7 @@ def summarize_opencode_events(path: Path) -> tuple[dict[str, Any], list[dict[str
             "session_id": session_id or previous.get("session_id"),
             "call_id": call_id or None,
             "tool": tool,
+            "category": _tool_category(tool),
             "status": status,
             "duration_ms": duration_ms,
             "target": target,
@@ -503,6 +535,9 @@ def summarize_opencode_events(path: Path) -> tuple[dict[str, Any], list[dict[str
         "tool_calls": sum(by_tool.values()),
         "by_tool": dict(sorted(by_tool.items())),
         "by_status": dict(sorted(by_status.items())),
+        "by_category": dict(sorted(Counter(action["category"] for action in actions).items())),
+        "terminal_calls": sum(action["category"] == "terminal" for action in actions),
+        "job_submission_calls": sum(action["category"] == "job_submission" for action in actions),
         "online_tool_calls": sum(by_tool[tool] for tool in ONLINE_TOOLS),
         "successful_online_tool_calls": sum(
             action["online"] and action["status"] == "completed" for action in actions
@@ -511,7 +546,9 @@ def summarize_opencode_events(path: Path) -> tuple[dict[str, Any], list[dict[str
             sorted(Counter(f"{action['tool']}:{action['status']}" for action in actions).items())
         ),
         "web_searches": by_tool["websearch"],
-        "inference_steps": inference_steps,
+        "inference_steps": max(started_steps, inference_steps),
+        "finished_inference_steps": inference_steps,
+        "token_usage_complete": started_steps == 0 or started_steps == inference_steps,
         "errors": errors,
         "tokens": dict(sorted(tokens.items())),
         "sessions": sorted(session_ids),
@@ -524,9 +561,9 @@ def _has_completed_candidate_edit(path: Path) -> bool:
 
     _, actions = summarize_opencode_events(path)
     return any(
-        action["tool"] in {"edit", "write", "apply_patch"}
+        action["tool"] in {"edit", "write", "apply_patch", "patch"}
         and action["status"] == "completed"
-        and action["target"] in {None, "candidate.py"}
+        and action["target"] == "candidate.py"
         for action in actions
     )
 
@@ -682,7 +719,9 @@ def _prepare_mutation_context(
     raise RuntimeError("Preparation missing required reads: " + ", ".join(missing))
 
 
-_OCSF_RE = re.compile(r"\bOCSF\s+(?P<class>[A-Z]+):(?P<activity>[A-Z_]+)")
+_OCSF_RE = re.compile(
+    r"\bOCSF(?:\s*\]\s*\[ocsf\])?\s+(?P<class>[A-Z]+):(?P<activity>[A-Z_]+)"
+)
 
 
 def summarize_openshell_log(path: Path) -> dict[str, Any]:
@@ -691,8 +730,30 @@ def summarize_openshell_log(path: Path) -> dict[str, Any]:
     classes: Counter[str] = Counter()
     activities: Counter[str] = Counter()
     decisions: Counter[str] = Counter()
+    seen_ids: set[str] = set()
     if path.is_file():
         for line in path.read_text(encoding="utf-8", errors="replace").splitlines():
+            raw = line.partition("OCSF-JSON ")[2] if "OCSF-JSON " in line else line
+            try:
+                event = json.loads(raw)
+            except json.JSONDecodeError:
+                event = None
+            if isinstance(event, dict) and "class_uid" in event:
+                event_id = str((event.get("metadata") or {}).get("uid") or "")
+                if event_id and event_id in seen_ids:
+                    continue
+                if event_id:
+                    seen_ids.add(event_id)
+                event_class = {4001: "NET", 4002: "HTTP", 4007: "SSH", 1007: "PROC",
+                               5019: "CONFIG", 6002: "LIFECYCLE", 2004: "FINDING"}.get(
+                                   event["class_uid"], "EVENT")
+                activity = str(event.get("activity_name") or event.get("activity_id", "unknown"))
+                decision = str(event.get("disposition") or event.get("action") or "").lower()
+                classes[event_class] += 1
+                activities[f"{event_class}:{activity}"] += 1
+                if decision in {"allowed", "denied", "blocked"}:
+                    decisions[decision] += 1
+                continue
             match = _OCSF_RE.search(line)
             if not match:
                 continue
@@ -708,6 +769,8 @@ def summarize_openshell_log(path: Path) -> dict[str, Any]:
                 decisions[decision.lower()] += 1
     return {
         "schema": 1,
+        "raw_log_present": path.is_file(),
+        "source": path.name,
         "ocsf_events": sum(classes.values()),
         "by_class": dict(sorted(classes.items())),
         "by_activity": dict(sorted(activities.items())),
@@ -719,56 +782,92 @@ def summarize_openshell_log(path: Path) -> dict[str, Any]:
 
 
 def _capture_openshell_logs(sandbox_name: str, destination: Path) -> None:
-    """Copy the sandbox's rotating audit logs before the sandbox is deleted."""
+    """Collect supported gateway logs and optional deployment-owned JSON audit."""
 
-    completed = _run(
-        [
-            "openshell",
-            "sandbox",
-            "exec",
-            "--name",
-            sandbox_name,
-            "--timeout",
-            "30",
-            "--",
-            "sh",
-            "-lc",
-            (
-                "for file in /var/log/openshell*.log; do "
-                '[ -f "$file" ] && { printf \'\\n== %s ==\\n\' "$file"; cat "$file"; }; '
-                "done"
-            ),
-        ],
-        check=False,
-        timeout=45,
-    )
-    destination.write_text(completed.stdout, encoding="utf-8")
-    if completed.stderr:
-        with destination.open("a", encoding="utf-8") as stream:
-            stream.write("\n== capture stderr ==\n")
-            stream.write(completed.stderr)
+    collection = {}
+    try:
+        completed = _run(
+            ["openshell", "logs", sandbox_name, "--source", "all", "-n", "10000"],
+            check=False, timeout=45,
+        )
+        destination.write_text(completed.stdout, encoding="utf-8")
+        if completed.stderr:
+            with destination.open("a", encoding="utf-8") as stream:
+                stream.write("\n== capture stderr ==\n" + completed.stderr)
+        collection["gateway_log_returncode"] = completed.returncode
+    except (OSError, subprocess.SubprocessError) as exc:
+        destination.write_text("", encoding="utf-8")
+        collection["gateway_log_error_type"] = type(exc).__name__
+    collector = os.environ.get("HSOPT_AUDIT_COLLECTOR")
+    if collector:
+        try:
+            result = _run([collector, sandbox_name, str(destination.parent)], check=False, timeout=45)
+            collection["structured_collector_returncode"] = result.returncode
+        except (OSError, subprocess.SubprocessError) as exc:
+            collection["structured_collector_error_type"] = type(exc).__name__
+    _write_json(destination.parent / "audit_collection.json", collection)
 
 
 def write_agent_audit(run_dir: Path) -> dict[str, Any]:
     """Persist durable, redacted metrics beside the raw agent/sandbox logs."""
 
     opencode_metrics, actions = summarize_opencode_events(run_dir / "opencode.jsonl")
-    openshell_metrics = summarize_openshell_log(run_dir / "openshell.log")
+    structured = run_dir / "openshell_ocsf.jsonl"
+    openshell_metrics = summarize_openshell_log(
+        structured if structured.is_file() and structured.stat().st_size else run_dir / "openshell.log"
+    )
     _write_json(run_dir / "opencode_metrics.json", opencode_metrics)
     _write_json(run_dir / "openshell_metrics.json", openshell_metrics)
     with (run_dir / "agent_actions.jsonl").open("w", encoding="utf-8") as stream:
         for action in actions:
             stream.write(json.dumps(action, sort_keys=True) + "\n")
+    provenance: dict[str, Any] = {}
+    runtime_versions = None
+    for filename in ("mutation_result.json", "mutation_protocol.json", "runtime_versions.json"):
+        source = run_dir / filename
+        if source.is_file():
+            record = json.loads(source.read_text())
+            provenance.update({key: value for key, value in record.items() if key == "model"})
+            if filename == "runtime_versions.json":
+                runtime_versions = record
     audit = {
         "schema": 1,
+        "model": provenance.get("model"),
+        "runtime_versions": runtime_versions,
         "opencode": opencode_metrics,
         "openshell": openshell_metrics,
         "action_log": "agent_actions.jsonl",
         "raw_opencode_log": "opencode.jsonl",
         "raw_openshell_log": "openshell.log",
+        "structured_openshell_log": structured.name if structured.is_file() else None,
+        "collection": (
+            json.loads((run_dir / "audit_collection.json").read_text())
+            if (run_dir / "audit_collection.json").is_file() else None
+        ),
     }
     _write_json(run_dir / "agent_audit.json", audit)
     return audit
+
+
+def _capture_runtime_versions(sandbox_name: str, run_dir: Path) -> None:
+    """Record the executables actually used by this mutation round."""
+    identity: dict[str, Any] = {
+        "model": NEMOTRON_MODEL,
+        "opencode_model": OPENCODE_MODEL,
+        "sandbox_image": os.environ.get("HSOPT_SANDBOX_IMAGE") or "community/base:latest",
+    }
+    commands = {
+        "openshell": ["openshell", "--version"],
+        "opencode": ["openshell", "sandbox", "exec", "--name", sandbox_name,
+                     "--no-tty", "--timeout", "30", "--", "opencode", "--version"],
+    }
+    for name, command in commands.items():
+        try:
+            result = _run(command, check=False, timeout=45)
+            identity[name] = {"version": result.stdout.strip()[:100], "returncode": result.returncode}
+        except (OSError, subprocess.SubprocessError) as exc:
+            identity[name] = {"version": None, "error_type": type(exc).__name__}
+    _write_json(run_dir / "runtime_versions.json", identity)
 
 
 def configure_inference() -> dict[str, Any]:
@@ -803,143 +902,57 @@ def configure_inference() -> dict[str, Any]:
                 "--name",
                 NVIDIA_PROVIDER,
                 "--type",
-                "nvidia",
+                "hsopt-nvidia-native",
                 "--credential",
                 "NVIDIA_API_KEY",
                 "--config",
                 f"NVIDIA_BASE_URL={NVIDIA_BASE_URL}",
             ]
         )
-    _run(
-        [
-            "openshell",
-            "inference",
-            "set",
-            "--provider",
-            NVIDIA_PROVIDER,
-            "--model",
-            NEMOTRON_MODEL,
-            "--timeout",
-            "300",
-        ]
-    )
     return {
         "status": "configured",
         "provider": NVIDIA_PROVIDER,
         "model": NEMOTRON_MODEL,
-        "route": "https://inference.local/v1",
+        "route": NVIDIA_BASE_URL,
     }
 
 
 def opencode_config(*, preparation: bool = False) -> dict[str, Any]:
-    """Configure read-only preparation or one isolated candidate edit."""
+    """Native OpenCode v2 config for one isolated candidate mutation."""
 
-    config = {
-        "$schema": "https://opencode.ai/config.json",
-        "autoupdate": False,
-        "share": "disabled",
-        "enabled_providers": ["openshell"],
-        "model": OPENCODE_MODEL,
-        "provider": {
-            "openshell": {
-                "name": "OpenShell managed inference",
-                "npm": "@ai-sdk/openai-compatible",
-                "options": {
-                    "baseURL": "https://inference.local/v1",
-                    "apiKey": "unused",
-                },
-                "models": {
-                    "nemotron-3-super-v3": {
-                        "name": "NVIDIA Nemotron 3 Super v3",
-                        "limit": {"context": 131072, "output": MODEL_OUTPUT_LIMIT},
-                    }
-                },
-            }
-        },
-        "agent": {
-            OPENCODE_AGENT: {
-                "description": "Mutate only the isolated HSOpt candidate.py policy.",
-                "mode": "primary",
-                "model": OPENCODE_MODEL,
-                "temperature": 1.0,
-                "top_p": 0.95,
-                # Leave room for repeated context reads and optional research
-                # before the single edit while still bounding the model/tool loop.
-                "steps": 20,
-                "prompt": (
-                    "Editing is now enabled. Your FIRST tool call in THIS continuation must read "
-                    "candidate.py AGAIN: OpenCode resets its file-read timestamps between processes, "
-                    "even when the conversation is resumed. Then perform exactly one candidate.py "
-                    "policy mutation. Verify that you have read "
-                    "research_context.json, and every required benchmark JSON listed there. "
-                    "Read them before editing; missing reads invalidate the proposal. Before "
-                    "editing, you may optionally use skill, websearch, webfetch, "
-                    "or codesearch for product-formula research. Read candidate.py, "
-                    "the read-only evaluate.py implementation, and the read-only "
-                    "benchmark JSON files as needed. Call one edit or write tool "
-                    "exactly once, then "
-                    "immediately return a final text response without calling "
-                    "another tool. ProductFormula.build_step() is the "
-                    "authoritative recurrence and may return any deterministic "
-                    "stationary Pauli-rotation schedule. Do not search for this "
-                    "HSOpt repository, campaign, or any sibling baseline policy."
-                ),
-                "permission": {
-                    # OpenCode 1.2.18 currently rejects granular edit allows
-                    # after merging the agent policy. The disposable sandbox
-                    # therefore permits its edit primitive, then enforces the
-                    # one-file contract against the raw action log before any
-                    # candidate is accepted or returned to the host.
-                    "*": "allow",
-                    "bash": "deny",
-                    "batch": "deny",
-                    "doom_loop": "deny",
-                    "external_directory": {
-                        "*": "deny",
-                        "/sandbox/work/candidate.py": "allow",
-                    },
-                    "glob": "deny",
-                    "grep": "deny",
-                    "list": "deny",
-                    "lsp": "deny",
-                    "question": "deny",
-                    "read": {
-                        "*": "deny",
-                        "candidate.py": "allow",
-                        "/sandbox/work/candidate.py": "allow",
-                        "evaluate.py": "allow",
-                        "/sandbox/work/evaluate.py": "allow",
-                        "problem.json": "allow",
-                        "/sandbox/work/problem.json": "allow",
-                        "reaction.json": "allow",
-                        "/sandbox/work/reaction.json": "allow",
-                        "*.json": "allow",
-                        "**/*.json": "allow",
-                        "/sandbox/work/**/*.json": "allow",
-                    },
-                    # OpenCode's edit permission gates edit, write, and patch.
-                    "edit": "allow",
-                    "skill": {
-                        "*": "deny",
-                        "hsopt": "allow",
-                    },
-                    "task": "deny",
-                    "todoread": "deny",
-                    "todowrite": "deny",
-                    "codesearch": "allow",
-                    "webfetch": "allow",
-                    "websearch": "allow",
-                },
-            }
-        },
-    }
-
+    permissions = [{"action": "*", "resource": "*", "effect": "deny"}]
+    for resource in ("candidate.py", "evaluate.py", "*.json", "**/*.json"):
+        permissions.append({"action": "read", "resource": resource, "effect": "allow"})
+    permissions.extend([
+        {"action": "edit", "resource": "candidate.py", "effect": "deny" if preparation else "allow"},
+        {"action": "skill", "resource": "hsopt", "effect": "allow"},
+        {"action": "webfetch", "resource": "*", "effect": "allow"},
+        {"action": "websearch", "resource": "*", "effect": "allow"},
+    ])
+    system = (
+        "Editing is now enabled. Your FIRST tool call in THIS continuation must read "
+        "candidate.py AGAIN: OpenCode resets its file-read timestamps between processes, "
+        "even when the conversation is resumed. Then perform exactly one candidate.py "
+        "policy mutation. Verify that you have read "
+        "research_context.json, and every required benchmark JSON listed there. "
+        "Read them before editing; missing reads invalidate the proposal. Before "
+        "editing, you may optionally use skill, websearch, webfetch, "
+        "for product-formula research. Read candidate.py, "
+        "the read-only evaluate.py implementation, and the read-only "
+        "benchmark JSON files as needed. Call one edit or write tool "
+        "exactly once, then "
+        "immediately return a final text response without calling "
+        "another tool. ProductFormula.build_step() is the "
+        "authoritative recurrence and may return any deterministic "
+        "stationary Pauli-rotation schedule. Do not search for this "
+        "HSOpt repository, campaign, or any sibling baseline policy."
+    )
     if preparation:
-        agent = config["agent"][OPENCODE_AGENT]
-        agent["permission"]["edit"] = "deny"
-        agent["prompt"] = (
+        system = (
             "This is the read-only preparation stage of an HSOpt mutation. "
-            "Read candidate.py, research_context.json, and EVERY file in required_reads. "
+            "Your FIRST tool call must read /sandbox/work/candidate.py. "
+            "Then read /sandbox/work/research_context.json and EVERY file in required_reads. "
+            "Each listed path is a FILE, never a directory. Do not read or list directories. "
             "The host verifies successful read receipts before enabling editing. "
             "Do not attempt edit, write, or patch in this stage. Analyze the concrete "
             "Hamiltonians, policy API, prior rejected proposals, and a new scientific "
@@ -947,7 +960,41 @@ def opencode_config(*, preparation: bool = False) -> dict[str, Any]:
             "Do not search for HSOpt or sibling baselines. Finish with a brief hypothesis; "
             "a separate continuation will enable exactly one candidate.py edit."
         )
-    return config
+    return {
+        "$schema": "https://opencode.ai/config.json",
+        "update": "disable",
+        "share": "disabled",
+        "snapshots": False,
+        "model": OPENCODE_MODEL,
+        "enabled_providers": ["openshell"],
+        "providers": {
+            "openshell": {
+                "name": "NVIDIA inference through OpenShell credential proxy",
+                "env": ["NVIDIA_API_KEY"],
+                "package": "@opencode/ai/providers/openai-compatible",
+                "settings": {"baseURL": NVIDIA_BASE_URL},
+                "models": {
+                    NEMOTRON_MODEL: {
+                        "modelID": NEMOTRON_MODEL,
+                        "name": "NVIDIA Nemotron 3.5 Super VL",
+                        "capabilities": {"tools": True},
+                        "limit": {"context": 131072, "output": MODEL_OUTPUT_LIMIT},
+                    }
+                },
+            }
+        },
+        "agents": {
+            OPENCODE_AGENT: {
+                "description": "Mutate only the isolated HSOpt candidate.py policy.",
+                "mode": "primary",
+                "model": OPENCODE_MODEL,
+                "request": {"body": {"temperature": 1.0, "top_p": 0.95}},
+                "steps": 20,
+                "system": system,
+                "permissions": permissions,
+            }
+        },
+    }
 
 
 def mutation_prompt(
@@ -1240,6 +1287,7 @@ def _mutate_once(
         run_dir / "mutation_protocol.json",
         {
             "version": MUTATION_PROTOCOL_VERSION,
+            "model": NEMOTRON_MODEL,
             "required_reads": required_reads,
             "context_sha256": _sha256(run_dir / "research_context.json"),
             "prompt_sha256": hashlib.sha256(prompt.encode()).hexdigest(),
@@ -1252,7 +1300,10 @@ def _mutate_once(
     )
     _write_json(run_dir / "opencode.preparation.json", opencode_config(preparation=True))
     preparation_prompt = (
-        "Read-only preparation. Editing is disabled until the host verifies all reads. "
+        "Read-only preparation. FIRST read /sandbox/work/candidate.py, then "
+        "/sandbox/work/research_context.json, then each remaining required FILE. "
+        "Do not read directories or append filenames to these file paths. "
+        "Editing is disabled until the host verifies all reads. "
         "Successfully read each of these files before returning: "
         + json.dumps(required_reads)
         + ". Inspect research_context.json for the exact hook contract, Hamiltonian "
@@ -1300,15 +1351,22 @@ def _mutate_once(
                 "--name",
                 sandbox_name,
                 "--no-auto-providers",
+                "--provider",
+                NVIDIA_PROVIDER,
                 "--no-tty",
+                "--detach",
+                *(["--from", os.environ["HSOPT_SANDBOX_IMAGE"]]
+                  if os.environ.get("HSOPT_SANDBOX_IMAGE") else []),
+                *(["--policy", os.environ["HSOPT_SANDBOX_POLICY"]]
+                  if os.environ.get("HSOPT_SANDBOX_POLICY") else []),
                 "--",
-                "sh",
-                "-lc",
-                "true",
+                "sleep",
+                "infinity",
             ],
             timeout=timeout_seconds,
         )
         created = True
+        _capture_runtime_versions(sandbox_name, run_dir)
         _write_json(
             run_dir / "research_network.json",
             _configure_research_network(sandbox_name),
@@ -1335,6 +1393,7 @@ def _mutate_once(
                 "openshell",
                 "sandbox",
                 "upload",
+                "--no-git-ignore",
                 sandbox_name,
                 str(candidate),
                 "/sandbox/work/candidate.py",
@@ -1348,6 +1407,7 @@ def _mutate_once(
                     "openshell",
                     "sandbox",
                     "upload",
+                    "--no-git-ignore",
                     sandbox_name,
                     str(local),
                     remote,
@@ -1360,6 +1420,7 @@ def _mutate_once(
                 "openshell",
                 "sandbox",
                 "upload",
+                "--no-git-ignore",
                 sandbox_name,
                 str(run_dir / "opencode.preparation.json"),
                 "/sandbox/opencode.json",
@@ -1371,6 +1432,7 @@ def _mutate_once(
                 "openshell",
                 "sandbox",
                 "upload",
+                "--no-git-ignore",
                 sandbox_name,
                 str(sandbox_skill),
                 "/sandbox/work/.opencode/skills/hsopt/SKILL.md",
@@ -1382,6 +1444,7 @@ def _mutate_once(
                 "openshell",
                 "sandbox",
                 "upload",
+                "--no-git-ignore",
                 sandbox_name,
                 str(sandbox_file_list_shim),
                 "/sandbox/work/.local/bin/rg",
@@ -1416,14 +1479,13 @@ def _mutate_once(
             "--",
             "opencode",
             "run",
+            "--standalone",
             "--format",
             "json",
             "--model",
             OPENCODE_MODEL,
             "--agent",
             OPENCODE_AGENT,
-            "--dir",
-            "/sandbox/work",
             prompt,
         ]
         stopped_after_edit = False
@@ -1441,6 +1503,7 @@ def _mutate_once(
                     "openshell",
                     "sandbox",
                     "upload",
+                    "--no-git-ignore",
                     sandbox_name,
                     str(run_dir / "opencode.json"),
                     "/sandbox/opencode.json",
@@ -1501,7 +1564,7 @@ def _mutate_once(
         "status": "mutated",
         "sandbox": sandbox_name,
         "model": NEMOTRON_MODEL,
-        "inference_route": "https://inference.local/v1",
+        "inference_route": NVIDIA_BASE_URL,
         "candidate": str(candidate),
         "run_dir": str(run_dir),
         "agent_audit": audit,

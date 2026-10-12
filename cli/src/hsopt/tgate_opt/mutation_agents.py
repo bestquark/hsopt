@@ -8,8 +8,8 @@ from typing import Any
 
 
 CODEX_PACKAGE = "@openai/codex@0.144.0"
-OPENCODE_PACKAGE = "opencode-ai@1.4.11"
-NEMOTRON_MODEL = "nvidia/nvidia/nemotron-3-super-v3"
+OPENCODE_PACKAGE = "@opencode/cli@2.0.26"
+NEMOTRON_MODEL = "nvidia/nvidia/nemotron-3.5-super-vl"
 NVIDIA_API_BASE = "https://inference-api.nvidia.com/v1"
 OPENCODE_AGENT = "hsopt-mutation"
 
@@ -43,37 +43,37 @@ def opencode_config(*, model: str = NEMOTRON_MODEL) -> dict[str, Any]:
     provider_model = model.removeprefix("nvidia/")
     return {
         "$schema": "https://opencode.ai/config.json",
-        "autoupdate": False,
+        "update": "disable",
         "share": "disabled",
+        "snapshots": False,
         "enabled_providers": ["nvidia"],
         "model": model,
-        "provider": {
+        "providers": {
             "nvidia": {
                 "name": "NVIDIA API Catalog",
-                "npm": "@ai-sdk/openai-compatible",
-                "options": {
-                    "baseURL": NVIDIA_API_BASE,
-                    "apiKey": "{env:NVIDIA_API_KEY}",
-                },
+                "env": ["NVIDIA_API_KEY"],
+                "package": "@opencode/ai/providers/openai-compatible",
+                "settings": {"baseURL": NVIDIA_API_BASE},
                 "models": {
                     provider_model: {
-                        "name": "NVIDIA Nemotron 3 Super v3",
+                        "modelID": model,
+                        "name": "NVIDIA Nemotron 3.5 Super VL",
+                        "capabilities": {"tools": True},
                     }
                 },
             }
         },
-        "agent": {
+        "agents": {
             OPENCODE_AGENT: {
                 "description": "Edit only the isolated HSOpt simple_pf.py candidate.",
                 "mode": "primary",
                 "model": model,
-                "temperature": 1.0,
-                "top_p": 0.95,
-                "permission": {
-                    "*": "deny",
-                    "read": {"*": "deny", "simple_pf.py": "allow"},
-                    "edit": {"*": "deny", "simple_pf.py": "allow"},
-                },
+                "request": {"body": {"temperature": 1.0, "top_p": 0.95}},
+                "permissions": [
+                    {"action": "*", "resource": "*", "effect": "deny"},
+                    {"action": "read", "resource": "simple_pf.py", "effect": "allow"},
+                    {"action": "edit", "resource": "simple_pf.py", "effect": "allow"},
+                ],
             }
         },
     }
@@ -151,14 +151,13 @@ def build_mutation_invocation(
             "-y",
             OPENCODE_PACKAGE,
             "run",
+            "--standalone",
             "--format",
             "json",
             "--model",
             selected_model,
             "--agent",
             OPENCODE_AGENT,
-            "--dir",
-            str(work_dir),
             prompt,
         ],
         environment=environment,
