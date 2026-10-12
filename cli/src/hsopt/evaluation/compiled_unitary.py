@@ -34,10 +34,12 @@ PHASE_ENCODING_METHOD = "centered_nonidentity_pauli_one_norm"
 QPE_DIMENSIONLESS_EVOLUTION_TIME = 1.0
 QPE_PHASE_ESTIMATION_ALPHA = 8.0 * math.pi
 QPE_SINGLE_RUN_PHASE_SUCCESS_LOWER_BOUND = 0.5
-EVALUATION_CONTRACT_VERSION = "normalized_hamiltonian_qpe_t_count_cudaq_v3"
+EVALUATION_CONTRACT_VERSION = "normalized_hamiltonian_hf_qpe_t_count_cudaq_v4"
+REFERENCE_TARGET = "lowest_exact_hf_accessible_energy"
 # Exact Hamiltonian references contain no approximate rotation synthesis.
 EXACT_REFERENCE_CONTRACT_VERSIONS = (
     "normalized_hamiltonian_qpe_t_count_v2",
+    "normalized_hamiltonian_qpe_t_count_cudaq_v3",
     EVALUATION_CONTRACT_VERSION,
 )
 SYNTHESIS_OPTIONS = {
@@ -1262,18 +1264,28 @@ def _select_lowest_hf_accessible_peak(
         ],
         dtype=np.float64,
     )
-    accessible = np.flatnonzero(probabilities >= QPE_PEAK_WEIGHT_THRESHOLD)
+    # QPE measures an energy eigenspace, not an arbitrary eigenvector chosen
+    # inside a degenerate subspace. Sum its HF weights before thresholding.
+    groups: list[list[int]] = []
+    for index in sorted(range(energies.size), key=lambda i: float(energies[i])):
+        if groups and abs(float(energies[index] - energies[groups[-1][0]])) <= 1.0e-10:
+            groups[-1].append(index)
+        else:
+            groups.append([index])
+    accessible_groups = [
+        group for group in groups if float(probabilities[group].sum()) >= QPE_PEAK_WEIGHT_THRESHOLD
+    ]
+    accessible = np.asarray([index for group in accessible_groups for index in group])
     if accessible.size == 0:
         raise RuntimeError(
             "compiled PF unitary has no numerically resolved eigenphase with HF support"
         )
-    selected = min(
-        (int(index) for index in accessible),
-        key=lambda index: (float(energies[index]), -float(probabilities[index]), index),
-    )
-    selected_probability = min(1.0, max(0.0, float(probabilities[selected])))
+    selected_group = accessible_groups[0]
+    selected = selected_group[0]
+    selected_probability = min(1.0, max(0.0, float(probabilities[selected_group].sum())))
     return {
         "selected_eigen_index": selected,
+        "selected_eigen_indices": selected_group,
         "selected_step_eigenphase_radians": float(phases[selected]),
         "selected_total_eigenphase_radians": float(total_phases[selected]),
         "selected_principal_eigenphase_radians": _principal_phase(total_phases[selected]),
@@ -1304,7 +1316,7 @@ def _reference_energy(
     problem: Mapping[str, Any],
     reference: Mapping[str, Any],
 ) -> float:
-    """Validate a cached exact reference without loading its ground-state vector."""
+    """Validate the fixed-HF reference; ground energy is only a diagnostic."""
 
     if reference.get("observable") != "exact_unitary_ground_eigenphase":
         raise ValueError("reference is not an exact-unitary ground-eigenphase result")
@@ -1313,7 +1325,70 @@ def _reference_energy(
     problem_path = Path(str(problem["_path"]))
     if reference.get("problem_sha256") != _sha256(problem_path):
         raise ValueError(f"exact reference does not match {problem_path}")
-    return float(reference["exact_unitary_ground_energy_hartree"])
+    if reference.get("reference_target") != REFERENCE_TARGET:
+        raise ValueError("cached reference requires HF-accessible reference preparation")
+    if reference.get("hf_basis_index") != _hartree_fock_basis_index(problem):
+        raise ValueError("cached reference uses a different initial HF determinant")
+    if reference.get("qpe_peak_weight_threshold") != QPE_PEAK_WEIGHT_THRESHOLD:
+        raise ValueError("cached reference uses a different HF accessibility threshold")
+    energy = float(reference["exact_hf_accessible_energy_hartree"])
+    if not math.isfinite(energy):
+        raise ValueError("cached HF-accessible reference energy must be finite")
+    return energy
+
+
+def prepare_hf_reference(
+    problem_path: Path,
+    ground_reference: Mapping[str, Any],
+    *,
+    backend: str = "numpy",
+) -> dict[str, Any]:
+    """Add the fixed-HF QPE target without recalibrating an initial policy.
+
+    Reuse a certified HF-supported ground cluster when available. Otherwise
+    resolve the lowest HF-supported Hamiltonian cluster with partial Lanczos.
+    Exact evolution shares H's eigenvectors, so U_exact is never constructed.
+    """
+    started = time.perf_counter()
+    problem = load_problem(problem_path)
+    result = dict(ground_reference)
+    if result.get("observable") != "exact_unitary_ground_eigenphase":
+        raise ValueError("HF reference preparation requires a cached ground reference")
+    if result.get("problem_sha256") != _sha256(problem_path):
+        raise ValueError("cached ground reference does not match the Hamiltonian")
+    if result.get("reference_target") == REFERENCE_TARGET:
+        _reference_energy(problem, result)
+        return result
+    probability = float(result["hf_ground_subspace_probability"])
+    if probability >= QPE_PEAK_WEIGHT_THRESHOLD:
+        energy = float(result["exact_unitary_ground_energy_hartree"])
+        diagnostics = {"method": "cached_hf_supported_ground_subspace"}
+    else:
+        backend_name, xp = array_backend(backend)
+        indices, matrix = _fixed_electron_hamiltonian(problem)
+        hf_index = int(np.flatnonzero(indices == _hartree_fock_basis_index(problem))[0])
+        from .gpu_spectrum import reference_hf_eigensolve
+
+        energy, probability, diagnostics = reference_hf_eigensolve(
+            xp.asarray(matrix, dtype=xp.complex128),
+            hf_index=hf_index,
+            identity_coefficient=float(problem["identity_coefficient"]),
+            target_time=float(problem["target_time"]),
+            backend=backend_name,
+        )
+    ground_energy = float(result["exact_unitary_ground_energy_hartree"])
+    result.update(
+        evaluation_contract_version=EVALUATION_CONTRACT_VERSION,
+        reference_target=REFERENCE_TARGET,
+        hf_basis_index=_hartree_fock_basis_index(problem),
+        qpe_peak_weight_threshold=QPE_PEAK_WEIGHT_THRESHOLD,
+        exact_hf_accessible_energy_hartree=energy,
+        exact_hf_accessible_probability=probability,
+        exact_hf_accessible_ground_gap_hartree=energy - ground_energy,
+        hf_reference_solver=diagnostics,
+        hf_reference_preparation_seconds=time.perf_counter() - started,
+    )
+    return result
 
 
 def evaluate_exact_reference(
@@ -1336,6 +1411,7 @@ def evaluate_exact_reference(
     hamiltonian_eigensolve_started = time.perf_counter()
     if backend_name == "cupy-lanczos":
         from .gpu_spectrum import reference_eigensolve
+
         h_eigenvalues, h_eigenvectors = reference_eigensolve(
             sector_hamiltonian, ground_atol=EXACT_GROUND_SUBSPACE_ATOL_HARTREE
         )
@@ -1403,13 +1479,14 @@ def evaluate_exact_reference(
             f"Hamiltonian ground energy: {consistency_error}"
         )
     evaluation_wall_seconds = time.perf_counter() - evaluation_started
-    return {
+    result = {
         "status": "ok",
         "evaluation_contract_version": EVALUATION_CONTRACT_VERSION,
         "observable": "exact_unitary_ground_eigenphase",
         "reference_solver": (
             "gpu_hamiltonian_lanczos_analytic_unitary_phase"
-            if backend_name == "cupy-lanczos" else "dense_exact_unitary"
+            if backend_name == "cupy-lanczos"
+            else "dense_exact_unitary"
         ),
         "unitary_definition": "U_exact = exp(+i (H - c0 I) / lambda)",
         "problem": problem["name"],
@@ -1447,6 +1524,7 @@ def evaluate_exact_reference(
             "total": evaluation_wall_seconds,
         },
     }
+    return prepare_hf_reference(problem_path, result, backend=backend)
 
 
 def assemble_exact_difference_reference(
@@ -1463,6 +1541,7 @@ def assemble_exact_difference_reference(
     species_results: dict[str, dict[str, Any]] = {}
     unitary_difference = 0.0
     hamiltonian_difference = 0.0
+    ground_difference = 0.0
     for item in reaction["terms"]:
         species = str(item["species"])
         coefficient = float(item["coefficient"])
@@ -1472,7 +1551,8 @@ def assemble_exact_difference_reference(
         problem = load_problem(problem_path)
         result = dict(species_references[species])
         unitary_energy = _reference_energy(problem, result)
-        hamiltonian_energy = float(result["hamiltonian_ground_energy_hartree"])
+        hamiltonian_energy = float(result["exact_hf_accessible_energy_hartree"])
+        ground_difference += coefficient * float(result["hamiltonian_ground_energy_hartree"])
         species_results[species] = result
         unitary_difference += coefficient * unitary_energy
         hamiltonian_difference += coefficient * hamiltonian_energy
@@ -1487,6 +1567,7 @@ def assemble_exact_difference_reference(
         "status": "ok",
         "evaluation_contract_version": EVALUATION_CONTRACT_VERSION,
         "observable": "exact_unitary_signed_energy_difference",
+        "reference_target": REFERENCE_TARGET,
         "unitary_definition": ("U_exact = exp(+i (H - c0 I) / lambda) for each species"),
         "reaction": reaction["name"],
         "reaction_path": str(reaction_path),
@@ -1494,6 +1575,7 @@ def assemble_exact_difference_reference(
         "backend": backend,
         "hamiltonian_exact_difference_hartree": hamiltonian_difference,
         "exact_unitary_difference_hartree": unitary_difference,
+        "exact_ground_difference_hartree": ground_difference,
         "unitary_hamiltonian_consistency_error_hartree": consistency_error,
         "species": species_results,
         "evaluation_wall_seconds": assembly_seconds,
@@ -1647,8 +1729,20 @@ def evaluate_molecule(
         "spectral_solver": spectral_solver,
         "n_qubits": int(problem["n_qubits"]),
         "electrons": int(problem["electrons"]),
-        "exact_ground_energy_hartree": exact_energy,
-        "exact_unitary_ground_energy_hartree": exact_energy,
+        "reference_target": REFERENCE_TARGET,
+        "exact_reference_energy_hartree": exact_energy,
+        "exact_hf_accessible_energy_hartree": exact_energy,
+        "exact_hf_accessible_probability": reference_result["exact_hf_accessible_probability"],
+        "exact_hf_accessible_ground_gap_hartree": reference_result[
+            "exact_hf_accessible_ground_gap_hartree"
+        ],
+        "exact_ground_energy_hartree": reference_result["exact_unitary_ground_energy_hartree"],
+        "exact_unitary_ground_energy_hartree": reference_result[
+            "exact_unitary_ground_energy_hartree"
+        ],
+        "ground_state_energy_error_hartree": abs(
+            estimated_energy - float(reference_result["exact_unitary_ground_energy_hartree"])
+        ),
         "compiled_pf_energy_hartree": estimated_energy,
         "signed_energy_error_hartree": signed_error,
         "absolute_energy_error_hartree": absolute_error,
@@ -1667,7 +1761,8 @@ def evaluate_molecule(
         "evaluation_contract": (
             "minimize the paper-bound full QPE T cost, including phase-resolution "
             "queries and enough HF-state attempts for 95% peak confidence, subject "
-            "to chemical accuracy after decoding the normalized Hamiltonian phase"
+            "to one-kcal/mol simulation error relative to exact evolution from "
+            "the same HF determinant after decoding the normalized Hamiltonian phase"
         ),
         "evaluation_wall_seconds": evaluation_wall_seconds,
         "timing_seconds": {
@@ -1714,6 +1809,8 @@ def evaluate_difference(
         raise ValueError("reference is not an exact-unitary signed-difference result")
     if reference.get("evaluation_contract_version") not in EXACT_REFERENCE_CONTRACT_VERSIONS:
         raise ValueError("reference uses a different evaluator contract")
+    if reference.get("reference_target") != REFERENCE_TARGET:
+        raise ValueError("reaction reference requires HF-accessible reference preparation")
     if reference.get("reaction_sha256") != _sha256(reaction_path):
         raise ValueError(f"exact reference does not match {reaction_path}")
     species_results: dict[str, dict[str, Any]] = {}
@@ -1744,7 +1841,7 @@ def evaluate_difference(
             species_results[species] = result
             total_t_count += int(result["t_count"])
         result = species_results[species]
-        exact_difference += coefficient * result["exact_ground_energy_hartree"]
+        exact_difference += coefficient * result["exact_reference_energy_hartree"]
         compiled_difference += coefficient * result["compiled_pf_energy_hartree"]
 
     signed_error = compiled_difference - exact_difference
@@ -1753,7 +1850,7 @@ def evaluate_difference(
         species: species_coefficients[species]
         * (
             float(result["compiled_pf_energy_hartree"])
-            - float(result["exact_ground_energy_hartree"])
+            - float(result["exact_reference_energy_hartree"])
         )
         for species, result in species_results.items()
     }
@@ -1813,6 +1910,8 @@ def evaluate_difference(
         "difference_error_contract": error_contract,
         "difference_error_contract_version": DIFFERENCE_ERROR_CONTRACT_VERSION,
         "observable": "compiled_unitary_signed_energy_difference",
+        "reference_target": REFERENCE_TARGET,
+        "exact_ground_difference_hartree": reference["exact_ground_difference_hartree"],
         "reaction": reaction["name"],
         "reaction_path": str(reaction_path),
         "policy_path": str(Path(policy_path).resolve()),

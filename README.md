@@ -95,13 +95,16 @@ decoded without consulting the exact answer:
 E_{\mathrm{Ha}}=c_0+\lambda\phi.
 ```
 
-The exact ground energy is cached once only to score candidates. A candidate
-may change the product formula and rotation-synthesis parameters, but not this
+The lowest exact HF-accessible QPE energy is cached once to score candidates.
+The exact ground energy is retained separately as a diagnostic and for the
+existing Reiher baseline calibration. A candidate may change the product formula and rotation-synthesis parameters, but not this
 encoding, the Hamiltonian, or the electron sector.
 
 The evaluator diagonalizes the compiled $U_{\mathrm{PF}}$ and selects the
 lowest decoded energy with numerically resolved HF weight $p_{\mathrm{HF}}$.
-After measuring its compiled-unitary systematic error
+Its simulation error is the difference from the exact HF-accessible energy,
+using the same determinant and peak threshold. This tests QPE dynamics rather
+than state-preparation quality. After measuring its compiled-unitary systematic error
 $\epsilon_{\mathrm{sys}}$, the remaining chemical-accuracy budget is assigned
 to QPE:
 

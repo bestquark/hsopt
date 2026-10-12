@@ -56,6 +56,16 @@ def _safe_component(value: object, label: str) -> str:
 
 def _write_csv(path: Path, rows: list[dict[str, Any]], fields: Iterable[str]) -> None:
     fieldnames = list(fields)
+    # Preserve explicit HF simulation targets alongside historical ground
+    # diagnostics, including when exporting older campaigns.
+    for row in rows:
+        for name in row:
+            if (
+                name == "reference_target"
+                or "hf_accessible" in name
+                or "simulation_energy_error" in name
+            ) and name not in fieldnames:
+                fieldnames.append(name)
     path.parent.mkdir(parents=True, exist_ok=True)
     with path.open("w", encoding="utf-8", newline="") as stream:
         writer = csv.DictWriter(stream, fieldnames=fieldnames, extrasaction="ignore")
@@ -257,7 +267,15 @@ def _hamlib_candidate_row(
             result.get("exact_ground_energy_hartree", ""),
         ),
         "ground_state_energy_estimate_hartree": result.get("compiled_pf_energy_hartree", ""),
-        "ground_state_energy_error_hartree": result.get("absolute_energy_error_hartree", ""),
+        "ground_state_energy_error_hartree": result.get(
+            "ground_state_energy_error_hartree", result.get("absolute_energy_error_hartree", "")
+        ),
+        "reference_target": result.get("reference_target", "ground_energy"),
+        "exact_hf_accessible_energy_hartree": result.get("exact_hf_accessible_energy_hartree", ""),
+        "exact_hf_accessible_ground_gap_hartree": result.get(
+            "exact_hf_accessible_ground_gap_hartree", ""
+        ),
+        "simulation_energy_error_hartree": result.get("absolute_energy_error_hartree", ""),
         "mutation_summary": _mutation_summary(result),
         "task_id": result.get("task_id", decision.get("task_id", "")),
         "backend": result.get("backend", ""),
@@ -312,7 +330,14 @@ def _hamlib_summary_row(
         "baseline_total_t_gates_qpe": baseline_t,
         "baseline_ground_state_energy_hartree": baseline["exact_unitary_ground_energy_hartree"],
         "baseline_ground_state_energy_estimate_hartree": baseline["compiled_pf_energy_hartree"],
-        "baseline_ground_state_energy_error_hartree": baseline["absolute_energy_error_hartree"],
+        "baseline_ground_state_energy_error_hartree": baseline.get(
+            "ground_state_energy_error_hartree", baseline["absolute_energy_error_hartree"]
+        ),
+        "reference_target": baseline.get("reference_target", "ground_energy"),
+        "baseline_exact_hf_accessible_energy_hartree": baseline.get(
+            "exact_hf_accessible_energy_hartree", ""
+        ),
+        "baseline_simulation_energy_error_hartree": baseline["absolute_energy_error_hartree"],
         "best_iteration": best_iteration,
         **{f"best_{key}": value for key, value in best_policy.items()},
         "best_compiled_evolution_t_gates": best.get("t_count", ""),
@@ -324,7 +349,13 @@ def _hamlib_summary_row(
         "best_total_t_gates_qpe": best_t,
         "best_ground_state_energy_hartree": best["exact_unitary_ground_energy_hartree"],
         "best_ground_state_energy_estimate_hartree": best["compiled_pf_energy_hartree"],
-        "best_ground_state_energy_error_hartree": best["absolute_energy_error_hartree"],
+        "best_ground_state_energy_error_hartree": best.get(
+            "ground_state_energy_error_hartree", best["absolute_energy_error_hartree"]
+        ),
+        "best_exact_hf_accessible_energy_hartree": best.get(
+            "exact_hf_accessible_energy_hartree", ""
+        ),
+        "best_simulation_energy_error_hartree": best["absolute_energy_error_hartree"],
         "reduction_percent": 100.0 * (baseline_t - best_t) / baseline_t,
     }
 

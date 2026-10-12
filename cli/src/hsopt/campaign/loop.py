@@ -20,6 +20,7 @@ from ..evaluation.compiled_unitary import (
     DIFFERENCE_ERROR_CONTRACT_VERSION,
     EVALUATION_CONTRACT_VERSION,
     EXACT_REFERENCE_CONTRACT_VERSIONS,
+    REFERENCE_TARGET,
 )
 from ..sandbox.openshell import mutate
 from ..sandbox.mutation_retry import (
@@ -257,6 +258,8 @@ def initialize_lane(
         reference = _read_json(exact_reference_path)
         if reference.get("evaluation_contract_version") not in EXACT_REFERENCE_CONTRACT_VERSIONS:
             raise ValueError("precomputed exact reference uses a different evaluator contract")
+        if reference.get("reference_target") != REFERENCE_TARGET:
+            raise ValueError("precomputed exact reference requires HF-accessible preparation")
         if kind == "absolute":
             if reference.get("observable") != "exact_unitary_ground_eigenphase":
                 raise ValueError("absolute lane requires a ground-eigenphase reference")
@@ -293,6 +296,7 @@ def initialize_lane(
     manifest = {
         "schema": 3,
         "evaluation_contract_version": EVALUATION_CONTRACT_VERSION,
+        "reference_target": REFERENCE_TARGET,
         "created_at": _now(),
         "kind": kind,
         "source": str(source),

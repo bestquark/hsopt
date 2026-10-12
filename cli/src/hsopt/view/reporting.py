@@ -202,9 +202,16 @@ def _schedule(row: Mapping[str, object], prefix: str = "") -> str:
 
 
 def _assert_energy(row: Mapping[str, str], prefix: str = "") -> float:
-    exact = _float(row.get(f"{prefix}ground_state_energy_hartree"))
+    hf_target = row.get(f"{prefix}exact_hf_accessible_energy_hartree")
+    exact = _float(
+        hf_target if value_present(hf_target) else row.get(f"{prefix}ground_state_energy_hartree")
+    )
     estimate = _float(row.get(f"{prefix}ground_state_energy_estimate_hartree"))
-    stored = _float(row.get(f"{prefix}ground_state_energy_error_hartree"))
+    stored = _float(
+        row.get(f"{prefix}simulation_energy_error_hartree")
+        if value_present(hf_target)
+        else row.get(f"{prefix}ground_state_energy_error_hartree")
+    )
     computed = abs(estimate - exact)
     if not math.isclose(computed, abs(stored), rel_tol=1e-9, abs_tol=2e-12):
         raise ReportValidationError("HamLib exact-energy error arithmetic is inconsistent")
@@ -288,7 +295,7 @@ def _hamlib_summary(lane_id: str, rows: Sequence[Mapping[str, str]]) -> str:
         f"Lane {lane_id}; molecule {first['molecule']}; {first['nqubits']} qubits; "
         f"{first['electrons']} electrons; {first['terms']} Pauli terms. "
         "A/R denotes accepted/rejected mutations. Energy errors are measured against the exact "
-        "ground-state energy in the fixed evaluator. T95 is the 95%-confidence "
+        "reference energy in the fixed evaluator (HF-accessible exact QPE for v4). T95 is the 95%-confidence "
         "cost; parentheses show per-attempt T count x QPE attempts."
     )
     body = (
@@ -356,9 +363,12 @@ def _hamlib_extended(
                 row.get("decision_reason") or "--",
             ]
         )
-    exact = summaries[0]["baseline_ground_state_energy_hartree"]
+    exact = summaries[0].get("baseline_exact_hf_accessible_energy_hartree")
+    hf_target = value_present(exact)
+    if not hf_target:
+        exact = summaries[0]["baseline_ground_state_energy_hartree"]
     intro = (
-        f"Lane {lane_id}. Exact ground-state energy: {_number(exact, 10)} Ha. "
+        f"Lane {lane_id}. Exact {'HF-accessible' if hf_target else 'ground-state'} energy: {_number(exact, 10)} Ha. "
         "Each row records the attempted mutation and the fixed evaluator outcome; rejected rows "
         "do not replace the incumbent."
     )

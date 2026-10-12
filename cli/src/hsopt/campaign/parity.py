@@ -14,6 +14,7 @@ from typing import Any, Mapping
 
 ENERGY_FIELDS = (
     "exact_unitary_ground_energy_hartree",
+    "exact_hf_accessible_energy_hartree",
     "compiled_pf_energy_hartree",
     "absolute_energy_error_hartree",
     "exact_difference_hartree",

@@ -82,7 +82,8 @@ The evaluator:
    the GPU Lanczos backend requires stable eigenphases/HF weights and never
    falls back to full-unitary diagonalization;
 2. repeats eigenphases exactly according to `repetitions()`;
-3. scores the lowest HF-accessible energy against the cached exact ground energy;
+3. scores the lowest HF-accessible energy against the cached exact HF-accessible
+   energy with the same determinant/threshold; ground energy is a separate diagnostic;
 4. assigns the remaining one-kcal/mol budget to QPE, using the paper bound
    `ceil(8*pi/(target_time*epsilon_QPE))` and enough attempts for 95% confidence.
 
@@ -91,7 +92,6 @@ their confidence-adjusted T costs are summed. `individual_errors` requires
 `sum_s |nu_s (E_pf,s - E_exact,s)| < epsilon_chem`; `error_cancellation` requires
 `|sum_s nu_s (E_pf,s - E_exact,s)| < epsilon_chem`. Both values are recorded,
 but lane identity, feasibility, history, exports, and plots use one contract.
-
 Once a lane is feasible, accept only a strict T95 reduction that remains within
 1 kcal/mol. Before feasibility, the loop may retain exact-error progress.
 
@@ -100,8 +100,9 @@ Once a lane is feasible, accept only a strict T95 reduction that remains within
 - Select one generated PF2 baseline: `loose` uses the rigorous Eq. (19) beta
   bound; `tight` measures beta against cached exact energy at 0.1 mHa.
   Both use Eq. (34) allocation and the same fixed evaluator.
-- Cache the exact reference once per Hamiltonian; reuse it in tight calibration,
-  iteration 0, and every mutation. Measure the unchanged baseline at iteration 0.
+- Keep the ground reference for tight calibration; cache the exact HF-accessible
+  reference for scoring. A reference change does not regenerate calibrated policies.
+  Measure the unchanged baseline at iteration 0.
 - Keep both reaction contracts and loose/tight campaigns separate: histories,
   task IDs, mutation pools, queues, workers, incumbents, exports, and plots.
   Exact references and hardware locks may be shared; candidate histories may not.
@@ -122,7 +123,6 @@ After complete matched loose/tight iteration-0 censuses, `hsopt-baseline-drop`
 records `100 * (T95_loose - T95_tight) / T95_loose` per experiment/contract.
 Require matching grids, hashes, contracts, backends, accelerators, placement,
 and accuracy; never pool hardware.
-
 Use `uv run`; see `cli/README.md` for agent setup and `references/layout.md` for layout.
 The external runtime uses `hsopt-handoff` to dispatch evaluation requests,
 deliver results, record acceptance, and resume mutations; see `docs/runtime.md`.

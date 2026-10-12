@@ -19,7 +19,9 @@ Every production lane must follow these stages:
    using `E_exact`. `tight` obtains it from the first numerically passing PF2
    step count against the cached exact ground energy at the same 0.1 mHa
    reference error. Prepare the exact ground-phase reference once with the
-   configured solver; both calibration modes and every lane reuse it. GPU
+   configured solver for calibration. Cache the lowest exact HF-accessible
+   energy separately for candidate scoring; retain the ground energy as a
+   diagnostic. Existing calibrated policies need not be regenerated. GPU
    Lanczos resolves H and maps its phases analytically to the exact unitary.
 2. Measure the generated paper policy unchanged as iteration 0 against that
    cached reference.

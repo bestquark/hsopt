@@ -10,7 +10,7 @@ from collections import Counter
 from pathlib import Path
 from typing import Any
 
-MUTATION_PROTOCOL_VERSION = "hamiltonian_context_history_v7_opencode2_model_tool_provenance"
+MUTATION_PROTOCOL_VERSION = "hamiltonian_context_history_v8_fixed_hf_qpe_reference"
 
 POLICY_CONTRACT = {
     "repetitions": "Return a positive integer; step_time = target_time / repetitions().",
@@ -72,6 +72,9 @@ POLICY_CONTRACT = {
     ),
     "objective": (
         "Minimize confidence-adjusted T95 for the fixed HF-accessible energy observable. "
+        "Simulation error compares compiled and exact evolution from the SAME HF determinant "
+        "using the same lowest-accessible-peak rule. Ground-state preparation bias is a separate "
+        "diagnostic, not the acceptance error. The HF state and reference remain immutable. "
         "Once feasible, only a feasible strict T95 improvement is accepted. Before feasibility, "
         "lower exact contract error is progress. The test is not full-unitary fidelity."
     ),

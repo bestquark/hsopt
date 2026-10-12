@@ -104,8 +104,13 @@ def eigensolve(unitary, problem, metrics, *, iterative, target_state=None):
             start /= cp.linalg.norm(start)
             operator = LinearOperator((dim, dim), matvec=action, dtype=cp.complex128)
             values, vectors = eigsh(
-                operator, k=k, ncv=min(max(48, 2 * k + 1), dim), which="SA",
-                v0=start, maxiter=1200, tol=1e-11
+                operator,
+                k=k,
+                ncv=min(max(48, 2 * k + 1), dim),
+                which="SA",
+                v0=start,
+                maxiter=1200,
+                tol=1e-11,
             )
             vectors /= cp.linalg.norm(vectors, axis=0, keepdims=True)
             uv = unitary @ vectors
@@ -116,7 +121,9 @@ def eigensolve(unitary, problem, metrics, *, iterative, target_state=None):
             if target_state is None:
                 try:
                     peak = ev._select_lowest_hf_accessible_peak(
-                        phases, weights, n_steps=metrics["n_steps"],
+                        phases,
+                        weights,
+                        n_steps=metrics["n_steps"],
                         target_time=problem["target_time"],
                         identity_coefficient=problem["identity_coefficient"],
                     )
@@ -187,8 +194,13 @@ def reference_eigensolve(hamiltonian, *, ground_atol):
         start = rng.standard_normal(dimension) + 1j * rng.standard_normal(dimension)
         start /= cp.linalg.norm(start)
         values, vectors = eigsh(
-            hamiltonian, k=k, ncv=min(dimension, max(48, 2 * k + 1)),
-            which="SA", tol=1e-12, maxiter=1200, v0=start,
+            hamiltonian,
+            k=k,
+            ncv=min(dimension, max(48, 2 * k + 1)),
+            which="SA",
+            tol=1e-12,
+            maxiter=1200,
+            v0=start,
         )
         order = cp.argsort(values)
         values, vectors = values[order], vectors[:, order]
@@ -198,17 +210,119 @@ def reference_eigensolve(hamiltonian, *, ground_atol):
             previous = None
             continue
         basis = vectors[:, ground.tolist()]
-        residual = float(cp.max(cp.linalg.norm(
-            hamiltonian @ basis - basis * values[ground.tolist()][None, :], axis=0)).get())
+        residual = float(
+            cp.max(
+                cp.linalg.norm(
+                    hamiltonian @ basis - basis * values[ground.tolist()][None, :], axis=0
+                )
+            ).get()
+        )
         if residual > 1e-10:
             previous = None
             continue
         if previous is not None:
             old_energy, old_basis = previous
             projectors_overlap = float(cp.sum(cp.abs(old_basis.conj().T @ basis) ** 2).get())
-            if (old_basis.shape[1] == basis.shape[1]
-                    and abs(old_energy - host[0]) <= 1e-10
-                    and abs(projectors_overlap - basis.shape[1]) <= 1e-9):
+            if (
+                old_basis.shape[1] == basis.shape[1]
+                and abs(old_energy - host[0]) <= 1e-10
+                and abs(projectors_overlap - basis.shape[1]) <= 1e-9
+            ):
                 return values, vectors
         previous = float(host[0]), basis
     raise RuntimeError("GPU reference ground subspace did not converge")
+
+
+def reference_hf_eigensolve(
+    hamiltonian,
+    *,
+    hf_index,
+    identity_coefficient,
+    target_time,
+    backend,
+):
+    """Certify a stable lowest HF-supported cluster using partial eigensolves.
+
+    CPU Lanczos is available for one-time reference preparation. Production
+    cupy-lanczos remains on GPU and has no dense diagonalization fallback.
+    A higher Ritz energy must bracket the selected cluster; independent starts
+    must agree on its energy and basis-independent HF probability.
+    """
+    from . import compiled_unitary as ev
+
+    if backend == "cupy-lanczos":
+        import cupy as xp
+        from cupyx.scipy.sparse.linalg import eigsh
+    else:
+        from scipy.sparse.linalg import eigsh
+
+        xp = np
+        hamiltonian = ev._host_array(hamiltonian, dtype=np.complex128)
+    dimension = hamiltonian.shape[0]
+    if dimension < 3:
+        raise RuntimeError("HF reference Lanczos requires at least three sector states")
+    previous = None
+    trials = []
+    for attempt, requested in enumerate((4, 8, 16, 32, 64)):
+        k = min(requested, dimension - 2)
+        rng = xp.random.RandomState(42 + 95 * attempt)
+        start = rng.standard_normal(dimension) + 1j * rng.standard_normal(dimension)
+        start /= xp.linalg.norm(start)
+        values, vectors = eigsh(
+            hamiltonian,
+            k=k,
+            ncv=min(dimension, max(48, 2 * k + 1)),
+            which="SA",
+            tol=1e-12,
+            maxiter=1200,
+            v0=start,
+        )
+        vectors /= xp.linalg.norm(vectors, axis=0, keepdims=True)
+        residuals = ev._host_array(
+            xp.linalg.norm(hamiltonian @ vectors - vectors * values[None, :], axis=0)
+        )
+        energies = ev._host_array(values)
+        weights = ev._host_array(xp.abs(vectors[hf_index, :]) ** 2)
+        try:
+            peak = ev._select_lowest_hf_accessible_peak(
+                (energies - identity_coefficient) * target_time,
+                weights,
+                n_steps=1,
+                target_time=target_time,
+                identity_coefficient=identity_coefficient,
+            )
+        except RuntimeError:
+            previous = None
+            trials.append({"k": k, "resolved": False})
+            continue
+        energy = peak["compiled_pf_energy_hartree"]
+        probability = peak["qpe_success_probability_from_hf"]
+        selected = peak["selected_eigen_indices"]
+        resolved = max(residuals) <= 1e-10 and max(energies) > energy + 1e-9
+        trials.append(
+            {
+                "k": k,
+                "energy": energy,
+                "probability": probability,
+                "resolved": bool(resolved),
+                "selected_residual_hartree": float(max(residuals[selected])),
+            }
+        )
+        if (
+            resolved
+            and previous is not None
+            and abs(energy - previous[0]) <= 1e-10
+            and abs(probability - previous[1]) <= 1e-11
+        ):
+            return (
+                energy,
+                probability,
+                {
+                    "method": "hamiltonian_lanczos_hf_peak",
+                    "backend": backend,
+                    "full_diagonalization_permitted": False,
+                    "trials": trials,
+                },
+            )
+        previous = (energy, probability) if resolved else None
+    raise RuntimeError("Exact HF-accessible reference did not converge: " + str(trials))
