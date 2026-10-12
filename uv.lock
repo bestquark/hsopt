@@ -320,6 +320,9 @@ cupynumeric = [
     { name = "legate", marker = "sys_platform == 'linux'" },
     { name = "nvidia-cupynumeric" },
 ]
+gpu-lanczos = [
+    { name = "cupy-cuda12x", marker = "sys_platform == 'linux'" },
+]
 
 [package.dev-dependencies]
 dev = [
@@ -331,6 +334,7 @@ dev = [
 requires-dist = [
     { name = "astpretty", marker = "sys_platform == 'darwin'", specifier = "~=3.0" },
     { name = "cuda-quantum-cu12", marker = "sys_platform == 'linux'", specifier = "==0.16.0.post1" },
+    { name = "cupy-cuda12x", marker = "sys_platform == 'linux' and extra == 'gpu-lanczos'", specifier = ">=13,<14" },
     { name = "h5py", specifier = ">=3.11,<4" },
     { name = "legate", marker = "sys_platform == 'linux' and extra == 'cupynumeric'", specifier = ">=25.10.0" },
     { name = "numpy", specifier = ">=1.26.4,<2" },
@@ -341,7 +345,7 @@ requires-dist = [
     { name = "requests", marker = "sys_platform == 'darwin'", specifier = ">=2.32.3" },
     { name = "scipy", specifier = ">=1.17.1,<1.18" },
 ]
-provides-extras = ["chemistry", "cupynumeric"]
+provides-extras = ["gpu-lanczos", "chemistry", "cupynumeric"]
 
 [package.metadata.requires-dev]
 dev = [

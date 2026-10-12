@@ -35,6 +35,7 @@ from hsopt.evaluation.compiled_unitary import (
     _apply_compiled_rotation,
     _decode_energy,
     _fence,
+    _host_array,
     _step_rotations,
     array_backend,
     evaluate_exact_reference,
@@ -229,6 +230,11 @@ def _exact_pf_energy(
     dimension = 1 << int(problem["n_qubits"])
     unitary = xp.eye(dimension, dtype=xp.complex128)
     workspace = xp.empty_like(unitary)
+    updater = None
+    matrices = []
+    if backend_name == "cupy-lanczos":
+        from hsopt.evaluation.gpu_rotations import RotationUpdater
+        updater = RotationUpdater(optimized=True)
     for term, alpha in rotations:
         theta = -2.0 * float(alpha)
         exact_rz = np.asarray(
@@ -238,22 +244,32 @@ def _exact_pf_energy(
             ],
             dtype=np.complex128,
         )
-        unitary, workspace = _apply_compiled_rotation(
-            unitary,
-            workspace,
-            label=str(term["label"]),
-            compiled_rz=exact_rz,
-            xp=xp,
-        )
+        matrices.append(exact_rz)
+        if updater is not None:
+            unitary, workspace = updater(
+                unitary, workspace, label=str(term["label"]), compiled_rz=exact_rz, xp=xp
+            )
+        else:
+            unitary, workspace = _apply_compiled_rotation(
+                unitary, workspace, label=str(term["label"]), compiled_rz=exact_rz, xp=xp
+            )
     _fence(backend_name)
     del workspace
 
-    eigenvalues, eigenvectors = xp.linalg.eig(unitary)
+    if backend_name == "cupy-lanczos":
+        from hsopt.evaluation.gpu_spectrum import eigensolve, phase_enclosure
+        eigenvalues, eigenvectors, _diagnostics = eigensolve(
+            unitary, problem,
+            {"n_steps": n_steps, "compiled_phase_enclosure": phase_enclosure(matrices, n_steps)},
+            iterative=True, target_state=exact_target,
+        )
+    else:
+        eigenvalues, eigenvectors = xp.linalg.eig(unitary)
     _fence(backend_name)
     eigenvectors /= xp.linalg.norm(eigenvectors, axis=0, keepdims=True)
     overlaps = xp.abs(eigenvectors.conj().T @ exact_target) ** 2
-    selected = int(np.asarray(xp.argmax(overlaps)))
-    step_phase = float(np.asarray(xp.angle(eigenvalues[selected])))
+    selected = int(_host_array(xp.argmax(overlaps)))
+    step_phase = float(_host_array(xp.angle(eigenvalues[selected])))
     total_phase = int(n_steps) * step_phase
     identity = float(problem["identity_coefficient"])
     energy = _decode_energy(
@@ -261,7 +277,7 @@ def _exact_pf_energy(
         target_time=target_time,
         identity_coefficient=identity,
     )
-    selected_overlap = float(np.asarray(overlaps[selected]))
+    selected_overlap = float(_host_array(overlaps[selected]))
     _fence(backend_name)
     del unitary, eigenvalues, eigenvectors, overlaps
     _fence(backend_name)
@@ -793,7 +809,7 @@ def calibration_main() -> int:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("problem", type=Path)
     parser.add_argument("--output", required=True, type=Path)
-    parser.add_argument("--backend", choices=("numpy", "cupynumeric"), default="numpy")
+    parser.add_argument("--backend", choices=("numpy", "cupynumeric", "cupy-lanczos"), default="numpy")
     parser.add_argument(
         "--mode",
         choices=("empirical_exact", "hamiltonian_bound"),
@@ -955,6 +971,40 @@ def _problem_paths(
     if not rows:
         raise ValueError(f"{source}: reaction has no Hamiltonians")
     return rows
+
+
+def refresh_synthesis_provenance(
+    payload: Mapping[str, Any], *, problem_path: Path
+) -> dict[str, Any]:
+    """Reseal a legacy allocation for CUDA-Q without repeating its beta calibration.
+
+    The old reference and every numerical policy parameter must remain equal.
+    The returned copy records its parent checksum; the historical file is untouched.
+    """
+    verify_calibration(payload, problem_path=problem_path)
+    problem = json.loads(problem_path.read_text(encoding="utf-8"))
+    policy, derivation = optimize_paper_error_allocation(
+        problem,
+        beta=float(payload["reference"]["reference_trotter_number_beta"]),
+        reference_error_hartree=float(payload["reference"]["reference_error_hartree"]),
+        total_error_hartree=float(payload["benchmark_adaptation"]["total_error_target_hartree"]),
+    )
+    old = dict(payload["instantiated_policy"])
+    expected = dict(policy)
+    old.pop("rotation_synthesis", None)
+    expected.pop("rotation_synthesis", None)
+    if old != expected:
+        raise ValueError(
+            "legacy allocation has changed numerical parameters; recalibration required"
+        )
+    updated = json.loads(json.dumps(payload))
+    updated["parent_calibration_sha256"] = payload["calibration_sha256"]
+    updated["instantiated_policy"] = policy
+    updated["allocation_derivation"] = derivation
+    updated["benchmark_adaptation"]["realized_t_count_source"] = (
+        "iteration-0 direct CUDA-Q compilation"
+    )
+    return seal_calibration(updated)
 
 
 def _read_calibration(path: Path, *, baseline: str) -> dict[str, Any]:

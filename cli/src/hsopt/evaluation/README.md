@@ -22,3 +22,13 @@ queues remain exact; proxy estimates alone do not accept a mutation.
 Exact evaluations compile rotations with CUDA-Q Ross--Selinger on CPU, preserving
 global phase and counting the returned T gates. The policy's epsilon is used
 directly, with seed 0 and fixed search budgets recorded in every result.
+
+GPU candidate evaluation selects `--backend cupy-lanczos`: CUDA-Q CPU synthesis,
+fused complex128 matrix construction, and GPU Lanczos. It requires a cached exact
+reference. Phase enclosure, selected Ritz residuals, and repeated HF-weight
+checks must pass. An unresolved solve returns an error; this backend never
+falls back to full-unitary diagonalization. Partial-spectrum diagnostics are
+explicitly marked and do not claim to enumerate all HF-accessible peaks.
+The same GPU backend prepares cached references through Hamiltonian Lanczos
+and analytic unitary phases. Tight calibration tracks the cached ground target
+with ideal rotations; it does not change the production HF-accessible score.

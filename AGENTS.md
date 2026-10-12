@@ -18,12 +18,13 @@ Every production lane must follow these stages:
    supplement's rigorous Eq. (19) Pauli double-commutator upper bound without
    using `E_exact`. `tight` obtains it from the first numerically passing PF2
    step count against the cached exact ground energy at the same 0.1 mHa
-   reference error. Construct and diagonalize `U_exact = exp(+i H t)` exactly
-   once; both calibration modes and every lane reuse that reference.
+   reference error. Prepare the exact ground-phase reference once with the
+   configured solver; both calibration modes and every lane reuse it. GPU
+   Lanczos resolves H and maps its phases analytically to the exact unitary.
 2. Measure the generated paper policy unchanged as iteration 0 against that
    cached reference.
 3. Permit OpenCode mutations only after iteration 0 passes. Mutations are
-   iterations 1 through 50.
+   iterations 1 through the configured campaign budget.
 
 Every reaction is evaluated in two independent scientific contracts:
 `individual_errors` enforces `sum_s |nu_s (E_pf,s - E_exact,s)|`, while
@@ -63,11 +64,9 @@ campaign.
 
 ## Production shape and resources
 
-- HamLib exact subset: 82 instances through 12 qubits, three independent
-  mutation lanes per instance, 50 mutation iterations per lane.
-- Reaction set: 10 reactions, one `individual_errors` lane and one
-  `error_cancellation` lane per reaction, 50 mutation iterations per lane.
-- Total: 266 lanes and 13,300 mutation evaluations, excluding iteration 0.
+Dataset size, independent seeds, mutation budget, and compute resources are
+selected by the deployment and recorded in each campaign manifest. Historical
+campaign sizes are not defaults for a newly authorized campaign.
 
 The deployment chooses evaluation resources and inference configuration.
 Keep scheduler commands, credentials, resource/account defaults, and hardware

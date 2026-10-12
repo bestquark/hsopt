@@ -5,8 +5,7 @@ description: Run or inspect exact compiled-unitary T-gate autoresearch for HSOpt
 
 # HSOpt product-formula autoresearch
 
-The repository runtime is ordinary package code under `cli/src/hsopt/`.
-This skill defines the mutation contract.
+The repository runtime is ordinary package code under `cli/src/hsopt/`; this skill defines the mutation contract.
 
 ## Mutation workspace
 
@@ -79,7 +78,9 @@ evaluator, or benchmark definition.
 ## Fixed score
 
 The evaluator:
-1. compiles scheduled rotations with CUDA-Q and diagonalizes the compiled step;
+1. compiles scheduled rotations with CUDA-Q and solves the compiled-step spectrum;
+   the GPU Lanczos backend requires stable eigenphases/HF weights and never
+   falls back to full-unitary diagonalization;
 2. repeats eigenphases exactly according to `repetitions()`;
 3. scores the lowest HF-accessible energy against the cached exact ground energy;
 4. assigns the remaining one-kcal/mol budget to QPE, using the paper bound
@@ -106,9 +107,9 @@ Once a lane is feasible, accept only a strict T95 reduction that remains within
   Exact references and hardware locks may be shared; candidate histories may not.
 - Expose only the selected baseline as `candidate.py`, never its sibling.
   Each worker accepts one baseline-tagged root and never alternates baseline queues.
-- Mutate external incumbents sequentially for iterations 1--50. The production
-  grid is 82 absolute-energy instances × three lanes plus ten reactions × two
-  contracts: 266 lanes, 13,300 mutations. Histories and transcripts stay external.
+- Mutate external incumbents sequentially for the iteration budget in the
+  campaign manifest. Dataset size, replicates, and compute placement are selected
+  by the deployment. Histories and transcripts stay external.
 - Record `mutation_protocol.json` and context/prompt hashes. Label protocol
   changes in analyses. Permanent inference failures block campaign mutations;
   transient/invalid proposals get backoff and at most three attempts per iteration.
@@ -125,5 +126,4 @@ and accuracy; never pool hardware.
 Use `uv run`; see `cli/README.md` for agent setup and `references/layout.md` for layout.
 The external runtime uses `hsopt-handoff` to dispatch evaluation requests,
 deliver results, record acceptance, and resume mutations; see `docs/runtime.md`.
-Compute configuration belongs to the deployment. Scientific evaluators and
-acceptance rules stay fixed during a campaign.
+Compute configuration belongs to the deployment; scientific evaluators and acceptance stay fixed.

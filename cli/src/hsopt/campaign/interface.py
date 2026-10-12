@@ -87,7 +87,10 @@ def evaluation_request(task_dir: Path) -> dict[str, Any]:
             for name in sorted(names)
         },
         "evaluator_sha256": hashlib.sha256(
-            Path(compiled_unitary.__file__).read_bytes()
+            b"".join(
+                name.encode() + b"\0" + Path(compiled_unitary.__file__).with_name(name).read_bytes()
+                for name in ("compiled_unitary.py", "gpu_rotations.py", "gpu_spectrum.py")
+            )
         ).hexdigest(),
     }
     request["request_sha256"] = hashlib.sha256(_json(request)).hexdigest()
@@ -263,7 +266,9 @@ def main() -> int:
     p = commands.add_parser("evaluate")
     p.add_argument("--request", type=Path, required=True)
     p.add_argument("--task-dir", type=Path)
-    p.add_argument("--backend", choices=("numpy", "cupynumeric"), default="numpy")
+    p.add_argument(
+        "--backend", choices=("numpy", "cupynumeric", "cupy-lanczos"), default="cupy-lanczos"
+    )
     p.add_argument("--accelerator", default="unknown")
     p.add_argument("--output", type=Path, required=True)
     args = parser.parse_args()

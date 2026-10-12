@@ -50,7 +50,7 @@ def main(argv: Sequence[str] | None = None) -> int:
             "error_cancellation enforces |sum_s nu_s dE_s| < chemical accuracy"
         ),
     )
-    parser.add_argument("--backend", choices=("numpy", "cupynumeric"), default="cupynumeric")
+    parser.add_argument("--backend", choices=("numpy", "cupynumeric", "cupy-lanczos"), default="cupy-lanczos")
     parser.add_argument("--output", type=Path)
     args = parser.parse_args(argv)
     if args.method == "exact" and args.exact_reference is None:

@@ -65,15 +65,23 @@ ROTATION_CHUNK_TARGET_BYTES = 1024**3
 DEFERRED_ROTATION_TARGET_BYTES = 8 * 1024**3
 MAX_ROTATIONS_BETWEEN_FENCES = 32
 MAX_POLICY_ROTATIONS_PER_TERM = 16
+
+
+def _host_array(value, *args, **kwargs):
+    if type(value).__module__ == "cupy" or type(value).__module__.startswith("cupy."):
+        value = value.get()
+    return np.asarray(value, *args, **kwargs)
+
+
 _PAULIS = {
     "I": np.eye(2, dtype=np.complex128),
-    "X": np.asarray([[0.0, 1.0], [1.0, 0.0]], dtype=np.complex128),
-    "Y": np.asarray([[0.0, -1.0j], [1.0j, 0.0]], dtype=np.complex128),
-    "Z": np.asarray([[1.0, 0.0], [0.0, -1.0]], dtype=np.complex128),
+    "X": _host_array([[0.0, 1.0], [1.0, 0.0]], dtype=np.complex128),
+    "Y": _host_array([[0.0, -1.0j], [1.0j, 0.0]], dtype=np.complex128),
+    "Z": _host_array([[1.0, 0.0], [0.0, -1.0]], dtype=np.complex128),
 }
 _H = _PAULIS["X"] + _PAULIS["Z"]
 _H /= math.sqrt(2.0)
-_S_DAGGER = np.asarray([[1.0, 0.0], [0.0, -1.0j]], dtype=np.complex128)
+_S_DAGGER = _host_array([[1.0, 0.0], [0.0, -1.0j]], dtype=np.complex128)
 
 
 def _safe_policy_import(
@@ -124,8 +132,12 @@ def array_backend(name: str) -> tuple[str, Any]:
     normalized = name.strip().lower()
     if normalized == "numpy":
         return "numpy", np
+    if normalized in {"cupy-lanczos"}:
+        import cupy as xp
+
+        return normalized, xp
     if normalized != "cupynumeric":
-        raise ValueError("backend must be 'numpy' or 'cupynumeric'")
+        raise ValueError("backend must be numpy, cupynumeric, or cupy-lanczos")
     try:
         import cupynumeric as xp
     except ImportError as exc:
@@ -136,6 +148,11 @@ def array_backend(name: str) -> tuple[str, Any]:
 
 
 def _fence(backend_name: str) -> None:
+    if backend_name.startswith("cupy") and backend_name != "cupynumeric":
+        import cupy
+
+        cupy.cuda.get_current_stream().synchronize()
+        return
     if backend_name != "cupynumeric":
         return
     from legate.core import get_legate_runtime
@@ -444,7 +461,7 @@ def _fixed_electron_hamiltonian(
     n_qubits = int(problem["n_qubits"])
     electrons = int(problem["electrons"])
     full_dimension = 1 << n_qubits
-    indices_host = np.asarray(
+    indices_host = _host_array(
         [index for index in range(full_dimension) if index.bit_count() == electrons],
         dtype=np.int64,
     )
@@ -499,7 +516,7 @@ def _anchored_ground_state(
     resolvable support is used instead.
     """
 
-    eigenvalues_host = np.asarray(eigenvalues, dtype=np.float64)
+    eigenvalues_host = _host_array(eigenvalues, dtype=np.float64)
     ground_energy = float(eigenvalues_host[0])
     ground_columns = np.flatnonzero(
         np.abs(eigenvalues_host - ground_energy) <= EXACT_GROUND_SUBSPACE_ATOL_HARTREE
@@ -512,7 +529,7 @@ def _anchored_ground_state(
         raise RuntimeError("Hartree--Fock determinant is absent from the fixed-electron sector")
     hf_position = int(matches[0])
     ground_basis = eigenvectors[:, ground_columns.tolist()]
-    determinant_probabilities = np.asarray(
+    determinant_probabilities = _host_array(
         xp.sum(xp.abs(ground_basis) ** 2, axis=1),
         dtype=np.float64,
     )
@@ -532,7 +549,7 @@ def _anchored_ground_state(
     anchor_probability = float(determinant_probabilities[anchor_position])
     target = ground_basis @ ground_basis[anchor_position, :].conj()
     target /= math.sqrt(anchor_probability)
-    hf_target_probability = float(np.asarray(xp.abs(target[hf_position]) ** 2))
+    hf_target_probability = float(_host_array(xp.abs(target[hf_position]) ** 2))
     return (
         ground_energy,
         target,
@@ -591,7 +608,7 @@ def _gate_sequence_matrix(gates: str) -> np.ndarray:
 
 
 def _rz_matrix(theta: float) -> np.ndarray:
-    return np.asarray(
+    return _host_array(
         [
             [np.exp(-0.5j * theta), 0.0],
             [0.0, np.exp(0.5j * theta)],
@@ -1005,10 +1022,21 @@ def _build_compiled_step(
     epsilon_values: set[float] = set()
     compilations: dict[str, dict[str, Any]] = {}
 
+    updater = _apply_compiled_rotation
+    gpu_metrics = {}
+    if backend_name in {"cupy-lanczos"}:
+        from .gpu_rotations import RotationUpdater
+        from .gpu_spectrum import phase_enclosure
+
+        updater = RotationUpdater(optimized=True)
+        gpu_metrics["compiled_phase_enclosure"] = phase_enclosure(
+            (compiled_rotations[key]["matrix"] for key in rotation_keys), n_steps
+        )
+        gpu_metrics["matrix_construction"] = "fused_complex128_paired_or_generic"
     applied_rotations = 0
     for (term, _alpha), (theta, epsilon) in zip(rotations, rotation_keys, strict=True):
         compiled = compiled_rotations[(theta, epsilon)]
-        unitary, workspace = _apply_compiled_rotation(
+        unitary, workspace = updater(
             unitary,
             workspace,
             label=str(term["label"]),
@@ -1034,6 +1062,8 @@ def _build_compiled_step(
 
     _fence(backend_name)
     del workspace
+    if hasattr(updater, "maps"):
+        updater.maps.clear()
     policy_metrics = dict(schedule_metrics["policy"])
     policy_metrics.update(
         {
@@ -1043,6 +1073,7 @@ def _build_compiled_step(
     )
     return unitary, {
         **schedule_metrics,
+        **gpu_metrics,
         "policy": policy_metrics,
         "skipped_rotation_count": skipped * n_steps,
         "one_step_t_count": t_count,
@@ -1212,15 +1243,15 @@ def _select_lowest_hf_accessible_peak(
 ) -> dict[str, Any]:
     """Select the lowest resolved PF energy that ideal QPE can sample from HF."""
 
-    phases = np.asarray(step_phases, dtype=np.float64)
-    probabilities = np.asarray(hf_probabilities, dtype=np.float64)
+    phases = _host_array(step_phases, dtype=np.float64)
+    probabilities = _host_array(hf_probabilities, dtype=np.float64)
     if phases.ndim != 1 or probabilities.shape != phases.shape or phases.size == 0:
         raise ValueError("PF eigenphases and HF probabilities must be nonempty 1D arrays")
     if n_steps <= 0 or target_time <= 0.0:
         raise ValueError("n_steps and target_time must be positive")
 
     total_phases = int(n_steps) * phases
-    energies = np.asarray(
+    energies = _host_array(
         [
             _decode_energy(
                 float(phase),
@@ -1265,7 +1296,7 @@ def _sha256(path: Path) -> str:
 
 
 def _serialize_state(state: Any) -> list[list[float]]:
-    host = np.asarray(state, dtype=np.complex128)
+    host = _host_array(state, dtype=np.complex128)
     return [[float(value.real), float(value.imag)] for value in host]
 
 
@@ -1290,7 +1321,7 @@ def evaluate_exact_reference(
     *,
     backend: str = "cupynumeric",
 ) -> dict[str, Any]:
-    """Construct and diagonalize the normalized, centered exact unitary once."""
+    """Cache the exact ground phase once, using the selected reference solver."""
 
     evaluation_started = time.perf_counter()
     problem = load_problem(problem_path)
@@ -1303,7 +1334,13 @@ def evaluate_exact_reference(
     sector_build_seconds = time.perf_counter() - sector_started
 
     hamiltonian_eigensolve_started = time.perf_counter()
-    h_eigenvalues, h_eigenvectors = xp.linalg.eigh(sector_hamiltonian)
+    if backend_name == "cupy-lanczos":
+        from .gpu_spectrum import reference_eigensolve
+        h_eigenvalues, h_eigenvectors = reference_eigensolve(
+            sector_hamiltonian, ground_atol=EXACT_GROUND_SUBSPACE_ATOL_HARTREE
+        )
+    else:
+        h_eigenvalues, h_eigenvectors = xp.linalg.eigh(sector_hamiltonian)
     _fence(backend_name)
     hamiltonian_eigensolve_seconds = time.perf_counter() - hamiltonian_eigensolve_started
     (
@@ -1325,20 +1362,27 @@ def evaluate_exact_reference(
     identity_coefficient = float(problem["identity_coefficient"])
     centered_h_eigenvalues = h_eigenvalues - identity_coefficient
     phases = xp.exp(1.0j * centered_h_eigenvalues * float(problem["target_time"]))
-    exact_unitary = (h_eigenvectors * phases[None, :]) @ h_eigenvectors.conj().T
+    # H and exp(+i(H-c0)t) share eigenvectors exactly. The Lanczos reference
+    # decodes the converged Hamiltonian Ritz phases without constructing U_exact.
+    exact_unitary = None
+    if backend_name != "cupy-lanczos":
+        exact_unitary = (h_eigenvectors * phases[None, :]) @ h_eigenvectors.conj().T
     _fence(backend_name)
     exact_unitary_build_seconds = time.perf_counter() - exact_unitary_started
 
     unitary_eigensolve_started = time.perf_counter()
-    eigenvalues, eigenvectors = xp.linalg.eig(exact_unitary)
+    if backend_name == "cupy-lanczos":
+        eigenvalues, eigenvectors = phases, h_eigenvectors
+    else:
+        eigenvalues, eigenvectors = xp.linalg.eig(exact_unitary)
     _fence(backend_name)
     unitary_eigensolve_seconds = time.perf_counter() - unitary_eigensolve_started
 
     postprocess_started = time.perf_counter()
     eigenvectors /= xp.linalg.norm(eigenvectors, axis=0, keepdims=True)
     ground_overlaps = xp.abs(eigenvectors.conj().T @ hamiltonian_target) ** 2
-    selected = int(np.asarray(xp.argmax(ground_overlaps)))
-    selected_phase = float(np.asarray(xp.angle(eigenvalues[selected])))
+    selected = int(_host_array(xp.argmax(ground_overlaps)))
+    selected_phase = float(_host_array(xp.angle(eigenvalues[selected])))
     unitary_energy = _decode_energy(
         selected_phase,
         target_time=float(problem["target_time"]),
@@ -1347,8 +1391,8 @@ def evaluate_exact_reference(
     full_target_state = xp.zeros(1 << int(problem["n_qubits"]), dtype=xp.complex128)
     indices = xp.asarray(indices_host, dtype=xp.int64)
     full_target_state[indices] = hamiltonian_target
-    selected_overlap = float(np.asarray(ground_overlaps[selected]))
-    max_modulus_error = float(np.asarray(xp.max(xp.abs(xp.abs(eigenvalues) - 1.0))))
+    selected_overlap = float(_host_array(ground_overlaps[selected]))
+    max_modulus_error = float(_host_array(xp.max(xp.abs(xp.abs(eigenvalues) - 1.0))))
     serialized_target_state = _serialize_state(full_target_state)
     _fence(backend_name)
     postprocess_seconds = time.perf_counter() - postprocess_started
@@ -1363,6 +1407,10 @@ def evaluate_exact_reference(
         "status": "ok",
         "evaluation_contract_version": EVALUATION_CONTRACT_VERSION,
         "observable": "exact_unitary_ground_eigenphase",
+        "reference_solver": (
+            "gpu_hamiltonian_lanczos_analytic_unitary_phase"
+            if backend_name == "cupy-lanczos" else "dense_exact_unitary"
+        ),
         "unitary_definition": "U_exact = exp(+i (H - c0 I) / lambda)",
         "problem": problem["name"],
         "problem_path": str(Path(problem_path).resolve()),
@@ -1532,24 +1580,36 @@ def evaluate_molecule(
     compiled_unitary_build_seconds = time.perf_counter() - compiled_unitary_started
 
     eigensolve_started = time.perf_counter()
-    eigenvalues, eigenvectors = xp.linalg.eig(unitary_step)
+    spectral_solver = {"method": "full_spectrum", "spectrum_complete": True}
+    if backend_name in {"cupy-lanczos"}:
+        from .gpu_spectrum import eigensolve
+
+        eigenvalues, eigenvectors, spectral_solver = eigensolve(
+            unitary_step, problem, metrics, iterative=backend_name == "cupy-lanczos"
+        )
+    else:
+        eigenvalues, eigenvectors = xp.linalg.eig(unitary_step)
     _fence(backend_name)
     eigenvectors /= xp.linalg.norm(eigenvectors, axis=0, keepdims=True)
     _fence(backend_name)
     compiled_unitary_eigensolve_seconds = time.perf_counter() - eigensolve_started
 
     postprocess_started = time.perf_counter()
-    hf_probabilities = np.asarray(
+    hf_probabilities = _host_array(
         xp.abs(eigenvectors.conj().T @ hf_state) ** 2,
         dtype=np.float64,
     )
     peak = _select_lowest_hf_accessible_peak(
-        np.asarray(xp.angle(eigenvalues), dtype=np.float64),
+        _host_array(xp.angle(eigenvalues), dtype=np.float64),
         hf_probabilities,
         n_steps=int(metrics["n_steps"]),
         target_time=float(problem["target_time"]),
         identity_coefficient=float(problem["identity_coefficient"]),
     )
+    if not spectral_solver["spectrum_complete"]:
+        # These are full-spectrum diagnostics and cannot be inferred from Ritz pairs.
+        peak["hf_accessible_peak_count"] = None
+        peak["hf_accessible_probability_mass"] = None
     estimated_energy = float(peak["compiled_pf_energy_hartree"])
     signed_error = estimated_energy - exact_energy
     absolute_error = abs(signed_error)
@@ -1566,7 +1626,7 @@ def evaluate_molecule(
         energy_precision_hartree=qpe_energy_precision,
         compiled_evolution_t_count=compiled_evolution_t_count,
     )
-    max_modulus_error = float(np.asarray(xp.max(xp.abs(xp.abs(eigenvalues) - 1.0))))
+    max_modulus_error = float(_host_array(xp.max(xp.abs(xp.abs(eigenvalues) - 1.0))))
     _fence(backend_name)
     postprocess_seconds = time.perf_counter() - postprocess_started
     evaluation_wall_seconds = time.perf_counter() - evaluation_started
@@ -1584,6 +1644,7 @@ def evaluate_molecule(
         "exact_reference_problem_sha256": reference_result["problem_sha256"],
         "exact_ground_subspace_dimension": int(reference_result["exact_ground_subspace_dimension"]),
         "backend": backend_name,
+        "spectral_solver": spectral_solver,
         "n_qubits": int(problem["n_qubits"]),
         "electrons": int(problem["electrons"]),
         "exact_ground_energy_hartree": exact_energy,

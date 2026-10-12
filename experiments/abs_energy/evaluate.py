@@ -41,7 +41,7 @@ def main(argv: Sequence[str] | None = None) -> int:
     parser.add_argument("--method", choices=METHODS, default="exact")
     parser.add_argument("--exact-reference", type=Path)
     parser.add_argument("--reference-size", type=int, help="BCH reference determinant cap")
-    parser.add_argument("--backend", choices=("numpy", "cupynumeric"), default="cupynumeric")
+    parser.add_argument("--backend", choices=("numpy", "cupynumeric", "cupy-lanczos"), default="cupy-lanczos")
     parser.add_argument("--output", type=Path)
     args = parser.parse_args(argv)
     if args.method == "exact" and args.exact_reference is None:
