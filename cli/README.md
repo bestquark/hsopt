@@ -72,6 +72,13 @@ the generated `research_context.json`, and every required benchmark input.
 Context includes recent lane feedback and the supported policy API. Duplicate
 policies and formatting-only changes are rejected before evaluation.
 
+Confirmed permission-blocked candidate writes are audit events, not fatal edits:
+the session retains its reads and the host verifies unchanged candidate bytes
+before enabling editing. `scratch/` permits disposable notes and test drafts in
+either stage. Code Mode (`execute`) supports JavaScript data checks through
+permitted tools; nested permissions still apply. Shell/Python execution remains
+unavailable. Scratch edits do not count toward the single scored-policy edit.
+
 Transient failures use bounded retries and backoff. A permanent inference
 failure blocks new mutations while evaluation collection continues. After
 repairing the cause, resume explicitly with an audit reason:

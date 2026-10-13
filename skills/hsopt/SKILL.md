@@ -9,29 +9,29 @@ The repository runtime is ordinary package code under `cli/src/hsopt/`; this ski
 
 ## Mutation workspace
 
-`candidate.py` is the only editable file. `evaluate.py`, benchmark JSON,
-prior feedback, and `research_context.json` are read-only. The context contains
-the supported API, Hamiltonian statistics, and this lane's recent proposals.
+`candidate.py` is the only editable scored policy. `evaluate.py`, benchmark JSON, prior feedback,
+and `research_context.json` are read-only; context includes the API, Hamiltonian statistics, and recent proposals.
 
-Before editing, successfully read `candidate.py`, `research_context.json`, and
-all benchmark files in `required_reads`, including every reaction species.
-The host verifies receipts before resuming the same session with editing enabled;
-it may request up to two additional read-only turns within the original budget.
-Reread `candidate.py` in the editing continuation because OpenCode resets its
-file-read timestamps between processes. Page raw JSON when summaries are
-insufficient; reading all of `evaluate.py` is optional.
+Before editing, successfully read `candidate.py`, `research_context.json`, and all benchmark files
+in `required_reads`, including every reaction species. The host verifies receipts before
+resuming the same session with editing enabled; it may request two further read-only turns
+within the original budget. Reread `candidate.py` in the editing continuation because OpenCode
+resets file-read timestamps between processes. Page raw JSON when summaries are insufficient;
+reading all of `evaluate.py` is optional.
+
+Blocked candidate writes retain the session; the host verifies unchanged bytes before enabling editing.
+Use `scratch/` for disposable notes/test drafts in either stage; these do not count as policy edits.
+`execute` (Code Mode) supports permitted reads and JavaScript calculations/assertions, with nested permissions enforced.
+Shell/Python execution is unavailable; Python scripts are drafts only. Do checks before the one candidate edit.
 
 Use rejected proposals and failures to choose a new hypothesis. Previously
 scored policies and formatting-only changes are rejected before evaluation.
-Optional literature/code/web searches are allowed. Use `read` for local files
-and `webfetch` for HTTP(S) URLs. Make one coherent edit, explain it, then stop.
-Never fabricate an evaluation. Prefer a complete plain Python `write` for
-multi-block edits; retain four-space indentation and all four interface methods.
+Optional literature/code/web searches are allowed: `read` for local files, `webfetch` for HTTP(S).
+Make one coherent edit, explain it, then stop. Never fabricate an evaluation.
+Prefer a complete plain Python `write` for multi-block edits; retain four-space indentation and all four interface methods.
 
-Only `import math` and the briefing's `available_builtins` are allowed.
-Private attributes, generators, top-level helpers, `set`, `getattr`, `hasattr`,
-`isinstance`, other imports, and external runtime access are unavailable.
-Context statistics are not extra `problem` keys; inspect the actual JSON.
+In the scored policy, only `import math` and the briefing's `available_builtins` are allowed.
+Private attributes, generators, top-level helpers, `set`, `getattr`, `hasattr`, `isinstance`, other imports and external runtime access are unavailable. Context statistics are not extra `problem` keys; inspect the actual JSON.
 
 ## Editable policy
 
@@ -123,7 +123,7 @@ After complete matched loose/tight iteration-0 censuses, `hsopt-baseline-drop`
 records `100 * (T95_loose - T95_tight) / T95_loose` per experiment/contract.
 Require matching grids, hashes, contracts, backends, accelerators, placement,
 and accuracy; never pool hardware.
-Use `uv run`; see `cli/README.md` for agent setup and `references/layout.md` for layout.
-The external runtime uses `hsopt-handoff` to dispatch evaluation requests,
-deliver results, record acceptance, and resume mutations; see `docs/runtime.md`.
+Use `uv run`; see `cli/README.md` for setup and `references/layout.md` for layout.
+The external runtime uses `hsopt-handoff` to dispatch evaluations, deliver results, record acceptance,
+and resume mutations; see `docs/runtime.md`.
 Compute configuration belongs to the deployment; scientific evaluators and acceptance stay fixed.

@@ -493,6 +493,8 @@ def _tool_category(tool: str) -> str:
     """Describe the observed tool without inferring unrecorded activity."""
     if tool in {"bash", "terminal", "shell", "exec"}:
         return "terminal"
+    if tool == "execute":
+        return "code_execution"
     if any(name in tool for name in ("slurm_submit", "submit_job", "slurm_run")):
         return "job_submission"
     if tool in {"websearch", "codesearch"}:
@@ -614,6 +616,13 @@ def summarize_opencode_events(path: Path) -> tuple[dict[str, Any], list[dict[str
             else previous.get("duration_ms")
         )
         target = _safe_tool_target(tool, state.get("input")) or previous.get("target")
+        # Only a frontend permission rejection proves the tool did not execute.
+        # Other errors may occur after a partial write and must remain fatal.
+        permission_denied = previous.get("permission_denied", False)
+        if "error" in state:
+            permission_denied = isinstance(state["error"], str) and bool(
+                re.fullmatch(r"Permission denied: (?:edit|external_directory)", state["error"])
+            )
         actions_by_call[action_key] = {
             "timestamp": event.get("timestamp") or previous.get("timestamp"),
             "session_id": session_id or previous.get("session_id"),
@@ -624,7 +633,36 @@ def summarize_opencode_events(path: Path) -> tuple[dict[str, Any], list[dict[str
             "duration_ms": duration_ms,
             "target": target,
             "online": tool in ONLINE_TOOLS,
+            "permission_denied": status == "error" and permission_denied,
         }
+        if tool == "execute":
+            metadata = state.get("metadata") or {}
+            # v2 puts Code Mode receipts inside the tool-result metadata, rather
+            # than emitting each nested call as a separate top-level event.
+            detail = metadata.get("metadata", metadata)
+            if detail.get("error") is True and status == "completed":
+                actions_by_call[action_key]["status"] = "error"
+            for index, nested in enumerate(detail.get("toolCalls") or []):
+                nested_key = f"{action_key}:nested:{index}"
+                if nested_key not in actions_by_call:
+                    action_order.append(nested_key)
+                qualified = str(nested.get("tool") or "unknown")
+                nested_tool = qualified.removeprefix("opencode.")
+                actions_by_call[nested_key] = {
+                    "timestamp": event.get("timestamp"),
+                    "session_id": session_id,
+                    "call_id": nested_key,
+                    "tool": nested_tool,
+                    "category": _tool_category(nested_tool),
+                    "status": str(nested.get("status") or "unknown"),
+                    "duration_ms": None,
+                    "target": _safe_tool_target(nested_tool, nested.get("input")),
+                    "online": nested_tool in ONLINE_TOOLS,
+                    # Nested error receipts do not include a denial reason.
+                    # Never infer a harmless rejection from status alone.
+                    "permission_denied": False,
+                    "parent_call_id": call_id or action_key,
+                }
 
     actions = [actions_by_call[key] for key in action_order]
     by_tool = Counter(str(action["tool"]) for action in actions)
@@ -668,6 +706,12 @@ def _has_completed_candidate_edit(path: Path) -> bool:
     )
 
 
+def _is_scratch_path(target: str) -> bool:
+    return target.startswith("scratch/") and all(
+        part not in {"", ".", ".."} for part in target.split("/")
+    )
+
+
 def _validate_agent_action_contract(
     path: Path,
     *,
@@ -684,6 +728,7 @@ def _validate_agent_action_contract(
         "apply_patch",
         "patch",
         "skill",
+        "execute",
         *ONLINE_TOOLS,
     }
     mutation_tools = {"edit", "write", "apply_patch", "patch"}
@@ -700,7 +745,7 @@ def _validate_agent_action_contract(
                 and not target.startswith(("outside:", "/", "../"))
                 and all(part not in {"", ".", ".."} for part in PurePosixPath(target).parts)
             )
-            if target not in READABLE_CONTEXT_FILES and not safe_json:
+            if target not in READABLE_CONTEXT_FILES and not safe_json and not _is_scratch_path(target):
                 raise RuntimeError("OpenCode attempted to read outside the mutation context")
             if action["status"] == "completed":
                 completed_reads.add(target)
@@ -709,6 +754,16 @@ def _validate_agent_action_contract(
             if any(marker in research_target for marker in RESEARCH_CONTAMINATION_MARKERS):
                 raise RuntimeError("OpenCode research attempted to inspect HSOpt baseline data")
         if tool in mutation_tools:
+            if _is_scratch_path(str(action["target"])):
+                # Scratch notes/drafts are not the scored policy. They can be
+                # changed repeatedly in either stage, with every call audited.
+                continue
+            if action["target"] != "candidate.py":
+                raise RuntimeError("OpenCode attempted to mutate outside candidate.py")
+            if action["permission_denied"]:
+                # A blocked attempt is an audit event, not a mutation. Keep the
+                # session and its successful reads; permissions remain enforced.
+                continue
             if preparation:
                 raise RuntimeError("OpenCode attempted to edit during read-only preparation")
             missing = set(required_reads) - completed_reads
@@ -717,8 +772,6 @@ def _validate_agent_action_contract(
                     "Read required benchmark context before editing: " + ", ".join(sorted(missing))
                 )
             mutation_actions.append(action)
-            if action["target"] != "candidate.py":
-                raise RuntimeError("OpenCode attempted to mutate outside candidate.py")
     if preparation:
         missing = set(required_reads) - completed_reads
         if missing:
@@ -785,7 +838,8 @@ def _prepare_mutation_context(
         _raise_inference_error(run_dir / "opencode.jsonl")
         if returncode != 0:
             raise RuntimeError(f"OpenCode preparation exited with status {returncode}")
-        # Still reject edits, forbidden tools, and out-of-context reads immediately.
+        # Reject actual/uncertain writes and forbidden tools, but retain a session
+        # whose candidate write was conclusively blocked by the permissions layer.
         _validate_agent_action_contract(run_dir / "opencode.jsonl", preparation=True)
         metrics, actions = summarize_opencode_events(run_dir / "opencode.jsonl")
         if len(metrics["sessions"]) != 1:
@@ -803,6 +857,12 @@ def _prepare_mutation_context(
                     "session": session,
                     "required_reads": required_reads,
                     "read_only_turns": attempt + 1,
+                    "blocked_candidate_writes": sum(
+                        a["category"] == "file_edit"
+                        and a["target"] == "candidate.py"
+                        and a["permission_denied"]
+                        for a in actions
+                    ),
                     "metrics": metrics,
                 },
             )
@@ -813,10 +873,31 @@ def _prepare_mutation_context(
             + ". Your next tool calls must read EACH listed file. Use read with limit=80 "
             "to inspect its header, then page additional ranges as needed. Do not substitute "
             "the summaries for reading these files. Do not edit, write, or patch. "
-            "Only after these reads, return your hypothesis."
+            "Only after these reads, return your hypothesis. Scratch notes and Code Mode "
+            "data checks are allowed; candidate.py must remain unchanged."
         )
         (run_dir / f"preparation_followup_{attempt + 1}.md").write_text(prompt)
     raise RuntimeError("Preparation missing required reads: " + ", ".join(missing))
+
+
+def _verify_preparation_candidate(sandbox_name: str, run_dir: Path, *, deadline: float) -> None:
+    """Verify unchanged candidate bytes before unlocking the scored policy."""
+    result = json.loads((run_dir / "preparation_result.json").read_text())
+    remaining = int(deadline - time.monotonic())
+    if remaining <= 0:
+        raise RuntimeError("Mutation time budget exhausted during preparation")
+    _download_candidate(sandbox_name, run_dir, timeout_seconds=remaining)
+    before = _sha256(run_dir / "candidate.before.py")
+    after = _sha256(run_dir / "candidate.py")
+    _write_json(run_dir / "preparation_integrity.json", {
+        "schema": 1,
+        "blocked_candidate_writes": result["blocked_candidate_writes"],
+        "before_sha256": before,
+        "after_sha256": after,
+        "unchanged": before == after,
+    })
+    if before != after:
+        raise RuntimeError("Candidate changed during read-only preparation")
 
 
 _OCSF_RE = re.compile(r"\bOCSF(?:\s*\]\s*\[ocsf\])?\s+(?P<class>[A-Z]+):(?P<activity>[A-Z_]+)")
@@ -1025,6 +1106,9 @@ def opencode_config(*, preparation: bool = False) -> dict[str, Any]:
     for resource in ("candidate.py", "evaluate.py", "*.json", "**/*.json"):
         permissions.append({"action": "read", "resource": resource, "effect": "allow"})
     permissions.extend([
+        {"action": "read", "resource": "scratch/*", "effect": "allow"},
+        {"action": "edit", "resource": "scratch/*", "effect": "allow"},
+        {"action": "execute", "resource": "*", "effect": "allow"},
         {"action": "edit", "resource": "candidate.py", "effect": "deny" if preparation else "allow"},
         {"action": "skill", "resource": "hsopt", "effect": "allow"},
         {"action": "webfetch", "resource": "*", "effect": "allow"},
@@ -1041,7 +1125,7 @@ def opencode_config(*, preparation: bool = False) -> dict[str, Any]:
         "for product-formula research. Read candidate.py, "
         "the read-only evaluate.py implementation, and the read-only "
         "benchmark JSON files as needed. Call one edit or write tool "
-        "exactly once, then "
+        "exactly once for candidate.py, then "
         "immediately return a final text response without calling "
         "another tool. ProductFormula.build_step() is the "
         "authoritative recurrence and may return any deterministic "
@@ -1055,12 +1139,22 @@ def opencode_config(*, preparation: bool = False) -> dict[str, Any]:
             "Then read /sandbox/work/research_context.json and EVERY file in required_reads. "
             "Each listed path is a FILE, never a directory. Do not read or list directories. "
             "The host verifies successful read receipts before enabling editing. "
-            "Do not attempt edit, write, or patch in this stage. Analyze the concrete "
+            "Do not edit, write, or patch candidate.py in this stage. Analyze the concrete "
             "Hamiltonians, policy API, prior rejected proposals, and a new scientific "
             "hypothesis. Optional general product-formula web research is allowed. "
             "Do not search for HSOpt or sibling baselines. Finish with a brief hypothesis; "
             "a separate continuation will enable exactly one candidate.py edit."
         )
+    system += (
+        " You may read/write scratch/* notes or draft tests in either stage. "
+        "Use execute (Code Mode) for JavaScript calculations and small assertions "
+        "on data returned by permitted read tools. Nested tools retain their permissions. "
+        "Use Math/JSON, console.log and throw new Error for failed assertions; "
+        "require, imports and console.assert are unavailable. "
+        "There is no shell or Python execution; scratch Python files are drafts only. "
+        "Scratch edits do not count as candidate.py edits. Do optional checks BEFORE "
+        "the single candidate.py edit; do not run the scientific evaluator."
+    )
     return {
         "$schema": "https://opencode.ai/config.json",
         "update": "disable",
@@ -1114,12 +1208,15 @@ You are proposing one HSOpt product-formula policy mutation.
 
 The working directory contains:
 
-- candidate.py: the only editable file;
+- candidate.py: the only editable scored policy;
 - evaluate.py: the exact fixed evaluator implementation used for scoring;
 - problem.json for an absolute-energy lane, or reaction.json plus its referenced
   Hamiltonian JSON files for a difference-energy lane.
 - research_context.json: compact Hamiltonian summaries, the exact policy API,
   lane-local proposal history, and the required-read list.
+- scratch/: optional disposable notes and test drafts, editable in either stage.
+  execute (Code Mode) can read permitted files and run JavaScript data checks.
+  Shell/Python execution is unavailable; Python files here are drafts only.
 
 Before editing, successfully read candidate.py, research_context.json, and ALL
 benchmark files listed in required_reads. Large raw JSON files may require
@@ -1390,6 +1487,8 @@ def _mutate_once(
         {
             "version": MUTATION_PROTOCOL_VERSION,
             "sandbox_transport": "bundle-v2",
+            "blocked_write_handling": "permission-denial-recovery-v1",
+            "agent_action_contract": "candidate-once-scratch-code-v1",
             "model": NEMOTRON_MODEL,
             "required_reads": required_reads,
             "context_sha256": _sha256(run_dir / "research_context.json"),
@@ -1413,7 +1512,8 @@ def _mutate_once(
         + json.dumps(required_reads)
         + ". Inspect research_context.json for the exact hook contract, Hamiltonian "
         "summaries, and previous proposals. Choose a new scientific hypothesis. "
-        "Do not edit yet. End with a brief explanation of the planned mutation."
+        "Do not edit candidate.py yet. Scratch notes and Code Mode data checks are "
+        "allowed. End with a brief explanation of the planned mutation."
     )
     (run_dir / "preparation_prompt.md").write_text(preparation_prompt, encoding="utf-8")
     (run_dir / "prompt.md").write_text(prompt, encoding="utf-8")
@@ -1559,6 +1659,8 @@ def _mutate_once(
                     prompt=preparation_prompt,
                     deadline=deadline,
                 )
+            with _mutation_phase(run_dir, "preparation_integrity"):
+                _verify_preparation_candidate(sandbox_name, run_dir, deadline=deadline)
             # OpenCode also discovers /sandbox/opencode.json as project config.
             # Replace that same file after verified reads, just as the original
             # transport did; a second config filename can retain the deny rules.

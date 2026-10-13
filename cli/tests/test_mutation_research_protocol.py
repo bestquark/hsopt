@@ -293,9 +293,9 @@ def test_cleanup_timeout_does_not_hide_permanent_inference_error(tmp_path, monke
 
 def test_preparation_disables_edits_and_requires_all_reads(tmp_path):
     config = openshell.opencode_config(preparation=True)
-    assert next(r["effect"] for r in config["agents"][openshell.OPENCODE_AGENT]["permissions"] if r["action"] == "edit") == "deny"
+    assert next(r["effect"] for r in config["agents"][openshell.OPENCODE_AGENT]["permissions"] if r["action"] == "edit" and r["resource"] == "candidate.py") == "deny"
     assert (
-        next(r["effect"] for r in openshell.opencode_config()["agents"][openshell.OPENCODE_AGENT]["permissions"] if r["action"] == "edit")
+        next(r["effect"] for r in openshell.opencode_config()["agents"][openshell.OPENCODE_AGENT]["permissions"] if r["action"] == "edit" and r["resource"] == "candidate.py")
         == "allow"
     )
     log = tmp_path / "events.jsonl"
@@ -332,8 +332,9 @@ def test_logged_continuation_preserves_preparation(tmp_path):
 
 
 @pytest.mark.parametrize("complete_preparation", [False, True])
+@pytest.mark.parametrize("blocked_write", [False, True])
 def test_host_unlocks_edit_only_after_preparation_receipts(
-    tmp_path, monkeypatch, complete_preparation
+    tmp_path, monkeypatch, complete_preparation, blocked_write
 ):
     feedback = tmp_path / "feedback.json"
     write(feedback, {"status": "ok", "score": 100})
@@ -351,13 +352,16 @@ def test_host_unlocks_edit_only_after_preparation_receipts(
             uploads.append(command[-1])
         if command[:3] == ["openshell", "sandbox", "download"]:
             target = Path(command[-1])
-            target.write_text(POLICY.replace("self.n = 2", "self.n = 3"))
+            if len(calls) == 1:
+                target.write_bytes((run_dir / "candidate.before.py").read_bytes())
+            else:
+                target.write_text(POLICY.replace("self.n = 2", "self.n = 3"))
         return subprocess.CompletedProcess(command, 0, "", "")
 
     def logged(command, *, stdout_path, append=False, **kwargs):
         calls.append(command)
         selected = next(item.split("=", 1)[1] for item in command if item.startswith("OPENCODE_CONFIG="))
-        edit_permission = next(rule["effect"] for rule in configs[selected]["agents"][openshell.OPENCODE_AGENT]["permissions"] if rule["action"] == "edit")
+        edit_permission = next(rule["effect"] for rule in configs[selected]["agents"][openshell.OPENCODE_AGENT]["permissions"] if rule["action"] == "edit" and rule["resource"] == "candidate.py")
         if len(calls) == 1 or not complete_preparation:
             assert uploads == ["/sandbox/hsopt-bootstrap.tar"]
             assert edit_permission == "deny"
@@ -367,6 +371,11 @@ def test_host_unlocks_edit_only_after_preparation_receipts(
                 else ["candidate.py"]
             )
             events = [event("read", target) for target in targets]
+            if blocked_write:
+                denied = event("edit", "candidate.py", "error")
+                denied["part"]["callID"] = f"blocked-{len(calls)}"
+                denied["part"]["state"]["error"] = "Permission denied: edit"
+                events.insert(0, denied)
         else:
             assert uploads == ["/sandbox/hsopt-bootstrap.tar"]
             assert edit_permission == "allow"
@@ -394,7 +403,11 @@ def test_host_unlocks_edit_only_after_preparation_receipts(
     if complete_preparation:
         assert openshell.mutate(*args, **kwargs)["status"] == "mutated"
         assert len(calls) == 2
-        assert json.loads((run_dir / "opencode_metrics.json").read_text())["tool_calls"] == 4
+        assert json.loads((run_dir / "opencode_metrics.json").read_text())["tool_calls"] == (
+            5 if blocked_write else 4
+        )
+        if blocked_write:
+            assert json.loads((run_dir / "preparation_integrity.json").read_text())["unchanged"]
     else:
         with pytest.raises(RuntimeError, match="Preparation missing required reads"):
             openshell.mutate(*args, **kwargs)
@@ -501,3 +514,127 @@ def test_documented_builtins_match_immutable_evaluator():
     assert set(POLICY_CONTRACT["available_builtins"]) == {
         key for key in _SAFE_POLICY_BUILTINS if not key.startswith("_")
     }
+
+
+@pytest.mark.parametrize("message", ["Permission denied: edit", "Permission denied: external_directory"])
+def test_blocked_write_keeps_preparation_session_and_reads(tmp_path, monkeypatch, message):
+    import time
+
+    calls = []
+    required = ["candidate.py", "research_context.json", "problem.json"]
+
+    def logged(command, *, stdout_path, append, **kwargs):
+        calls.append(command)
+        events = [event("read", target) for target in (required[:1] if len(calls) == 1 else required[1:])]
+        if len(calls) == 1:
+            denied = event("write", "candidate.py", "error")
+            denied["part"]["state"]["error"] = message
+            events.append(denied)
+        with stdout_path.open("a" if append else "w") as stream:
+            for item in events:
+                stream.write(json.dumps({**item, "sessionID": "ses_same"}) + "\n")
+        return 0, False
+
+    monkeypatch.setattr(openshell, "_run_logged", logged)
+    session = openshell._prepare_mutation_context(
+        ["openshell", "--timeout", "120", "opencode", "run", "unused"],
+        run_dir=tmp_path, required_reads=required, prompt="read only",
+        deadline=time.monotonic() + 120,
+    )
+    assert session == "ses_same"
+    assert len(calls) == 2
+    assert calls[1][calls[1].index("--session") + 1] == session
+    result = json.loads((tmp_path / "preparation_result.json").read_text())
+    assert result["blocked_candidate_writes"] == 1
+    # A later successful edit counts once, despite the earlier denial.
+    with (tmp_path / "opencode.jsonl").open("a") as stream:
+        stream.write(json.dumps(event("edit", "candidate.py")) + "\n")
+    openshell._validate_agent_action_contract(tmp_path / "opencode.jsonl", required_reads=required)
+
+
+@pytest.mark.parametrize("status,error,target", [
+    ("completed", None, "candidate.py"),
+    ("running", None, "candidate.py"),
+    ("error", "disk full", "candidate.py"),
+    ("error", "Permission denied: edit after write", "candidate.py"),
+    ("error", "Permission denied: edit", "problem.json"),
+])
+def test_recovery_does_not_accept_actual_uncertain_or_outside_writes(tmp_path, status, error, target):
+    attempt = event("edit", target, status)
+    attempt["part"]["state"]["error"] = error
+    log = tmp_path / "opencode.jsonl"
+    log.write_text(json.dumps(attempt))
+    with pytest.raises(RuntimeError):
+        openshell._validate_agent_action_contract(log, preparation=True)
+
+
+@pytest.mark.parametrize("changed", [False, True])
+def test_recovered_preparation_requires_unchanged_candidate_bytes(tmp_path, monkeypatch, changed):
+    import time
+
+    (tmp_path / "candidate.before.py").write_text(POLICY)
+    write(tmp_path / "preparation_result.json", {"blocked_candidate_writes": 1})
+
+    def download(*args, **kwargs):
+        (tmp_path / "candidate.py").write_text(POLICY + ("# changed\n" if changed else ""))
+
+    monkeypatch.setattr(openshell, "_download_candidate", download)
+    if changed:
+        with pytest.raises(RuntimeError, match="changed during read-only"):
+            openshell._verify_preparation_candidate("test", tmp_path, deadline=time.monotonic() + 120)
+    else:
+        openshell._verify_preparation_candidate("test", tmp_path, deadline=time.monotonic() + 120)
+    assert json.loads((tmp_path / "preparation_integrity.json").read_text())["unchanged"] is not changed
+
+
+def test_scratch_and_code_mode_do_not_count_as_candidate_mutations(tmp_path):
+    log = tmp_path / "opencode.jsonl"
+    actions = [event("write", "scratch/smoke.js"), event("read", "scratch/smoke.js"),
+               event("execute", "*"), event("edit", "scratch/smoke.js"),
+               event("read", "candidate.py"), event("read", "problem.json")]
+    log.write_text("\n".join(json.dumps(a) for a in actions))
+    openshell._validate_agent_action_contract(log, required_reads=["candidate.py", "problem.json"], preparation=True)
+    assert not openshell._has_completed_candidate_edit(log)
+    with pytest.raises(RuntimeError, match="exactly one"):
+        openshell._validate_agent_action_contract(log)
+    log.write_text(log.read_text() + "\n" + json.dumps(event("edit", "candidate.py")))
+    openshell._validate_agent_action_contract(log, required_reads=["candidate.py", "problem.json"])
+    assert openshell._has_completed_candidate_edit(log)
+
+
+@pytest.mark.parametrize("target", ["scratch/../candidate.py", "scratch//escape.py", "scratchpad/notes.py"])
+def test_scratch_must_remain_in_designated_directory(tmp_path, target):
+    log = tmp_path / "opencode.jsonl"
+    log.write_text(json.dumps(event("write", target)))
+    with pytest.raises(RuntimeError, match="outside candidate.py"):
+        openshell._validate_agent_action_contract(log, preparation=True)
+
+
+def test_code_mode_nested_receipts_enforce_reads_and_candidate_edit(tmp_path):
+    log = tmp_path / "opencode.jsonl"
+    calls = [{"tool": "opencode.read", "status": "completed", "input": {"path": f"/sandbox/work/{name}"}}
+             for name in ["candidate.py", "problem.json"]]
+    wrapper = event("execute", "*")
+    wrapper["part"]["state"]["metadata"] = {"metadata": {"toolCalls": calls}}
+    log.write_text(json.dumps(wrapper))
+    openshell._validate_agent_action_contract(log, required_reads=["candidate.py", "problem.json"], preparation=True)
+    calls.append({"tool": "opencode.edit", "status": "completed", "input": {"path": "/sandbox/work/candidate.py"}})
+    log.write_text(json.dumps(wrapper))
+    openshell._validate_agent_action_contract(log, required_reads=["candidate.py", "problem.json"])
+    assert openshell._has_completed_candidate_edit(log)
+    with pytest.raises(RuntimeError, match="read-only preparation"):
+        openshell._validate_agent_action_contract(log, preparation=True)
+    calls.append({"tool": "opencode.read", "status": "completed", "input": {"path": "/etc/passwd"}})
+    log.write_text(json.dumps(wrapper))
+    with pytest.raises(RuntimeError, match="outside the mutation context"):
+        openshell._validate_agent_action_contract(log)
+
+
+def test_code_mode_calculation_errors_are_audited_and_recoverable(tmp_path):
+    log = tmp_path / "opencode.jsonl"
+    wrapper = event("execute", "*")
+    wrapper["part"]["state"]["metadata"] = {"metadata": {"toolCalls": [], "error": True}}
+    log.write_text(json.dumps(wrapper))
+    openshell._validate_agent_action_contract(log, preparation=True)
+    _, actions = openshell.summarize_opencode_events(log)
+    assert actions[0]["status"] == "error"
