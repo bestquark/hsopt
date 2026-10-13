@@ -63,7 +63,10 @@ def eigensolve(unitary, problem, metrics, *, iterative, target_state=None):
         raise ValueError("This GPU evaluator requires Lanczos; full diagonalization is disabled")
     guard = metrics["compiled_phase_enclosure"]
     dim = unitary.shape[0]
+    matrix_free = hasattr(unitary, "adjoint")
     if not guard["sin_monotone"] or not guard["no_repetition_wrap"]:
+        if matrix_free:
+            raise RuntimeError("Matrix-free Lanczos phase-order/repetition guard is not certified")
         # Cancellation between substeps can make the circuit-sum enclosure loose.
         # Gershgorin on Re(U) bounds *every* eigenphase from the constructed U,
         # independently of reference energies or a sampled Ritz subspace.
@@ -85,6 +88,10 @@ def eigensolve(unitary, problem, metrics, *, iterative, target_state=None):
         if lower <= threshold + 1e-10:
             raise RuntimeError("Lanczos phase-order/repetition guard is not certified")
     scale = metrics["n_steps"] / problem["target_time"]
+    if matrix_free:
+        from .gpu_circuit import ground_lanczos
+
+        return ground_lanczos(unitary, problem, metrics, target_state)
     hermitian = cp.empty_like(unitary)
     for first in range(0, dim, 128):
         last = min(first + 128, dim)

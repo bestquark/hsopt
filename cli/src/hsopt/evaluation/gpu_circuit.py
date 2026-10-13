@@ -1,0 +1,257 @@
+"""Matrix-free action of the same literal compiled circuit, captured on GPU.
+
+Forward and adjoint graphs apply every actual 2x2 CUDA-Q synthesis matrix and
+its Clifford scaffold. No recovered-angle approximation or dense U is used.
+"""
+
+import numpy as np
+
+PROBABILITY_ATOL = 1e-9
+
+
+def certify_qpe_repetitions(probability, target_confidence):
+    """Refuse a score whose integer cost depends on overlap roundoff."""
+    from . import compiled_unitary as ev
+
+    bounds = (max(0.0, probability - PROBABILITY_ATOL), min(1.0, probability + PROBABILITY_ATOL))
+    if bounds[0] <= 0.5:
+        raise RuntimeError("Ground-input peak majority is numerically ambiguous")
+    repetitions = [
+        ev._qpe_repetitions(
+            p * ev.QPE_SINGLE_RUN_PHASE_SUCCESS_LOWER_BOUND, target_confidence=target_confidence
+        )
+        for p in bounds
+    ]
+    if repetitions[0] != repetitions[1]:
+        raise RuntimeError("Ground-input QPE repetition count depends on overlap uncertainty")
+
+
+VECTOR_KERNEL = r"""
+struct C { double x,y; };
+__device__ __forceinline__ C mul(C a,C b) {
+  return C{a.x*b.x-a.y*b.y,a.x*b.y+a.y*b.x};
+}
+extern "C" __global__ void compiled_gate(
+  const C* in,C* out,unsigned int size,
+  unsigned int x0,unsigned int z0,unsigned int x1,unsigned int z1,
+  unsigned int x2,unsigned int z2,double ar,double ai,
+  double br,double bi,double cr,double ci,double dr,double di) {
+  unsigned int row=blockIdx.x*blockDim.x+threadIdx.x;
+  if(row>=size)return;
+  C value=mul(C{ar,ai},in[row]);
+  unsigned int xs[3]={x0,x1,x2},zs[3]={z0,z1,z2};
+  C coeff[3]={{br,bi},{cr,ci},{dr,di}};
+  #pragma unroll
+  for(int p=0;p<3;p++){
+    if(coeff[p].x==0. && coeff[p].y==0.)continue;
+    unsigned int src=row^xs[p];
+    C v=mul(coeff[p],in[src]);
+    double sign=(__popc(src&zs[p])&1)?-1.:1.;
+    value.x+=sign*v.x;value.y+=sign*v.y;
+  }
+  out[row]=value;
+}
+"""
+
+
+def gate_parameters(label, matrix):
+    """Constant-size Pauli masks, exactly matching the literal Clifford scaffold."""
+    from . import compiled_unitary as ev
+
+    coefficients = [complex(0.5 * np.trace(p.conj().T @ matrix)) for p in ev._PAULIS.values()]
+    coefficients = [c if abs(c) > 1e-15 else 0j for c in coefficients]
+    masks = []
+    for index, axis in enumerate("XYZ", 1):
+        sign, transformed = ev._conjugated_pivot_pauli(label, axis)
+        x = sum(1 << i for i, c in enumerate(reversed(transformed)) if c in "XY")
+        z = sum(1 << i for i, c in enumerate(reversed(transformed)) if c in "YZ")
+        masks.extend((np.uint32(x), np.uint32(z)))
+        coefficients[index] *= sign * (1j ** transformed.count("Y"))
+    return (*masks, *(np.float64(a) for c in coefficients for a in (c.real, c.imag)))
+
+
+class CompiledCircuit:
+    def __init__(self, dimension):
+        self.shape = (dimension, dimension)
+        self.gates = []
+
+    def add(self, label, matrix):
+        self.gates.append((label, np.asarray(matrix, dtype=np.complex128)))
+
+    def finish(self):
+        import cupy as cp
+
+        self.kernel = cp.RawKernel(VECTOR_KERNEL, "compiled_gate", options=("--fmad=false",))
+        self.kernel.compile()
+        self.input = cp.empty((self.shape[0], 1), dtype=cp.complex128)
+        self.workspace = cp.empty_like(self.input)
+        stream = cp.cuda.Stream(non_blocking=True)
+        self.graphs = []
+        for gates in (
+            self.gates,
+            [(label, matrix.conj().T) for label, matrix in reversed(self.gates)],
+        ):
+            parameters = [gate_parameters(label, matrix) for label, matrix in gates]
+
+            def execute():
+                value, workspace = self.input, self.workspace
+                for args in parameters:
+                    self.kernel(
+                        ((self.shape[0] + 255) // 256,),
+                        (256,),
+                        (value, workspace, np.uint32(self.shape[0]), *args),
+                    )
+                    value, workspace = workspace, value
+                return value
+
+            # Maps and kernels must exist before capture. Graph buffers are
+            # fixed; solver vectors are copied into them outside capture.
+            with stream:
+                output = execute()
+            stream.synchronize()
+            with stream:
+                stream.begin_capture()
+                output = execute()
+                graph = stream.end_capture()
+            self.graphs.append((graph, output))
+        self.gates = []
+
+    def apply(self, value, *, adjoint=False):
+        import cupy as cp
+
+        if value.ndim == 2:
+            return cp.column_stack(
+                [self.apply(value[:, i], adjoint=adjoint) for i in range(value.shape[1])]
+            )
+        cp.copyto(self.input[:, 0], value)
+        graph, output = self.graphs[int(adjoint)]
+        graph.launch(cp.cuda.get_current_stream())
+        return output[:, 0].copy()
+
+    def __matmul__(self, value):
+        return self.apply(value)
+
+    def adjoint(self, value):
+        return self.apply(value, adjoint=True)
+
+
+def ground_lanczos(unitary, problem, metrics, target_state):
+    """Ground-input Krylov search with full reorthogonalization and Ritz checks.
+
+    Lanczos starts near the fixed input, rather than spending time resolving
+    unrelated low-energy Fock sectors. Every returned peak needs majority input
+    weight, a literal-U residual, and agreement between independent starts.
+    """
+    import time
+    import cupy as cp
+    from . import ground_branch
+
+    if target_state is None:
+        raise ValueError("matrix-free ground Lanczos requires its fixed input")
+    dim = unitary.shape[0]
+    scale = metrics["n_steps"] / problem["target_time"]
+    started, calls, trials = time.monotonic(), 0, []
+
+    def action(v):
+        nonlocal calls
+        calls += 1
+        if time.monotonic() - started > 120:
+            raise TimeoutError("Ground-input Lanczos exceeded 120 seconds")
+        return (-0.5j * scale) * (unitary @ v - unitary.adjoint(v))
+
+    previous = None
+    for attempt in range(2):
+        rng = cp.random.RandomState(42 + 95 * attempt)
+        jitter = rng.standard_normal(dim) + 1j * rng.standard_normal(dim)
+        jitter /= cp.linalg.norm(jitter)
+        v = target_state + 1e-5 * jitter
+        v /= cp.linalg.norm(v)
+        maximum = min(dim, 1024)
+        basis = cp.empty((dim, maximum), dtype=cp.complex128)
+        alphas, betas = [], []
+        for index in range(maximum):
+            basis[:, index] = v
+            w = action(v)
+            alpha = float(cp.vdot(v, w).real.get())
+            w -= alpha * v
+            if index:
+                w -= betas[-1] * basis[:, index - 1]
+            # Two passes keep the entire returned basis orthonormal.
+            q = basis[:, : index + 1]
+            for _ in range(2):
+                w -= q @ (q.conj().T @ w)
+            beta = float(cp.linalg.norm(w).get())
+            alphas.append(alpha)
+            size = index + 1
+            exhausted = beta < 1e-14 or size == maximum
+            if size in (8, 16, 32, 64, 96, 128, 192, 256, 384, 512, 768, 1024) or exhausted:
+                t = np.diag(alphas) + np.diag(betas, 1) + np.diag(betas, -1)
+                values, rotation = np.linalg.eigh(t)  # small Ritz space, never full U
+                projected = q @ cp.asarray(rotation)
+                overlaps = cp.asnumpy(cp.abs(projected.conj().T @ target_state) ** 2)
+                phases = np.arcsin(np.clip(values / scale, -1, 1))
+                try:
+                    peak = ground_branch.select_peak(
+                        phases,
+                        overlaps,
+                        n_steps=metrics["n_steps"],
+                        target_time=problem["target_time"],
+                        identity_coefficient=problem["identity_coefficient"],
+                    )
+                except RuntimeError:
+                    peak = None
+                if peak is not None:
+                    selected = projected[:, peak["selected_eigen_indices"]]
+                    uv = unitary @ selected
+                    rays = cp.sum(selected.conj() * uv, axis=0)
+                    residual = (
+                        float(cp.max(cp.linalg.norm(uv - selected * rays[None, :], axis=0)).get())
+                        * scale
+                    )
+                    final_peak = ground_branch.select_peak(
+                        cp.asnumpy(cp.angle(rays)),
+                        cp.asnumpy(cp.abs(selected.conj().T @ target_state) ** 2),
+                        n_steps=metrics["n_steps"],
+                        target_time=problem["target_time"],
+                        identity_coefficient=problem["identity_coefficient"],
+                    )
+                    record = {
+                        "attempt": attempt,
+                        "krylov_size": size,
+                        "residual_hartree": residual,
+                        "energy": final_peak["compiled_pf_energy_hartree"],
+                        "probability": final_peak["qpe_success_probability_from_ground_input"],
+                    }
+                    trials.append(record)
+                    if residual <= 1e-10:
+                        if (
+                            previous is not None
+                            and abs(record["energy"] - previous["energy"]) <= 1e-10
+                            and abs(record["probability"] - previous["probability"])
+                            <= PROBABILITY_ATOL
+                        ):
+                            return (
+                                rays,
+                                selected,
+                                {
+                                    "method": "gpu_matrix_free_ground_input_lanczos",
+                                    "spectrum_complete": False,
+                                    "full_diagonalization_permitted": False,
+                                    "matvec_calls": calls,
+                                    "trials": trials,
+                                    "probability_absolute_tolerance": PROBABILITY_ATOL,
+                                    "probability_independent_start_difference": abs(
+                                        record["probability"] - previous["probability"]
+                                    ),
+                                },
+                            )
+                        if attempt == 0:
+                            previous = record
+                            break
+            if exhausted:
+                break
+            betas.append(beta)
+            v = w / beta
+    raise RuntimeError(
+        "Ground-input Lanczos did not certify a stable literal-U peak: " + str(trials)
+    )

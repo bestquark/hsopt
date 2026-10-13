@@ -1007,6 +1007,7 @@ def _build_compiled_step(
     *,
     backend_name: str,
     xp: Any,
+    matrix_free: bool = False,
 ) -> tuple[Any, dict[str, Any]]:
     product_formula, rotations, schedule_metrics = _product_formula_schedule(problem, policy)
     n_steps = int(schedule_metrics["n_steps"])
@@ -1016,8 +1017,15 @@ def _build_compiled_step(
 
     dim = 1 << int(problem["n_qubits"])
     fence_interval = _rotation_fence_interval(dim)
-    unitary = xp.eye(dim, dtype=xp.complex128)
-    workspace = xp.empty_like(unitary)
+    if matrix_free:
+        if backend_name != "cupy-lanczos":
+            raise ValueError("compiled circuit graphs require GPU Lanczos")
+        from .gpu_circuit import CompiledCircuit
+
+        unitary, workspace = CompiledCircuit(dim), None
+    else:
+        unitary = xp.eye(dim, dtype=xp.complex128)
+        workspace = xp.empty_like(unitary)
     t_count = 0
     skipped = 0
     epsilon_histogram: Counter[str] = Counter()
@@ -1030,21 +1038,24 @@ def _build_compiled_step(
         from .gpu_rotations import RotationUpdater
         from .gpu_spectrum import phase_enclosure
 
-        updater = RotationUpdater(optimized=True)
+        if not matrix_free:
+            updater = RotationUpdater(optimized=True)
         gpu_metrics["compiled_phase_enclosure"] = phase_enclosure(
             (compiled_rotations[key]["matrix"] for key in rotation_keys), n_steps
         )
-        gpu_metrics["matrix_construction"] = "fused_complex128_paired_or_generic"
+        gpu_metrics["matrix_construction"] = (
+            "matrix_free_cuda_graph_literal_circuit" if matrix_free else "fused_complex128_paired_or_generic"
+        )
     applied_rotations = 0
     for (term, _alpha), (theta, epsilon) in zip(rotations, rotation_keys, strict=True):
         compiled = compiled_rotations[(theta, epsilon)]
-        unitary, workspace = updater(
-            unitary,
-            workspace,
-            label=str(term["label"]),
-            compiled_rz=compiled["matrix"],
-            xp=xp,
-        )
+        if matrix_free:
+            unitary.add(str(term["label"]), compiled["matrix"])
+        else:
+            unitary, workspace = updater(
+                unitary, workspace, label=str(term["label"]),
+                compiled_rz=compiled["matrix"], xp=xp,
+            )
         applied_rotations += 1
         if applied_rotations % fence_interval == 0:
             _fence(backend_name)
@@ -1063,6 +1074,8 @@ def _build_compiled_step(
         }
 
     _fence(backend_name)
+    if matrix_free:
+        unitary.finish()
     del workspace
     if hasattr(updater, "maps"):
         updater.maps.clear()
@@ -1081,8 +1094,8 @@ def _build_compiled_step(
         "one_step_t_count": t_count,
         "t_count": t_count * n_steps,
         "dense_matrix_dimension": dim,
-        "dense_matrix_bytes": dim * dim * np.dtype(np.complex128).itemsize,
-        "rotation_workspace_bytes": dim * dim * np.dtype(np.complex128).itemsize,
+        "dense_matrix_bytes": 0 if matrix_free else dim * dim * np.dtype(np.complex128).itemsize,
+        "rotation_workspace_bytes": dim * np.dtype(np.complex128).itemsize if matrix_free else dim * dim * np.dtype(np.complex128).itemsize,
         "rotation_chunk_target_bytes": ROTATION_CHUNK_TARGET_BYTES,
         "rotation_fence_interval": fence_interval,
         "synthesis_epsilon_histogram": dict(sorted(epsilon_histogram.items())),
@@ -1633,12 +1646,17 @@ def evaluate_molecule(
     reference_result: Mapping[str, Any] | None = None,
     target_confidence: float = QPE_TARGET_CONFIDENCE,
     energy_target: str = "hf_accessible",
+    matrix_free: bool | None = None,
 ) -> dict[str, Any]:
     """Evaluate one explicitly selected, versioned compiled-PF energy contract."""
 
     if energy_target not in {"hf_accessible", "ground_branch"}:
         raise ValueError("energy_target must be hf_accessible or ground_branch")
     ground_input = energy_target == "ground_branch"
+    if matrix_free is None:
+        matrix_free = ground_input
+    if matrix_free and not ground_input:
+        raise ValueError("matrix-free ground targeting requires the ground-input contract")
     if ground_input and (backend != "cupy-lanczos" or (reference_path is None and reference_result is None)):
         raise ValueError("ground-input scoring requires a cached reference and GPU Lanczos; no fallback")
 
@@ -1671,6 +1689,7 @@ def evaluate_molecule(
         policy,
         backend_name=backend_name,
         xp=xp,
+        **({"matrix_free": True} if matrix_free else {}),
     )
     compiled_unitary_build_seconds = time.perf_counter() - compiled_unitary_started
 
@@ -1714,6 +1733,10 @@ def evaluate_molecule(
     qpe_success_probability = float(peak[
         "qpe_success_probability_from_ground_input" if ground_input else "qpe_success_probability_from_hf"
     ])
+    if matrix_free:
+        from .gpu_circuit import certify_qpe_repetitions
+
+        certify_qpe_repetitions(qpe_success_probability, target_confidence)
     compiled_evolution_t_count = int(metrics["t_count"])
     qpe_energy_precision = (
         CHEMICAL_ACCURACY_HARTREE - absolute_error if passes else CHEMICAL_ACCURACY_HARTREE

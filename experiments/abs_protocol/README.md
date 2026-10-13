@@ -16,6 +16,15 @@ compiled QPE eigenspace by ground-input overlap, includes its probability in
 T95, and excludes ideal ground-state preparation cost. GPU Lanczos must certify
 majority overlap, residuals and independent-start agreement; there is no dense
 fallback. Task IDs and scoring versions keep these experiments separate.
+Ground-input evaluation applies the literal compiled circuit and its adjoint to
+vectors through CUDA graphs. It never constructs the full unitary; Lanczos
+starts near the fixed input and refines its peak with full reorthogonalization.
+Clifford scaffolds and synthesis matrices are preserved, rather than replacing
+compiled sequences with recovered rotation angles. Only its small Ritz matrix
+is diagonalized; unresolved peaks fail explicitly.
+Peak probabilities must agree within `1e-9`; evaluation rejects a case if that
+uncertainty changes its integer QPE repetition count. Energy residuals and
+independent-start energy agreement remain at `1e-10` Hartree.
 Once feasible, accept only a
 strict score reduction. Every iteration-0 case must pass before any mutation;
 an inaccurate or uncertified baseline holds the suite. Zero T95 yields score zero; equal zero scores use
