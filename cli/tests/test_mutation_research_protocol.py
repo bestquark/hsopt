@@ -517,7 +517,8 @@ def test_documented_builtins_match_immutable_evaluator():
 
 
 @pytest.mark.parametrize("message", ["Permission denied: edit", "Permission denied: external_directory"])
-def test_blocked_write_keeps_preparation_session_and_reads(tmp_path, monkeypatch, message):
+@pytest.mark.parametrize("target", ["candidate.py", "problem.json", "scratch_test.py"])
+def test_blocked_write_keeps_preparation_session_and_reads(tmp_path, monkeypatch, message, target):
     import time
 
     calls = []
@@ -527,7 +528,7 @@ def test_blocked_write_keeps_preparation_session_and_reads(tmp_path, monkeypatch
         calls.append(command)
         events = [event("read", target) for target in (required[:1] if len(calls) == 1 else required[1:])]
         if len(calls) == 1:
-            denied = event("write", "candidate.py", "error")
+            denied = event("write", target, "error")
             denied["part"]["state"]["error"] = message
             events.append(denied)
         with stdout_path.open("a" if append else "w") as stream:
@@ -545,7 +546,7 @@ def test_blocked_write_keeps_preparation_session_and_reads(tmp_path, monkeypatch
     assert len(calls) == 2
     assert calls[1][calls[1].index("--session") + 1] == session
     result = json.loads((tmp_path / "preparation_result.json").read_text())
-    assert result["blocked_candidate_writes"] == 1
+    assert result["blocked_candidate_writes"] == (1 if target == "candidate.py" else 0)
     # A later successful edit counts once, despite the earlier denial.
     with (tmp_path / "opencode.jsonl").open("a") as stream:
         stream.write(json.dumps(event("edit", "candidate.py")) + "\n")
@@ -557,7 +558,6 @@ def test_blocked_write_keeps_preparation_session_and_reads(tmp_path, monkeypatch
     ("running", None, "candidate.py"),
     ("error", "disk full", "candidate.py"),
     ("error", "Permission denied: edit after write", "candidate.py"),
-    ("error", "Permission denied: edit", "problem.json"),
 ])
 def test_recovery_does_not_accept_actual_uncertain_or_outside_writes(tmp_path, status, error, target):
     attempt = event("edit", target, status)
@@ -566,6 +566,19 @@ def test_recovery_does_not_accept_actual_uncertain_or_outside_writes(tmp_path, s
     log.write_text(json.dumps(attempt))
     with pytest.raises(RuntimeError):
         openshell._validate_agent_action_contract(log, preparation=True)
+
+
+def test_failed_outside_read_keeps_context_receipts_but_successful_outside_read_is_rejected(tmp_path):
+    required = ["candidate.py", "problem.json"]
+    events = [event("read", p) for p in required]
+    events.insert(1, event("read", "/etc/unknown", "error"))
+    log = tmp_path / "events.jsonl"
+    log.write_text("\n".join(json.dumps(e) for e in events))
+    openshell._validate_agent_action_contract(log, required_reads=required, preparation=True)
+    events[1]["part"]["state"]["status"] = "completed"
+    log.write_text("\n".join(json.dumps(e) for e in events))
+    with pytest.raises(RuntimeError, match="outside the mutation context"):
+        openshell._validate_agent_action_contract(log, required_reads=required, preparation=True)
 
 
 @pytest.mark.parametrize("changed", [False, True])
@@ -638,3 +651,29 @@ def test_code_mode_calculation_errors_are_audited_and_recoverable(tmp_path):
     openshell._validate_agent_action_contract(log, preparation=True)
     _, actions = openshell.summarize_opencode_events(log)
     assert actions[0]["status"] == "error"
+
+
+def test_compact_shared_context_preserves_every_case_and_starting_parameters(tmp_path):
+    h = {"name": "H2", "n_qubits": 4, "electrons": 2, "term_count": 14,
+         "nonidentity_one_norm": 2.0, "target_time": .5,
+         "pauli_families": {"diagonal": 10, "off_diagonal": 4},
+         "largest_terms": [{"coefficient": -.4, "label": "IIIZ"}],
+         "smallest_terms": [{"coefficient": .01, "label": "XXXX"}]}
+    cases = [{"case_id": f"case-{i}", "hamiltonians": [h],
+              "parameters": {"H2": {"n_steps": i+2, "uniform_epsilon": 1e-7,
+                                    "reference_trotter_number_beta": 7.0}}} for i in range(91)]
+    original = {"energy_target": "ground_branch", "cases": cases}
+    compact = openshell._compact_protocol_benchmark(original)
+    path = tmp_path / "research_context.json"
+    context = {"benchmark": compact, "required_reads": ["candidate.py", "suite.json"]}
+    openshell._write_protocol_context(path, context)
+    saved = json.loads(path.read_text())
+    assert saved == context
+    assert [c["case_id"] for c in saved["benchmark"]["cases"]] == [c["case_id"] for c in cases]
+    for index, c in enumerate(saved["benchmark"]["cases"]):
+        system = c["hamiltonians"][0]
+        assert (system["initial_r"], system["initial_epsilon"], system["initial_beta"]) == (index+2, 1e-7, 7.0)
+        assert system["nonidentity_one_norm"] == 2.0
+    assert path.stat().st_size < 50*1024
+    assert max(map(len, path.read_text().splitlines())) < 2000
+    assert original["cases"][0]["parameters"]["H2"]["n_steps"] == 2

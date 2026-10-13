@@ -736,6 +736,34 @@ def _is_scratch_path(target: str) -> bool:
     )
 
 
+def _compact_protocol_benchmark(benchmark):
+    """Keep every case's starting parameters and Hamiltonian features readable."""
+    cases = []
+    for case in benchmark["cases"]:
+        systems = []
+        for h in case["hamiltonians"]:
+            row = {k: h[k] for k in ("n_qubits", "electrons", "term_count", "nonidentity_one_norm", "target_time", "pauli_families")}
+            initial = case["parameters"][h["name"]]
+            row.update(initial_r=initial["n_steps"], initial_epsilon=initial["uniform_epsilon"],
+                       initial_beta=initial["reference_trotter_number_beta"])
+            row["max_abs_coefficient"] = max(abs(t["coefficient"]) for t in h["largest_terms"])
+            row["min_abs_coefficient"] = min(abs(t["coefficient"]) for t in h["smallest_terms"])
+            systems.append(row)
+        cases.append({**{k: v for k, v in case.items() if k != "parameters"}, "hamiltonians": systems})
+    return {**benchmark, "cases": cases}
+
+
+def _write_protocol_context(path, context):
+    """One JSON line per case avoids consuming a read page with indentation."""
+    marker = "__HSOPT_PROTOCOL_CASE_LINES__"
+    benchmark = context["benchmark"]
+    outer = {**context, "benchmark": {**benchmark, "cases": marker}}
+    rows = "[\n" + ",\n".join(json.dumps(c, separators=(",", ":"), allow_nan=False)
+                              for c in benchmark["cases"]) + "\n]"
+    rendered = json.dumps(outer, indent=2, allow_nan=False).replace(json.dumps(marker), rows, 1)
+    path.write_text(rendered + "\n")
+
+
 def _validate_agent_action_contract(
     path: Path,
     *,
@@ -763,6 +791,10 @@ def _validate_agent_action_contract(
         if tool not in allowed_tools:
             raise RuntimeError(f"OpenCode attempted forbidden tool {tool!r}")
         if tool == "read":
+            if action["status"] == "error":
+                # No file contents reached the model; retain a recoverable
+                # read-only session after a bad path or blocked read.
+                continue
             target = str(action["target"])
             safe_json = (
                 target.endswith(".json")
@@ -778,16 +810,16 @@ def _validate_agent_action_contract(
             if any(marker in research_target for marker in RESEARCH_CONTAMINATION_MARKERS):
                 raise RuntimeError("OpenCode research attempted to inspect HSOpt baseline data")
         if tool in mutation_tools:
+            if action["permission_denied"]:
+                # Frontend rejection happened before execution, including a
+                # denied write to a protected input or an undesignated scratch file.
+                continue
             if _is_scratch_path(str(action["target"])):
                 # Scratch notes/drafts are not the scored policy. They can be
                 # changed repeatedly in either stage, with every call audited.
                 continue
             if action["target"] != "candidate.py":
                 raise RuntimeError("OpenCode attempted to mutate outside candidate.py")
-            if action["permission_denied"]:
-                # A blocked attempt is an audit event, not a mutation. Keep the
-                # session and its successful reads; permissions remain enforced.
-                continue
             if preparation:
                 raise RuntimeError("OpenCode attempted to edit during read-only preparation")
             missing = set(required_reads) - completed_reads
@@ -1524,6 +1556,23 @@ def _mutate_once(
             if relative.as_posix() not in {"evaluate.py", "protocol_evaluate.py"}
         ],
     ]
+    if kind == "protocol":
+        # Read the entire suite summary, then representative raw systems.
+        # All raw inputs remain available; acceptance still covers every case.
+        suite = json.loads(source.read_text())
+        def case_size(case):
+            definition = json.loads((source.parent / case["source"]).read_text())
+            if suite["kind"] == "absolute":
+                return (definition["n_qubits"], len(definition["terms"]))
+            systems = [json.loads((source.parent / Path(case["source"]).parent / row["problem"]).read_text())
+                       for row in definition["terms"]]
+            return (max(p["n_qubits"] for p in systems), sum(len(p["terms"]) for p in systems))
+        ordered = sorted(suite["cases"], key=case_size)
+        selected = [ordered[i] for i in sorted({0, len(ordered)//2, len(ordered)-1})]
+        prefixes = {str(Path(case["source"]).parent) + "/" for case in selected}
+        required_reads = [p for p in required_reads if p in {
+            "candidate.py", "research_context.json", "suite.json"
+        } or any(p.startswith(prefix) for prefix in prefixes)]
     if any(relative.as_posix() == "research_context.json" for _, relative in context_files):
         raise ValueError("benchmark path collides with research_context.json")
     research_context = {
@@ -1535,6 +1584,8 @@ def _mutate_once(
     }
     if kind == "protocol":
         energy_target = research_context["benchmark"].get("energy_target", "hf_accessible")
+        research_context["benchmark"] = _compact_protocol_benchmark(research_context["benchmark"])
+        research_context["mutation_protocol_version"] += "_shared_representative_raw_reads_v3"
         if energy_target == "ground_branch":
             research_context["mutation_protocol_version"] += "_shared_ground_input_v1"
             research_context["policy_contract"] = {
@@ -1549,13 +1600,19 @@ def _mutate_once(
                 ),
             }
         research_context["shared_protocol"] = {
+            "raw_context_strategy": "Read whole-suite features and small/median/large raw cases; all raw cases remain readable and all cases must be evaluated.",
+            "required_raw_case_ids": [case["id"] for case in selected],
+            "raw_input_paths": "Absolute: /sandbox/work/inputs/{case_id}/problem.json. Reaction: /sandbox/work/inputs/{case_id}/reaction.json; it lists its species paths.",
             "energy_target": energy_target,
             "objective": "geometric_mean_baseline_relative_t95",
             "accuracy": "Every selected molecule/reaction must pass its own fixed energy contract.",
             "baseline_binding": "Preserve baseline_parameters = {}. The host supplies each case's sealed (r, epsilon, beta) starting values. Change self.r/angles/tolerance rules, not this table.",
             "mixed_precision": "Explicitly explore mixed-precision rotation synthesis: coefficient-, Pauli-support-, angle-, species-feature-, and error-budget-weighted tolerances. Constant epsilon is only the initial policy. Test coherent schemes using synthesis_epsilon(term, angle); exact compiled-energy feasibility remains mandatory for every case.",
         }
-    _write_json(run_dir / "research_context.json", research_context)
+    if kind == "protocol":
+        _write_protocol_context(run_dir / "research_context.json", research_context)
+    else:
+        _write_json(run_dir / "research_context.json", research_context)
     context_files.append(
         (run_dir / "research_context.json", PurePosixPath("research_context.json"))
     )
@@ -1596,11 +1653,17 @@ def _mutate_once(
     )
     if kind == "protocol":
         preparation_prompt += (
-            " This is one shared protocol across the WHOLE suite. After the first candidate "
-            "and research_context reads, use execute Code Mode to batch the remaining "
-            "required read tools (limit=40 for headers, then relevant ranges as needed). "
-            "Use the exact tool names/signatures in the catalog. Await every call and "
-            "return compact per-case features so raw inputs do not fill the context. "
+            " This is one shared protocol across the WHOLE suite. "
+            "Use the ordinary read tool. Read research_context.json with limit=2000 "
+            "so the complete compact suite is visible, and use {path, limit:80} "
+            "for the required raw Hamiltonian FILES. "
+            "The required raw examples span system sizes; research_context.json has "
+            "features for EVERY case. All other Hamiltonian files remain readable "
+            "when useful, and EVERY case will be evaluated. "
+            "execute accepts JavaScript ONLY, never Python. There is no import, open, "
+            "os, subprocess, filesystem API, fetch, or HTTP file endpoint. "
+            "Do not use execute for these required reads. Use it only for optional "
+            "small JavaScript calculations from data you already read. "
             "Explicitly plan a mixed-precision rotation-synthesis hypothesis."
         )
     (run_dir / "preparation_prompt.md").write_text(preparation_prompt, encoding="utf-8")
@@ -1818,6 +1881,7 @@ def _mutate_once(
         "run_dir": str(run_dir),
         "agent_audit": audit,
         "agent_completion": ("completed_edit_observed" if stopped_after_edit else "normal_exit"),
+        "mutation_protocol_version": research_context["mutation_protocol_version"],
     }
 
 
@@ -1882,7 +1946,7 @@ def mutate(
             "schema": 1,
             "status": "mutated",
             "started_at": started_at,
-            "mutation_protocol_version": MUTATION_PROTOCOL_VERSION,
+            "mutation_protocol_version": result.get("mutation_protocol_version", MUTATION_PROTOCOL_VERSION),
             "finished_at": datetime.now(UTC).isoformat(),
             "model": result["model"],
             "candidate": "candidate.py",

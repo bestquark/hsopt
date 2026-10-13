@@ -70,3 +70,9 @@ Five replicates × 100 rounds produce **500 agent proposals and 45,500 evaluatio
 for 91 molecules, plus baseline evaluations. Existing per-molecule campaigns
 remain separate. Replicate names label independent stochastic trajectories;
 they do not claim deterministic inference seeding.
+
+Mutation preparation reads the complete compact suite summary plus small,
+middle and large raw examples. All Hamiltonians remain available for inspection;
+every candidate is still evaluated on every case. Failed reads and conclusively
+blocked writes are audited and recoverable. Successful edits of protected files
+and uncertain writes remain invalid.
