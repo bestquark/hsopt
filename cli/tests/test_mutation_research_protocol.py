@@ -337,19 +337,18 @@ def test_host_unlocks_edit_only_after_preparation_receipts(
 ):
     feedback = tmp_path / "feedback.json"
     write(feedback, {"status": "ok", "score": 100})
-    calls, uploads = [], []
+    calls, uploads, configs = [], [], {}
     run_dir = tmp_path / "trial"
 
     def run(command, **kwargs):
         if command[:3] == ["openshell", "sandbox", "upload"]:
             assert "--no-git-ignore" in command
-        if (
-            command[:3] == ["openshell", "sandbox", "upload"]
-            and command[-1] == "/sandbox/opencode.json"
-        ):
-            uploads.append(
-                next(r["effect"] for r in json.loads(Path(command[-2]).read_text())["agents"][openshell.OPENCODE_AGENT]["permissions"] if r["action"] == "edit")
-            )
+        if command[:3] == ["openshell", "sandbox", "upload"]:
+            import tarfile
+            with tarfile.open(command[-2]) as archive:
+                for name in ["opencode.json", "opencode.mutation.json"]:
+                    configs["/sandbox/" + name] = json.load(archive.extractfile(name))
+            uploads.append(command[-1])
         if command[:3] == ["openshell", "sandbox", "download"]:
             target = Path(command[-1])
             target.write_text(POLICY.replace("self.n = 2", "self.n = 3"))
@@ -357,8 +356,11 @@ def test_host_unlocks_edit_only_after_preparation_receipts(
 
     def logged(command, *, stdout_path, append=False, **kwargs):
         calls.append(command)
+        selected = next(item.split("=", 1)[1] for item in command if item.startswith("OPENCODE_CONFIG="))
+        edit_permission = next(rule["effect"] for rule in configs[selected]["agents"][openshell.OPENCODE_AGENT]["permissions"] if rule["action"] == "edit")
         if len(calls) == 1 or not complete_preparation:
-            assert uploads == ["deny"]
+            assert uploads == ["/sandbox/hsopt-bootstrap.tar"]
+            assert edit_permission == "deny"
             targets = (
                 ["candidate.py", "research_context.json", "problem.json"]
                 if complete_preparation
@@ -366,7 +368,8 @@ def test_host_unlocks_edit_only_after_preparation_receipts(
             )
             events = [event("read", target) for target in targets]
         else:
-            assert uploads == ["deny", "allow"]
+            assert uploads == ["/sandbox/hsopt-bootstrap.tar"]
+            assert edit_permission == "allow"
             assert command[command.index("--session") + 1] == "ses_prepare"
             assert append
             events = [event("edit", "candidate.py")]
@@ -376,7 +379,13 @@ def test_host_unlocks_edit_only_after_preparation_receipts(
         return 0, False
 
     monkeypatch.setattr(openshell, "_run", run)
-    monkeypatch.setattr(openshell, "_run_setup_command", lambda *args: None)
+    def setup(sandbox, command, run_dir):
+        if command[0] == "cp":
+            assert complete_preparation
+            assert len(calls) == 1
+            configs["/sandbox/opencode.json"] = configs["/sandbox/opencode.mutation.json"]
+
+    monkeypatch.setattr(openshell, "_run_setup_command", setup)
     monkeypatch.setattr(openshell, "_run_logged", logged)
     monkeypatch.setattr(openshell, "_capture_openshell_logs", lambda *args: None)
     monkeypatch.setattr(openshell, "_terminate_sandbox_opencode", lambda *args: None)
@@ -390,7 +399,7 @@ def test_host_unlocks_edit_only_after_preparation_receipts(
         with pytest.raises(RuntimeError, match="Preparation missing required reads"):
             openshell.mutate(*args, **kwargs)
         assert len(calls) == 3
-        assert uploads == ["deny"]
+        assert uploads == ["/sandbox/hsopt-bootstrap.tar"]
 
 
 @pytest.mark.parametrize("status", [401, 500])

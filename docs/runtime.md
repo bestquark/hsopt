@@ -79,6 +79,13 @@ mutation-failure/backoff rules. Blocked lanes require repair and explicit resume
 
 ## Existing deployments
 
+An external runtime can limit concurrent sandbox startup separately from model
+inference by setting `HSOPT_SANDBOX_SETUP_GATE=module:factory`. The factory takes
+the iteration directory and returns a context manager; HSOpt releases it before
+the first agent turn. Inputs travel in one explicit bundle, with immutable files
+read-only and preparation/editing configurations selected in order after read
+verification. Each iteration records host phase durations in `mutation_timing.json`.
+
 Retain pinned code and environments for campaigns already running. Synchronizing
 `main` does not migrate, restart, or reinterpret those campaigns. Scheduler
 adapters and supervisor services must be installed in the external runtime;

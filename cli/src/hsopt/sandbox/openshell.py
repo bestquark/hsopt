@@ -4,14 +4,18 @@ from __future__ import annotations
 
 import argparse
 import hashlib
+import importlib
+import io
 import json
 import os
 import re
 import shutil
 import subprocess
+import tarfile
 import time
 import uuid
 from collections import Counter
+from contextlib import contextmanager, nullcontext
 from datetime import UTC, datetime
 from pathlib import Path, PurePosixPath
 from typing import Any, Sequence
@@ -91,13 +95,19 @@ def _run_setup_command(sandbox_name: str, command: Sequence[str], run_dir: Path)
     receipt, a command failure, or another transport error as success.
     """
     args = list(command)
-    if len(args) < 3 or (args[0], args[1]) not in {
-        ("mkdir", "-p"),
-        ("chmod", "0444"),
-        ("chmod", "755"),
-    }:
-        raise ValueError("verified setup only supports mkdir/chmod")
-    if any(
+    bundle_install = args == ["tar", "-xf", "/sandbox/hsopt-bootstrap.tar", "-C", "/sandbox"]
+    config_switch = args == ["cp", "-f", "/sandbox/opencode.mutation.json", "/sandbox/opencode.json"]
+    if not (bundle_install or config_switch) and (
+        len(args) < 3
+        or (args[0], args[1])
+        not in {
+            ("mkdir", "-p"),
+            ("chmod", "0444"),
+            ("chmod", "755"),
+        }
+    ):
+        raise ValueError("verified setup only supports mkdir/chmod or fixed bundle operations")
+    if not (bundle_install or config_switch) and any(
         not path.startswith("/sandbox/")
         or PurePosixPath(path) == PurePosixPath("/sandbox")
         or ".." in PurePosixPath(path).parts
@@ -253,6 +263,61 @@ def _write_opencode_file_list_shim(path: Path) -> None:
     path.chmod(0o755)
 
 
+@contextmanager
+def _mutation_phase(run_dir: Path, name: str):
+    """Persist host phase timings, including failed attempts, without payloads."""
+    started = time.monotonic()
+    try:
+        yield
+    finally:
+        path = run_dir / "mutation_timing.json"
+        value = json.loads(path.read_text()) if path.exists() else {"schema": 1, "phases": {}}
+        value["phases"][name] = time.monotonic() - started
+        _write_json(path, value)
+
+
+def _sandbox_setup_gate(run_dir: Path):
+    """Let an external deployment bound setup independently of model inference."""
+    hook = os.environ.get("HSOPT_SANDBOX_SETUP_GATE")
+    if not hook:
+        return nullcontext()
+    module, function = hook.split(":", 1)
+    return getattr(importlib.import_module(module), function)(run_dir)
+
+
+def _build_sandbox_bundle(run_dir: Path, candidate: Path, context_files) -> Path:
+    """Bundle only explicitly permitted inputs, preserving read-only file modes."""
+    entries = {
+        "work/candidate.py": (candidate, 0o644),
+        "work/.opencode/skills/hsopt/SKILL.md": (run_dir / "hsopt.SKILL.md", 0o444),
+        "work/.local/bin/rg": (run_dir / "rg", 0o755),
+        "opencode.json": (run_dir / "opencode.preparation.json", 0o444),
+        "opencode.mutation.json": (run_dir / "opencode.json", 0o444),
+        "hsopt-preparation-prompt.txt": (run_dir / "preparation_prompt.md", 0o444),
+        "hsopt-mutation-prompt.txt": (run_dir / "prompt.md", 0o444),
+    }
+    for source, relative in context_files:
+        relative = PurePosixPath(relative)
+        name = "work/" + relative.as_posix()
+        if relative.is_absolute() or ".." in relative.parts or name in entries:
+            raise ValueError("invalid or colliding sandbox context path")
+        entries[name] = (source, 0o444)
+    archive = run_dir / "sandbox-bootstrap.tar"
+    manifest = {"schema": 1, "files": {}, "prompts": {}}
+    with tarfile.open(archive, "w") as bundle:
+        for name, (source, mode) in sorted(entries.items()):
+            data = source.read_bytes()
+            info = tarfile.TarInfo(name)
+            info.size, info.mode = len(data), mode
+            bundle.addfile(info, io.BytesIO(data))
+            digest = hashlib.sha256(data).hexdigest()
+            manifest["files"][name] = {"sha256": digest, "mode": oct(mode)}
+            if name in {"hsopt-preparation-prompt.txt", "hsopt-mutation-prompt.txt"}:
+                manifest["prompts"][digest] = "/sandbox/" + name
+    _write_json(run_dir / "sandbox_bundle_manifest.json", manifest)
+    return archive
+
+
 def _stdin_prompt_command(command: Sequence[str], run_dir: Path) -> list[str]:
     """Stage OpenCode prompts as stdin, outside OpenShell's 32-KiB argv limit.
 
@@ -267,11 +332,43 @@ def _stdin_prompt_command(command: Sequence[str], run_dir: Path) -> list[str]:
     if args[separator + 1 : separator + 3] != ["opencode", "run"]:
         return args
     sandbox_name = args[args.index("--name") + 1]
+    manifest_path = run_dir / "sandbox_bundle_manifest.json"
+    remote = None
+    if manifest_path.exists():
+        digest = hashlib.sha256(args[-1].encode()).hexdigest()
+        remote = json.loads(manifest_path.read_text()).get("prompts", {}).get(digest)
+        if remote not in {
+            None,
+            "/sandbox/hsopt-preparation-prompt.txt",
+            "/sandbox/hsopt-mutation-prompt.txt",
+        }:
+            raise ValueError("invalid bundled prompt path")
+    if remote is None:
+        return _upload_prompt_command(args, run_dir, sandbox_name, separator)
+    return _redirect_prompt_command(args, separator, remote)
+
+
+def _upload_prompt_command(args, run_dir, sandbox_name, separator):
     prompt_file = run_dir / f"transport-prompt-{uuid.uuid4().hex[:12]}.txt"
     prompt_file.write_text(args[-1], encoding="utf-8")
     remote = f"/sandbox/{prompt_file.name}"
-    _run(["openshell", "sandbox", "upload", "--no-git-ignore", sandbox_name, str(prompt_file), remote], timeout=45)
+    _run(
+        [
+            "openshell",
+            "sandbox",
+            "upload",
+            "--no-git-ignore",
+            sandbox_name,
+            str(prompt_file),
+            remote,
+        ],
+        timeout=45,
+    )
     _run_setup_command(sandbox_name, ["chmod", "0444", remote], run_dir)
+    return _redirect_prompt_command(args, separator, remote)
+
+
+def _redirect_prompt_command(args, separator, remote):
     return [
         *args[: separator + 1],
         "sh",
@@ -722,9 +819,7 @@ def _prepare_mutation_context(
     raise RuntimeError("Preparation missing required reads: " + ", ".join(missing))
 
 
-_OCSF_RE = re.compile(
-    r"\bOCSF(?:\s*\]\s*\[ocsf\])?\s+(?P<class>[A-Z]+):(?P<activity>[A-Z_]+)"
-)
+_OCSF_RE = re.compile(r"\bOCSF(?:\s*\]\s*\[ocsf\])?\s+(?P<class>[A-Z]+):(?P<activity>[A-Z_]+)")
 
 
 def summarize_openshell_log(path: Path) -> dict[str, Any]:
@@ -1294,6 +1389,7 @@ def _mutate_once(
         run_dir / "mutation_protocol.json",
         {
             "version": MUTATION_PROTOCOL_VERSION,
+            "sandbox_transport": "bundle-v2",
             "model": NEMOTRON_MODEL,
             "required_reads": required_reads,
             "context_sha256": _sha256(run_dir / "research_context.json"),
@@ -1352,115 +1448,70 @@ def _mutate_once(
     created = False
     audit: dict[str, Any] | None = None
     try:
-        _run(
-            [
-                "openshell",
-                "sandbox",
-                "create",
-                "--name",
-                sandbox_name,
-                "--no-auto-providers",
-                "--provider",
-                NVIDIA_PROVIDER,
-                "--no-tty",
-                "--detach",
-                *(["--from", os.environ["HSOPT_SANDBOX_IMAGE"]]
-                  if os.environ.get("HSOPT_SANDBOX_IMAGE") else []),
-                *(["--policy", os.environ["HSOPT_SANDBOX_POLICY"]]
-                  if os.environ.get("HSOPT_SANDBOX_POLICY") else []),
-                "--",
-                "sleep",
-                "infinity",
-            ],
-            timeout=timeout_seconds,
-        )
-        created = True
-        _capture_runtime_versions(sandbox_name, run_dir)
-        _write_json(
-            run_dir / "research_network.json",
-            _configure_research_network(sandbox_name),
-        )
-        _run_setup_command(
-            sandbox_name,
-            [
-                "mkdir",
-                "-p",
-                "/sandbox/work/.opencode/skills/hsopt",
-                "/sandbox/work/.local/bin",
-                *sorted(
-                    {
-                        f"/sandbox/work/{relative.parent.as_posix()}"
-                        for _, relative in context_files
-                        if relative.parent != PurePosixPath(".")
-                    }
-                ),
-            ],
-            run_dir,
-        )
-        _run(
-            [
-                "openshell",
-                "sandbox",
-                "upload",
-                "--no-git-ignore",
-                sandbox_name,
-                str(candidate),
-                "/sandbox/work/candidate.py",
-            ],
-            timeout=timeout_seconds,
-        )
-        for local, relative in context_files:
-            remote = f"/sandbox/work/{relative.as_posix()}"
-            _run(
-                [
-                    "openshell",
-                    "sandbox",
-                    "upload",
-                    "--no-git-ignore",
-                    sandbox_name,
-                    str(local),
-                    remote,
-                ],
-                timeout=timeout_seconds,
-            )
-            _run_setup_command(sandbox_name, ["chmod", "0444", remote], run_dir)
-        _run(
-            [
-                "openshell",
-                "sandbox",
-                "upload",
-                "--no-git-ignore",
-                sandbox_name,
-                str(run_dir / "opencode.preparation.json"),
-                "/sandbox/opencode.json",
-            ],
-            timeout=timeout_seconds,
-        )
-        _run(
-            [
-                "openshell",
-                "sandbox",
-                "upload",
-                "--no-git-ignore",
-                sandbox_name,
-                str(sandbox_skill),
-                "/sandbox/work/.opencode/skills/hsopt/SKILL.md",
-            ],
-            timeout=timeout_seconds,
-        )
-        _run(
-            [
-                "openshell",
-                "sandbox",
-                "upload",
-                "--no-git-ignore",
-                sandbox_name,
-                str(sandbox_file_list_shim),
-                "/sandbox/work/.local/bin/rg",
-            ],
-            timeout=timeout_seconds,
-        )
-        _run_setup_command(sandbox_name, ["chmod", "755", "/sandbox/work/.local/bin/rg"], run_dir)
+        with _mutation_phase(run_dir, "setup_wait_and_setup"), _sandbox_setup_gate(run_dir):
+            with _mutation_phase(run_dir, "sandbox_setup"):
+                # The owned name may exist even if create fails during registration.
+                created = True
+                _run(
+                    [
+                        "openshell",
+                        "sandbox",
+                        "create",
+                        "--name",
+                        sandbox_name,
+                        "--no-auto-providers",
+                        "--provider",
+                        NVIDIA_PROVIDER,
+                        "--no-tty",
+                        "--detach",
+                        *(
+                            ["--from", os.environ["HSOPT_SANDBOX_IMAGE"]]
+                            if os.environ.get("HSOPT_SANDBOX_IMAGE")
+                            else []
+                        ),
+                        *(
+                            ["--policy", os.environ["HSOPT_SANDBOX_POLICY"]]
+                            if os.environ.get("HSOPT_SANDBOX_POLICY")
+                            else []
+                        ),
+                        "--",
+                        "sleep",
+                        "infinity",
+                    ],
+                    timeout=timeout_seconds,
+                )
+                _capture_runtime_versions(sandbox_name, run_dir)
+                _write_json(
+                    run_dir / "research_network.json",
+                    _configure_research_network(sandbox_name),
+                )
+                archive = _build_sandbox_bundle(run_dir, candidate, context_files)
+                try:
+                    _run(
+                        [
+                            "openshell",
+                            "sandbox",
+                            "upload",
+                            "--no-git-ignore",
+                            sandbox_name,
+                            str(archive),
+                            "/sandbox/hsopt-bootstrap.tar",
+                        ],
+                        timeout=timeout_seconds,
+                    )
+                    _run_setup_command(
+                        sandbox_name,
+                        [
+                            "tar",
+                            "-xf",
+                            "/sandbox/hsopt-bootstrap.tar",
+                            "-C",
+                            "/sandbox",
+                        ],
+                        run_dir,
+                    )
+                finally:
+                    archive.unlink(missing_ok=True)
         command = [
             "openshell",
             "sandbox",
@@ -1500,47 +1551,46 @@ def _mutate_once(
         stopped_after_edit = False
         try:
             deadline = time.monotonic() + timeout_seconds
-            session = _prepare_mutation_context(
-                command,
-                run_dir=run_dir,
-                required_reads=required_reads,
-                prompt=preparation_prompt,
-                deadline=deadline,
-            )
-            _run(
-                [
-                    "openshell",
-                    "sandbox",
-                    "upload",
-                    "--no-git-ignore",
-                    sandbox_name,
-                    str(run_dir / "opencode.json"),
-                    "/sandbox/opencode.json",
-                ],
-                timeout=45,
-            )
+            with _mutation_phase(run_dir, "preparation_agent"):
+                session = _prepare_mutation_context(
+                    command,
+                    run_dir=run_dir,
+                    required_reads=required_reads,
+                    prompt=preparation_prompt,
+                    deadline=deadline,
+                )
+            # OpenCode also discovers /sandbox/opencode.json as project config.
+            # Replace that same file after verified reads, just as the original
+            # transport did; a second config filename can retain the deny rules.
+            with _mutation_phase(run_dir, "editing_config_switch"):
+                _run_setup_command(sandbox_name, [
+                    "cp", "-f", "/sandbox/opencode.mutation.json", "/sandbox/opencode.json",
+                ], run_dir)
             remaining = int(deadline - time.monotonic())
             if remaining <= 0:
                 raise RuntimeError("Mutation time budget exhausted during preparation")
             continuation = [*command[:-1], "--session", session, prompt]
             continuation[continuation.index("--timeout") + 1] = str(remaining)
-            returncode, stopped_after_edit = _run_logged(
-                continuation,
-                stdout_path=run_dir / "opencode.jsonl",
-                stderr_path=run_dir / "opencode.stderr",
-                timeout=remaining + 30,
-                completed_edit_grace_seconds=10,
-                append=True,
-            )
+            with _mutation_phase(run_dir, "editing_agent"):
+                returncode, stopped_after_edit = _run_logged(
+                    continuation,
+                    stdout_path=run_dir / "opencode.jsonl",
+                    stderr_path=run_dir / "opencode.stderr",
+                    timeout=remaining + 30,
+                    completed_edit_grace_seconds=10,
+                    append=True,
+                )
         finally:
             if stopped_after_edit:
                 _terminate_sandbox_opencode(sandbox_name)
-            _capture_openshell_logs(sandbox_name, run_dir / "openshell.log")
-            audit = write_agent_audit(run_dir)
+            with _mutation_phase(run_dir, "telemetry_collection"):
+                _capture_openshell_logs(sandbox_name, run_dir / "openshell.log")
+                audit = write_agent_audit(run_dir)
         _raise_inference_error(run_dir / "opencode.jsonl")
         if returncode != 0 and not stopped_after_edit:
             raise RuntimeError(f"OpenCode exited with status {returncode}")
-        _download_candidate(sandbox_name, run_dir, timeout_seconds=timeout_seconds)
+        with _mutation_phase(run_dir, "candidate_download"):
+            _download_candidate(sandbox_name, run_dir, timeout_seconds=timeout_seconds)
     finally:
         if created and not (run_dir / "agent_audit.json").is_file():
             _capture_openshell_logs(sandbox_name, run_dir / "openshell.log")
@@ -1548,7 +1598,6 @@ def _mutate_once(
         if created and not keep_sandbox:
             cleanup_errors = []
             for cleanup in (
-                lambda: _terminate_sandbox_opencode(sandbox_name),
                 lambda: _run(
                     ["openshell", "sandbox", "delete", sandbox_name],
                     check=False,
@@ -1556,7 +1605,8 @@ def _mutate_once(
                 ),
             ):
                 try:
-                    cleanup()
+                    with _mutation_phase(run_dir, "sandbox_cleanup"):
+                        cleanup()
                 except (OSError, subprocess.SubprocessError) as exc:
                     cleanup_errors.append(f"{type(exc).__name__}: {exc}"[:500])
             if cleanup_errors:
