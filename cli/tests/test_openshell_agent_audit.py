@@ -287,6 +287,20 @@ def test_logged_process_stops_after_completed_edit(tmp_path: Path) -> None:
     assert returncode != 0
 
 
+def test_read_barrier_stops_a_looping_process_only_after_all_receipts(tmp_path):
+    events = [{"type": "tool_use", "sessionID": "read-session", "part": {
+        "callID": name, "tool": "read", "state": {"status": "completed",
+        "input": {"path": "/sandbox/work/"+name}}}}
+        for name in ["candidate.py", "problem.json"]]
+    code = "import time\n" + "\n".join(f"print({json.dumps(e)!r},flush=True)" for e in events) + "\ntime.sleep(30)"
+    path = tmp_path / "events.jsonl"
+    returncode, stopped = _run_logged([sys.executable, "-c", code],
+        stdout_path=path, stderr_path=tmp_path/"stderr.log", timeout=5,
+        required_reads_to_stop=["candidate.py", "problem.json"])
+    assert stopped and returncode != 0
+    _validate_agent_action_contract(path, required_reads=["candidate.py", "problem.json"], preparation=True)
+
+
 def test_openshell_audit_counts_ocsf_security_events(tmp_path: Path) -> None:
     log = tmp_path / "openshell.log"
     log.write_text(
@@ -705,7 +719,12 @@ def test_sandbox_cleanup_terminates_opencode_without_matching_itself(
         "--name",
         "hsopt-deadbeef",
     ]
-    assert "[o]pencode run" in command[-1]
+    import re
+    pattern = r"[o]pencode(\.exe)? (run|serve)"
+    assert pattern in command[-1]
+    assert re.search(pattern, "opencode.exe run --standalone")
+    assert re.search(pattern, "opencode serve")
+    assert not re.search(pattern, command[-1])
     assert kwargs == {"check": False, "timeout": 20}
 
 

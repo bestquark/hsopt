@@ -389,6 +389,7 @@ def _run_logged(
     stderr_path: Path,
     timeout: int,
     completed_edit_grace_seconds: float | None = None,
+    required_reads_to_stop: Sequence[str] = (),
     append: bool = False,
 ) -> tuple[int, bool]:
     """Run a command with logs visible to external monitors while it is active."""
@@ -406,11 +407,18 @@ def _run_logged(
         )
         deadline = time.monotonic() + timeout
         edit_completed_at: float | None = None
+        reads_completed_at: float | None = None
         while True:
             returncode = process.poll()
             if returncode is not None:
                 return returncode, False
             now = time.monotonic()
+            if required_reads_to_stop and reads_completed_at is None:
+                _, actions = summarize_opencode_events(stdout_path)
+                completed = {a['target'] for a in actions
+                             if a['tool'] == 'read' and a['status'] == 'completed'}
+                if set(required_reads_to_stop) <= completed:
+                    reads_completed_at = now
             if (
                 completed_edit_grace_seconds is not None
                 and edit_completed_at is None
@@ -418,8 +426,9 @@ def _run_logged(
             ):
                 edit_completed_at = now
             if (
-                edit_completed_at is not None
-                and now - edit_completed_at >= completed_edit_grace_seconds
+                (edit_completed_at is not None
+                 and now - edit_completed_at >= completed_edit_grace_seconds)
+                or (reads_completed_at is not None and now - reads_completed_at >= 1.0)
             ):
                 process.terminate()
                 try:
@@ -884,15 +893,19 @@ def _prepare_mutation_context(
             raise RuntimeError("Mutation time budget exhausted during preparation")
         turn = [*command[:-1], *(["--session", session] if session else []), prompt]
         turn[turn.index("--timeout") + 1] = str(remaining)
-        returncode, _ = _run_logged(
+        stop_on_reads = os.environ.get("HSOPT_PREPARATION_READ_BARRIER") == "1"
+        returncode, stopped_on_reads = _run_logged(
             turn,
             stdout_path=run_dir / "opencode.jsonl",
             stderr_path=run_dir / "opencode.stderr",
             timeout=remaining + 30,
             append=attempt > 0,
+            **({"required_reads_to_stop": required_reads} if stop_on_reads else {}),
         )
+        if stopped_on_reads and "--name" in command:
+            _terminate_sandbox_opencode(command[command.index("--name") + 1])
         _raise_inference_error(run_dir / "opencode.jsonl")
-        if returncode != 0:
+        if returncode != 0 and not stopped_on_reads:
             raise RuntimeError(f"OpenCode preparation exited with status {returncode}")
         # Reject actual/uncertain writes and forbidden tools, but retain a session
         # whose candidate write was conclusively blocked by the permissions layer.
@@ -913,6 +926,7 @@ def _prepare_mutation_context(
                     "session": session,
                     "required_reads": required_reads,
                     "read_only_turns": attempt + 1,
+                    "host_read_barrier_handoff": stopped_on_reads,
                     "blocked_candidate_writes": sum(
                         a["category"] == "file_edit"
                         and a["target"] == "candidate.py"
@@ -1511,9 +1525,9 @@ def _terminate_sandbox_opencode(sandbox_name: str) -> None:
             "sh",
             "-lc",
             (
-                "pkill -TERM -f '[o]pencode run' 2>/dev/null || true; "
+                "pkill -TERM -f '[o]pencode(\\.exe)? (run|serve)' 2>/dev/null || true; "
                 "sleep 1; "
-                "pkill -KILL -f '[o]pencode run' 2>/dev/null || true"
+                "pkill -KILL -f '[o]pencode(\\.exe)? (run|serve)' 2>/dev/null || true"
             ),
         ],
         check=False,
@@ -1632,6 +1646,7 @@ def _mutate_once(
             "model_output_limit": MODEL_OUTPUT_LIMIT,
             "model_context_limit": MODEL_CONTEXT_LIMIT,
             "automatic_compaction": True,
+            "preparation_handoff": "required-read-barrier-v1" if os.environ.get("HSOPT_PREPARATION_READ_BARRIER") == "1" else "model_turn_completion",
         },
     )
     (run_dir / "opencode.json").write_text(
@@ -1816,6 +1831,8 @@ def _mutate_once(
             # Replace that same file after verified reads, just as the original
             # transport did; a second config filename can retain the deny rules.
             with _mutation_phase(run_dir, "editing_config_switch"):
+                if os.environ.get("HSOPT_PREPARATION_READ_BARRIER") == "1":
+                    _terminate_sandbox_opencode(sandbox_name)
                 _run_setup_command(sandbox_name, [
                     "cp", "-f", "/sandbox/opencode.mutation.json", "/sandbox/opencode.json",
                 ], run_dir)
@@ -1935,7 +1952,9 @@ def mutate(
                     ),
                 },
             )
-            if run_dir.name.isdigit():
+            # Shared protocol orchestration records its own failure once.
+            # Its numeric iteration folder must not count the same error twice.
+            if run_dir.name.isdigit() and kind != "protocol":
                 record_mutation_failure(
                     policy_file.resolve().parent, exc, iteration=int(run_dir.name)
                 )

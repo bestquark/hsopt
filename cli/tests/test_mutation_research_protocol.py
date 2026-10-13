@@ -507,6 +507,38 @@ def test_missing_reads_are_recovered_read_only_in_same_session(tmp_path, monkeyp
     assert json.loads((tmp_path / "preparation_result.json").read_text())["read_only_turns"] == 2
 
 
+def test_completed_read_barrier_retains_session_despite_host_termination(tmp_path, monkeypatch):
+    import time
+    required = ["candidate.py", "problem.json"]
+    def logged(command, *, stdout_path, required_reads_to_stop, **kwargs):
+        assert list(required_reads_to_stop) == required
+        stdout_path.write_text("\n".join(json.dumps({**event("read", path), "sessionID": "read-ready"})
+                                       for path in required))
+        return -15, True
+    stopped = []
+    monkeypatch.setenv("HSOPT_PREPARATION_READ_BARRIER", "1")
+    monkeypatch.setattr(openshell, "_run_logged", logged)
+    monkeypatch.setattr(openshell, "_terminate_sandbox_opencode", stopped.append)
+    session = openshell._prepare_mutation_context(
+        ["openshell", "--name", "owned-sandbox", "--timeout", "120", "opencode", "unused"],
+        run_dir=tmp_path, required_reads=required, prompt="read only", deadline=time.monotonic()+120)
+    assert session == "read-ready" and stopped == ["owned-sandbox"]
+    assert json.loads((tmp_path/"preparation_result.json").read_text())["host_read_barrier_handoff"]
+
+
+def test_shared_mutation_failure_is_counted_once_by_its_orchestrator(tmp_path, monkeypatch):
+    lane = lane_at(tmp_path)
+    def fail(*args, **kwargs):
+        raise RuntimeError("mutation failed")
+    monkeypatch.setattr(openshell, "_mutate_once", fail)
+    with pytest.raises(RuntimeError) as raised:
+        openshell.mutate(lane/"incumbent.py", lane/"incumbent_result.json",
+                         lane/"iterations/0001", kind="protocol", source=lane/"suite.json")
+    assert not (lane/"mutation_retry.json").exists()
+    record_mutation_failure(lane, raised.value, iteration=1)
+    assert json.loads((lane/"mutation_retry.json").read_text())["attempts"] == 1
+
+
 def test_documented_builtins_match_immutable_evaluator():
     from hsopt.evaluation.compiled_unitary import _SAFE_POLICY_BUILTINS
     from hsopt.sandbox.research_context import POLICY_CONTRACT
