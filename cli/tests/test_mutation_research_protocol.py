@@ -215,9 +215,19 @@ def test_transient_failure_has_backoff_then_stops_after_three_attempts(tmp_path,
     assert mutation_readiness(lane) is None
 
 
-def test_known_model_output_limit_is_explicit():
+def test_lightning_deployment_limits_and_compaction_are_explicit():
+    config=openshell.opencode_config()
     model = openshell.opencode_config()["providers"]["openshell"]["models"][openshell.NEMOTRON_MODEL]
-    assert model["limit"]["output"] == 16384
+    assert openshell.NEMOTRON_MODEL == 'nvidia/nvidia/nemotron-3.5-lightning'
+    assert model["limit"] == {"context":131072,"output":65536}
+    assert config['agents'][openshell.OPENCODE_AGENT]['request']['body']['max_tokens']==65536
+    assert config['compaction']['auto'] is True
+
+
+def test_output_reservation_cannot_exhaust_context(monkeypatch):
+    monkeypatch.setattr(openshell,'MODEL_OUTPUT_LIMIT',openshell.MODEL_CONTEXT_LIMIT)
+    with pytest.raises(ValueError,match='smaller than context'):
+        openshell.opencode_config()
 
 
 def test_metrics_distinguish_failed_fetch_from_successful_search(tmp_path):

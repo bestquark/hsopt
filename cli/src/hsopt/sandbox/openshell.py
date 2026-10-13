@@ -29,10 +29,13 @@ from .research_context import (
 
 NVIDIA_PROVIDER = "hsopt-nvidia-native"
 NVIDIA_BASE_URL = "https://inference-api.nvidia.com/v1"
-NEMOTRON_MODEL = "nvidia/nvidia/nemotron-3.5-super-vl"
+NEMOTRON_MODEL = os.environ.get("HSOPT_MUTATION_MODEL", "nvidia/nvidia/nemotron-3.5-lightning")
 OPENCODE_MODEL = f"openshell/{NEMOTRON_MODEL}"
 OPENCODE_AGENT = "hsopt-mutation"
-MODEL_OUTPUT_LIMIT = 16384
+# Limits describe the inference deployment, not the checkpoint's advertised size.
+# The live Lightning deployment accepts 128K total context and 64K response requests.
+MODEL_CONTEXT_LIMIT = int(os.environ.get("HSOPT_MODEL_CONTEXT_LIMIT", "131072"))
+MODEL_OUTPUT_LIMIT = int(os.environ.get("HSOPT_MODEL_OUTPUT_LIMIT", "65536"))
 ONLINE_TOOLS = frozenset({"webfetch", "websearch", "codesearch"})
 RESEARCH_CONTAMINATION_MARKERS = ("bestquark", "hsopt", "initial_pf")
 REPOSITORY_ROOT = Path(__file__).resolve().parents[4]
@@ -920,6 +923,9 @@ def configure_inference() -> dict[str, Any]:
 def opencode_config(*, preparation: bool = False) -> dict[str, Any]:
     """Native OpenCode v2 config for one isolated candidate mutation."""
 
+    if not 0 < MODEL_OUTPUT_LIMIT < MODEL_CONTEXT_LIMIT:
+        raise ValueError("Model output allowance must be positive and smaller than context")
+
     permissions = [{"action": "*", "resource": "*", "effect": "deny"}]
     for resource in ("candidate.py", "evaluate.py", "*.json", "**/*.json"):
         permissions.append({"action": "read", "resource": resource, "effect": "allow"})
@@ -965,6 +971,7 @@ def opencode_config(*, preparation: bool = False) -> dict[str, Any]:
         "update": "disable",
         "share": "disabled",
         "snapshots": False,
+        "compaction": {"auto": True, "keep": {"tokens": 15000}, "buffer": 8192},
         "model": OPENCODE_MODEL,
         "enabled_providers": ["openshell"],
         "providers": {
@@ -976,9 +983,9 @@ def opencode_config(*, preparation: bool = False) -> dict[str, Any]:
                 "models": {
                     NEMOTRON_MODEL: {
                         "modelID": NEMOTRON_MODEL,
-                        "name": "NVIDIA Nemotron 3.5 Super VL",
+                        "name": NEMOTRON_MODEL.rsplit("/", 1)[-1],
                         "capabilities": {"tools": True},
-                        "limit": {"context": 131072, "output": MODEL_OUTPUT_LIMIT},
+                        "limit": {"context": MODEL_CONTEXT_LIMIT, "output": MODEL_OUTPUT_LIMIT},
                     }
                 },
             }
@@ -988,7 +995,7 @@ def opencode_config(*, preparation: bool = False) -> dict[str, Any]:
                 "description": "Mutate only the isolated HSOpt candidate.py policy.",
                 "mode": "primary",
                 "model": OPENCODE_MODEL,
-                "request": {"body": {"temperature": 1.0, "top_p": 0.95}},
+                "request": {"body": {"temperature": 1.0, "top_p": 0.95, "max_tokens": MODEL_OUTPUT_LIMIT}},
                 "steps": 20,
                 "system": system,
                 "permissions": permissions,
@@ -1292,6 +1299,8 @@ def _mutate_once(
             "context_sha256": _sha256(run_dir / "research_context.json"),
             "prompt_sha256": hashlib.sha256(prompt.encode()).hexdigest(),
             "model_output_limit": MODEL_OUTPUT_LIMIT,
+            "model_context_limit": MODEL_CONTEXT_LIMIT,
+            "automatic_compaction": True,
         },
     )
     (run_dir / "opencode.json").write_text(

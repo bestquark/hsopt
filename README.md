@@ -464,8 +464,13 @@ boundary and every emitted audit file.
 Use [OpenCode 2](https://opencode.ai/v2/docs/) in an
 [OpenShell](https://docs.nvidia.com/openshell/) sandbox. The deployment installs
 OpenShell on its host, supplies an image with `@opencode/cli@2.0.26`, and imports
-its native inference provider profile. HSOpt uses Nemotron 3.5 Super VL
-(`nvidia/nvidia/nemotron-3.5-super-vl`). The OpenShell proxy keeps the real
+its native inference provider profile. HSOpt defaults to Nemotron 3.5 Lightning
+(`nvidia/nvidia/nemotron-3.5-lightning`), with automatic OpenCode compaction.
+Set `HSOPT_MUTATION_MODEL`, `HSOPT_MODEL_CONTEXT_LIMIT`, and
+`HSOPT_MODEL_OUTPUT_LIMIT` for your inference deployment's verified limits.
+The default Lightning deployment has 128K total context and a 64K response
+allowance, including reasoning; response space must leave room for input.
+The OpenShell proxy keeps the real
 credential on the host and substitutes it only at the approved inference endpoint.
 
 ```bash
