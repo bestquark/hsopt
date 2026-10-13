@@ -89,10 +89,15 @@ def evaluation_request(task_dir: Path) -> dict[str, Any]:
         "evaluator_sha256": hashlib.sha256(
             b"".join(
                 name.encode() + b"\0" + Path(compiled_unitary.__file__).with_name(name).read_bytes()
-                for name in ("compiled_unitary.py", "gpu_rotations.py", "gpu_spectrum.py")
+                for name in (
+                    "compiled_unitary.py", "gpu_rotations.py", "gpu_spectrum.py",
+                    *(["ground_branch.py"] if metadata.get("energy_target") == "ground_branch" else []),
+                )
             )
         ).hexdigest(),
     }
+    if metadata.get("energy_target"):
+        request["task"]["energy_target"] = metadata["energy_target"]
     request["request_sha256"] = hashlib.sha256(_json(request)).hexdigest()
     return {**request, "task_dir": str(task_dir)}
 

@@ -27,6 +27,7 @@ from ..evaluation.compiled_unitary import (
     evaluate_exact_reference,
     evaluate_molecule,
 )
+from ..evaluation import ground_branch
 
 
 QUEUE_PHASES = ("pending", "completed", "failed")
@@ -70,10 +71,13 @@ def _task_id(
     policy: Path | None = None,
     reference: Path | None = None,
     difference_error_contract: str | None = None,
+    energy_target: str = "hf_accessible",
 ) -> str:
     digest = hashlib.sha256()
     digest.update(b"hsopt-exact-task-v4\0")
     digest.update(EVALUATION_CONTRACT_VERSION.encode())
+    if energy_target != "hf_accessible":
+        digest.update(b"\0" + ground_branch.CONTRACT_VERSION.encode())
     digest.update(b"\0")
     digest.update(stage.encode())
     digest.update(kind.encode())
@@ -153,11 +157,16 @@ def enqueue(
     policy: Path,
     reference: Path | None = None,
     difference_error_contract: str | None = None,
+    energy_target: str = "hf_accessible",
 ) -> dict[str, Any]:
     """Snapshot one candidate into the pending queue, deduplicated by content."""
 
     queue_dir = queue_dir.resolve()
     policy = policy.resolve()
+    if energy_target not in {"hf_accessible", "ground_branch"} or (
+        energy_target == "ground_branch" and (kind != "absolute" or reference is None)
+    ):
+        raise ValueError("ground-input tasks require an absolute-energy case and cached reference")
     if not policy.is_file():
         raise FileNotFoundError(policy)
     if reference is not None:
@@ -182,6 +191,7 @@ def enqueue(
         policy=policy,
         reference=reference,
         difference_error_contract=difference_error_contract,
+        energy_target=energy_target,
     )
     with _enqueue_lock(queue_dir):
         existing = _find_task(queue_dir, task_id)
@@ -231,6 +241,9 @@ def enqueue(
                 ),
                 "queued_at": _now(),
             }
+            if energy_target != "hf_accessible":
+                metadata.update(energy_target=energy_target,
+                                evaluation_contract_version=ground_branch.CONTRACT_VERSION)
             _write_json(temporary / "task.json", metadata)
             destination = queue_dir / "pending" / task_id
             temporary.rename(destination)
@@ -297,7 +310,12 @@ def evaluate_task(
     task_started_at = _now()
     task_started = time.perf_counter()
     try:
-        if metadata.get("evaluation_contract_version") != EVALUATION_CONTRACT_VERSION:
+        energy_target = metadata.get("energy_target", "hf_accessible")
+        expected_contract = (
+            ground_branch.CONTRACT_VERSION if energy_target == "ground_branch"
+            else EVALUATION_CONTRACT_VERSION
+        )
+        if metadata.get("evaluation_contract_version") != expected_contract:
             raise ValueError(
                 "queued task uses a different evaluator contract; keep old results separate"
             )
@@ -316,6 +334,7 @@ def evaluate_task(
                     policy,
                     backend=backend,
                     reference_path=reference,
+                    **({"energy_target": energy_target} if energy_target != "hf_accessible" else {}),
                 )
             else:
                 result = evaluate_difference(
@@ -330,13 +349,15 @@ def evaluate_task(
         result = {
             "status": "error",
             "task_id": task_id,
-            "evaluation_contract_version": EVALUATION_CONTRACT_VERSION,
+            "evaluation_contract_version": metadata.get("evaluation_contract_version"),
             "difference_error_contract": metadata.get("difference_error_contract"),
             "difference_error_contract_version": metadata.get("difference_error_contract_version"),
             "error_type": type(exc).__name__,
             "error": str(exc),
             "traceback": traceback.format_exc(),
         }
+        if metadata.get("energy_target"):
+            result["energy_target"] = metadata["energy_target"]
     result.update(
         {
             "task_started_at": task_started_at,

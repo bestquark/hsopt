@@ -17,6 +17,7 @@ from pathlib import Path
 from typing import Any
 
 from ..evaluation import compiled_unitary as judge
+from ..evaluation import ground_branch
 from ..sandbox.openshell import mutate
 from ..sandbox.mutation_retry import (
     clear_mutation_retry,
@@ -109,10 +110,13 @@ def bind_policy(candidate: Path, parameters: dict[str, Any], output: Path) -> No
     judge.validate_policy_source(output)
 
 
-def _validate_reference(kind: str, source: Path, reference: Path) -> None:
+def _validate_reference(kind: str, source: Path, reference: Path, energy_target: str) -> None:
     payload = read(reference)
     if kind == "absolute":
-        judge._reference_energy(judge.load_problem(source), payload)
+        if energy_target == "ground_branch":
+            ground_branch.cached_reference(judge.load_problem(source), payload)
+        else:
+            judge._reference_energy(judge.load_problem(source), payload)
         return
     if (
         payload.get("observable") != "exact_unitary_signed_energy_difference"
@@ -136,11 +140,16 @@ def prepare(
     iterations: int,
     replicate: str,
     error_contract: str | None = None,
+    energy_target: str = "hf_accessible",
 ) -> dict[str, Any]:
     """Reuse beta calibrations and cached references; never recalibrate/diagonalize."""
     if family not in FAMILIES or baseline not in calibration.BASELINE_VARIANTS or iterations < 1:
         raise ValueError("invalid family, baseline or mutation budget")
     kind = FAMILIES[family]
+    if energy_target not in {"hf_accessible", "ground_branch"} or (
+        kind != "absolute" and energy_target != "hf_accessible"
+    ):
+        raise ValueError("ground-input scoring is available for abs_protocol only")
     if (
         kind == "difference"
         and error_contract not in judge.DIFFERENCE_ERROR_CONTRACTS
@@ -161,7 +170,7 @@ def prepare(
             raise ValueError("case IDs must be simple names")
         base = selection.resolve().parent
         source, reference = (base / row["source"]).resolve(), (base / row["reference"]).resolve()
-        _validate_reference(kind, source, reference)
+        _validate_reference(kind, source, reference, energy_target)
         parameters, _ = calibration.load_baselines(
             source,
             baseline=baseline,
@@ -191,6 +200,7 @@ def prepare(
         "baseline": baseline,
         "objective": OBJECTIVE,
         "difference_error_contract": error_contract,
+        "energy_target": energy_target,
         "cases": cases,
     }
     write(run / "suite.json", suite)
@@ -207,9 +217,13 @@ def prepare(
             "iterations_target": iterations,
             "baseline": baseline,
             "difference_error_contract": error_contract,
+            "energy_target": energy_target,
+            "evaluation_contract_version": (
+                ground_branch.CONTRACT_VERSION if energy_target == "ground_branch"
+                else judge.EVALUATION_CONTRACT_VERSION
+            ),
             "suite_sha256": sha(run / "suite.json"),
             "input_sha256": hashes,
-            "evaluation_contract_version": judge.EVALUATION_CONTRACT_VERSION,
             "protocol_evaluator_sha256": sha(Path(__file__)),
         },
     )
@@ -241,6 +255,7 @@ def _enqueue_round(run: Path, iteration: int, candidate: Path) -> dict[str, Any]
             policy=bound,
             reference=within(run, case["reference"]),
             difference_error_contract=suite["difference_error_contract"],
+            energy_target=suite["energy_target"],
         )
         task = Path(queued["path"])
         request = evaluation_request(task)
@@ -304,11 +319,13 @@ def _check_receipt(
     result = receipt["result"]
     if (
         result.get("task_id") != expected["task_id"]
-        or result.get("evaluation_contract_version") != judge.EVALUATION_CONTRACT_VERSION
+        or result.get("evaluation_contract_version") != expected["task"]["evaluation_contract_version"]
     ):
         raise ValueError("case result has wrong task or evaluator contract")
     if result.get("execution_backend") != "cupy-lanczos":
         raise ValueError("shared case receipt must come from GPU Lanczos")
+    if expected["task"].get("energy_target") and result.get("energy_target") != expected["task"]["energy_target"]:
+        raise ValueError("case result has a different energy target")
     contract = read(run / "suite.json")["difference_error_contract"]
     if result.get("difference_error_contract") != contract:
         raise ValueError("reaction contract mismatch")
@@ -595,6 +612,9 @@ def main(*, family: str, worker: bool = False) -> int:
         )
         prepare_parser.add_argument("--iterations", required=True, type=int)
         prepare_parser.add_argument("--replicate", required=True)
+        if family == "abs_protocol":
+            prepare_parser.add_argument("--energy-target", choices=("hf_accessible", "ground_branch"),
+                                        default="hf_accessible")
         if family == "diff_protocol":
             prepare_parser.add_argument(
                 "--error-contract", required=True, choices=judge.DIFFERENCE_ERROR_CONTRACTS
@@ -617,6 +637,7 @@ def main(*, family: str, worker: bool = False) -> int:
                 iterations=args.iterations,
                 replicate=args.replicate,
                 error_contract=getattr(args, "error_contract", None),
+                energy_target=getattr(args, "energy_target", "hf_accessible"),
             )
         else:
             if read(args.run_dir / "manifest.json")["family"] != family:

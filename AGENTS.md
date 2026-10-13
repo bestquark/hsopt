@@ -107,3 +107,10 @@ explicitly explore mixed-precision rotation synthesis. Use geometric-mean
 baseline-relative T95 with a separate accuracy constraint for each selected case.
 Keep reaction contracts, baselines and replicates isolated. GPU Lanczos is mandatory;
 do not drop a case to improve the aggregate score or alter existing campaigns.
+
+Shared absolute protocols additionally select `energy_target` explicitly.
+`ground_branch` uses the cached exact ground input from tight calibration and
+scores `|E_compiled,0 - E_0|`, with its compiled QPE peak probability in T95.
+Ideal ground-state preparation cost is excluded. Its task IDs, evaluator version,
+manifests and dashboard labels must remain separate from HF-accessible runs.
+Do not regenerate beta calibrations when changing this selected scoring contract.

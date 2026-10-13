@@ -1322,6 +1322,19 @@ Call one edit or write tool exactly once. After that tool succeeds, immediately
 return a final text response without rewriting the file.
 """
     if context is not None and context.get("shared_protocol"):
+        if context["shared_protocol"].get("energy_target") == "ground_branch":
+            prompt = prompt.replace(
+                "lowest-energy eigenphase with resolved weight from the fixed Hartree--Fock\ninput.",
+                "dominant compiled eigenspace sampled from the cached EXACT GROUND STATE\ninput used for tight calibration; error is E_compiled,0 - E_0.",
+            ).replace("resolved HF peak", "resolved exact-ground-input peak").replace(
+                "Small resolved HF peak weight", "Small resolved ground-input peak weight"
+            )
+            prompt += (
+                "\nGROUND-INPUT SHARED CONTRACT: GPU Lanczos must certify the compiled QPE peak "
+                "by its overlap with the cached exact ground vector. It never compares to an "
+                "HF-accessible excited-state energy. Ground-state preparation cost is excluded; "
+                "the shared formula is scored for dynamics and T95. All cases must pass.\n"
+            )
         prompt += (
             "\nSHARED PROTOCOL EXPERIMENT: this ONE candidate.py is evaluated on ALL suite cases. "
             "Optimize the geometric mean of case T95/baseline T95, with case-wise accuracy. "
@@ -1521,7 +1534,22 @@ def _mutate_once(
         "history": lane_history(policy_file.parent, run_dir),
     }
     if kind == "protocol":
+        energy_target = research_context["benchmark"].get("energy_target", "hf_accessible")
+        if energy_target == "ground_branch":
+            research_context["mutation_protocol_version"] += "_shared_ground_input_v1"
+            research_context["policy_contract"] = {
+                **POLICY_CONTRACT,
+                "objective": (
+                    "Minimize geometric-mean baseline-relative T95 across ALL molecules, "
+                    "with |E_compiled,0 - E_0| below chemical accuracy for EVERY molecule. "
+                    "The initial state is the cached exact ground vector used for tight "
+                    "calibration. Select its dominant compiled QPE eigenspace; do not use HF. "
+                    "Include its probability in the 95% confidence cost. Ideal ground-state "
+                    "preparation cost is excluded. Only feasible strict aggregate gains count."
+                ),
+            }
         research_context["shared_protocol"] = {
+            "energy_target": energy_target,
             "objective": "geometric_mean_baseline_relative_t95",
             "accuracy": "Every selected molecule/reaction must pass its own fixed energy contract.",
             "baseline_binding": "Preserve baseline_parameters = {}. The host supplies each case's sealed (r, epsilon, beta) starting values. Change self.r/angles/tolerance rules, not this table.",
@@ -1535,7 +1563,7 @@ def _mutate_once(
     _write_json(
         run_dir / "mutation_protocol.json",
         {
-            "version": MUTATION_PROTOCOL_VERSION,
+            "version": research_context["mutation_protocol_version"],
             "sandbox_transport": "bundle-v2",
             "blocked_write_handling": "permission-denial-recovery-v1",
             "agent_action_contract": "candidate-once-scratch-code-v1",

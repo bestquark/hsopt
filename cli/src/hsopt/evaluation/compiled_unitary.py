@@ -1632,8 +1632,15 @@ def evaluate_molecule(
     reference_path: Path | None = None,
     reference_result: Mapping[str, Any] | None = None,
     target_confidence: float = QPE_TARGET_CONFIDENCE,
+    energy_target: str = "hf_accessible",
 ) -> dict[str, Any]:
-    """Evaluate the lowest HF-accessible compiled-PF energy for one molecule."""
+    """Evaluate one explicitly selected, versioned compiled-PF energy contract."""
+
+    if energy_target not in {"hf_accessible", "ground_branch"}:
+        raise ValueError("energy_target must be hf_accessible or ground_branch")
+    ground_input = energy_target == "ground_branch"
+    if ground_input and (backend != "cupy-lanczos" or (reference_path is None and reference_result is None)):
+        raise ValueError("ground-input scoring requires a cached reference and GPU Lanczos; no fallback")
 
     evaluation_started = time.perf_counter()
     problem = load_problem(problem_path)
@@ -1647,8 +1654,14 @@ def evaluate_molecule(
         reference_result = evaluate_exact_reference(problem_path, backend=backend)
 
     reference_started = time.perf_counter()
-    exact_energy = _reference_energy(problem, reference_result)
-    hf_state = _hartree_fock_state(problem, xp)
+    if ground_input:
+        from . import ground_branch
+
+        exact_energy, cached_state = ground_branch.cached_reference(problem, reference_result)
+        input_state = xp.asarray(cached_state, dtype=xp.complex128)
+    else:
+        exact_energy = _reference_energy(problem, reference_result)
+        input_state = _hartree_fock_state(problem, xp)
     _fence(backend_name)
     reference_load_seconds = time.perf_counter() - reference_started
 
@@ -1667,7 +1680,8 @@ def evaluate_molecule(
         from .gpu_spectrum import eigensolve
 
         eigenvalues, eigenvectors, spectral_solver = eigensolve(
-            unitary_step, problem, metrics, iterative=backend_name == "cupy-lanczos"
+            unitary_step, problem, metrics, iterative=backend_name == "cupy-lanczos",
+            **({"target_state": input_state} if ground_input else {}),
         )
     else:
         eigenvalues, eigenvectors = xp.linalg.eig(unitary_step)
@@ -1677,18 +1691,19 @@ def evaluate_molecule(
     compiled_unitary_eigensolve_seconds = time.perf_counter() - eigensolve_started
 
     postprocess_started = time.perf_counter()
-    hf_probabilities = _host_array(
-        xp.abs(eigenvectors.conj().T @ hf_state) ** 2,
+    input_probabilities = _host_array(
+        xp.abs(eigenvectors.conj().T @ input_state) ** 2,
         dtype=np.float64,
     )
-    peak = _select_lowest_hf_accessible_peak(
+    selector = ground_branch.select_peak if ground_input else _select_lowest_hf_accessible_peak
+    peak = selector(
         _host_array(xp.angle(eigenvalues), dtype=np.float64),
-        hf_probabilities,
+        input_probabilities,
         n_steps=int(metrics["n_steps"]),
         target_time=float(problem["target_time"]),
         identity_coefficient=float(problem["identity_coefficient"]),
     )
-    if not spectral_solver["spectrum_complete"]:
+    if not ground_input and not spectral_solver["spectrum_complete"]:
         # These are full-spectrum diagnostics and cannot be inferred from Ritz pairs.
         peak["hf_accessible_peak_count"] = None
         peak["hf_accessible_probability_mass"] = None
@@ -1696,7 +1711,9 @@ def evaluate_molecule(
     signed_error = estimated_energy - exact_energy
     absolute_error = abs(signed_error)
     passes = absolute_error < CHEMICAL_ACCURACY_HARTREE
-    qpe_success_probability = float(peak["qpe_success_probability_from_hf"])
+    qpe_success_probability = float(peak[
+        "qpe_success_probability_from_ground_input" if ground_input else "qpe_success_probability_from_hf"
+    ])
     compiled_evolution_t_count = int(metrics["t_count"])
     qpe_energy_precision = (
         CHEMICAL_ACCURACY_HARTREE - absolute_error if passes else CHEMICAL_ACCURACY_HARTREE
@@ -1713,7 +1730,7 @@ def evaluate_molecule(
     postprocess_seconds = time.perf_counter() - postprocess_started
     evaluation_wall_seconds = time.perf_counter() - evaluation_started
 
-    return {
+    result = {
         "status": "ok",
         "evaluation_contract_version": EVALUATION_CONTRACT_VERSION,
         "observable": "compiled_unitary_lowest_hf_accessible_eigenphase",
@@ -1732,10 +1749,10 @@ def evaluate_molecule(
         "reference_target": REFERENCE_TARGET,
         "exact_reference_energy_hartree": exact_energy,
         "exact_hf_accessible_energy_hartree": exact_energy,
-        "exact_hf_accessible_probability": reference_result["exact_hf_accessible_probability"],
-        "exact_hf_accessible_ground_gap_hartree": reference_result[
+        "exact_hf_accessible_probability": reference_result.get("exact_hf_accessible_probability"),
+        "exact_hf_accessible_ground_gap_hartree": reference_result.get(
             "exact_hf_accessible_ground_gap_hartree"
-        ],
+        ),
         "exact_ground_energy_hartree": reference_result["exact_unitary_ground_energy_hartree"],
         "exact_unitary_ground_energy_hartree": reference_result[
             "exact_unitary_ground_energy_hartree"
@@ -1774,6 +1791,26 @@ def evaluate_molecule(
         },
         **metrics,
     }
+    if ground_input:
+        result.update(
+            evaluation_contract_version=ground_branch.CONTRACT_VERSION,
+            energy_target=energy_target,
+            reference_target=ground_branch.REFERENCE_TARGET,
+            observable="compiled_unitary_exact_ground_input_eigenphase",
+            pf_peak_selection="largest_exact_ground_input_eigenspace_weight",
+            initial_state_definition=reference_result["target_state_definition"],
+            exact_ground_input_sha256=hashlib.sha256(cached_state.tobytes()).hexdigest(),
+            evaluation_contract=(
+                "minimize full QPE T95 for the dominant compiled eigenspace sampled from the "
+                "cached exact ground input; compare E_compiled,0 - E_0 within one kcal/mol. "
+                "Lanczos certifies a majority-weight peak and never uses dense fallback. "
+                "Ideal ground-state preparation cost is excluded from this dynamics benchmark."
+            ),
+        )
+        for name in ("exact_hf_accessible_energy_hartree", "exact_hf_accessible_probability",
+                     "exact_hf_accessible_ground_gap_hartree", "qpe_peak_weight_threshold"):
+            result.pop(name, None)
+    return result
 
 
 def evaluate_difference(

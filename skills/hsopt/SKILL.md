@@ -76,14 +76,14 @@ Do not change the Hamiltonian, electron sector, target time, exact reference,
 evaluator, or benchmark definition.
 
 ## Fixed score
-
 The evaluator:
 1. compiles scheduled rotations with CUDA-Q and solves the compiled-step spectrum;
-   the GPU Lanczos backend requires stable eigenphases/HF weights and never
+   GPU Lanczos requires stable eigenphases/input weights and never
    falls back to full-unitary diagonalization;
 2. repeats eigenphases exactly according to `repetitions()`;
-3. scores the lowest HF-accessible energy against the cached exact HF-accessible
-   energy with the same determinant/threshold; ground energy is a separate diagnostic;
+3. uses the context's energy target: HF-accessible compares the same determinant's
+   lowest peaks; shared `ground_branch` compares the cached exact ground input's
+   dominant compiled peak against E₀, excluding ideal state-preparation cost;
 4. assigns the remaining one-kcal/mol budget to QPE, using the paper bound
    `ceil(8*pi/(target_time*epsilon_QPE))` and enough attempts for 95% confidence.
 
@@ -101,7 +101,7 @@ Once a lane is feasible, accept only a strict T95 reduction that remains within
   bound; `tight` measures beta against cached exact energy at 0.1 mHa.
   Both use Eq. (34) allocation and the same fixed evaluator.
 - Keep the ground reference for tight calibration; cache the exact HF-accessible
-  reference for scoring. A reference change does not regenerate calibrated policies.
+  reference for HF scoring. Shared ground-input scoring reuses the calibration vector.
   Measure the unchanged baseline at iteration 0.
 - Keep both reaction contracts and loose/tight campaigns separate: histories,
   task IDs, mutation pools, queues, workers, incumbents, exports, and plots.

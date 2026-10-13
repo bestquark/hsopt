@@ -145,27 +145,31 @@ def eigensolve(unitary, problem, metrics, *, iterative, target_state=None):
                 probability = peak["qpe_success_probability_from_hf"]
             else:
                 overlaps = cp.asnumpy(cp.abs(vectors.conj().T @ target_state) ** 2)
-                selected = int(np.argmax(overlaps))
-                probability = float(overlaps[selected])
-                # More than half the target norm certifies that no omitted
-                # eigenvector can have a larger overlap with the same target.
-                if probability <= 0.5:
+                from .ground_branch import select_peak
+
+                try:
+                    peak = select_peak(phases, overlaps, n_steps=metrics["n_steps"],
+                                       target_time=problem["target_time"],
+                                       identity_coefficient=problem["identity_coefficient"])
+                except RuntimeError:
                     trials.append(
                         {"k": k, "resolved": False, "seconds": time.monotonic() - trial_started}
                     )
                     continue
-                energy = ev._decode_energy(
-                    metrics["n_steps"] * phases[selected],
-                    target_time=problem["target_time"],
-                    identity_coefficient=problem["identity_coefficient"],
-                )
+                selected = peak["selected_eigen_index"]
+                probability = peak["qpe_success_probability_from_ground_input"]
+                energy = peak["compiled_pf_energy_hartree"]
+            selected_residual = (
+                max(residuals[i] for i in peak["selected_eigen_indices"])
+                if target_state is not None else residuals[selected]
+            )
             trial = {
                 "k": k,
                 "selected": selected,
-                "resolved": float(residuals[selected]) <= 1e-10,
+                "resolved": float(selected_residual) <= 1e-10,
                 "energy": energy,
                 "probability": probability,
-                "residual_hartree": float(residuals[selected]),
+                "residual_hartree": float(selected_residual),
                 "max_residual_hartree": float(max(residuals)),
                 "seconds": time.monotonic() - trial_started,
             }

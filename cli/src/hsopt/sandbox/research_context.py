@@ -127,6 +127,7 @@ def benchmark_summary(source: Path, kind: str) -> dict[str, Any]:
             cases.append({"case_id":case["id"], "parameters":parameters, **summary})
         return {"kind":"protocol", "family":payload["family"], "objective":payload["objective"],
                 "baseline":payload["baseline"], "difference_error_contract":payload["difference_error_contract"],
+                "energy_target":payload.get("energy_target", "hf_accessible"),
                 "cases":cases}
     if kind == "absolute":
         sources = [(source, "problem.json")]

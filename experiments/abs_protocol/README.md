@@ -8,7 +8,15 @@ rotation ordering/angles, or **mixed-precision synthesis**.
 
 The score is the equal-weight geometric mean
 `exp(mean(log(T95_candidate / T95_iteration0)))`. Every molecule must satisfy
-its fixed HF-accessible energy accuracy contract. Once feasible, accept only a
+its fixed energy accuracy contract. `--energy-target hf_accessible` compares
+the lowest compiled/exact peaks supported by the same HF determinant.
+`--energy-target ground_branch` reuses the cached exact ground input from tight
+calibration and compares `|E_compiled,0 - E_0|`. The latter selects the dominant
+compiled QPE eigenspace by ground-input overlap, includes its probability in
+T95, and excludes ideal ground-state preparation cost. GPU Lanczos must certify
+majority overlap, residuals and independent-start agreement; there is no dense
+fallback. Task IDs and scoring versions keep these experiments separate.
+Once feasible, accept only a
 strict score reduction. Every iteration-0 case must pass before any mutation;
 an inaccurate or uncertified baseline holds the suite. Zero T95 yields score zero; equal zero scores use
 mean relative T95 as a tie-break. No case is silently dropped.
@@ -22,7 +30,9 @@ Create an external selection JSON; paths resolve relative to that file:
 
 Use `calibration_root` instead of `calibration` for a directory of sealed records.
 List the entire chosen dataset (for example all 91 A100 molecules). References
-must already match the current certified HF-accessible evaluator. A missing or
+must match the selected energy contract. Ground-input runs reuse the cached
+ground vector, energy and Hamiltonian fingerprint; no HF-reference regeneration
+or beta recalibration is needed. A missing or
 uncertified reference needs resolution, not a diagonalization fallback.
 
 ```bash
