@@ -102,6 +102,32 @@ def _read(path: Path) -> dict[str, Any]:
 def benchmark_summary(source: Path, kind: str) -> dict[str, Any]:
     """Summarize concrete coefficients, with raw JSON still available for detailed inspection."""
     payload = _read(source)
+    if kind == "protocol":
+        cases = []
+        for case in payload["cases"]:
+            path = (source.parent / case["source"]).resolve()
+            if not path.is_relative_to(source.parent.resolve()):
+                raise ValueError("suite case escapes its root")
+            summary = benchmark_summary(path, payload["kind"])
+            for row in summary["hamiltonians"]:
+                # A shared proposal sees every case; keep its mandatory prompt
+                # compact and leave detailed coefficients in the read-only files.
+                row["largest_terms"] = row["largest_terms"][:4]
+                row["smallest_terms"] = row["smallest_terms"][:2]
+                row["source"] = (
+                    case["source"] if payload["kind"] == "absolute"
+                    else str(Path(case["source"]).parent / row["source"])
+                )
+            parameters = {
+                name: {key: values[key] for key in (
+                    "n_steps", "uniform_epsilon", "reference_trotter_number_beta", "target_time",
+                )}
+                for name, values in case["parameters"].items()
+            }
+            cases.append({"case_id":case["id"], "parameters":parameters, **summary})
+        return {"kind":"protocol", "family":payload["family"], "objective":payload["objective"],
+                "baseline":payload["baseline"], "difference_error_contract":payload["difference_error_contract"],
+                "cases":cases}
     if kind == "absolute":
         sources = [(source, "problem.json")]
         reaction = None
@@ -190,6 +216,20 @@ def lane_history(lane: Path, run_dir: Path) -> dict[str, Any]:
                 "change": diff,
             }
         )
+        if result.get("protocol_objective"):
+            cases = result.get("case_metrics", [])
+            # Retain the full vector in result.json, and expose the most useful
+            # failed/regressing cases from each recent proposal in the briefing.
+            worst = sorted(cases, key=lambda row: (
+                row.get("passes_chemical_accuracy", False),
+                -(row.get("error_hartree") or 0),
+                -(row.get("relative_t95") or 0),
+            ))[:8]
+            proposals[-1].update(
+                protocol_objective=result["protocol_objective"],
+                failed_case_ids=result["failed_case_ids"],
+                worst_cases=worst,
+            )
     failure_paths = sorted(
         (lane / "mutation_failures").glob("*/mutation_result.json"), key=lambda p: p.stat().st_mtime
     )[-3:]

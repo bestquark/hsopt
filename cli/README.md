@@ -15,10 +15,10 @@ cli/
 └── tests/       Unit tests and compact executable evaluator fixtures
 ```
 
-The scientific paper baseline itself intentionally lives in one visible file:
-`../experiments/generate_initial_pf.py`. Campaign code loads that file when it
-needs to calibrate or render an immutable iteration-0 policy; there is no
-second baseline implementation hidden in this package.
+`../experiments/generate_initial_pf.py` defines the compact PF object and emits
+immutable iteration-0 policies. `src/hsopt/campaign/calibration.py` owns the
+Reiher calibration math, sealed records, and baseline parameter preparation;
+the generator delegates its existing calibration API to that module.
 
 The agent-facing `$hsopt` instructions stay separately in
 `skills/hsopt/SKILL.md`. A mutation sandbox receives that compact skill and

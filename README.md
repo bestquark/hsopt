@@ -231,6 +231,8 @@ hsopt/
 ├── experiments/
 │   ├── abs_energy/             82 definitions × two baseline policies
 │   ├── diff_energy/            10 definitions × two baseline policies
+│   ├── abs_protocol/           One shared PF across a molecular suite
+│   ├── diff_protocol/          One shared PF across a reaction suite
 │   └── generate_initial_pf.py  Loose/tight initializer for both families
 ├── plots/                      Publication-plot source code
 ├── skills/hsopt/               Compact agent instructions and references
@@ -245,9 +247,10 @@ hsopt/
     └── tests/                  Scientific-contract tests and compact fixtures
 ```
 
-The complete Reiher baseline derivation and policy renderer share the single
-`experiments/generate_initial_pf.py` source. The installable campaign package
-only contains a thin loader for invoking it.
+`experiments/generate_initial_pf.py` exposes the compact `ProductFormula` and
+emits the loose/tight starting policies. Calibration and provenance are in
+`cli/src/hsopt/campaign/calibration.py`. Mutations edit the short emitted class:
+repetitions, rotation schedule/angles, and per-rotation synthesis tolerance.
 
 ## Installation
 

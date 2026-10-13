@@ -169,7 +169,7 @@ def test_experiments_tree_is_the_only_checked_in_benchmark_tree() -> None:
         path.name for path in experiments.iterdir() if path.is_dir() and path.name != "__pycache__"
     }
 
-    assert directories == {"abs_energy", "diff_energy"}
+    assert directories == {"abs_energy", "diff_energy", "abs_protocol", "diff_protocol"}
     assert not (REPO / "examples").exists()
 
 

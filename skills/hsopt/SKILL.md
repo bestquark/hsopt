@@ -68,9 +68,9 @@ Angles may vary by label, coefficient, support, or species, including negative
 substeps and corrections. The judge compiles `Rz(-2 * angle)` and scores energy;
 custom schedules are not certified for full-unitary fidelity.
 
-`synthesis_epsilon()` returns a finite CUDA-Q operator-norm tolerance
-strictly between zero and one for each scheduled rotation. It may depend on the
-term and angle.
+`synthesis_epsilon(term, angle)` sets a finite CUDA-Q tolerance in (0, 1) for each
+rotation. The initial uniform epsilon is a starting value, not a mutation constraint:
+vary precision by coefficient, Pauli label/support, species, or rotation angle.
 
 Do not change the Hamiltonian, electron sector, target time, exact reference,
 evaluator, or benchmark definition.

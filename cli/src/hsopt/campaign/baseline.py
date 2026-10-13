@@ -1,8 +1,8 @@
 """Load the canonical baseline implementation from ``generate_initial_pf.py``.
 
-The scientific definition deliberately lives with the checked-in experiment
-generator.  This module is only a runtime adapter for campaign commands that
-need to validate or calibrate an initializer; it contains no baseline math.
+The checked-in generator owns the compact PF class and delegates baseline math
+to ``campaign.calibration``. This loader preserves the public generator API
+for campaign commands and contains no duplicate baseline math.
 """
 
 from __future__ import annotations

@@ -46,7 +46,9 @@ REPOSITORY_ROOT = Path(__file__).resolve().parents[4]
 HSOPT_SKILL_PATH = REPOSITORY_ROOT / "skills" / "hsopt" / "SKILL.md"
 EVALUATOR_SOURCE_PATH = Path(__file__).resolve().parents[1] / "evaluation" / "compiled_unitary.py"
 SANDBOX_CONTEXT_ROOT = PurePosixPath("/sandbox/work")
-READABLE_CONTEXT_FILES = frozenset({"candidate.py", "evaluate.py", "problem.json", "reaction.json"})
+READABLE_CONTEXT_FILES = frozenset({
+    "candidate.py", "evaluate.py", "protocol_evaluate.py", "problem.json", "reaction.json",
+})
 OPENCODE_NETWORK_BINARIES = (
     "/usr/lib/node_modules/@opencode/cli/bin/opencode.exe",
     "/usr/local/lib/node_modules/@opencode/cli/bin/opencode.exe",
@@ -484,8 +486,30 @@ def sandbox_context_files(
                 raise FileNotFoundError(problem)
             files.append((problem, relative))
             seen.add(relative)
+    elif kind == "protocol":
+        suite = json.loads(source.read_text())
+        if suite.get("schema") != "hsopt-shared-protocol-v1":
+            raise ValueError("unsupported shared protocol suite")
+        files.append((source, PurePosixPath("suite.json")))
+        files.append((Path(__file__).parents[1] / "campaign/protocol.py", PurePosixPath("protocol_evaluate.py")))
+        seen = set()
+        for case in suite["cases"]:
+            relative = _safe_sandbox_relative_path(case["source"])
+            problem = (source.parent / relative).resolve()
+            paths = [relative]
+            if suite["kind"] == "difference":
+                paths.extend(relative.parent / _safe_sandbox_relative_path(row["problem"])
+                             for row in json.loads(problem.read_text())["terms"])
+            for path in paths:
+                if path in seen:
+                    continue
+                local = (source.parent / path).resolve()
+                if not local.is_relative_to(source.parent.resolve()) or not local.is_file():
+                    raise ValueError("shared protocol context escapes the sealed suite")
+                files.append((local, path))
+                seen.add(path)
     else:
-        raise ValueError("kind must be 'absolute' or 'difference'")
+        raise ValueError("kind must be 'absolute', 'difference' or 'protocol'")
     return files
 
 
@@ -1297,6 +1321,19 @@ Do not fabricate an evaluation result. Read the available context as needed.
 Call one edit or write tool exactly once. After that tool succeeds, immediately
 return a final text response without rewriting the file.
 """
+    if context is not None and context.get("shared_protocol"):
+        prompt += (
+            "\nSHARED PROTOCOL EXPERIMENT: this ONE candidate.py is evaluated on ALL suite cases. "
+            "Optimize the geometric mean of case T95/baseline T95, with case-wise accuracy. "
+            "Do not optimize a separate file per molecule. Read suite.json and its fixed baseline "
+            "parameters; preserve the empty baseline_parameters placeholder. The host binds it. "
+            "Actively propose mixed-precision synthesis schemes, not only global epsilon changes: "
+            "coefficient/angle magnitude weighting, diagonal versus off-diagonal terms, Pauli "
+            "support, or normalized error-budget weights. These are hypotheses, not guaranteed "
+            "bounds; the unchanged CUDA-Q/energy judge decides feasibility. Use Code Mode to "
+            "batch permitted reads/calculations across the suite; many direct read turns "
+            "would exceed the agent step budget. Return compact features, not all raw JSON.\n"
+        )
     if context is not None:
         prompt += (
             "\nRequired context and policy contract (immutable):\n"
@@ -1344,6 +1381,12 @@ def agent_feedback(feedback: dict[str, Any]) -> dict[str, Any]:
         "confidence_adjusted_t_count",
         "t_count",
         "score",
+        "protocol_objective",
+        "mean_relative_t95",
+        "failed_case_ids",
+        "case_metrics",
+        "worst_normalized_error",
+        "case_count",
         "formula_order",
         "n_steps",
         "rotations_per_step",
@@ -1465,7 +1508,7 @@ def _mutate_once(
         *[
             relative.as_posix()
             for _, relative in context_files
-            if relative.as_posix() != "evaluate.py"
+            if relative.as_posix() not in {"evaluate.py", "protocol_evaluate.py"}
         ],
     ]
     if any(relative.as_posix() == "research_context.json" for _, relative in context_files):
@@ -1477,6 +1520,13 @@ def _mutate_once(
         "benchmark": benchmark_summary(source, kind),
         "history": lane_history(policy_file.parent, run_dir),
     }
+    if kind == "protocol":
+        research_context["shared_protocol"] = {
+            "objective": "geometric_mean_baseline_relative_t95",
+            "accuracy": "Every selected molecule/reaction must pass its own fixed energy contract.",
+            "baseline_binding": "Preserve baseline_parameters = {}. The host supplies each case's sealed (r, epsilon, beta) starting values. Change self.r/angles/tolerance rules, not this table.",
+            "mixed_precision": "Explicitly explore mixed-precision rotation synthesis: coefficient-, Pauli-support-, angle-, species-feature-, and error-budget-weighted tolerances. Constant epsilon is only the initial policy. Test coherent schemes using synthesis_epsilon(term, angle); exact compiled-energy feasibility remains mandatory for every case.",
+        }
     _write_json(run_dir / "research_context.json", research_context)
     context_files.append(
         (run_dir / "research_context.json", PurePosixPath("research_context.json"))
@@ -1489,6 +1539,7 @@ def _mutate_once(
             "sandbox_transport": "bundle-v2",
             "blocked_write_handling": "permission-denial-recovery-v1",
             "agent_action_contract": "candidate-once-scratch-code-v1",
+            "shared_protocol": research_context.get("shared_protocol"),
             "model": NEMOTRON_MODEL,
             "required_reads": required_reads,
             "context_sha256": _sha256(run_dir / "research_context.json"),
@@ -1515,6 +1566,15 @@ def _mutate_once(
         "Do not edit candidate.py yet. Scratch notes and Code Mode data checks are "
         "allowed. End with a brief explanation of the planned mutation."
     )
+    if kind == "protocol":
+        preparation_prompt += (
+            " This is one shared protocol across the WHOLE suite. After the first candidate "
+            "and research_context reads, use execute Code Mode to batch the remaining "
+            "required read tools (limit=40 for headers, then relevant ranges as needed). "
+            "Use the exact tool names/signatures in the catalog. Await every call and "
+            "return compact per-case features so raw inputs do not fill the context. "
+            "Explicitly plan a mixed-precision rotation-synthesis hypothesis."
+        )
     (run_dir / "preparation_prompt.md").write_text(preparation_prompt, encoding="utf-8")
     (run_dir / "prompt.md").write_text(prompt, encoding="utf-8")
     _write_json(
@@ -1820,7 +1880,7 @@ def _parser() -> argparse.ArgumentParser:
     mutate_parser.add_argument("--policy-file", type=Path, required=True)
     mutate_parser.add_argument("--feedback-file", type=Path, required=True)
     mutate_parser.add_argument("--run-dir", type=Path, required=True)
-    mutate_parser.add_argument("--kind", choices=("absolute", "difference"), required=True)
+    mutate_parser.add_argument("--kind", choices=("absolute", "difference", "protocol"), required=True)
     mutate_parser.add_argument("--source", type=Path, required=True)
     mutate_parser.add_argument("--timeout-seconds", type=int, default=900)
     mutate_parser.add_argument("--keep-sandbox", action="store_true")

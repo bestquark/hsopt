@@ -1,6 +1,6 @@
 # Experiments
 
-The checked-in benchmark surface has exactly two families:
+The individual optimization experiments are:
 
 - `abs_energy/`: the canonical 82-instance HamLib selection through 12
   qubits. Each selected Hamiltonian has a visible directory containing an
@@ -12,16 +12,39 @@ The checked-in benchmark surface has exactly two families:
   `definition.json` plus the same two baseline variants. Its explicit fixed
   evaluator entry point is `diff_energy/evaluate.py`.
 
-`generate_initial_pf.py` is the single immutable iteration-0 policy generator
-for both families. It verifies sealed per-Hamiltonian calibration records and
+Two separate experiments optimize one shared protocol per trajectory:
+
+- [`abs_protocol/`](abs_protocol/README.md): one mutation evaluated on all selected molecules.
+- [`diff_protocol/`](diff_protocol/README.md): one mutation evaluated on all selected reactions,
+  separately for each reaction-error contract.
+
+Both use calibrated baseline parameters, explicit mixed-precision mutation prompts,
+and geometric-mean baseline-relative T95 with case-wise accuracy constraints.
+
+`generate_initial_pf.py` exposes the compact `ProductFormula`, returns an object
+via `product_formula(problem, parameters)`, and generates both iteration-0 policies.
+Calibration math and provenance live in `cli/src/hsopt/campaign/calibration.py`.
+The generator verifies sealed per-Hamiltonian calibration records and
 embeds two controlled forms of the Reiher--Wiebe--Svore--Wecker--Troyer PF2
 baseline. `loose` uses the rigorous Eq. (19) double-commutator upper bound for
 $\beta(H)$ without the exact energy. `tight` numerically finds the first PF2
 step count passing the same 0.1 mHa reference error against the cached exact
 ground energy. Both use lexicographic Strang ordering, the same Eq. (34) error
 allocation, normalized physical time $t=1/\sum_j|h_j|$, and 1 kcal/mol total
-target. The two policies stay beside the same definition; there are no extra
-experiment-family folders.
+target. The individual policies stay beside the same definition; shared-protocol
+code lives in its own experiment folders and consumes an explicit external suite.
+
+The agent edits the emitted class, not the calibration machinery:
+
+| Hook | Agent can change |
+| --- | --- |
+| `repetitions()` | Step count $r$; the evaluator sets $\Delta t=t/r$. |
+| `build_step(terms, step_time)` | Ordering, stages, repetitions of terms, and rotation angles. |
+| `synthesis_epsilon(term, angle)` | The tolerance for each rotation, using its term and angle. |
+
+Uniform precision belongs to the starting PF2 baseline. A mutation may return
+different tolerances for different rotations; feasibility still comes from the
+fixed compiled-evolution energy test. Total physical time remains fixed.
 
 Run `uv run hsopt-layout --check` to prove that the 82 + 10 visible directories
 match their compact registries and source checksums exactly. Run

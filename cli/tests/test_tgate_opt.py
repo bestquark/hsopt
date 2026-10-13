@@ -31,8 +31,11 @@ def test_agent_skill_is_separate_from_runtime_package() -> None:
     assert not (runtime / "paper_baseline.py").exists()
     generator = REPO_ROOT / "experiments" / "generate_initial_pf.py"
     generator_source = generator.read_text(encoding="utf-8")
-    assert "def calibrate_problem(" in generator_source
-    assert "def optimize_paper_error_allocation(" in generator_source
+    calibration_source = (runtime / "campaign" / "calibration.py").read_text(encoding="utf-8")
+    assert "def calibrate_problem(" in calibration_source
+    assert "def optimize_paper_error_allocation(" in calibration_source
+    assert "class ProductFormula:" in generator_source
+    assert "def product_formula(" in generator_source
     assert "def render(" in generator_source
     assert (REPO_ROOT / "cli" / "tests").is_dir()
     assert not (REPO_ROOT / "src").exists()

@@ -41,7 +41,7 @@ are not acceptance metrics.
 
 ## Immutable baseline
 
-`experiments/generate_initial_pf.py` is the sole generator of
+`experiments/generate_initial_pf.py` defines the compact `ProductFormula` and is the sole generator of
 `initial_pf_loose.py` and `initial_pf_tight.py`. Both require sealed calibration
 data and embed the Reiher--Wiebe--Svore--Wecker--Troyer citation,
 lexicographic PF2/Strang structure, `beta(H)` referenced to 0.1 mHa, the
@@ -49,6 +49,8 @@ norm-derived physical target time, and the CUDA-Q tolerance selected by
 the same paper Eq. (34) Trotter/QPE/rotation-error allocation with a
 1 kcal/mol total target. The exact reference must not affect the loose policy;
 it intentionally selects the numeric beta used by the tight policy.
+Calibration math and sealed-record preparation live in
+`cli/src/hsopt/campaign/calibration.py`; the generator forwards its existing API.
 
 Every `experiments/abs_energy/<instance>/` and
 `experiments/diff_energy/<reaction>/` directory contains both generated
@@ -88,9 +90,20 @@ benchmark framework:
 - `cli/src/hsopt/campaign/queue.py`
 - `cli/src/hsopt/campaign/loop.py`
 - `cli/src/hsopt/campaign/baseline_batch.py`
-- `experiments/generate_initial_pf.py` (the sole baseline definition and policy generator)
+- `experiments/generate_initial_pf.py` (the compact baseline policy and generator)
+- `cli/src/hsopt/campaign/calibration.py` (baseline math and sealed calibration records)
 
 Campaign histories belong outside the checkout. After every lane completes,
 run `hsopt-export-exact` for `abs_energy` and `diff_energy`, then run
 `hsopt-reports` on both checksummed exports. The external deployment must
 invoke this completion gate automatically and idempotently.
+
+## Shared protocol experiments
+
+`experiments/abs_protocol/` and `experiments/diff_protocol/` own separate shared-PF
+trajectories. One candidate is evaluated on every case in a sealed external suite;
+the host binds per-case calibrated r, epsilon, and beta. Mutation prompts must
+explicitly explore mixed-precision rotation synthesis. Use geometric-mean
+baseline-relative T95 with a separate accuracy constraint for each selected case.
+Keep reaction contracts, baselines and replicates isolated. GPU Lanczos is mandatory;
+do not drop a case to improve the aggregate score or alter existing campaigns.

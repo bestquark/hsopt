@@ -1,0 +1,53 @@
+# Shared absolute-energy protocol
+
+One short `initial_pf.py` is mutated once per round, then evaluated on **every
+selected Hamiltonian**. The host binds the selected loose/tight calibration's
+`r`, synthesis epsilon, and tuned beta for each molecule; it never recalibrates
+or exposes the sibling baseline. Modify the shared rule for repetitions,
+rotation ordering/angles, or **mixed-precision synthesis**.
+
+The score is the equal-weight geometric mean
+`exp(mean(log(T95_candidate / T95_iteration0)))`. Every molecule must satisfy
+its fixed HF-accessible energy accuracy contract. Once feasible, accept only a
+strict score reduction. Every iteration-0 case must pass before any mutation;
+an inaccurate or uncertified baseline holds the suite. Zero T95 yields score zero; equal zero scores use
+mean relative T95 as a tie-break. No case is silently dropped.
+
+Create an external selection JSON; paths resolve relative to that file:
+
+```json
+{"cases": [{"id": "molecule_01", "source": "prepared/hamiltonian.json",
+  "reference": "cached/exact_reference.json", "calibration": "cached/tight.json"}]}
+```
+
+Use `calibration_root` instead of `calibration` for a directory of sealed records.
+List the entire chosen dataset (for example all 91 A100 molecules). References
+must already match the current certified HF-accessible evaluator. A missing or
+uncertified reference needs resolution, not a diagonalization fallback.
+
+```bash
+uv run python experiments/abs_protocol/mutate.py prepare \
+  --selection "$HSOPT_WORKDIR/data/abs-protocol-selection.json" \
+  --run-dir "$HSOPT_WORKDIR/runs/abs_protocol/tight/seed-01" \
+  --baseline tight --iterations 100 --replicate seed-01
+uv run python experiments/abs_protocol/evaluate.py \
+  --run-dir "$HSOPT_WORKDIR/runs/abs_protocol/tight/seed-01"
+uv run python experiments/abs_protocol/mutate.py advance \
+  --run-dir "$HSOPT_WORKDIR/runs/abs_protocol/tight/seed-01"
+```
+
+`prepare` requests iteration 0. Alternate evaluation and `advance` until complete.
+Evaluation uses CUDA-Q synthesis and **GPU Lanczos only**. `--case-id` partitions
+pending cases across workers; it never shrinks the acceptance suite. A site
+runtime may dispatch the standard portable requests in `iterations/NNNN/requests.json`
+and return each receipt with `mutate.py deliver --run-dir ... --case-id ... --receipt ...`.
+Scheduling/batching stays outside this experiment.
+
+Each replicate owns one `incumbent.py` and archives its shared candidate, full
+`case_results.json`, aggregate `result.json`, acceptance decision, and OpenShell
+traces per round. `advance --no-mutate` only reconciles results. Agent failures
+use the existing bounded retry gates; operator recovery is `hsopt-openshell resume`.
+Five replicates × 100 rounds produce **500 agent proposals and 45,500 evaluations**
+for 91 molecules, plus baseline evaluations. Existing per-molecule campaigns
+remain separate. Replicate names label independent stochastic trajectories;
+they do not claim deterministic inference seeding.
