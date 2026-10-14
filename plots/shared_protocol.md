@@ -3,7 +3,10 @@ Each gray curve averages one molecule over five independent seeds. The green cur
 averages the five seed-level molecule means, with a band of ±1 sample standard
 deviation across those five means (`ddof=1`). This is a standard-deviation band.
 The per-molecule bars use the same five seeds, with per-molecule standard-deviation
-whiskers. Both plots stop at the last round completed by every seed.
+whiskers. The energy-error plot averages absolute molecular errors, in mHa,
+using the same five-seed means and standard-deviation band. Its red horizontal
+line uses the recorded chemical-accuracy threshold. Iteration 0 contains the
+unmodified baseline errors. All plots stop at the last round completed by every seed.
 
 Download **Plot data** from the dashboard and reproduce the PNG and vector PDF:
 
