@@ -33,6 +33,7 @@ hsopt-view = "hsopt.view.mutation_history:main"
 t-autoresearch = "hsopt.tgate_opt.t_autoresearch_cli:main"
 
 [project.optional-dependencies]
+plots = ["matplotlib>=3.10,<4"]
 gpu-lanczos = ["cupy-cuda12x>=13,<14; sys_platform == 'linux'"]
 chemistry = [
   "openfermion>=1.7.1,<2",
