@@ -656,6 +656,16 @@ def summarize_opencode_events(path: Path) -> tuple[dict[str, Any], list[dict[str
             permission_denied = isinstance(state["error"], str) and bool(
                 re.fullmatch(r"Permission denied: (?:edit|external_directory)", state["error"])
             )
+        metadata = state.get("metadata") or {}
+        unavailable_message = (
+            f'No tool named "{tool}" is currently available. '
+            "Please use a tool from the available tool list."
+        )
+        tool_unavailable = (
+            state.get("error") == unavailable_message
+            and (metadata.get("providerCall") or {}).get("executed") is False
+            and (metadata.get("providerResult") or {}).get("executed") is False
+        )
         actions_by_call[action_key] = {
             "timestamp": event.get("timestamp") or previous.get("timestamp"),
             "session_id": session_id or previous.get("session_id"),
@@ -667,6 +677,7 @@ def summarize_opencode_events(path: Path) -> tuple[dict[str, Any], list[dict[str
             "target": target,
             "online": tool in ONLINE_TOOLS,
             "permission_denied": status == "error" and permission_denied,
+            "tool_unavailable": status == "error" and tool_unavailable,
         }
         if tool == "execute":
             metadata = state.get("metadata") or {}
@@ -797,6 +808,10 @@ def _validate_agent_action_contract(
     completed_reads: set[str] = set()
     for action in actions:
         tool = str(action["tool"])
+        if action.get("tool_unavailable"):
+            # OpenCode conclusively rejected an invented tool before execution.
+            # Retain the failed call in telemetry without discarding the proposal.
+            continue
         if tool not in allowed_tools:
             raise RuntimeError(f"OpenCode attempted forbidden tool {tool!r}")
         if tool == "read":
@@ -1194,7 +1209,9 @@ def opencode_config(*, preparation: bool = False) -> dict[str, Any]:
         "editing, you may optionally use skill, websearch, webfetch, "
         "for product-formula research. Read candidate.py, "
         "the read-only evaluate.py implementation, and the read-only "
-        "benchmark JSON files as needed. Call one edit or write tool "
+        "benchmark JSON files as needed. Prefer one complete write of candidate.py "
+        "with your final policy, retaining all four interface methods. The host stops "
+        "this turn as soon as the first candidate edit completes. Call one edit or write tool "
         "exactly once for candidate.py, then "
         "immediately return a final text response without calling "
         "another tool. ProductFormula.build_step() is the "
@@ -1273,6 +1290,8 @@ Your FIRST tool call in THIS continuation MUST read /sandbox/work/candidate.py
 AGAIN, even though you read it during preparation. OpenCode resets its file-read
 timestamps between processes, so an edit without this fresh read will fail.
 After that fresh read, make exactly one candidate.py edit and return final text.
+Prefer a complete write of your final policy. The host stops at the first
+completed candidate edit, so prepare all changes before writing the file.
 
 You are proposing one HSOpt product-formula policy mutation.
 
@@ -1647,6 +1666,7 @@ def _mutate_once(
             "model_context_limit": MODEL_CONTEXT_LIMIT,
             "automatic_compaction": True,
             "preparation_handoff": "required-read-barrier-v1" if os.environ.get("HSOPT_PREPARATION_READ_BARRIER") == "1" else "model_turn_completion",
+            "editing_handoff": "first-completed-candidate-edit-v1",
         },
     )
     (run_dir / "opencode.json").write_text(
@@ -1847,7 +1867,7 @@ def _mutate_once(
                     stdout_path=run_dir / "opencode.jsonl",
                     stderr_path=run_dir / "opencode.stderr",
                     timeout=remaining + 30,
-                    completed_edit_grace_seconds=10,
+                    completed_edit_grace_seconds=0,
                     append=True,
                 )
         finally:

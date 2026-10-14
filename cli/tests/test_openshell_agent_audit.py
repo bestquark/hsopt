@@ -301,6 +301,50 @@ def test_read_barrier_stops_a_looping_process_only_after_all_receipts(tmp_path):
     _validate_agent_action_contract(path, required_reads=["candidate.py", "problem.json"], preparation=True)
 
 
+@pytest.mark.parametrize("executed", [False, True, None])
+def test_unavailable_tool_requires_conclusive_nonexecution_receipts(tmp_path, executed):
+    events = [
+        {"type": "tool_use", "part": {
+            "callID": "invented-final", "tool": "final", "state": {
+                "status": "error", "input": {},
+                "error": 'No tool named "final" is currently available. Please use a tool from the available tool list.',
+                "metadata": {"providerCall": {"executed": executed},
+                             "providerResult": {"executed": executed}},
+            }}},
+        {"type": "tool_use", "part": {
+            "callID": "candidate-write", "tool": "write", "state": {
+                "status": "completed", "input": {"path": "candidate.py"},
+            }}},
+    ]
+    path = tmp_path / "events.jsonl"
+    path.write_text("\n".join(json.dumps(e) for e in events))
+    _, actions = summarize_opencode_events(path)
+    assert actions[0]["tool_unavailable"] is (executed is False)
+    if executed is False:
+        _validate_agent_action_contract(path)
+    else:
+        with pytest.raises(RuntimeError, match="forbidden tool"):
+            _validate_agent_action_contract(path)
+
+
+def test_edit_handoff_prevents_a_later_candidate_rewrite(tmp_path):
+    def event(call_id):
+        return json.dumps({"type": "tool_use", "part": {
+            "callID": call_id, "tool": "write", "state": {
+                "status": "completed", "input": {"path": "candidate.py"},
+            }}})
+
+    path = tmp_path / "events.jsonl"
+    code = (f"import time; print({event('first')!r}, flush=True); "
+            f"time.sleep(1); print({event('second')!r}, flush=True); time.sleep(30)")
+    _, stopped = _run_logged([sys.executable, "-c", code], stdout_path=path,
+        stderr_path=tmp_path / "stderr.log", timeout=5, completed_edit_grace_seconds=0)
+    assert stopped
+    _validate_agent_action_contract(path)
+    _, actions = summarize_opencode_events(path)
+    assert [a["call_id"] for a in actions] == ["first"]
+
+
 def test_openshell_audit_counts_ocsf_security_events(tmp_path: Path) -> None:
     log = tmp_path / "openshell.log"
     log.write_text(
