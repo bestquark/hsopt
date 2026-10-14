@@ -10,7 +10,7 @@ from pathlib import Path
 
 import numpy as np
 
-STYLE_VERSION = "relative-t95-energy-five-seeds-latex-v2"
+STYLE_VERSION = "relative-t95-calibrated-energy-budget-five-seeds-latex-v3"
 
 
 def aggregate(snapshot: dict) -> dict:
@@ -25,7 +25,7 @@ def aggregate(snapshot: dict) -> dict:
         raise ValueError("The molecule cohort is incomplete")
     common = min(s["trajectory"]["iterations"][-1] for s in seeds)
     grid = list(range(common + 1))
-    values, energy_values, thresholds = [], [], []
+    values, energy_values, thresholds, baseline_budgets = [], [], [], []
     for seed in seeds:
         t = seed["trajectory"]
         if t["iterations"][:common + 1] != grid:
@@ -42,6 +42,8 @@ def aggregate(snapshot: dict) -> dict:
             raise ValueError("A molecule energy-error trajectory is incomplete")
         energy_values.append([[1000 * abs(error) for error in errors[name][:common + 1]]
                               for name in case_ids])
+        budgets = {r["case_id"]: r["baseline_simulation_budget_hartree"] for r in t["molecules"]}
+        baseline_budgets.append([1000 * float(budgets[name]) for name in case_ids])
         thresholds.append(float(t["chemical_accuracy_hartree"]) * 1000)
     matrix = np.asarray(values, dtype=float)  # seed, molecule, iteration
     if not np.isfinite(matrix).all() or np.any(matrix <= 0):
@@ -56,6 +58,13 @@ def aggregate(snapshot: dict) -> dict:
             thresholds, thresholds[0], rtol=0, atol=1e-9):
         raise ValueError("All seeds need the same chemical-accuracy threshold")
     seed_energy_means = energy_matrix.mean(axis=1)
+    budget_matrix = np.asarray(baseline_budgets, dtype=float)
+    if not np.isfinite(budget_matrix).all() or np.any(budget_matrix <= 0) or np.any(
+            budget_matrix >= thresholds[0]):
+        raise ValueError("Invalid baseline simulation budget")
+    if not np.allclose(budget_matrix, budget_matrix[0], rtol=0, atol=1e-9):
+        raise ValueError("All seeds need the same per-molecule calibration budgets")
+    budgets = budget_matrix[0]
     result = {
         "schema": "hsopt-shared-figure-statistics-v1",
         "style_version": STYLE_VERSION, "common_round": common,
@@ -72,6 +81,11 @@ def aggregate(snapshot: dict) -> dict:
         "mean_energy_error_mha": seed_energy_means.mean(axis=0).tolist(),
         "std_energy_error_mha": seed_energy_means.std(axis=0, ddof=1).tolist(),
         "chemical_accuracy_mha": thresholds[0],
+        "molecule_baseline_simulation_budget_mha": budgets.tolist(),
+        "mean_baseline_simulation_budget_mha": float(budgets.mean()),
+        "min_baseline_simulation_budget_mha": float(budgets.min()),
+        "max_baseline_simulation_budget_mha": float(budgets.max()),
+        "energy_budget_semantics": "Fixed baseline calibration: chemical accuracy minus its QPE precision allocation. Reference only; current T95 adapts QPE precision to measured simulation error. The horizontal line is the molecule mean; the band is the molecule range, not seed uncertainty.",
         "energy_semantics": "Absolute molecular energy error before averaging; accepted shared policies including iteration zero.",
         "uncertainty": "Sample standard deviation across five independent seed means (ddof=1); not a confidence interval.",
         "semantics": "Accepted shared incumbents; matched rounds only; no extrapolation of incomplete seeds.",
@@ -144,9 +158,12 @@ def plot(summary: dict, output: Path) -> None:
         errors = np.asarray(summary["molecule_mean_energy_error_mha"])
         mean_error = np.asarray(summary["mean_energy_error_mha"])
         std_error = np.asarray(summary["std_energy_error_mha"])
-        threshold = float(summary["chemical_accuracy_mha"])
+        calibrated_budget = "mean_baseline_simulation_budget_mha" in summary
+        budget = float(summary["mean_baseline_simulation_budget_mha"] if calibrated_budget
+                       else summary["chemical_accuracy_mha"])
+        budget_min = float(summary["min_baseline_simulation_budget_mha"]) if calibrated_budget else budget
+        budget_max = float(summary["max_baseline_simulation_budget_mha"]) if calibrated_budget else budget
         fig, ax = plt.subplots(figsize=(7.6, 4.6), layout="constrained")
-        ax.axhspan(0, threshold, color="#76B900", alpha=.05, zorder=0)
         for index, values in enumerate(errors):
             ax.step(x, values, where="post", color="0.60", alpha=.36, linewidth=.7,
                     label=r"molecule means" if index == 0 else None, zorder=2)
@@ -155,16 +172,21 @@ def plot(summary: dict, output: Path) -> None:
                         label=r"$\pm 1\sigma$ (seeds)", zorder=1)
         ax.step(x, mean_error, where="post", color="#3E7E00", linewidth=2.8,
                 label=r"mean of seed means", zorder=4)
-        ax.axhline(threshold, color="#C00000", linewidth=1.8,
-                   label=r"chemical accuracy ($1$ kcal/mol)", zorder=5)
+        if calibrated_budget:
+            ax.axhspan(budget_min, budget_max, color="#C00000", alpha=.10, linewidth=0,
+                       label=r"baseline budget range", zorder=0)
+        ax.axhline(budget, color="#C00000", linewidth=1.8,
+                   label=(r"$\overline{\epsilon_{\rm chem}-\epsilon_{\rm QPE}^{(0)}}$"
+                          if calibrated_budget else r"chemical accuracy ($1$ kcal/mol)"), zorder=5)
         ax.set_xlim(0, max(1, int(x[-1])))
-        ax.set_ylim(0, max(1.15*threshold, 1.08*float(errors.max()),
+        ax.set_ylim(0, max(1.15*budget_max, 1.08*float(errors.max()),
                            1.08*float((mean_error+std_error).max())))
         ax.xaxis.set_major_locator(MaxNLocator(nbins=6, integer=True))
         ax.set_xlabel(r"Autoresearch iteration")
         ax.set_ylabel(r"$|E_{\rm compiled}-E_{\rm exact}|$ (mHa)")
         ax.spines[["top", "right"]].set_visible(False)
-        ax.legend(loc="best", handlelength=1.7)
+        ax.legend(loc="best", handlelength=1.7, frameon=True, facecolor="white",
+                  edgecolor="none", framealpha=1)
         for ext in ("png", "pdf"):
             fig.savefig(output / f"energy_error_trajectories.{ext}")
         plt.close(fig)
