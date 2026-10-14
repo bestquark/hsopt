@@ -10,7 +10,7 @@ from pathlib import Path
 
 import numpy as np
 
-STYLE_VERSION = "relative-t95-calibrated-energy-budget-five-seeds-latex-v3"
+STYLE_VERSION = "relative-t95-calibrated-energy-budget-five-seeds-latex-v4"
 
 
 def aggregate(snapshot: dict) -> dict:
@@ -185,8 +185,8 @@ def plot(summary: dict, output: Path) -> None:
         ax.set_xlabel(r"Autoresearch iteration")
         ax.set_ylabel(r"$|E_{\rm compiled}-E_{\rm exact}|$ (mHa)")
         ax.spines[["top", "right"]].set_visible(False)
-        ax.legend(loc="best", handlelength=1.7, frameon=True, facecolor="white",
-                  edgecolor="none", framealpha=1)
+        ax.legend(loc="lower left", bbox_to_anchor=(0, 1.02), ncol=2,
+                  handlelength=1.7, borderaxespad=0, columnspacing=1.2)
         for ext in ("png", "pdf"):
             fig.savefig(output / f"energy_error_trajectories.{ext}")
         plt.close(fig)
