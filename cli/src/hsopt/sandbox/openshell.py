@@ -339,7 +339,12 @@ def _build_sandbox_bundle(run_dir: Path, candidate: Path, context_files) -> Path
     }
     plugin = run_dir / "opencode.websearch.js"
     if plugin.is_file():
-        entries["opencode.websearch.js"] = (plugin, 0o444)
+        # OpenCode 2.0.26 ignores configured standalone files; use a local
+        # package directory, with an explicit ESM entrypoint.
+        package = run_dir / "opencode.websearch.package.json"
+        _write_json(package, {"type": "module", "main": "./index.js"})
+        entries["hsopt-websearch/index.js"] = (plugin, 0o444)
+        entries["hsopt-websearch/package.json"] = (package, 0o444)
     for source, relative in context_files:
         relative = PurePosixPath(relative)
         name = "work/" + relative.as_posix()
@@ -1294,7 +1299,7 @@ def opencode_config(*, preparation: bool = False) -> dict[str, Any]:
         "share": "disabled",
         "snapshots": False,
         "websearch": {"provider": search["provider"]},
-        **({"plugins": [{"package": "/sandbox/opencode.websearch.js",
+        **({"plugins": [{"package": "/sandbox/hsopt-websearch",
                           "options": {"endpoint": search["endpoint"]}}]}
            if search.get("plugin_path") else {}),
         "compaction": {

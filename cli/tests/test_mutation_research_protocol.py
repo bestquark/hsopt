@@ -247,7 +247,7 @@ def test_runtime_search_provider_is_readonly_bundled_and_binary_scoped(tmp_path,
     monkeypatch.setenv("HSOPT_WEBSEARCH_URL", "http://172.18.0.1:18889/search")
     config = openshell.opencode_config(preparation=preparation)
     assert config["websearch"] == {"provider": "searxng"}
-    assert config["plugins"] == [{"package": "/sandbox/opencode.websearch.js",
+    assert config["plugins"] == [{"package": "/sandbox/hsopt-websearch",
                                   "options": {"endpoint": "http://172.18.0.1:18889/search"}}]
     metadata = openshell._websearch_metadata(openshell._websearch_settings())
     assert metadata["plugin_sha256"] == openshell._sha256(plugin)
@@ -266,8 +266,10 @@ def test_runtime_search_provider_is_readonly_bundled_and_binary_scoped(tmp_path,
         (tmp_path / name).write_text("test")
     (tmp_path / "opencode.websearch.js").write_bytes(plugin.read_bytes())
     with tarfile.open(openshell._build_sandbox_bundle(tmp_path, tmp_path / "candidate.py", [])) as bundle:
-        assert bundle.getmember("opencode.websearch.js").mode == 0o444
-        assert bundle.extractfile("opencode.websearch.js").read() == plugin.read_bytes()
+        assert bundle.getmember("hsopt-websearch/index.js").mode == 0o444
+        assert bundle.extractfile("hsopt-websearch/index.js").read() == plugin.read_bytes()
+        assert bundle.getmember("hsopt-websearch/package.json").mode == 0o444
+        assert json.load(bundle.extractfile("hsopt-websearch/package.json"))["type"] == "module"
 
 
 @pytest.mark.parametrize("endpoint", ["file:///tmp/search", "https://user:secret@example.com/search",
