@@ -63,3 +63,40 @@ def test_tied_tolerance_optimum_counts_rotation_multiplicity(monkeypatch):
         assert sensitivity[0] * after[0] == pytest.approx(sensitivity[1] * after[1])
         assert np.sum(weights * np.log(1 / after)) <= np.sum(weights * np.log(1 / before))
         assert plot.geometric_mean(np.array([row[f"{model}_shape"] for row in selected]), weights) == pytest.approx(1)
+
+
+def test_bounded_angle_allocation_satisfies_budget_and_kkt_conditions(monkeypatch):
+    monkeypatch.syspath_prepend(str(PLOTS))
+    from compile_angle_allocation import bounded_allocation
+
+    weights = np.array([2., 1., 3., 1.])
+    response = np.array([1., .2, 1e-12, 0.])
+    agent = np.array([2e-6, 3e-6, 2e-6, 8e-6])
+    derived, info = bounded_allocation(weights, response, agent)
+    assert len(derived) == len(agent)
+    assert np.all((derived > 0) & (derived <= agent.max()))
+    assert np.sum(weights * response * derived) == pytest.approx(
+        np.sum(weights * response * agent), rel=1e-12
+    )
+    interior = derived < agent.max() * (1 - 1e-12)
+    np.testing.assert_allclose(response[interior] * derived[interior], info["scale"], rtol=1e-12)
+    assert np.all(response[~interior] * derived[~interior] <= info["scale"] * (1 + 1e-12))
+    assert derived[-1] == agent.max()  # Zero sensitivity is retained with finite tolerance.
+    assert info["derived_log_cost"] <= info["agent_log_cost"]
+
+
+def test_zero_angle_response_uses_finite_cap_for_every_term(monkeypatch):
+    monkeypatch.syspath_prepend(str(PLOTS))
+    from compile_angle_allocation import bounded_allocation
+
+    derived, info = bounded_allocation([1, 2], [0, 0], [1e-5, 2e-5])
+    np.testing.assert_array_equal(derived, [2e-5, 2e-5])
+    assert info["derived_dimensionless_budget"] == 0
+
+
+def test_invalid_synthesis_tolerance_is_not_silently_clipped(monkeypatch):
+    monkeypatch.syspath_prepend(str(PLOTS))
+    from compile_angle_allocation import bounded_allocation
+
+    with pytest.raises(ValueError, match="invalid"):
+        bounded_allocation([1], [1], [1])

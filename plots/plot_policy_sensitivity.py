@@ -6,6 +6,7 @@ from __future__ import annotations
 import argparse
 import csv
 import gzip
+import hashlib
 import json
 from pathlib import Path
 
@@ -17,6 +18,7 @@ from _paper_plot import GRAPHITE, NVIDIA_DARK_GREEN, apply_paper_style, molecule
 
 
 AMBER = "#BB7C24"
+DERIVED_BLUE = "#3977B8"
 SENSITIVITY_CUTOFF = 1e-8
 
 
@@ -158,44 +160,37 @@ def overlay_allocations(rows, output):
         x[indices] = coefficients / geometric_mean(coefficients, weights)
     rng = np.random.default_rng(42)
     sampled = rng.choice(len(rows), size=min(len(rows), 12000), replace=False)
-    # The same terms and log-coefficient bins are used for both series. Lines
-    # are descriptive medians, not the conditional power-law fits at fixed support.
-    edges = np.geomspace(x.min() * .999, x.max() * 1.001, 20)
-    fig, ax = plt.subplots(figsize=(9.6, 7.2), layout="constrained")
-    for field, color, label, line, marker in (
-        ("angle_shape", GRAPHITE, "Calculated (angle model)", "--", "^"),
-        ("learned_shape", NVIDIA_DARK_GREEN, "Agent", "-", "o"),
+    fig, ax = plt.subplots(figsize=(10.8, 8.0), layout="constrained")
+    derived_field = "derived_shape" if "derived_shape" in rows[0] else "angle_shape"
+    for field, color, label in (
+        (derived_field, DERIVED_BLUE, "Derived angle model"),
+        ("learned_shape", NVIDIA_DARK_GREEN, "Agent"),
     ):
         y = np.array([row[field] for row in rows])
-        ax.scatter(x[sampled], y[sampled], s=9, color=color,
-                   alpha=.12, linewidths=0, rasterized=True)
-        centers, medians = [], []
-        for lower, upper in zip(edges[:-1], edges[1:]):
-            retained = (x >= lower) & (x < upper)
-            if np.count_nonzero(retained) < 8:
-                continue
-            centers.append(float(np.exp(np.mean(np.log(x[retained])))))
-            medians.append(float(np.median(y[retained])))
-        ax.plot(centers, medians, color=color, linestyle=line, linewidth=2.6,
-                marker=marker, markersize=5, label=label)
-    ax.axhline(1, color="#B0B0B0", linewidth=1, zorder=0)
+        ax.scatter(x[sampled], y[sampled], s=10, color=color,
+                   alpha=.23, linewidths=0, rasterized=True, label=label)
     ax.set(xscale="log", yscale="log",
            xlabel=r"Relative coefficient $|c_j|/\mathrm{GM}(|c|)$",
-           ylabel=r"Relative tolerance $\epsilon_j/\mathrm{GM}(\epsilon)$")
-    ax.legend(loc="upper right")
-    ax.text(.03, .04, "Dots: terms; curves: binned medians", transform=ax.transAxes,
-            fontsize=16, va="bottom")
+           ylabel="Relative synthesis error tolerance\n" + r"$\epsilon_j/\mathrm{GM}(\epsilon)$")
+    ax.xaxis.label.set_fontsize(30)
+    ax.yaxis.label.set_fontsize(30)
+    ax.tick_params(axis="both", which="major", labelsize=26)
+    legend = ax.legend(loc="upper right", markerscale=3, fontsize=24)
+    for handle in legend.legend_handles:
+        handle.set_alpha(1)
+    ax.text(.03, .96, r"Higher $\epsilon$ = less precision", transform=ax.transAxes,
+            fontsize=19, ha="left", va="top")
     ax.grid(which="major", alpha=.12, linewidth=.7)
     ax.spines[["top", "right"]].set_visible(False)
     save(fig, output, "sensitivity_overlay")
 
 
-def figures(rows, summary, output, *, overlay_only=False):
+def figures(rows, summary, output, *, overlay_only=False, overlay_rows=None):
     apply_paper_style()
     plt.rcParams.update({"font.size": 20, "axes.labelsize": 23, "axes.titlesize": 22,
                          "xtick.labelsize": 18, "ytick.labelsize": 18,
                          "legend.fontsize": 17})
-    overlay_allocations(rows, output)
+    overlay_allocations(overlay_rows if overlay_rows is not None else rows, output)
     if overlay_only:
         return
     fig, axes = plt.subplots(1, 3, figsize=(19.8, 5.8), layout="constrained")
@@ -309,6 +304,8 @@ def main():
     parser.add_argument("--output-dir", type=Path, required=True)
     parser.add_argument("--overlay-only", action="store_true",
                         help="Only render the common-axis calculated/agent allocation overlay")
+    parser.add_argument("--compilation-dir", type=Path,
+                        help="Use the concrete bounded tolerances from compile_angle_allocation.py")
     args = parser.parse_args()
     with gzip.open(args.data, "rt", newline="") as handle:
         raw = list(csv.DictReader(handle))
@@ -326,12 +323,36 @@ def main():
     summary["policy_sha256"] = manifest["policy_sha256"]
     output = args.output_dir.resolve()
     output.mkdir(parents=True, exist_ok=True)
-    (output / "comparison_summary.json").write_text(json.dumps(summary, indent=2) + "\n")
     with gzip.open(output / "allocation_comparison.csv.gz", "wt", newline="") as handle:
         writer = csv.DictWriter(handle, fieldnames=list(selected[0]))
         writer.writeheader()
         writer.writerows(selected)
-    figures(selected, summary, output, overlay_only=args.overlay_only)
+    overlay_rows = None
+    if args.compilation_dir:
+        compilation = json.loads((args.compilation_dir / "synthesis_comparison.json").read_text())
+        if compilation.get("status") != "complete" or compilation["policy_sha256"] != manifest["policy_sha256"]:
+            raise ValueError("compilation comparison uses a different agent policy")
+        compiled_table = args.compilation_dir / "compiled_term_comparison.csv.gz"
+        if hashlib.sha256(compiled_table.read_bytes()).hexdigest() != compilation["compiled_table_sha256"]:
+            raise ValueError("compiled comparison table checksum mismatch")
+        with gzip.open(compiled_table, "rt") as handle:
+            overlay_rows = [
+                {key: (value if key in {"case_id", "label"} else float(value))
+                 for key, value in row.items()}
+                for row in csv.DictReader(handle)
+            ]
+        if len(overlay_rows) != len(rows) or {(r["case_id"], r["label"]) for r in overlay_rows} != {
+            (r["case_id"], r["label"]) for r in rows
+        }:
+            raise ValueError("compiled comparison differs from the full Hamiltonian term cohort")
+    summary["overlay"] = {
+        "terms": len(overlay_rows) if overlay_rows is not None else len(selected),
+        "derived_allocation": "bounded, matched agent angle budget" if overlay_rows is not None
+        else "uncapped inverse angle response shape",
+        "trend_curves": False,
+    }
+    (output / "comparison_summary.json").write_text(json.dumps(summary, indent=2) + "\n")
+    figures(selected, summary, output, overlay_only=args.overlay_only, overlay_rows=overlay_rows)
 
 
 if __name__ == "__main__":

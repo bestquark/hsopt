@@ -116,6 +116,13 @@ frozen allocation with inverse local angle/SU(2) sensitivities. See
 [policy_sensitivity.md](policy_sensitivity.md) for assumptions, small-system
 finite-difference validation, normalization, and reproduction commands. These
 are post-hoc first-order diagnostics, not new acceptance rules or error certificates.
+`compile_angle_allocation.py` compares actual CUDA-Q circuit T counts at a shared
+first-order angle-error budget; its bounded tolerances can also be shown in the
+blue/green point-cloud overlay. This does not measure the derived policy's T95.
+`validate_angle_allocation.py` then checks all concrete allocations with the fixed
+GPU Lanczos evaluator and cached references, reporting energy feasibility and
+baseline-relative T95 separately from the circuit-count reduction. Any accuracy
+failure or uncertified case prevents a whole-suite T95 claim.
 
 ## Independent iteration-0 T95 census
 

@@ -1,8 +1,9 @@
 # Local sensitivity and mixed precision
 
-These scripts explain a **frozen** shared absolute-energy policy. They do not
-score new proposals, change tolerances, or alter campaign acceptance. Keep all
-tables, Hamiltonians, cached states and figures outside the checkout.
+These scripts explain a **frozen** shared absolute-energy policy and compare it
+with a post-hoc sensitivity-based allocation. They do not change live proposals,
+sealed baselines, or campaign acceptance. Keep all tables, Hamiltonians, cached
+states, bound validation policies and figures outside the checkout.
 
 ## Model
 
@@ -69,13 +70,16 @@ If a term's `m_j` occurrences share one tolerance, define
 `epsilon*_j = m_j B/(L S_j) = B/(L mean_occurrence(s_k))`.
 
 The figures compare **shapes** after dividing each molecule's tolerances by
-their occurrence-weighted geometric mean. Thus the theory shape is the
-normalized inverse mean sensitivity, and overall precision relaxation cannot
+their occurrence-weighted geometric mean, `GM(x) = exp(sum_j m_j log(x_j) / sum_j m_j)`.
+The coefficient axis uses the same per-molecule normalization, so a value of ten
+means ten times that molecule's geometric-mean coefficient magnitude. Thus the
+theory shape is the normalized inverse mean sensitivity, and overall precision relaxation cannot
 create apparent agreement. The CSV also provides absolute predictions matched
 to the learned policy's own linearized budget. Those are not certified paper
 budget allocations. Near-zero responses have no finite interior optimum in
-this model; they are explicitly omitted, with counts and cutoff checks at
-1e-6, 1e-8, and 1e-10. No finite-error regularizer is fitted.
+this model. The uncapped diagnostic omits them, recording counts and cutoff
+checks at 1e-6, 1e-8, and 1e-10. The bounded compilation comparison below retains
+every term instead. No finite-error regularizer is fitted.
 
 The coefficient/support power-law fits are **descriptive fits to calculated
 responses**, with equal molecule weight and molecule intercepts removed. Their
@@ -90,13 +94,41 @@ dependence to show the coefficient trend. Fits to inverse sensitivity and to
 the learned tolerances are computed separately; the latter's high R-squared
 primarily reflects the explicit power-law structure already present in the code.
 
-`sensitivity_overlay` puts calculated inverse-angle allocation and learned
-allocation on one common axis. It uses the same terms, coefficient normalization
-and geometric-mean tolerance normalization for both; support is retained in the
-data without series-specific corrections. Faint points are a matched sample of
-terms, while curves are medians in identical logarithmic coefficient bins. These
-curves describe the observed distributions and are not the conditional power-law
-fits above. Use `--overlay-only` to regenerate only this figure from saved data.
+`sensitivity_overlay` puts the derived angle allocation (blue) and learned
+allocation (green) on one common axis, as two point clouds without trend curves.
+It uses the same terms, coefficient normalization and geometric-mean tolerance
+normalization for both; support is retained without series-specific corrections.
+Points are a matched sample of terms. Tick numbers, axis labels and legend use
+26, 30 and 24 point fonts. Use `--overlay-only` to regenerate this figure.
+Epsilon is an allowed synthesis error, so a larger y value means **less**
+precision. Approximate precision in bits is `-log2(epsilon)` and would reverse
+the direction; the figure explicitly labels the quantity as error tolerance.
+
+## Actual synthesis counts
+
+`compile_angle_allocation.py` turns the response shape into concrete tolerances
+and compiles both it and the frozen agent policy with the same CUDA-Q settings.
+For each molecule, set `B_agent = sum_j m_j g_j epsilon_agent,j`, with
+`g_j = mean_occurrence(|angle response|)`. Minimize `sum_j m_j log(1/epsilon_j)`
+subject to that same budget and `epsilon_j <= max_k epsilon_agent,k`.
+The bounded solution is `epsilon_j = min(cap, C/g_j)`; bisection fixes C to
+match the budget. Zero responses receive cap. No terms are discarded and no
+unbounded or order-one error tolerance is introduced. This finite cap makes
+the compilation comparison well-defined while retaining the small-error regime
+of the original agent tolerances.
+
+Counts include every physical rotation and product-formula repetition in one
+full evolution. CUDA-Q counts are checked against the literal T characters in
+the synthesized sequence. The report contains per-molecule counts and both a
+summed cohort cost and a geometric-mean ratio. The synthesis report alone is a
+compilation-only comparison; it does not evaluate chemical accuracy, QPE
+probabilities or full T95. Matching a local error model does not establish
+equality of actual energy errors.
+
+Pass `--compilation-dir /path/to/synthesis-comparison` to the plotter to display
+these concrete bounded tolerances, including all terms, instead of the uncapped
+inverse-response diagnostic. The compiled table checksum and frozen policy
+identity are verified before plotting.
 
 Neither a local derivative nor its inverse certifies finite compilation error,
 higher-order effects, branch switching, QPE overlap probability or optimal T95.
@@ -104,6 +136,27 @@ General U(2) scalar phase errors are outside the SU(2) model. Identical compiled
 gates can have correlated errors; the absolute-sum model permits no cancellation.
 Thus numerical agreement would support a mechanism, rather than prove that the
 agent recovered a unique globally optimal allocation.
+
+## Full energy and T95 validation
+
+`validate_angle_allocation.py` evaluates the concrete derived tolerances through
+the unchanged compiled-unitary evaluator with `cupy-lanczos`, matrix-free literal
+circuits, and the cached exact ground-input reference. It preserves the frozen
+policy's rotation schedule and repetitions, replacing only the synthesis-tolerance
+method. There is no dense-diagonalization fallback or baseline recalibration.
+
+Saved iteration-0 and frozen-agent results are reused only after cohort, policy,
+Hamiltonian, compiler-settings and fresh-agent circuit-count checks. Every
+derived count and rotation-schedule hash must match the compilation report.
+Results record the actual energy bias, chemical-accuracy pass, QPE probability
+and T95, alongside evaluator source hashes and accelerator metadata. Reports and
+bound policies are written outside the live campaign. An interrupted run can
+reuse receipts only with identical inputs, script and evaluator provenance.
+
+The report distinguishes measured accuracy failures from uncertified evaluations.
+Both prevent claiming a feasible whole-suite improvement. It reports the shared
+geometric-mean baseline-relative T95 only when **every** molecule passes, rather
+than silently excluding failures or confusing raw circuit counts with T95.
 
 Related accuracy-allocation frameworks: [Meuli et al. (2020)](https://arxiv.org/abs/2003.08408)
 and [Kuklinski et al. (2025), section IV.A](https://arxiv.org/abs/2508.03987).
@@ -126,8 +179,24 @@ uv run python plots/plot_policy_sensitivity.py \
   --data /path/to/sensitivity/term_sensitivities.csv.gz \
   --manifest /path/to/sensitivity/sensitivity_manifest.json \
   --output-dir /path/to/sensitivity
+
+uv run python plots/compile_angle_allocation.py \
+  --run /path/to/campaign/seed-04 \
+  --policy /path/to/precision-snapshot/policy.py \
+  --snapshot /path/to/precision-snapshot/manifest.json \
+  --sensitivities-dir /path/to/sensitivity \
+  --output-dir /path/to/synthesis-comparison
+
+uv run python plots/validate_angle_allocation.py \
+  --run /path/to/campaign/seed-04 \
+  --policy /path/to/precision-snapshot/policy.py \
+  --compilation-dir /path/to/synthesis-comparison \
+  --agent-iteration 20 \
+  --output-dir /path/to/synthesis-comparison/validation
 ```
 
 The analyzer validates source/policy hashes and uses only statevectors for the
 cohort calculation. It does not compile any rotations. Plotting uses real
 LaTeX and writes PNG/PDF figures plus the allocation table and summary.
+Compilation and validation require CUDA-Q; validation additionally requires
+CuPy on a GPU and the same scientific evaluator revision as the saved controls.
