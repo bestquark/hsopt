@@ -86,6 +86,15 @@ the first agent turn. Inputs travel in one explicit bundle, with immutable files
 read-only and preparation/editing configurations selected in order after read
 verification. Each iteration records host phase durations in `mutation_timing.json`.
 
+Both OpenCode mutation stages explicitly select the native Exa `websearch`
+provider, avoiding an interactive first-search prompt. OpenShell permits its
+`mcp.exa.ai:443` endpoint for the OpenCode binary. Literature search is optional;
+retrieved pages are reference material. The selected provider and capability
+version are recorded in each iteration's `mutation_protocol.json` and
+`research_context.json`. A configured network policy alone does not prove that
+search works: verify a successful `websearch` tool receipt inside a sandbox when
+deploying a new agent image. Search failures remain visible in the tool telemetry.
+
 Retain pinned code and environments for campaigns already running. Synchronizing
 `main` does not migrate, restart, or reinterpret those campaigns. Scheduler
 adapters and supervisor services must be installed in the external runtime;

@@ -225,6 +225,18 @@ def test_lightning_deployment_limits_and_compaction_are_explicit():
     assert config['compaction']['buffer'] == 32768
 
 
+@pytest.mark.parametrize("preparation", [True, False])
+def test_websearch_selects_provider_without_interactive_consent(preparation):
+    config = openshell.opencode_config(preparation=preparation)
+    assert config["websearch"] == {"provider": "exa"}
+    agent = config["agents"][openshell.OPENCODE_AGENT]
+    assert {"action": "websearch", "resource": "*", "effect": "allow"} in agent["permissions"]
+    assert "websearch is configured with Exa" in agent["system"]
+    assert "mcp.exa.ai:443" in openshell.RESEARCH_ENDPOINTS
+    # Credential values must never be embedded in a mutation's config.
+    assert "EXA_API_KEY" not in json.dumps(config)
+
+
 def test_shared_continuation_reuses_verified_context_without_repeating_it():
     context = {
         "shared_protocol": {"energy_target": "ground_branch"},
@@ -311,6 +323,9 @@ def test_cleanup_timeout_does_not_hide_permanent_inference_error(tmp_path, monke
     assert (run_dir / "cleanup_errors.json").is_file()
     protocol = json.loads((run_dir / "mutation_protocol.json").read_text())
     assert protocol["required_reads"] == ["candidate.py", "research_context.json", "problem.json"]
+    assert protocol["websearch"]["provider"] == "exa"
+    assert protocol["websearch"]["capability_version"] == "native-v2-exa-v1"
+    assert "_websearch_exa_v1" in protocol["version"]
 
 
 def test_preparation_disables_edits_and_requires_all_reads(tmp_path):
