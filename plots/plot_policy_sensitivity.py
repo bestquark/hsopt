@@ -148,11 +148,56 @@ def save(fig, output, name):
     plt.close(fig)
 
 
-def figures(rows, summary, output):
+def overlay_allocations(rows, output):
+    """Put both allocation shapes on identical axes without support corrections."""
+    x = np.empty(len(rows))
+    for case in sorted({row["case_id"] for row in rows}):
+        indices = [i for i, row in enumerate(rows) if row["case_id"] == case]
+        coefficients = np.array([rows[i]["relative_coefficient"] for i in indices])
+        weights = np.array([rows[i]["occurrences"] for i in indices])
+        x[indices] = coefficients / geometric_mean(coefficients, weights)
+    rng = np.random.default_rng(42)
+    sampled = rng.choice(len(rows), size=min(len(rows), 12000), replace=False)
+    # The same terms and log-coefficient bins are used for both series. Lines
+    # are descriptive medians, not the conditional power-law fits at fixed support.
+    edges = np.geomspace(x.min() * .999, x.max() * 1.001, 20)
+    fig, ax = plt.subplots(figsize=(9.6, 7.2), layout="constrained")
+    for field, color, label, line, marker in (
+        ("angle_shape", GRAPHITE, "Calculated (angle model)", "--", "^"),
+        ("learned_shape", NVIDIA_DARK_GREEN, "Agent", "-", "o"),
+    ):
+        y = np.array([row[field] for row in rows])
+        ax.scatter(x[sampled], y[sampled], s=9, color=color,
+                   alpha=.12, linewidths=0, rasterized=True)
+        centers, medians = [], []
+        for lower, upper in zip(edges[:-1], edges[1:]):
+            retained = (x >= lower) & (x < upper)
+            if np.count_nonzero(retained) < 8:
+                continue
+            centers.append(float(np.exp(np.mean(np.log(x[retained])))))
+            medians.append(float(np.median(y[retained])))
+        ax.plot(centers, medians, color=color, linestyle=line, linewidth=2.6,
+                marker=marker, markersize=5, label=label)
+    ax.axhline(1, color="#B0B0B0", linewidth=1, zorder=0)
+    ax.set(xscale="log", yscale="log",
+           xlabel=r"Relative coefficient $|c_j|/\mathrm{GM}(|c|)$",
+           ylabel=r"Relative tolerance $\epsilon_j/\mathrm{GM}(\epsilon)$")
+    ax.legend(loc="upper right")
+    ax.text(.03, .04, "Dots: terms; curves: binned medians", transform=ax.transAxes,
+            fontsize=16, va="bottom")
+    ax.grid(which="major", alpha=.12, linewidth=.7)
+    ax.spines[["top", "right"]].set_visible(False)
+    save(fig, output, "sensitivity_overlay")
+
+
+def figures(rows, summary, output, *, overlay_only=False):
     apply_paper_style()
     plt.rcParams.update({"font.size": 20, "axes.labelsize": 23, "axes.titlesize": 22,
                          "xtick.labelsize": 18, "ytick.labelsize": 18,
                          "legend.fontsize": 17})
+    overlay_allocations(rows, output)
+    if overlay_only:
+        return
     fig, axes = plt.subplots(1, 3, figsize=(19.8, 5.8), layout="constrained")
     rng = np.random.default_rng(42)
     sampled = rng.choice(len(rows), size=min(len(rows), 12000), replace=False)
@@ -262,6 +307,8 @@ def main():
     parser.add_argument("--data", type=Path, required=True)
     parser.add_argument("--manifest", type=Path, required=True)
     parser.add_argument("--output-dir", type=Path, required=True)
+    parser.add_argument("--overlay-only", action="store_true",
+                        help="Only render the common-axis calculated/agent allocation overlay")
     args = parser.parse_args()
     with gzip.open(args.data, "rt", newline="") as handle:
         raw = list(csv.DictReader(handle))
@@ -284,7 +331,7 @@ def main():
         writer = csv.DictWriter(handle, fieldnames=list(selected[0]))
         writer.writeheader()
         writer.writerows(selected)
-    figures(selected, summary, output)
+    figures(selected, summary, output, overlay_only=args.overlay_only)
 
 
 if __name__ == "__main__":

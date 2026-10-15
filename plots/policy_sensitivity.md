@@ -90,6 +90,14 @@ dependence to show the coefficient trend. Fits to inverse sensitivity and to
 the learned tolerances are computed separately; the latter's high R-squared
 primarily reflects the explicit power-law structure already present in the code.
 
+`sensitivity_overlay` puts calculated inverse-angle allocation and learned
+allocation on one common axis. It uses the same terms, coefficient normalization
+and geometric-mean tolerance normalization for both; support is retained in the
+data without series-specific corrections. Faint points are a matched sample of
+terms, while curves are medians in identical logarithmic coefficient bins. These
+curves describe the observed distributions and are not the conditional power-law
+fits above. Use `--overlay-only` to regenerate only this figure from saved data.
+
 Neither a local derivative nor its inverse certifies finite compilation error,
 higher-order effects, branch switching, QPE overlap probability or optimal T95.
 General U(2) scalar phase errors are outside the SU(2) model. Identical compiled
