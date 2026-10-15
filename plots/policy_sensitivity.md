@@ -106,10 +106,15 @@ the direction; the figure explicitly labels the quantity as error tolerance.
 
 ## Actual synthesis counts
 
-`compile_angle_allocation.py` turns the response shape into concrete tolerances
+`compile_angle_allocation.py` turns a selected response into concrete tolerances
 and compiles both it and the frozen agent policy with the same CUDA-Q settings.
-For each molecule, set `B_agent = sum_j m_j g_j epsilon_agent,j`, with
-`g_j = mean_occurrence(|angle response|)`. Minimize `sum_j m_j log(1/epsilon_j)`
+Select `--sensitivity-model angle` (the original default) for
+`g_j = mean_occurrence(|b_z|)`, or `--sensitivity-model su2` for
+`g_j = mean_occurrence(sqrt(b_x^2 + b_y^2 + b_z^2))`. The latter accounts for
+all three local synthesis-error directions, not only an extra Rz angle error.
+For each molecule, set `B_agent = sum_j m_j g_j epsilon_agent,j` using the
+**same selected response model** for agent and derived allocations.
+Minimize `sum_j m_j log(1/epsilon_j)`
 subject to that same budget and `epsilon_j <= max_k epsilon_agent,k`.
 The bounded solution is `epsilon_j = min(cap, C/g_j)`; bisection fixes C to
 match the budget. Zero responses receive cap. No terms are discarded and no
@@ -129,6 +134,30 @@ Pass `--compilation-dir /path/to/synthesis-comparison` to the plotter to display
 these concrete bounded tolerances, including all terms, instead of the uncapped
 inverse-response diagnostic. The compiled table checksum and frozen policy
 identity are verified before plotting.
+
+Pass `--normalization baseline` together with `--compilation-dir` to plot
+`|c_j|/c_max` against `epsilon_j/epsilon_0`, where epsilon_0 is the sealed
+uniform baseline tolerance. Blue and green use exactly the same per-molecule
+scales, preserving absolute relaxation relative to baseline. The dashed line
+is the uniform baseline. The model label comes from the compilation report.
+The default `--normalization shape` preserves the earlier geometric-mean view.
+
+### Why the angle-only allocation can fail
+
+An actual synthesized gate can have a local error
+`exp(i(delta_0 I + delta_x X + delta_y Y + delta_z Z))`, instead of just an
+extra Z rotation. Thus a small `|b_z|` does not justify loose tolerance when
+`|b_x|` or `|b_y|` is large. Independent reconstruction of the frozen angle-only
+comparison found this mechanism in its two accuracy failures: the missing
+first-order X contribution was approximately -2.018 mHa for H4 R=0.7 and
+-4.167 mHa for NaLi-14. Native synthesis stayed within its requested tolerance.
+
+The three-axis comparison corrects this directional model, but is still not a
+finite-error certificate. Its matched budget is the agent's **modeled** budget,
+which may exceed chemical accuracy because the measured agent benefits from
+cancellation and favorable compiler errors. Keep the same cached-state proxy
+and cap, do not tune a scale after observing evaluation outcomes, and validate
+every case through the unchanged scientific evaluator before claiming improvement.
 
 Neither a local derivative nor its inverse certifies finite compilation error,
 higher-order effects, branch switching, QPE overlap probability or optimal T95.
@@ -193,6 +222,29 @@ uv run python plots/validate_angle_allocation.py \
   --compilation-dir /path/to/synthesis-comparison \
   --agent-iteration 20 \
   --output-dir /path/to/synthesis-comparison/validation
+
+# Independent three-axis comparison; preserve the original angle-only results.
+uv run python plots/compile_angle_allocation.py \
+  --run /path/to/campaign/seed-04 \
+  --policy /path/to/precision-snapshot/policy.py \
+  --snapshot /path/to/precision-snapshot/manifest.json \
+  --sensitivities-dir /path/to/sensitivity \
+  --sensitivity-model su2 \
+  --output-dir /path/to/sensitivity/su2
+
+uv run python plots/validate_angle_allocation.py \
+  --run /path/to/campaign/seed-04 \
+  --policy /path/to/precision-snapshot/policy.py \
+  --compilation-dir /path/to/sensitivity/su2 \
+  --agent-iteration 20 \
+  --output-dir /path/to/sensitivity/su2/validation
+
+uv run python plots/plot_policy_sensitivity.py \
+  --data /path/to/sensitivity/term_sensitivities.csv.gz \
+  --manifest /path/to/sensitivity/sensitivity_manifest.json \
+  --compilation-dir /path/to/sensitivity/su2 \
+  --normalization baseline --overlay-only \
+  --output-dir /path/to/sensitivity/su2
 ```
 
 The analyzer validates source/policy hashes and uses only statevectors for the

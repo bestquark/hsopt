@@ -150,32 +150,52 @@ def save(fig, output, name):
     plt.close(fig)
 
 
-def overlay_allocations(rows, output):
-    """Put both allocation shapes on identical axes without support corrections."""
-    x = np.empty(len(rows))
+def overlay_coordinates(rows, *, response_model="angle", normalization="shape"):
+    """Use common physical baseline scales or separately centered shapes."""
+    x = np.array([row["relative_coefficient"] for row in rows])
+    if normalization == "baseline":
+        baseline = np.array([row["baseline_epsilon"] for row in rows])
+        return (x, np.array([row["derived_epsilon"] for row in rows]) / baseline,
+                np.array([row["epsilon"] for row in rows]) / baseline)
+    if normalization != "shape":
+        raise ValueError("unknown overlay normalization")
     for case in sorted({row["case_id"] for row in rows}):
         indices = [i for i, row in enumerate(rows) if row["case_id"] == case]
-        coefficients = np.array([rows[i]["relative_coefficient"] for i in indices])
+        coefficients = x[indices]
         weights = np.array([rows[i]["occurrences"] for i in indices])
         x[indices] = coefficients / geometric_mean(coefficients, weights)
+    field = "derived_shape" if "derived_shape" in rows[0] else f"{response_model}_shape"
+    return (x, np.array([row[field] for row in rows]),
+            np.array([row["learned_shape"] for row in rows]))
+
+
+def overlay_allocations(rows, output, *, response_model="angle", normalization="shape"):
+    """Compare actual bounded allocations, or diagnostic normalized shapes."""
+    x, derived, learned = overlay_coordinates(rows, response_model=response_model,
+                                               normalization=normalization)
     rng = np.random.default_rng(42)
     sampled = rng.choice(len(rows), size=min(len(rows), 12000), replace=False)
     fig, ax = plt.subplots(figsize=(10.8, 8.0), layout="constrained")
-    derived_field = "derived_shape" if "derived_shape" in rows[0] else "angle_shape"
-    for field, color, label in (
-        (derived_field, DERIVED_BLUE, "Derived angle model"),
-        ("learned_shape", NVIDIA_DARK_GREEN, "Agent"),
+    for y, color, label in (
+        (derived, DERIVED_BLUE, "Derived three-axis model" if response_model == "su2" else "Derived angle model"),
+        (learned, NVIDIA_DARK_GREEN, "Agent"),
     ):
-        y = np.array([row[field] for row in rows])
         ax.scatter(x[sampled], y[sampled], s=10, color=color,
                    alpha=.23, linewidths=0, rasterized=True, label=label)
+    if normalization == "baseline":
+        ax.axhline(1, color=GRAPHITE, linestyle="--", linewidth=1.4, alpha=.8,
+                   label=r"Uniform baseline $\epsilon_0$")
     ax.set(xscale="log", yscale="log",
-           xlabel=r"Relative coefficient $|c_j|/\mathrm{GM}(|c|)$",
-           ylabel="Relative synthesis error tolerance\n" + r"$\epsilon_j/\mathrm{GM}(\epsilon)$")
+           xlabel=r"Relative coefficient $|c_j|/c_{\max}$" if normalization == "baseline"
+           else r"Relative coefficient $|c_j|/\mathrm{GM}(|c|)$",
+           ylabel="Relative synthesis error tolerance\n" + (r"$\epsilon_j/\epsilon_0$"
+           if normalization == "baseline" else r"$\epsilon_j/\mathrm{GM}(\epsilon)$"))
     ax.xaxis.label.set_fontsize(30)
     ax.yaxis.label.set_fontsize(30)
     ax.tick_params(axis="both", which="major", labelsize=26)
-    legend = ax.legend(loc="upper right", markerscale=3, fontsize=24)
+    legend = ax.legend(loc="lower left" if normalization == "baseline" else "upper right",
+                       bbox_to_anchor=(.02, .08) if normalization == "baseline" else None,
+                       markerscale=3, fontsize=24)
     for handle in legend.legend_handles:
         handle.set_alpha(1)
     ax.text(.03, .96, r"Higher $\epsilon$ = less precision", transform=ax.transAxes,
@@ -185,12 +205,14 @@ def overlay_allocations(rows, output):
     save(fig, output, "sensitivity_overlay")
 
 
-def figures(rows, summary, output, *, overlay_only=False, overlay_rows=None):
+def figures(rows, summary, output, *, overlay_only=False, overlay_rows=None,
+            response_model="angle", normalization="shape"):
     apply_paper_style()
     plt.rcParams.update({"font.size": 20, "axes.labelsize": 23, "axes.titlesize": 22,
                          "xtick.labelsize": 18, "ytick.labelsize": 18,
                          "legend.fontsize": 17})
-    overlay_allocations(overlay_rows if overlay_rows is not None else rows, output)
+    overlay_allocations(overlay_rows if overlay_rows is not None else rows, output,
+                        response_model=response_model, normalization=normalization)
     if overlay_only:
         return
     fig, axes = plt.subplots(1, 3, figsize=(19.8, 5.8), layout="constrained")
@@ -306,7 +328,11 @@ def main():
                         help="Only render the common-axis calculated/agent allocation overlay")
     parser.add_argument("--compilation-dir", type=Path,
                         help="Use the concrete bounded tolerances from compile_angle_allocation.py")
+    parser.add_argument("--normalization", choices=("shape", "baseline"), default="shape",
+                        help="shape: geometric means; baseline: c_max and sealed uniform epsilon_0")
     args = parser.parse_args()
+    if args.normalization == "baseline" and not args.compilation_dir:
+        parser.error("baseline normalization requires a concrete --compilation-dir")
     with gzip.open(args.data, "rt", newline="") as handle:
         raw = list(csv.DictReader(handle))
     rows = []
@@ -327,11 +353,14 @@ def main():
         writer = csv.DictWriter(handle, fieldnames=list(selected[0]))
         writer.writeheader()
         writer.writerows(selected)
-    overlay_rows = None
+    overlay_rows, response_model = None, "angle"
     if args.compilation_dir:
         compilation = json.loads((args.compilation_dir / "synthesis_comparison.json").read_text())
         if compilation.get("status") != "complete" or compilation["policy_sha256"] != manifest["policy_sha256"]:
             raise ValueError("compilation comparison uses a different agent policy")
+        response_model = compilation.get("response_model", "angle")
+        if response_model not in {"angle", "su2"}:
+            raise ValueError("unknown compiled response model")
         compiled_table = args.compilation_dir / "compiled_term_comparison.csv.gz"
         if hashlib.sha256(compiled_table.read_bytes()).hexdigest() != compilation["compiled_table_sha256"]:
             raise ValueError("compiled comparison table checksum mismatch")
@@ -347,12 +376,15 @@ def main():
             raise ValueError("compiled comparison differs from the full Hamiltonian term cohort")
     summary["overlay"] = {
         "terms": len(overlay_rows) if overlay_rows is not None else len(selected),
-        "derived_allocation": "bounded, matched agent angle budget" if overlay_rows is not None
+        "derived_allocation": f"bounded, matched agent {response_model} budget" if overlay_rows is not None
         else "uncapped inverse angle response shape",
+        "response_model": response_model,
+        "normalization": args.normalization,
         "trend_curves": False,
     }
     (output / "comparison_summary.json").write_text(json.dumps(summary, indent=2) + "\n")
-    figures(selected, summary, output, overlay_only=args.overlay_only, overlay_rows=overlay_rows)
+    figures(selected, summary, output, overlay_only=args.overlay_only, overlay_rows=overlay_rows,
+            response_model=response_model, normalization=args.normalization)
 
 
 if __name__ == "__main__":

@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Validate a frozen angle allocation with the unchanged ground-input evaluator.
+"""Validate a frozen sensitivity allocation with the unchanged ground-input evaluator.
 
 Post-hoc results and bound policies live outside the source/campaign. Cached
 iteration-0 and agent controls are reused after input/compiler/count checks.
@@ -39,9 +39,9 @@ def derived_policy(source, parameters, tolerances, output):
     tree = ev.validate_policy_source(output)
     cls = next(n for n in tree.body if isinstance(n, ast.ClassDef))
     initializer = next(n for n in cls.body if isinstance(n, ast.FunctionDef) and n.name == "__init__")
-    initializer.body.extend(ast.parse("self.angle_tolerances = " + repr(tolerances)).body)
+    initializer.body.extend(ast.parse("self.synthesis_tolerances = " + repr(tolerances)).body)
     method = next(n for n in cls.body if isinstance(n, ast.FunctionDef) and n.name == "synthesis_epsilon")
-    method.body = ast.parse("return self.angle_tolerances[term['label']]").body
+    method.body = ast.parse("return self.synthesis_tolerances[term['label']]").body
     output.write_text(ast.unparse(ast.fix_missing_locations(tree)) + "\n")
     ev.validate_policy_source(output)
 
@@ -63,6 +63,8 @@ def summarize(results, baseline, agent, compilation):
             "agent_t_count": agent[case_id]["t_count"], "agent_t95": agent[case_id]["score"],
             "derived_t_count": current.get("t_count"), "derived_t95": current.get("score"),
             "derived_relative_t95": ratio,
+            "baseline_energy_error_mha": original.get("absolute_energy_error_mha"),
+            "agent_energy_error_mha": agent[case_id].get("absolute_energy_error_mha"),
             "derived_energy_error_mha": current.get("absolute_energy_error_mha"),
             "passes_chemical_accuracy": current.get("passes_chemical_accuracy"),
             "status": current.get("status", "pending"),
@@ -89,6 +91,8 @@ def summarize(results, baseline, agent, compilation):
         "agent_geomean_relative_t95": agent_ratio,
         "derived_geomean_relative_t95": derived_ratio,
         "derived_t95_reduction_vs_baseline": 1 - derived_ratio if all_pass else None,
+        "derived_geomean_t95_over_agent": derived_ratio / agent_ratio if all_pass else None,
+        "derived_t95_reduction_vs_agent": 1 - derived_ratio / agent_ratio if all_pass else None,
         "max_derived_error_mha": max((v["absolute_energy_error_mha"] for v in completed.values()), default=None),
         "cases": comparisons,
     }
@@ -150,6 +154,7 @@ def main(before_case=None):
         "accelerator": cp.cuda.runtime.getDeviceProperties(cp.cuda.Device().id)["name"].decode(),
         "backend": "cupy-lanczos", "matrix_free": True, "full_diagonalization_permitted": False,
         "agent_iteration": args.agent_iteration,
+        "response_model": compilation.get("response_model", "angle"),
     }
     results = {}
     started = time.monotonic()
@@ -197,6 +202,10 @@ def main(before_case=None):
               f"T95={result.get('score')} seconds={result['evaluation_wall_seconds']:.1f}", flush=True)
         ev._compile_rz.cache_clear()
         cp.get_default_memory_pool().free_all_blocks()
+    with (output / "molecule_comparison.csv").open("w", newline="") as handle:
+        writer = csv.DictWriter(handle, fieldnames=list(report["cases"][0]))
+        writer.writeheader()
+        writer.writerows(report["cases"])
 
 
 if __name__ == "__main__":

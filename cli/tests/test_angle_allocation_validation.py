@@ -73,8 +73,10 @@ def test_full_suite_score_requires_every_case_to_pass(mode):
     if mode == "pass":
         assert report["derived_geomean_relative_t95"] == pytest.approx(.8)
         assert report["derived_t95_reduction_vs_baseline"] == pytest.approx(.2)
+        assert report["derived_t95_reduction_vs_agent"] == pytest.approx(1 - .8 / .9)
     else:
         assert report["derived_geomean_relative_t95"] is None
         assert report["derived_t95_reduction_vs_baseline"] is None
+        assert report["derived_t95_reduction_vs_agent"] is None
     assert report["physical_accuracy_failures"] == (["b"] if mode == "physical_failure" else [])
     assert report["uncertified_cases"] == (["b"] if mode == "uncertified" else [])

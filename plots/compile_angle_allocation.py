@@ -1,8 +1,8 @@
 #!/usr/bin/env python3
-"""Count actual CUDA-Q T gates for a bounded angle allocation and a frozen agent.
+"""Count CUDA-Q T gates for a bounded sensitivity allocation and a frozen agent.
 
 Compilation only: no GPU, energy evaluation, QPE success probability or T95.
-Every Hamiltonian term is included, including near-zero angle responses.
+Select angle-only or three-axis SU(2) response; retain every Hamiltonian term.
 """
 
 from __future__ import annotations
@@ -24,12 +24,15 @@ from hsopt.campaign.protocol import bind_policy
 from hsopt.evaluation import compiled_unitary as ev
 
 
+RESPONSE_FIELDS = {"angle": "angle_weight", "su2": "su2_weight"}
+
+
 def bounded_allocation(weights, response, agent):
     """Minimize sum m log(1/eps) at the agent's linearized error budget.
 
     eps_j = min(cap, C/g_j), with cap=max(agent_eps). A zero response receives
     cap; it is neither discarded nor assigned unbounded synthesis tolerance.
-    g_j is the mean absolute angle response over the term's occurrences.
+    g_j is the mean selected response magnitude over the term's occurrences.
     """
     weights, response, agent = (np.asarray(a, dtype=float) for a in (weights, response, agent))
     if not (weights.shape == response.shape == agent.shape) or weights.ndim != 1:
@@ -80,7 +83,7 @@ def compiled_counts(schedule, formula):
     return by_term, execution
 
 
-def run_case(case, root, policy, samples, expected, output):
+def run_case(case, root, policy, samples, expected, output, *, response_model="angle"):
     problem_path = root / case["source"]
     if sha(problem_path) != expected["problem_sha256"]:
         raise ValueError("Hamiltonian differs from the frozen snapshot")
@@ -90,7 +93,7 @@ def run_case(case, root, policy, samples, expected, output):
         raise ValueError("sensitivity table must include every Hamiltonian term")
     labels = sorted(by_label)
     weights = np.array([float(by_label[label]["occurrences"]) for label in labels])
-    responses = np.array([float(by_label[label]["angle_weight"]) for label in labels])
+    responses = np.array([float(by_label[label][RESPONSE_FIELDS[response_model]]) for label in labels])
     agent_epsilon = np.array([float(by_label[label]["epsilon"]) for label in labels])
     derived_epsilon, allocation = bounded_allocation(weights, responses, agent_epsilon)
     tolerances = dict(zip(labels, derived_epsilon, strict=True))
@@ -134,6 +137,7 @@ def run_case(case, root, policy, samples, expected, output):
         "problem_sha256": sha(problem_path), "terms": len(labels),
         "n_steps": n_steps, "rotations_per_step": len(schedule),
         "rotation_schedule_sha256": metrics["rotation_schedule_sha256"],
+        "response_model": response_model,
         "allocation": allocation,
         "agent_compiled_evolution_t_count": agent_total,
         "derived_compiled_evolution_t_count": derived_total,
@@ -155,6 +159,8 @@ def main():
     parser.add_argument("--snapshot", type=Path, required=True)
     parser.add_argument("--sensitivities-dir", type=Path, required=True)
     parser.add_argument("--output-dir", type=Path, required=True)
+    parser.add_argument("--sensitivity-model", choices=RESPONSE_FIELDS, default="angle",
+                        help="angle: Z response; su2: norm of all three synthesis-error responses")
     args = parser.parse_args()
     root, output = args.run.resolve(), args.output_dir.resolve()
     if output == root or output.is_relative_to(root):
@@ -179,7 +185,8 @@ def main():
     started = time.perf_counter()
     results, terms = [], []
     for i, case in enumerate(suite["cases"]):
-        result, points = run_case(case, root, args.policy, grouped[case["id"]], expected[case["id"]], output)
+        result, points = run_case(case, root, args.policy, grouped[case["id"]], expected[case["id"]],
+                                  output, response_model=args.sensitivity_model)
         results.append(result)
         terms.extend(points)
         print(f"{i+1}/{len(expected)} {case['id']}: "
@@ -199,8 +206,11 @@ def main():
         "sensitivity_manifest_sha256": sha(args.sensitivities_dir / "sensitivity_manifest.json"),
         "compiled_table_sha256": sha(table), "molecules": len(results), "terms": len(terms),
         "rotation_synthesis": synthesis,
+        "response_model": args.sensitivity_model,
+        "response_quantity": "mean_occurrence(abs(b_z))" if args.sensitivity_model == "angle"
+        else "mean_occurrence(sqrt(b_x**2 + b_y**2 + b_z**2))",
         "cost_definition": "T gates for one full physical evolution per molecule; includes PF repetitions",
-        "error_budget": "match each molecule's agent first-order absolute angle-error budget",
+        "error_budget": f"match each molecule's agent first-order {args.sensitivity_model} error budget",
         "epsilon_cap": "each molecule's maximum agent tolerance",
         "near_zero_terms": "included; bounded optimum uses cap, no sensitivity floor",
         "agent_total_compiled_evolution_t_count": agent_total,

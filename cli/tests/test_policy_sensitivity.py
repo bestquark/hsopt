@@ -100,3 +100,38 @@ def test_invalid_synthesis_tolerance_is_not_silently_clipped(monkeypatch):
 
     with pytest.raises(ValueError, match="invalid"):
         bounded_allocation([1], [1], [1])
+
+
+def test_three_axis_response_captures_error_missed_by_angle_only_model():
+    # This nondegenerate conjugated-Z circuit has a first gadget whose angle
+    # derivative vanishes, although another synthesis-error axis moves its phase.
+    actions = analysis.PauliActions(1)
+    schedule = [({"label": "X"}, np.pi / 4), ({"label": "Z"}, .2),
+                ({"label": "X"}, -np.pi / 4)]
+    _, vectors = np.linalg.eig(analysis.propagate(actions, schedule, np.eye(2, dtype=complex)))
+    target = vectors[:, 0]
+    gradients, _ = analysis.response(actions, schedule, target)
+    assert abs(gradients[0, 2]) < 1e-12
+    assert abs(gradients[0, 0]) == pytest.approx(1)
+    assert np.linalg.norm(gradients[0]) == pytest.approx(1)
+    check = analysis.validate_derivatives(actions, schedule, target, gradients)
+    assert max(row["absolute_error_at_1e_6"] for row in check["finite_differences"]) < 1e-7
+
+
+def test_baseline_overlay_preserves_actual_tolerance_multipliers(monkeypatch):
+    monkeypatch.syspath_prepend(str(PLOTS))
+    plot_spec = importlib.util.spec_from_file_location("sensitivity_plot", PLOTS / "plot_policy_sensitivity.py")
+    plot = importlib.util.module_from_spec(plot_spec)
+    plot_spec.loader.exec_module(plot)
+    rows = [
+        {"case_id": "a", "relative_coefficient": .01, "occurrences": 2,
+         "baseline_epsilon": 1e-6, "epsilon": 3e-6, "derived_epsilon": 5e-6,
+         "derived_shape": 1., "learned_shape": 1.},
+        {"case_id": "b", "relative_coefficient": 1., "occurrences": 1,
+         "baseline_epsilon": 1e-8, "epsilon": 2e-8, "derived_epsilon": 4e-8,
+         "derived_shape": 1., "learned_shape": 1.},
+    ]
+    x, derived, agent = plot.overlay_coordinates(rows, response_model="su2", normalization="baseline")
+    np.testing.assert_allclose(x, [.01, 1])
+    np.testing.assert_allclose(derived, [5, 4])
+    np.testing.assert_allclose(agent, [3, 2])

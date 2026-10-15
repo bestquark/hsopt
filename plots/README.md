@@ -119,6 +119,9 @@ are post-hoc first-order diagnostics, not new acceptance rules or error certific
 `compile_angle_allocation.py` compares actual CUDA-Q circuit T counts at a shared
 first-order angle-error budget; its bounded tolerances can also be shown in the
 blue/green point-cloud overlay. This does not measure the derived policy's T95.
+Use `--sensitivity-model su2` for a separate comparison with all three local
+error directions. The overlay's `--normalization baseline` uses `c_max` and
+the sealed uniform `epsilon_0`, retaining the absolute tolerance relaxation.
 `validate_angle_allocation.py` then checks all concrete allocations with the fixed
 GPU Lanczos evaluator and cached references, reporting energy feasibility and
 baseline-relative T95 separately from the circuit-count reduction. Any accuracy
