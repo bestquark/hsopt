@@ -14,7 +14,7 @@ and visual style while reading the new exact-unitary data contracts:
 | `plot_baseline_tolerance.py` | Initial tolerance versus Hamiltonian one-norm | `baseline_epsilon_vs_lambda.pdf` |
 | `plot_policy_angle_tolerance_violins.py` | Initial-versus-best physical rotation distributions per experiment | `angle_tolerance_violin.pdf` and `.png` per Hamiltonian/reaction |
 
-All result plots verify the strict export completion marker and every declared
+Completed-export result plots verify the strict export completion marker and every declared
 SHA-256 checksum before reading data. They never read a live campaign database.
 The current 82-instance manifest supplies stable dataset metadata, while the
 coefficient plot reads the immutable prepared Hamiltonian JSON files. Scripts
@@ -88,6 +88,28 @@ reaction stoichiometry; QPE query repetitions are deliberately excluded.
 The plots use a real LaTeX installation for typography and deliberately do not
 fall back to Matplotlib mathtext. Generated PDFs, exports, raw campaigns,
 databases, and logs remain outside the Git checkout.
+
+## Shared-policy mixed-precision inspection
+
+`plot_shared_policy_precision.py` plots one frozen policy's synthesis tolerances
+against Hamiltonian coefficient magnitudes. Its left panel shows one molecule;
+its right panel normalizes coefficients by each molecule's largest coefficient
+and tolerances by its sealed uniform baseline. Color denotes Pauli support.
+Each point is one nonidentity Pauli term, with repeated rotations collapsed.
+
+```bash
+uv run python plots/plot_shared_policy_precision.py \
+  --data /path/to/snapshot/term_tolerances.csv.gz \
+  --manifest /path/to/snapshot/manifest.json \
+  --molecule 0391_standard_OH \
+  --output-dir /path/to/precision-figures
+```
+
+This is a policy diagnostic, including for an unfinished campaign, rather than
+a completed campaign comparison. The external term table records the actual
+policy method outputs, sealed baseline parameters and Pauli features; its
+manifest identifies the policy, accepted iteration and source inputs. Plotting
+does not compile rotations, run an eigensolver or modify the campaign.
 
 ## Independent iteration-0 T95 census
 
