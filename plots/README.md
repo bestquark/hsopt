@@ -111,6 +111,12 @@ policy method outputs, sealed baseline parameters and Pauli features; its
 manifest identifies the policy, accepted iteration and source inputs. Plotting
 does not compile rotations, run an eigensolver or modify the campaign.
 
+`analyze_policy_sensitivity.py` and `plot_policy_sensitivity.py` compare that
+frozen allocation with inverse local angle/SU(2) sensitivities. See
+[policy_sensitivity.md](policy_sensitivity.md) for assumptions, small-system
+finite-difference validation, normalization, and reproduction commands. These
+are post-hoc first-order diagnostics, not new acceptance rules or error certificates.
+
 ## Independent iteration-0 T95 census
 
 `compute_iteration0_t95.py` measures the plotted baseline costs outside the
