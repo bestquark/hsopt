@@ -71,3 +71,37 @@ def test_calibrated_qpe_budget_must_be_fixed_and_valid_across_seeds():
     data["seeds"][0]["trajectory"]["molecules"][0]["baseline_simulation_budget_hartree"] = .002
     with pytest.raises(ValueError, match="Invalid baseline simulation budget"):
         module.aggregate(data)
+
+
+def test_rejected_trials_survive_selection_and_extend_beyond_matched_means():
+    data = snapshot()
+    data["seeds"][1]["trajectory"]["trials"] = [
+        {"iteration": 1, "accepted": False, "relative_t95": [1.8, None],
+         "energy_error_hartree": [.0004, .003], "case_passes_accuracy": [True, False]},
+        {"iteration": 2, "accepted": False, "relative_t95": [None, 1.2],
+         "energy_error_hartree": [None, .0002], "case_passes_accuracy": [False, True]},
+    ]
+    result = module.aggregate(data)
+    assert result["common_round"] == 1
+    assert result["trial_last_round"] == 2
+    assert result["mean_relative_t95"] == pytest.approx([1, .85])
+    assert result["proposal_trials"][0]["relative_t95"] == [1.8, None]
+    assert result["proposal_trials"][0]["energy_error_mha"] == pytest.approx([.4, 3])
+    assert result["proposal_trials"][1]["energy_error_mha"] == [None, .2]
+    assert result["trial_summary"] == {
+        "proposals": 2, "rejected_proposals": 2, "rejected_t95_points": 2,
+        "rejected_energy_points": 3, "accuracy_failed_case_evaluations": 1,
+        "uncertified_case_evaluations": 1,
+    }
+    data["seeds"][1]["trajectory"]["trials"][1]["relative_t95"][1] = 1.3
+    assert module.aggregate(data)["figure_key"] != result["figure_key"]
+
+
+def test_inaccurate_case_diagnostic_cost_is_not_called_valid_t95():
+    data = snapshot()
+    data["seeds"][0]["trajectory"]["trials"] = [
+        {"iteration": 1, "accepted": False, "relative_t95": [.5, 1],
+         "energy_error_hartree": [.003, .0001], "case_passes_accuracy": [False, True]},
+    ]
+    with pytest.raises(ValueError, match="passing case"):
+        module.aggregate(data)

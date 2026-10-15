@@ -10,7 +10,54 @@ from pathlib import Path
 
 import numpy as np
 
-STYLE_VERSION = "relative-t95-calibrated-energy-budget-five-seeds-latex-v4"
+STYLE_VERSION = "relative-t95-energy-rejected-trials-five-seeds-latex-v5"
+
+
+def proposal_trials(snapshot: dict, case_ids: list[str], threshold_mha: float) -> tuple[list, dict]:
+    trials = []
+    counts = {"proposals": 0, "rejected_proposals": 0, "rejected_t95_points": 0,
+              "rejected_energy_points": 0, "accuracy_failed_case_evaluations": 0,
+              "uncertified_case_evaluations": 0}
+    for seed in snapshot["seeds"]:
+        trajectory = seed["trajectory"]
+        order = {row["case_id"]: index for index, row in enumerate(trajectory["molecules"])}
+        indices = [order[name] for name in case_ids]
+        seen = set()
+        for row in trajectory.get("trials", []):
+            iteration = row["iteration"]
+            if not isinstance(iteration, int) or not 1 <= iteration <= trajectory["iterations"][-1] or iteration in seen:
+                raise ValueError("A proposal trial is outside its completed seed rounds or repeated")
+            seen.add(iteration)
+            if any(len(row[key]) != len(case_ids) for key in (
+                    "relative_t95", "energy_error_hartree", "case_passes_accuracy")):
+                raise ValueError("A proposal trial has an incomplete molecule cohort")
+            ratios = [row["relative_t95"][i] for i in indices]
+            errors = [None if row["energy_error_hartree"][i] is None
+                      else 1000 * abs(float(row["energy_error_hartree"][i])) for i in indices]
+            passes = [bool(row["case_passes_accuracy"][i]) for i in indices]
+            for ratio, error, passed in zip(ratios, errors, passes):
+                if ratio is not None and (not np.isfinite(ratio) or ratio < 0 or not passed):
+                    raise ValueError("A trial T95 needs a finite nonnegative cost and a passing case")
+                if error is not None and not np.isfinite(error):
+                    raise ValueError("A trial energy error must be finite")
+                if passed and (error is None or error >= threshold_mha or ratio is None):
+                    raise ValueError("A passing trial needs certified energy and T95")
+            if row["accepted"] and not all(passes):
+                raise ValueError("An accepted trial must pass the entire molecule cohort")
+            trials.append({"seed": seed["seed"], "iteration": iteration,
+                           "accepted": bool(row["accepted"]), "reason": row.get("reason"),
+                           "candidate_sha256": row.get("candidate_sha256"),
+                           "relative_t95": ratios, "energy_error_mha": errors,
+                           "case_passes_accuracy": passes})
+            counts["proposals"] += 1
+            if not row["accepted"]:
+                counts["rejected_proposals"] += 1
+                counts["rejected_t95_points"] += sum(x is not None for x in ratios)
+                counts["rejected_energy_points"] += sum(x is not None for x in errors)
+                counts["accuracy_failed_case_evaluations"] += sum(
+                    error is not None and not passed for error, passed in zip(errors, passes))
+                counts["uncertified_case_evaluations"] += sum(x is None for x in errors)
+    return trials, counts
 
 
 def aggregate(snapshot: dict) -> dict:
@@ -65,6 +112,7 @@ def aggregate(snapshot: dict) -> dict:
     if not np.allclose(budget_matrix, budget_matrix[0], rtol=0, atol=1e-9):
         raise ValueError("All seeds need the same per-molecule calibration budgets")
     budgets = budget_matrix[0]
+    trials, trial_summary = proposal_trials(snapshot, case_ids, thresholds[0])
     result = {
         "schema": "hsopt-shared-figure-statistics-v1",
         "style_version": STYLE_VERSION, "common_round": common,
@@ -81,6 +129,9 @@ def aggregate(snapshot: dict) -> dict:
         "mean_energy_error_mha": seed_energy_means.mean(axis=0).tolist(),
         "std_energy_error_mha": seed_energy_means.std(axis=0, ddof=1).tolist(),
         "chemical_accuracy_mha": thresholds[0],
+        "proposal_trials": trials, "trial_summary": trial_summary,
+        "trial_last_round": max([common, *(row["iteration"] for row in trials)]),
+        "trial_semantics": "Rejected proposal scatter shows individual molecule/seed measurements, with slight horizontal jitter; no trial averaging or carry-forward. Valid cases from a rejected suite are retained. Inaccurate energy errors use crosses; inaccurate cases have no chemically accurate T95. Missing certified metrics stay null and are counted. Trials can extend beyond the matched five-seed incumbent curves.",
         "molecule_baseline_simulation_budget_mha": budgets.tolist(),
         "mean_baseline_simulation_budget_mha": float(budgets.mean()),
         "min_baseline_simulation_budget_mha": float(budgets.min()),
@@ -93,6 +144,65 @@ def aggregate(snapshot: dict) -> dict:
     identity = {k: v for k, v in result.items() if k != "seed_completed_rounds"}
     result["figure_key"] = hashlib.sha256(json.dumps(identity, sort_keys=True).encode()).hexdigest()[:16]
     return result
+
+
+def trial_scatter(summary: dict, ax, metric: str, *, labels: bool = True) -> list[float]:
+    groups = {True: ([], []), False: ([], [])}
+    seeds = {name: i for i, name in enumerate(summary["seed_ids"])}
+    count = len(summary["case_ids"])
+    for row in summary.get("proposal_trials", []):
+        if row["accepted"]:
+            continue
+        for index, (value, passed) in enumerate(zip(row[metric], row["case_passes_accuracy"])):
+            if value is None:
+                continue
+            jitter = .25 * (seeds[row["seed"]] / 4 - .5) + .04 * (index / max(1, count-1) - .5)
+            xs, ys = groups[passed]
+            xs.append(row["iteration"] + jitter)
+            ys.append(value)
+    for passed, (xs, ys) in groups.items():
+        if not xs:
+            continue
+        if passed:
+            ax.scatter(xs, ys, s=8, color="#B56B00", alpha=.22, linewidths=0,
+                       label=r"rejected trials" if labels else None, zorder=3, rasterized=True)
+        else:
+            ax.scatter(xs, ys, s=13, color="#B3261E", alpha=.30, marker="x", linewidths=.65,
+                       label=r"accuracy failures" if labels else None, zorder=3, rasterized=True)
+    return groups[True][1] + groups[False][1]
+
+
+def trajectory_axes(plt, summary: dict, metric: str):
+    if summary.get("trial_summary", {}).get("rejected_proposals", 0):
+        fig, (ax, context) = plt.subplots(2, 1, figsize=(7.6, 7.2), sharex=True,
+                                        gridspec_kw={"height_ratios": [2.5, 1]}, layout="constrained")
+        trial_scatter(summary, ax, metric)
+        values = trial_scatter(summary, context, metric, labels=False)
+        energy = metric == "energy_error_mha"
+        reference = summary["chemical_accuracy_mha"] if energy else 1
+        context.set_yscale("symlog", linthresh=.01 if energy else .1)
+        context.set_ylim(0, 1.25 * max([reference, *values]))
+        context.set_ylabel(r"Trial error (mHa)" if energy else r"Trial relative $T_{95}$", fontsize=15)
+        context.set_title(r"All rejected trials (symmetric-log scale)", loc="left", fontsize=13)
+        context.axhline(reference, color="0.35", linestyle="--", linewidth=.9, zorder=0)
+        if energy:
+            context.text(.99, reference, r"$\epsilon_{\rm chem}$", transform=context.get_yaxis_transform(),
+                         ha="right", va="bottom", fontsize=12)
+        context.tick_params(labelsize=14)
+        context.spines[["top", "right"]].set_visible(False)
+        context.set_xlabel(r"Autoresearch iteration")
+        if summary.get("trial_last_round", 0) > summary["common_round"]:
+            for axis in (ax, context):
+                axis.axvline(summary["common_round"]+.25, color="0.55", linestyle=":", linewidth=.9)
+                axis.axvspan(summary["common_round"]+.25, summary["trial_last_round"]+.35,
+                             color="0.92", alpha=.45, zorder=-1)
+    else:
+        fig, ax = plt.subplots(figsize=(7.6, 4.6), layout="constrained")
+        context = None
+        ax.set_xlabel(r"Autoresearch iteration")
+    end = max(summary["iterations"][-1], summary.get("trial_last_round", 0))
+    ax.set_xlim(0, max(1, end+.35 if context is not None else end))
+    return fig, ax, context
 
 
 def plot(summary: dict, output: Path) -> None:
@@ -117,7 +227,7 @@ def plot(summary: dict, output: Path) -> None:
     molecule = np.asarray(summary["molecule_mean_relative_t95"])
     molecule_std = np.asarray(summary["molecule_std_relative_t95"])
     mean, std = np.asarray(summary["mean_relative_t95"]), np.asarray(summary["std_relative_t95"])
-    fig, ax = plt.subplots(figsize=(7.6, 4.6), layout="constrained")
+    fig, ax, context = trajectory_axes(plt, summary, "relative_t95")
     for index, values in enumerate(molecule):
         ax.step(x, values, where="post", color="0.60", alpha=.36, linewidth=.7,
                 label=r"molecule means" if index == 0 else None, zorder=2)
@@ -126,12 +236,14 @@ def plot(summary: dict, output: Path) -> None:
     ax.step(x, mean, where="post", color="#3E7E00", linewidth=2.8,
             label=r"mean of seed means", zorder=4)
     ax.axhline(1, color="0.35", linestyle="--", linewidth=.9, alpha=.7, zorder=0)
-    ax.set_xlim(0, max(1, int(x[-1])))
+    if context is not None:
+        ax.set_ylim(max(0, min(.8, float(molecule.min())-.05, float((mean-std).min())-.05)),
+                    max(1.25, float(molecule.max())+.05, float((mean+std).max())+.05))
     ax.xaxis.set_major_locator(MaxNLocator(nbins=6, integer=True))
-    ax.set_xlabel(r"Autoresearch iteration")
     ax.set_ylabel(r"Relative $T_{95}/T_{95}^{(0)}$")
     ax.spines[["top", "right"]].set_visible(False)
-    ax.legend(loc="best", handlelength=1.7)
+    ax.legend(loc="lower left", bbox_to_anchor=(0, 1.02), ncol=2,
+              handlelength=1.7, borderaxespad=0, columnspacing=1.2)
     for ext in ("png", "pdf"):
         fig.savefig(output / f"relative_t95_trajectories.{ext}")
     plt.close(fig)
@@ -163,7 +275,7 @@ def plot(summary: dict, output: Path) -> None:
                        else summary["chemical_accuracy_mha"])
         budget_min = float(summary["min_baseline_simulation_budget_mha"]) if calibrated_budget else budget
         budget_max = float(summary["max_baseline_simulation_budget_mha"]) if calibrated_budget else budget
-        fig, ax = plt.subplots(figsize=(7.6, 4.6), layout="constrained")
+        fig, ax, context = trajectory_axes(plt, summary, "energy_error_mha")
         for index, values in enumerate(errors):
             ax.step(x, values, where="post", color="0.60", alpha=.36, linewidth=.7,
                     label=r"molecule means" if index == 0 else None, zorder=2)
@@ -178,11 +290,9 @@ def plot(summary: dict, output: Path) -> None:
         ax.axhline(budget, color="#C00000", linewidth=1.8,
                    label=(r"$\overline{\epsilon_{\rm chem}-\epsilon_{\rm QPE}^{(0)}}$"
                           if calibrated_budget else r"chemical accuracy ($1$ kcal/mol)"), zorder=5)
-        ax.set_xlim(0, max(1, int(x[-1])))
         ax.set_ylim(0, max(1.15*budget_max, 1.08*float(errors.max()),
                            1.08*float((mean_error+std_error).max())))
         ax.xaxis.set_major_locator(MaxNLocator(nbins=6, integer=True))
-        ax.set_xlabel(r"Autoresearch iteration")
         ax.set_ylabel(r"$|E_{\rm compiled}-E_{\rm exact}|$ (mHa)")
         ax.spines[["top", "right"]].set_visible(False)
         ax.legend(loc="lower left", bbox_to_anchor=(0, 1.02), ncol=2,
