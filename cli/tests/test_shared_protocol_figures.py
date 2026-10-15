@@ -105,3 +105,65 @@ def test_inaccurate_case_diagnostic_cost_is_not_called_valid_t95():
     ]
     with pytest.raises(ValueError, match="passing case"):
         module.aggregate(data)
+
+
+def rejected_trials():
+    return [
+        {"iteration": 1, "seed": "a", "accepted": False, "relative_t95": [1, 3],
+         "energy_error_mha": [.2, .6], "case_passes_accuracy": [True, True]},
+        {"iteration": 1, "seed": "b", "accepted": False, "relative_t95": [4, None],
+         "energy_error_mha": [.8, 3], "case_passes_accuracy": [True, False]},
+        {"iteration": 1, "seed": "c", "accepted": True, "relative_t95": [.5, .5],
+         "energy_error_mha": [.1, .1], "case_passes_accuracy": [True, True]},
+        {"iteration": 2, "seed": "a", "accepted": False, "relative_t95": [None, None],
+         "energy_error_mha": [None, None], "case_passes_accuracy": [False, False]},
+    ]
+
+
+def test_rejected_means_weight_seeds_equally_and_expose_partial_coverage():
+    rows = module.rejected_trial_means(rejected_trials(), "relative_t95")
+    # Seed means 2 and 4 average to 3, rather than pooling 1, 3, 4 into 8/3.
+    assert rows[0] == {
+        "iteration": 1, "value": 3, "contributing_seeds": 2, "rejected_seeds": 2,
+        "measured_case_evaluations": 3, "expected_case_evaluations": 4,
+        "accuracy_failed_case_evaluations": 1, "uncertified_case_evaluations": 0,
+    }
+    assert rows[1]["value"] is None
+    assert rows[1]["contributing_seeds"] == 0
+    assert rows[1]["uncertified_case_evaluations"] == 2
+    energy = module.rejected_trial_means(rejected_trials(), "energy_error_mha")
+    assert energy[0]["value"] == pytest.approx((.4 + 1.9) / 2)
+    assert energy[0]["measured_case_evaluations"] == 4
+    assert energy[0]["accuracy_failed_case_evaluations"] == 1
+
+
+def test_latex_scatter_has_one_unjittered_mean_per_measured_iteration():
+    matplotlib = pytest.importorskip("matplotlib", reason="Figure rendering uses the optional plots extra")
+    matplotlib.use("Agg")
+    import matplotlib.pyplot as plt
+
+    fig, ax = plt.subplots()
+    try:
+        values = module.trial_scatter({"proposal_trials": rejected_trials()}, ax, "relative_t95")
+        assert values == [3]
+        offsets = np.concatenate([collection.get_offsets() for collection in ax.collections])
+        assert offsets.tolist() == [[1, 3]]
+        assert ax.collections[0].get_label() == "means with failures"
+        # Hollow white face indicates the missing T95; the red edge flags the failure.
+        assert ax.collections[0].get_facecolors()[0][:3] == pytest.approx([1, 1, 1])
+        assert ax.collections[0].get_edgecolors()[0][:3] == pytest.approx([179/255, 38/255, 30/255])
+    finally:
+        plt.close(fig)
+
+
+def test_older_exports_get_current_mean_data_and_a_new_figure_key_without_score_changes():
+    old = module.aggregate(snapshot())
+    old.update(style_version="old-individual-scatter", figure_key="old", proposal_trials=rejected_trials())
+    old.pop("rejected_trial_means")
+    refreshed = module.current_plot_statistics(old)
+    assert refreshed["figure_key"] != "old"
+    assert refreshed["style_version"] == module.STYLE_VERSION
+    assert refreshed["rejected_trial_means"]["relative_t95"][0]["value"] == 3
+    assert refreshed["mean_relative_t95"] == old["mean_relative_t95"]
+    assert refreshed["proposal_trials"] == old["proposal_trials"]
+    assert module.current_plot_statistics(refreshed)["figure_key"] == refreshed["figure_key"]

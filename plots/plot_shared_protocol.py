@@ -10,7 +10,16 @@ from pathlib import Path
 
 import numpy as np
 
-STYLE_VERSION = "relative-t95-energy-rejected-trials-five-seeds-latex-v5"
+STYLE_VERSION = "relative-t95-energy-rejected-means-five-seeds-latex-v6"
+TRIAL_SEMANTICS = (
+    "Rejected scatter shows one mean per iteration: available molecule values are averaged "
+    "within each rejected seed, then observed seed means receive equal weight. Hollow markers "
+    "indicate partial coverage; red outlines indicate any measured accuracy failure, even if "
+    "the mean is below the accuracy limit. Inaccurate cases have no chemically accurate T95. "
+    "Missing certified metrics stay null, never zero-filled; no carry-forward. The full "
+    "individual measurements remain in proposal_trials, and rejected_trial_means records "
+    "coverage. Trial means can extend beyond the matched five-seed incumbent curves."
+)
 
 
 def proposal_trials(snapshot: dict, case_ids: list[str], threshold_mha: float) -> tuple[list, dict]:
@@ -58,6 +67,52 @@ def proposal_trials(snapshot: dict, case_ids: list[str], threshold_mha: float) -
                     error is not None and not passed for error, passed in zip(errors, passes))
                 counts["uncertified_case_evaluations"] += sum(x is None for x in errors)
     return trials, counts
+
+
+def rejected_trial_means(trials: list[dict], metric: str) -> list[dict]:
+    """One display mean per round, with equal weight for each measured seed.
+
+    Null T95 values (inaccurate or uncertified cases) are excluded rather than
+    treated as zero. Coverage and failures accompany every mean, including
+    rounds with no plottable result. Acceptance still uses the original scores.
+    """
+    rounds = {}
+    for row in trials:
+        if not row["accepted"]:
+            rounds.setdefault(row["iteration"], []).append(row)
+    result = []
+    for iteration, rows in sorted(rounds.items()):
+        seed_means, measured, expected, failed, uncertified = [], 0, 0, 0, 0
+        for row in rows:
+            values = [float(value) for value in row[metric]
+                      if value is not None and np.isfinite(value)]
+            if values:
+                seed_means.append(float(np.mean(values)))
+            measured += len(values)
+            expected += len(row[metric])
+            for error, passed in zip(row["energy_error_mha"], row["case_passes_accuracy"]):
+                if error is None or not np.isfinite(error):
+                    uncertified += 1
+                elif not passed:
+                    failed += 1
+        result.append({"iteration": iteration,
+                       "value": float(np.mean(seed_means)) if seed_means else None,
+                       "contributing_seeds": len(seed_means), "rejected_seeds": len(rows),
+                       "measured_case_evaluations": measured, "expected_case_evaluations": expected,
+                       "accuracy_failed_case_evaluations": failed,
+                       "uncertified_case_evaluations": uncertified})
+    return result
+
+
+def current_plot_statistics(summary: dict) -> dict:
+    """Version the display and its derived data, also when replaying older exports."""
+    result = dict(summary, style_version=STYLE_VERSION, trial_semantics=TRIAL_SEMANTICS,
+                  rejected_trial_means={metric: rejected_trial_means(
+                      summary.get("proposal_trials", []), metric)
+                      for metric in ("relative_t95", "energy_error_mha")})
+    identity = {k: v for k, v in result.items() if k not in ("seed_completed_rounds", "figure_key")}
+    result["figure_key"] = hashlib.sha256(json.dumps(identity, sort_keys=True).encode()).hexdigest()[:16]
+    return result
 
 
 def aggregate(snapshot: dict) -> dict:
@@ -131,7 +186,6 @@ def aggregate(snapshot: dict) -> dict:
         "chemical_accuracy_mha": thresholds[0],
         "proposal_trials": trials, "trial_summary": trial_summary,
         "trial_last_round": max([common, *(row["iteration"] for row in trials)]),
-        "trial_semantics": "Rejected proposal scatter shows individual molecule/seed measurements, with slight horizontal jitter; no trial averaging or carry-forward. Valid cases from a rejected suite are retained. Inaccurate energy errors use crosses; inaccurate cases have no chemically accurate T95. Missing certified metrics stay null and are counted. Trials can extend beyond the matched five-seed incumbent curves.",
         "molecule_baseline_simulation_budget_mha": budgets.tolist(),
         "mean_baseline_simulation_budget_mha": float(budgets.mean()),
         "min_baseline_simulation_budget_mha": float(budgets.min()),
@@ -141,35 +195,24 @@ def aggregate(snapshot: dict) -> dict:
         "uncertainty": "Sample standard deviation across five independent seed means (ddof=1); not a confidence interval.",
         "semantics": "Accepted shared incumbents; matched rounds only; no extrapolation of incomplete seeds.",
     }
-    identity = {k: v for k, v in result.items() if k != "seed_completed_rounds"}
-    result["figure_key"] = hashlib.sha256(json.dumps(identity, sort_keys=True).encode()).hexdigest()[:16]
-    return result
+    return current_plot_statistics(result)
 
 
 def trial_scatter(summary: dict, ax, metric: str, *, labels: bool = True) -> list[float]:
-    groups = {True: ([], []), False: ([], [])}
-    seeds = {name: i for i, name in enumerate(summary["seed_ids"])}
-    count = len(summary["case_ids"])
-    for row in summary.get("proposal_trials", []):
-        if row["accepted"]:
+    means = rejected_trial_means(summary.get("proposal_trials", []), metric)
+    for failed in (False, True):
+        rows = [row for row in means if row["value"] is not None
+                and bool(row["accuracy_failed_case_evaluations"]) == failed]
+        if not rows:
             continue
-        for index, (value, passed) in enumerate(zip(row[metric], row["case_passes_accuracy"])):
-            if value is None:
-                continue
-            jitter = .25 * (seeds[row["seed"]] / 4 - .5) + .04 * (index / max(1, count-1) - .5)
-            xs, ys = groups[passed]
-            xs.append(row["iteration"] + jitter)
-            ys.append(value)
-    for passed, (xs, ys) in groups.items():
-        if not xs:
-            continue
-        if passed:
-            ax.scatter(xs, ys, s=8, color="#B56B00", alpha=.22, linewidths=0,
-                       label=r"rejected trials" if labels else None, zorder=3, rasterized=True)
-        else:
-            ax.scatter(xs, ys, s=13, color="#B3261E", alpha=.30, marker="x", linewidths=.65,
-                       label=r"accuracy failures" if labels else None, zorder=3, rasterized=True)
-    return groups[True][1] + groups[False][1]
+        faces = ["white" if row["measured_case_evaluations"] < row["expected_case_evaluations"]
+                 else "#B56B00" for row in rows]
+        ax.scatter([row["iteration"] for row in rows], [row["value"] for row in rows],
+                   s=30, facecolors=faces, edgecolors="#B3261E" if failed else "#B56B00",
+                   linewidths=1.2, alpha=.9, marker="o",
+                   label=((r"means with failures" if failed else r"rejected means")
+                          if labels else None), zorder=3)
+    return [row["value"] for row in means if row["value"] is not None]
 
 
 def trajectory_axes(plt, summary: dict, metric: str):
@@ -182,8 +225,8 @@ def trajectory_axes(plt, summary: dict, metric: str):
         reference = summary["chemical_accuracy_mha"] if energy else 1
         context.set_yscale("symlog", linthresh=.01 if energy else .1)
         context.set_ylim(0, 1.25 * max([reference, *values]))
-        context.set_ylabel(r"Trial error (mHa)" if energy else r"Trial relative $T_{95}$", fontsize=15)
-        context.set_title(r"All rejected trials (symmetric-log scale)", loc="left", fontsize=13)
+        context.set_ylabel(r"Mean trial error (mHa)" if energy else r"Mean trial relative $T_{95}$", fontsize=15)
+        context.set_title(r"Rejected means (symmetric-log scale)", loc="left", fontsize=15)
         context.axhline(reference, color="0.35", linestyle="--", linewidth=.9, zorder=0)
         if energy:
             context.text(.99, reference, r"$\epsilon_{\rm chem}$", transform=context.get_yaxis_transform(),
@@ -309,7 +352,8 @@ def main() -> None:
     parser.add_argument("--output", required=True, type=Path)
     args = parser.parse_args()
     data = json.loads(args.input.read_text())
-    summary = data if data.get("schema") == "hsopt-shared-figure-statistics-v1" else aggregate(data)
+    summary = (current_plot_statistics(data)
+               if data.get("schema") == "hsopt-shared-figure-statistics-v1" else aggregate(data))
     plot(summary, args.output)
     print(json.dumps({"common_round": summary["common_round"], "figure_key": summary["figure_key"]}))
 

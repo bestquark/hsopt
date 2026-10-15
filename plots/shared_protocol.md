@@ -18,19 +18,26 @@ by every seed.
 Older exported statistics without calibration budgets retain their original
 chemical-accuracy reference; a baseline QPE allocation is never inferred from measured bias.
 
-Both iteration plots overlay rejected proposals as amber scatter. Each point is
-one molecule/seed evaluation, with slight deterministic horizontal jitter, and
-uses that seed's iteration-zero T95 denominator. These individual measurements
-are not five-seed averages. Faster seeds' completed trials can extend beyond the
-matched incumbent curves; the shaded right-hand region marks that coverage.
-The top panel zooms around the incumbent trajectories. A lower symmetric-log
-panel retains the entire rejected-trial range, including large outliers and zero.
-Energy accuracy failures use red crosses. Their diagnostic T costs cannot deliver
-chemically accurate QPE, so they are omitted from T95 scatter. Uncertified metrics
-remain null and are counted in `trial_summary`, never substituted with zero.
-Valid case measurements from a suite rejected because another case failed are
-still shown. The exported `proposal_trials` preserve each archived proposal's
-seed, iteration, acceptance, candidate checksum, and case-ordered measurements.
+Both iteration plots overlay one rejected-trial mean per iteration. First average
+available molecule measurements within each rejected seed, using each molecule's
+own iteration-zero T95 denominator; then average those seed means with equal
+weight. Only rejected seeds contribute, so their number can vary by iteration.
+Faster seeds' completed trials can extend beyond the matched incumbent curves;
+the shaded right-hand region marks that coverage. The top panel zooms around the
+incumbent trajectories. A lower symmetric-log panel shows the full range of
+rejected means, including large means and zero.
+
+Amber markers show rejected means. A red outline flags any measured chemical
+accuracy failure among that round's rejected proposals, even when the mean energy
+error is below the limit. Hollow markers indicate missing metric values. Inaccurate
+cases have no chemically accurate T95, so their diagnostic costs are excluded from
+T95 means. Uncertified metrics remain null, never substituted with zero. Available
+measurements from a rejected suite still contribute; means with partial coverage
+are display summaries and cannot establish that the entire suite passed.
+The exported `rejected_trial_means` give each mean, seed count, measurement coverage,
+and failure counts. The original `proposal_trials` retain every archived proposal's
+seed, iteration, acceptance, candidate checksum, and individual measurements for
+inspection or alternate visualizations. Acceptance and incumbent curves are unchanged.
 
 Download **Plot data** from the dashboard and reproduce the PNG and vector PDF:
 
