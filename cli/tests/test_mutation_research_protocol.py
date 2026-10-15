@@ -237,6 +237,57 @@ def test_websearch_selects_provider_without_interactive_consent(preparation):
     assert "EXA_API_KEY" not in json.dumps(config)
 
 
+@pytest.mark.parametrize("preparation", [True, False])
+def test_runtime_search_provider_is_readonly_bundled_and_binary_scoped(tmp_path, monkeypatch, preparation):
+    import tarfile
+    plugin = tmp_path / "external.js"
+    plugin.write_text("export default {id:'test.search', setup(){}};")
+    monkeypatch.setenv("HSOPT_WEBSEARCH_PROVIDER", "searxng")
+    monkeypatch.setenv("HSOPT_WEBSEARCH_PLUGIN", str(plugin))
+    monkeypatch.setenv("HSOPT_WEBSEARCH_URL", "http://172.18.0.1:18889/search")
+    config = openshell.opencode_config(preparation=preparation)
+    assert config["websearch"] == {"provider": "searxng"}
+    assert config["plugins"] == [{"package": "/sandbox/opencode.websearch.js",
+                                  "options": {"endpoint": "http://172.18.0.1:18889/search"}}]
+    metadata = openshell._websearch_metadata(openshell._websearch_settings())
+    assert metadata["plugin_sha256"] == openshell._sha256(plugin)
+    assert "plugin_path" not in metadata
+    commands = []
+    def run(command, **kwargs):
+        commands.append(command)
+        return subprocess.CompletedProcess(command, 0, "", "")
+    monkeypatch.setattr(openshell, "_run", run)
+    network = openshell._configure_research_network("test-search")
+    assert "172.18.0.1:18889" in network["endpoints"]
+    assert network["binaries"] == list(openshell.OPENCODE_NETWORK_BINARIES)
+    assert "--binary" in commands[0]
+    for name in ["hsopt.SKILL.md", "rg", "opencode.preparation.json", "opencode.json",
+                 "preparation_prompt.md", "prompt.md", "candidate.py"]:
+        (tmp_path / name).write_text("test")
+    (tmp_path / "opencode.websearch.js").write_bytes(plugin.read_bytes())
+    with tarfile.open(openshell._build_sandbox_bundle(tmp_path, tmp_path / "candidate.py", [])) as bundle:
+        assert bundle.getmember("opencode.websearch.js").mode == 0o444
+        assert bundle.extractfile("opencode.websearch.js").read() == plugin.read_bytes()
+
+
+@pytest.mark.parametrize("endpoint", ["file:///tmp/search", "https://user:secret@example.com/search",
+                                     "https://example.com/search?key=secret", "https://example.com/#secret"])
+def test_custom_search_rejects_non_http_or_secret_bearing_urls(tmp_path, monkeypatch, endpoint):
+    plugin = tmp_path / "search.js"
+    plugin.write_text("export default {}")
+    monkeypatch.setenv("HSOPT_WEBSEARCH_PROVIDER", "searxng")
+    monkeypatch.setenv("HSOPT_WEBSEARCH_PLUGIN", str(plugin))
+    monkeypatch.setenv("HSOPT_WEBSEARCH_URL", endpoint)
+    with pytest.raises(ValueError, match="HTTP"):
+        openshell.opencode_config()
+
+
+def test_custom_search_cannot_silently_select_an_unregistered_provider(monkeypatch):
+    monkeypatch.setenv("HSOPT_WEBSEARCH_PROVIDER", "searxng")
+    with pytest.raises(ValueError, match="custom websearch requires"):
+        openshell.opencode_config()
+
+
 def test_shared_continuation_reuses_verified_context_without_repeating_it():
     context = {
         "shared_protocol": {"energy_target": "ground_branch"},

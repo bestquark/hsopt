@@ -95,6 +95,15 @@ version are recorded in each iteration's `mutation_protocol.json` and
 search works: verify a successful `websearch` tool receipt inside a sandbox when
 deploying a new agent image. Search failures remain visible in the tool telemetry.
 
+To use a self-hosted search service, the external runtime can set
+`HSOPT_WEBSEARCH_PROVIDER`, `HSOPT_WEBSEARCH_PLUGIN` (an OpenCode v2 JavaScript
+provider plugin), and `HSOPT_WEBSEARCH_URL`. HSOpt copies that plugin read-only
+into the sandbox, configures its endpoint, adds binary-scoped endpoint access,
+and records its SHA256 in each mutation's capability metadata. URLs must not
+contain credentials. The service, upstream engines, caching and quotas remain
+runtime responsibilities. Native `websearch` permissions and tool logs still
+apply; evaluator inputs and scientific acceptance remain fixed.
+
 Retain pinned code and environments for campaigns already running. Synchronizing
 `main` does not migrate, restart, or reinterpret those campaigns. Scheduler
 adapters and supervisor services must be installed in the external runtime;
