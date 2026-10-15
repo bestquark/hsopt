@@ -8,9 +8,20 @@ import pytest
 
 from hsopt.campaign import interface, protocol, queue
 from hsopt.evaluation import compiled_unitary as ev, gpu_spectrum, ground_branch as g
+from hsopt.evaluation import gpu_circuit
 from hsopt.sandbox.openshell import mutation_prompt
 
 FIXTURE = Path(__file__).parent / "fixtures" / "abs_energy_h2"
+
+
+def test_numerical_verifier_upgrade_isolates_ground_task_receipts(monkeypatch):
+    args = ("absolute", FIXTURE / "hamiltonian.json")
+    kwargs = {"stage": "candidate", "policy": FIXTURE / "initial_pf.py"}
+    ground_before = queue._task_id(*args, **kwargs, energy_target="ground_branch")
+    hf_before = queue._task_id(*args, **kwargs)
+    monkeypatch.setattr(gpu_circuit, "CERTIFIER_VERSION", "another_numerical_verifier")
+    assert queue._task_id(*args, **kwargs, energy_target="ground_branch") != ground_before
+    assert queue._task_id(*args, **kwargs) == hf_before
 
 
 def test_ground_input_selects_its_branch_not_the_lowest_hf_peak():

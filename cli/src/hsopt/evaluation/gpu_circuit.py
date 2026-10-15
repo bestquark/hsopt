@@ -7,6 +7,18 @@ its Clifford scaffold. No recovered-angle approximation or dense U is used.
 import numpy as np
 
 PROBABILITY_ATOL = 1e-9
+CERTIFIER_VERSION = "matrix_free_ground_lanczos_refined_anchor_v2"
+
+
+class GroundLanczosInconclusive(RuntimeError):
+    """The fixed verifier has not certified a peak; no energy violation is implied."""
+
+    def __init__(self, trials, calls):
+        self.trials = trials
+        self.calls = calls
+        super().__init__(
+            "Ground-input Lanczos did not certify a stable literal-U peak: " + str(trials)
+        )
 
 
 def certify_qpe_repetitions(probability, target_confidence):
@@ -136,6 +148,46 @@ class CompiledCircuit:
 
 
 def ground_lanczos(unitary, problem, metrics, target_state):
+    """Automatically refine a prematurely frozen first start before giving up.
+
+    The successful fast path is unchanged. On an uncertified result with a
+    residual-qualified first start, rerun the same literal operator and stabilize
+    that start's energy AND weight before the independent comparison. This is
+    evaluator work, not an agent repair; it never changes the candidate, energy
+    target, tolerances, majority requirement, or compiled gate sequence.
+    """
+    try:
+        rays, selected, diagnostics = _ground_lanczos(
+            unitary, problem, metrics, target_state, refine_initial=False
+        )
+    except GroundLanczosInconclusive as original:
+        if not any(t["attempt"] == 0 and t["residual_hartree"] <= 1e-10 for t in original.trials):
+            raise
+        try:
+            rays, selected, diagnostics = _ground_lanczos(
+                unitary, problem, metrics, target_state, refine_initial=True
+            )
+        except (GroundLanczosInconclusive, TimeoutError) as retry:
+            raise RuntimeError(
+                "Ground-input Lanczos verification remains inconclusive after automatic "
+                "first-start refinement; this is not a measured energy-accuracy failure. "
+                + str(retry)
+            ) from retry
+        diagnostics["verification_retry"] = {
+            "attempted": True,
+            "reason": "residual_qualified_first_start_not_independently_confirmed",
+            "initial_matvec_calls": original.calls,
+            "initial_trials": original.trials,
+            "refinement": "stabilize_first_start_energy_and_overlap_before_independent_check",
+        }
+        diagnostics["matvec_calls"] += original.calls
+    else:
+        diagnostics["verification_retry"] = {"attempted": False}
+    diagnostics["certifier_version"] = CERTIFIER_VERSION
+    return rays, selected, diagnostics
+
+
+def _ground_lanczos(unitary, problem, metrics, target_state, *, refine_initial):
     """Ground-input Krylov search with full reorthogonalization and Ritz checks.
 
     Lanczos starts near the fixed input, rather than spending time resolving
@@ -224,7 +276,17 @@ def ground_lanczos(unitary, problem, metrics, target_state):
                     }
                     trials.append(record)
                     if residual <= 1e-10:
-                        if (
+                        if refine_initial and attempt == 0:
+                            stable = (
+                                previous is not None
+                                and abs(record["energy"] - previous["energy"]) <= 1e-10
+                                and abs(record["probability"] - previous["probability"])
+                                <= PROBABILITY_ATOL
+                            )
+                            previous = record
+                            if stable or exhausted:
+                                break
+                        elif (
                             previous is not None
                             and abs(record["energy"] - previous["energy"]) <= 1e-10
                             and abs(record["probability"] - previous["probability"])
@@ -245,13 +307,11 @@ def ground_lanczos(unitary, problem, metrics, target_state):
                                     ),
                                 },
                             )
-                        if attempt == 0:
+                        if not refine_initial and attempt == 0:
                             previous = record
                             break
             if exhausted:
                 break
             betas.append(beta)
             v = w / beta
-    raise RuntimeError(
-        "Ground-input Lanczos did not certify a stable literal-U peak: " + str(trials)
-    )
+    raise GroundLanczosInconclusive(trials, calls)

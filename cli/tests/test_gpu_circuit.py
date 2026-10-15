@@ -7,7 +7,72 @@ import numpy as np
 import pytest
 
 from hsopt.evaluation import compiled_unitary as ev
+from hsopt.evaluation import gpu_circuit
 from hsopt.evaluation.gpu_circuit import certify_qpe_repetitions, gate_parameters, ground_lanczos
+
+
+def test_successful_fast_path_keeps_the_same_numerical_result(monkeypatch):
+    rays, vectors = np.array([np.exp(.2j)]), np.array([[1.0]])
+    diagnostics = {"matvec_calls": 16, "trials": [{"attempt": 0}, {"attempt": 1}]}
+    calls = []
+
+    def solve(*args, refine_initial):
+        calls.append(refine_initial)
+        return rays, vectors, diagnostics
+
+    monkeypatch.setattr(gpu_circuit, "_ground_lanczos", solve)
+    actual_rays, actual_vectors, report = ground_lanczos(object(), {}, {}, object())
+    assert actual_rays is rays and actual_vectors is vectors
+    assert calls == [False]
+    assert report["verification_retry"] == {"attempted": False}
+
+
+def test_uncertified_anchor_is_automatically_refined_using_the_same_problem(monkeypatch):
+    operator, problem, metrics, state = object(), {}, {}, object()
+    initial = [{"attempt": 0, "residual_hartree": 5e-11, "probability": .6834282922}]
+    calls = []
+
+    def solve(u, p, m, v, *, refine_initial):
+        assert (u, p, m, v) == (operator, problem, metrics, state)
+        calls.append(refine_initial)
+        if not refine_initial:
+            raise gpu_circuit.GroundLanczosInconclusive(initial, 128)
+        return np.array([1j]), np.array([[1.0]]), {"matvec_calls": 320, "trials": []}
+
+    monkeypatch.setattr(gpu_circuit, "_ground_lanczos", solve)
+    _, _, report = ground_lanczos(operator, problem, metrics, state)
+    assert calls == [False, True]
+    assert report["verification_retry"]["initial_trials"] == initial
+    assert report["verification_retry"]["attempted"]
+    assert report["matvec_calls"] == 448
+
+
+def test_failed_refinement_stays_inconclusive_and_is_never_accepted(monkeypatch):
+    calls = []
+
+    def solve(*args, refine_initial):
+        calls.append(refine_initial)
+        raise gpu_circuit.GroundLanczosInconclusive(
+            [{"attempt": 0, "residual_hartree": 5e-11}], 128
+        )
+
+    monkeypatch.setattr(gpu_circuit, "_ground_lanczos", solve)
+    with pytest.raises(RuntimeError, match="remains inconclusive after automatic"):
+        ground_lanczos(object(), {}, {}, object())
+    assert calls == [False, True]
+
+
+def test_no_anchor_does_not_repeat_an_identical_deterministic_search(monkeypatch):
+    calls = []
+
+    def solve(*args, refine_initial):
+        calls.append(refine_initial)
+        raise gpu_circuit.GroundLanczosInconclusive([], 128)
+
+    monkeypatch.setattr(gpu_circuit, "_ground_lanczos", solve)
+    with pytest.raises(gpu_circuit.GroundLanczosInconclusive):
+        ground_lanczos(object(), {}, {}, object())
+    assert calls == [False]
 
 
 def test_qpe_count_rejects_an_overlap_at_an_integer_repetition_boundary():

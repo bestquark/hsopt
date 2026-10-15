@@ -27,7 +27,7 @@ from ..evaluation.compiled_unitary import (
     evaluate_exact_reference,
     evaluate_molecule,
 )
-from ..evaluation import ground_branch
+from ..evaluation import ground_branch, gpu_circuit
 
 
 QUEUE_PHASES = ("pending", "completed", "failed")
@@ -78,6 +78,10 @@ def _task_id(
     digest.update(EVALUATION_CONTRACT_VERSION.encode())
     if energy_target != "hf_accessible":
         digest.update(b"\0" + ground_branch.CONTRACT_VERSION.encode())
+        # A verifier upgrade must not reuse an older inconclusive task receipt.
+        # The physical scoring contract remains the same; numerical provenance
+        # gets its own content-addressed task identity.
+        digest.update(b"\0" + gpu_circuit.CERTIFIER_VERSION.encode())
     digest.update(b"\0")
     digest.update(stage.encode())
     digest.update(kind.encode())

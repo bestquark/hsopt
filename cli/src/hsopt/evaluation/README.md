@@ -32,3 +32,11 @@ explicitly marked and do not claim to enumerate all HF-accessible peaks.
 The same GPU backend prepares cached references through Hamiltonian Lanczos
 and analytic unitary phases. Tight calibration tracks the cached ground target
 with ideal rotations; it does not change the production HF-accessible score.
+
+Shared `ground_branch` runs certify the cached ground input's dominant compiled
+peak. If the first residual-qualified Lanczos start cannot be independently
+confirmed, the evaluator automatically retries after stabilizing its energy and
+overlap at larger Krylov checkpoints. The original fast path, residual/overlap
+tolerances, candidate and energy target are preserved. Results record the
+certifier version, retry diagnostics and total Krylov actions. Remaining
+uncertified solves are inconclusive, with no measured accuracy violation implied.
