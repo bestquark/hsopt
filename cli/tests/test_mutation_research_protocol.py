@@ -222,6 +222,28 @@ def test_lightning_deployment_limits_and_compaction_are_explicit():
     assert model["limit"] == {"context":131072,"output":65536}
     assert config['agents'][openshell.OPENCODE_AGENT]['request']['body']['max_tokens']==65536
     assert config['compaction']['auto'] is True
+    assert config['compaction']['buffer'] == 32768
+
+
+def test_shared_continuation_reuses_verified_context_without_repeating_it():
+    context = {
+        "shared_protocol": {"energy_target": "ground_branch"},
+        "history": {"recent_proposals": [{"error": "saved-trial-feedback-" * 10000}]},
+    }
+    feedback = {"score": 0.98, "failed_case_ids": ["NH-10"]}
+    prompt = openshell.mutation_prompt(feedback, context=context)
+    assert "research_context.json, already read during preparation" in prompt
+    assert "including after automatic compaction" in prompt
+    assert "saved-trial-feedback-" not in prompt
+    assert '"score": 0.98' in prompt
+    assert "NH-10" in prompt
+    assert "GROUND-INPUT SHARED CONTRACT" in prompt
+    assert len(prompt) < 20000
+
+
+def test_nonshared_continuation_still_includes_its_context():
+    prompt = openshell.mutation_prompt(context={"policy_contract": "ordinary-lane-contract"})
+    assert "ordinary-lane-contract" in prompt
 
 
 def test_output_reservation_cannot_exhaust_context(monkeypatch):

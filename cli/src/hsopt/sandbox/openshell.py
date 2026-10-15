@@ -1247,7 +1247,12 @@ def opencode_config(*, preparation: bool = False) -> dict[str, Any]:
         "update": "disable",
         "share": "disabled",
         "snapshots": False,
-        "compaction": {"auto": True, "keep": {"tokens": 15000}, "buffer": 8192},
+        "compaction": {
+            "auto": True,
+            "keep": {"tokens": 15000},
+            # Leave room for a complete tool response before the next check.
+            "buffer": min(32768, MODEL_CONTEXT_LIMIT // 4),
+        },
         "model": OPENCODE_MODEL,
         "enabled_providers": ["openshell"],
         "providers": {
@@ -1412,7 +1417,17 @@ return a final text response without rewriting the file.
             "batch permitted reads/calculations across the suite; many direct read turns "
             "would exceed the agent step budget. Return compact features, not all raw JSON.\n"
         )
-    if context is not None:
+    if context is not None and context.get("shared_protocol"):
+        # This continuation uses the verified preparation session, which has
+        # already read the entire context. Repeating it can overflow the model
+        # window before OpenCode gets a chance to compact the next tool turn.
+        prompt += (
+            "\nThe immutable policy contract, whole-suite features and recent trial "
+            "history are in research_context.json, already read during preparation "
+            "in this session. Re-read that file when needed, including after "
+            "automatic compaction; do not discard failed-trial feedback.\n"
+        )
+    elif context is not None:
         prompt += (
             "\nRequired context and policy contract (immutable):\n"
             + json.dumps(context, sort_keys=True)
@@ -1619,6 +1634,7 @@ def _mutate_once(
         energy_target = research_context["benchmark"].get("energy_target", "hf_accessible")
         research_context["benchmark"] = _compact_protocol_benchmark(research_context["benchmark"])
         research_context["mutation_protocol_version"] += "_shared_representative_raw_reads_v3"
+        research_context["mutation_protocol_version"] += "_context_reuse_v1"
         if energy_target == "ground_branch":
             research_context["mutation_protocol_version"] += "_shared_ground_input_v1"
             research_context["policy_contract"] = {
