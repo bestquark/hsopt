@@ -51,7 +51,6 @@ def _compiled_lanczos_sizes(dim):
 
 def eigensolve(unitary, problem, metrics, *, iterative, target_state=None):
     import cupy as cp
-    from cupyx.scipy.sparse.linalg import LinearOperator, eigsh
     from . import compiled_unitary as ev
 
     diagnostics = {
@@ -64,9 +63,19 @@ def eigensolve(unitary, problem, metrics, *, iterative, target_state=None):
     guard = metrics["compiled_phase_enclosure"]
     dim = unitary.shape[0]
     matrix_free = hasattr(unitary, "adjoint")
+    if matrix_free:
+        if target_state is None:
+            raise ValueError("Matrix-free certification requires its fixed input state")
+        from .gpu_circuit import ground_lanczos, certify_selected_phase
+
+        rays, vectors, report = ground_lanczos(unitary, problem, metrics, target_state)
+        # Unlike lowest-HF-peak selection, majority ground-input selection is
+        # independently certified against the literal U. A triangle bound on
+        # every expanded rotation can overcount cancelling fermionic terms.
+        report["phase_guard"] = certify_selected_phase(rays, int(metrics["n_steps"]))
+        report["phase_guard"]["global_circuit_sum_enclosure"] = dict(guard)
+        return rays, vectors, report
     if not guard["sin_monotone"] or not guard["no_repetition_wrap"]:
-        if matrix_free:
-            raise RuntimeError("Matrix-free Lanczos phase-order/repetition guard is not certified")
         # Cancellation between substeps can make the circuit-sum enclosure loose.
         # Gershgorin on Re(U) bounds *every* eigenphase from the constructed U,
         # independently of reference energies or a sampled Ritz subspace.
@@ -88,10 +97,7 @@ def eigensolve(unitary, problem, metrics, *, iterative, target_state=None):
         if lower <= threshold + 1e-10:
             raise RuntimeError("Lanczos phase-order/repetition guard is not certified")
     scale = metrics["n_steps"] / problem["target_time"]
-    if matrix_free:
-        from .gpu_circuit import ground_lanczos
-
-        return ground_lanczos(unitary, problem, metrics, target_state)
+    from cupyx.scipy.sparse.linalg import LinearOperator, eigsh
     hermitian = cp.empty_like(unitary)
     for first in range(0, dim, 128):
         last = min(first + 128, dim)

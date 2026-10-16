@@ -240,6 +240,43 @@ def test_failed_compiled_baseline_is_not_sealed(tmp_path, monkeypatch):
     assert not (tmp_path / "baseline/calibration.json").exists()
 
 
+def test_verifier_refresh_keeps_calibrated_beta_policy_and_reference(tmp_path, monkeypatch):
+    pytest.importorskip("openfermion")
+    reference = tmp_path / "reference.json"
+    reference.write_text(json.dumps(ev.evaluate_exact_reference(H2, backend="numpy")))
+    from hsopt.evaluation import ground_branch
+    from hsopt.campaign import calibration
+
+    result = {
+        "passes_chemical_accuracy": True,
+        "evaluation_contract_version": ground_branch.CONTRACT_VERSION,
+    }
+    monkeypatch.setattr(ev, "evaluate_molecule", lambda *a, **k: dict(result))
+    folder = tmp_path / "baseline"
+    record = prep.prepare(H2, reference, folder, baseline="tight", backend="numpy")
+    original_policy = (folder / "initial_pf.py").read_bytes()
+    original_parameters = copy.deepcopy(record["instantiated_policy"])
+    record.pop("calibration_sha256")
+    record["validation_contract_version"] = "older-verifier"
+    record["calibration_sha256"] = elote.digest(record)
+    (folder / "calibration.json").write_text(json.dumps(record))
+    with pytest.raises(ValueError, match="older verifier"):
+        prep.verify(record, H2, "tight")
+
+    def forbidden(*args, **kwargs):
+        pytest.fail("refresh recalibrated beta")
+
+    monkeypatch.setattr(calibration, "_empirical_reference_beta", forbidden)
+    updated = prep.refresh_validation(H2, reference, folder)
+    prep.verify(updated, H2, "tight")
+    assert updated["instantiated_policy"] == original_parameters
+    assert (folder / "initial_pf.py").read_bytes() == original_policy
+    assert updated["validation_history"][0]["calibration_parameters_reused"]
+    reference.write_text(reference.read_text() + "\n")
+    with pytest.raises(ValueError, match="changed policy or exact reference"):
+        prep.refresh_validation(H2, reference, folder)
+
+
 def test_host_keeps_its_decomposition_when_a_constructor_mutates_its_copy(tmp_path):
     pytest.importorskip("openfermion")
     policy = tmp_path / "candidate.py"

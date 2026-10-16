@@ -46,3 +46,10 @@ overlap at larger Krylov checkpoints. The original fast path, residual/overlap
 tolerances, candidate and energy target are preserved. Results record the
 certifier version, retry diagnostics and total Krylov actions. Remaining
 uncertified solves are inconclusive, with no measured accuracy violation implied.
+
+For matrix-free ground-input scoring, a loose circuit-sum phase enclosure is
+replaced by a state-targeted certificate: literal-U residuals, majority overlap,
+independent-start agreement, and no repetition wrapping for the selected peak.
+This handles cancelling contributions in grouped fermionic splittings without
+requiring global ordering of Im(U). The HF lowest-peak path retains its global
+phase-order guard. No full-unitary reconstruction or dense fallback is introduced.

@@ -47,9 +47,10 @@ def ideal_energy(problem, *, n_steps, exact_energy, exact_target, backend_name, 
         matrix_free=backend_name == "cupy-lanczos",
     )
     if backend_name == "cupy-lanczos":
-        from ..evaluation.gpu_circuit import ground_lanczos
+        from ..evaluation.gpu_circuit import ground_lanczos, certify_selected_phase
 
         rays, vectors, diagnostics = ground_lanczos(unitary, problem, metrics, exact_target)
+        diagnostics["phase_guard"] = certify_selected_phase(rays, n_steps)
     else:
         rays, vectors = np.linalg.eig(unitary)
         diagnostics = {"verification": "small_system_dense_test_oracle"}
@@ -193,13 +194,16 @@ def prepare(
     if not compiled["passes_chemical_accuracy"]:
         raise RuntimeError("compiled nested iteration 0 failed accuracy; calibration NOT sealed")
     record["compiled_iteration_zero_passed"] = True
+    record["validation_contract_version"] = compiled.get(
+        "evaluation_contract_version", ground_branch.CONTRACT_VERSION
+    )
     record["baseline_policy_sha256"] = ev._sha256(output / "initial_pf.py")
     record["calibration_sha256"] = digest(record)
     _write(output / "calibration.json", record)
     return record
 
 
-def verify(record, problem_path, baseline):
+def verify(record, problem_path, baseline, *, require_current_verifier=True):
     payload = dict(record)
     checksum = payload.pop("calibration_sha256", None)
     if (
@@ -213,6 +217,57 @@ def verify(record, problem_path, baseline):
         raise ValueError(
             "nested calibration is stale, unvalidated, or for another problem/baseline"
         )
+    if (
+        require_current_verifier
+        and record.get("validation_contract_version") != ground_branch.CONTRACT_VERSION
+    ):
+        raise ValueError(
+            "nested validation uses an older verifier; refresh its compiled iteration zero"
+        )
+
+
+def refresh_validation(problem_path, reference_path, output, *, backend="cupy-lanczos"):
+    """Recheck the unchanged policy after a verifier upgrade, reusing its beta.
+
+    No parameters are retuned and no historical trajectory is rewritten. This
+    operates only on a sealed preparation directory, before its new campaign.
+    """
+    problem_path, reference_path, output = Path(problem_path), Path(reference_path), Path(output)
+    record = _read(output / "calibration.json")
+    verify(record, problem_path, record["baseline"], require_current_verifier=False)
+    if (
+        ev._sha256(output / "initial_pf.py") != record["baseline_policy_sha256"]
+        or ev._sha256(reference_path) != record["reference_sha256"]
+    ):
+        raise ValueError("cannot refresh a changed policy or exact reference")
+    from ..evaluation.elote import fermionic_blocks
+
+    if fermionic_blocks(ev.load_problem(problem_path))["sha256"] != record["decomposition_sha256"]:
+        raise ValueError("cannot refresh a changed Hamiltonian decomposition")
+    previous = _read(output / "baseline_validation.json")
+    compiled = ev.evaluate_molecule(
+        problem_path,
+        output / "initial_pf.py",
+        backend=backend,
+        reference_path=reference_path,
+        energy_target="ground_branch",
+        matrix_free=True,
+    )
+    if not compiled["passes_chemical_accuracy"]:
+        raise RuntimeError("refreshed compiled iteration zero failed accuracy")
+    record.setdefault("validation_history", []).append(
+        {
+            "previous_contract_version": previous.get("evaluation_contract_version"),
+            "previous_validation_sha256": ev._sha256(output / "baseline_validation.json"),
+            "previous_calibration_sha256": record.pop("calibration_sha256"),
+            "calibration_parameters_reused": True,
+        }
+    )
+    record["validation_contract_version"] = compiled["evaluation_contract_version"]
+    record["calibration_sha256"] = digest(record)
+    _write(output / "baseline_validation.json", compiled)
+    _write(output / "calibration.json", record)
+    return record
 
 
 def load_baselines(source, *, baseline, calibration_path, calibration_root):
@@ -313,6 +368,10 @@ def main():
     prep.add_argument("--output-dir", type=Path, required=True)
     prep.add_argument("--baseline", choices=("loose", "tight"), required=True)
     prep.add_argument("--max-steps", type=int, default=1 << 20)
+    refresh = sub.add_parser("refresh")
+    refresh.add_argument("--problem", type=Path, required=True)
+    refresh.add_argument("--exact-reference", type=Path, required=True)
+    refresh.add_argument("--output-dir", type=Path, required=True)
     inspect = sub.add_parser("describe")
     inspect.add_argument("--problem", type=Path, required=True)
     inspect.add_argument("--policy-file", type=Path, required=True)
@@ -326,6 +385,13 @@ def main():
             baseline=args.baseline,
             max_steps=args.max_steps,
         )
+        print(
+            json.dumps(
+                {"output": str(args.output_dir), "calibration_sha256": record["calibration_sha256"]}
+            )
+        )
+    elif args.action == "refresh":
+        record = refresh_validation(args.problem, args.exact_reference, args.output_dir)
         print(
             json.dumps(
                 {"output": str(args.output_dir), "calibration_sha256": record["calibration_sha256"]}

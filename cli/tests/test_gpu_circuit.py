@@ -9,6 +9,56 @@ import pytest
 from hsopt.evaluation import compiled_unitary as ev
 from hsopt.evaluation import gpu_circuit
 from hsopt.evaluation.gpu_circuit import certify_qpe_repetitions, gate_parameters, ground_lanczos
+from hsopt.evaluation.gpu_circuit import certify_selected_phase
+
+
+def test_selected_literal_phase_checks_repetition_alias_without_a_global_triangle_bound():
+    proof = certify_selected_phase(np.exp(1j*np.array([-.2, -.2+1e-12])), 4)
+    assert proof["selected_repeated_phase_min"] == pytest.approx(-.8)
+    assert proof["wrap_margin_radians"] > 2
+    # A principal-phase match after wrapping cannot bypass branch certification.
+    with pytest.raises(RuntimeError, match="repetition wrap"):
+        certify_selected_phase(np.exp(1j*np.array([2.])), 4)
+    with pytest.raises(ValueError, match="finite nonzero"):
+        certify_selected_phase(np.array([0j]), 1)
+
+
+def test_matrix_free_uses_literal_peak_certificate_when_circuit_sum_is_loose(monkeypatch):
+    from hsopt.evaluation.gpu_spectrum import eigensolve
+
+    cp = ModuleType("cupy")
+    monkeypatch.setitem(sys.modules, "cupy", cp)
+    rays, vectors = np.exp(1j*np.array([-.2])), np.eye(8)[:, :1]
+    fixed_input = vectors[:, 0]
+    guard = {"sin_monotone": False, "no_repetition_wrap": False}
+    report = {"method": "gpu_matrix_free_ground_input_lanczos",
+              "trials": [{"residual_hartree": 1e-12, "probability": .99}]}
+
+    class Operator:
+        shape = (8, 8)
+
+        def adjoint(self, value):
+            raise AssertionError("only the verifier may apply the operator")
+
+    def certified(operator, problem, metrics, target):
+        assert target is fixed_input
+        return rays, vectors, dict(report)
+
+    monkeypatch.setattr(gpu_circuit, "ground_lanczos", certified)
+    values, selected, diagnostic = eigensolve(Operator(), {"target_time": 1.},
+        {"n_steps": 2, "compiled_phase_enclosure": guard}, iterative=True, target_state=fixed_input)
+    assert values is rays and selected is vectors
+    assert diagnostic["phase_guard"]["global_circuit_sum_enclosure"] == guard
+    assert diagnostic["phase_guard"]["selected_repeated_phase_min"] == pytest.approx(-.4)
+    assert not diagnostic["phase_guard"]["global_spectrum_ordering_required"]
+
+    def inconclusive(*args):
+        raise gpu_circuit.GroundLanczosInconclusive([], 200)
+
+    monkeypatch.setattr(gpu_circuit, "ground_lanczos", inconclusive)
+    with pytest.raises(gpu_circuit.GroundLanczosInconclusive):
+        eigensolve(Operator(), {}, {"n_steps": 2, "compiled_phase_enclosure": guard},
+                   iterative=True, target_state=fixed_input)
 
 
 def test_successful_fast_path_keeps_the_same_numerical_result(monkeypatch):

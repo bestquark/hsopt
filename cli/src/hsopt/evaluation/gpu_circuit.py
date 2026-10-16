@@ -7,7 +7,7 @@ its Clifford scaffold. No recovered-angle approximation or dense U is used.
 import numpy as np
 
 PROBABILITY_ATOL = 1e-9
-CERTIFIER_VERSION = "matrix_free_ground_lanczos_refined_anchor_v2"
+CERTIFIER_VERSION = "matrix_free_ground_lanczos_selected_phase_v3"
 
 
 class GroundLanczosInconclusive(RuntimeError):
@@ -36,6 +36,34 @@ def certify_qpe_repetitions(probability, target_confidence):
     ]
     if repetitions[0] != repetitions[1]:
         raise RuntimeError("Ground-input QPE repetition count depends on overlap uncertainty")
+
+
+def certify_selected_phase(rays, n_steps):
+    """Certify no repetition alias for the literal-U peak actually selected.
+
+    This is used only after literal-U residuals, majority input overlap and an
+    independent-start comparison pass. Ordering the *entire* spectrum of Im(U)
+    is unnecessary for that state-targeted certificate. The HF lowest-peak
+    solver still needs its global phase-order guard.
+    """
+    from . import compiled_unitary as ev
+
+    values = ev._host_array(rays, dtype=np.complex128)
+    if (type(n_steps) is not int or n_steps < 1 or values.ndim != 1 or not values.size
+            or not np.isfinite(values).all() or np.any(np.abs(values) == 0)):
+        raise ValueError("selected phase certificate needs finite nonzero rays and positive repetitions")
+    phases = np.angle(values)
+    repeated = n_steps * phases
+    margin = float(np.min(np.pi - np.abs(repeated)))
+    if margin <= 1e-6:
+        raise RuntimeError("Selected literal-unitary QPE peak has an uncertified repetition wrap")
+    return {"method": "selected_literal_U_peak_no_repetition_wrap",
+            "selected_step_phase_min": float(np.min(phases)),
+            "selected_step_phase_max": float(np.max(phases)),
+            "selected_repeated_phase_min": float(np.min(repeated)),
+            "selected_repeated_phase_max": float(np.max(repeated)),
+            "wrap_margin_radians": margin,
+            "global_spectrum_ordering_required": False}
 
 
 VECTOR_KERNEL = r"""

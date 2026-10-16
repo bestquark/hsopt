@@ -82,6 +82,17 @@ Preparation uses GPU Lanczos and never a dense fallback. A small-system dense
 oracle exists only for tests. A failed/uncertified start is not licensed for
 mutations and must be investigated separately.
 
+Ground-input certification checks literal-U residuals, majority input overlap,
+independent-start agreement and absence of repetition wrapping for the selected
+peak. It does not require a global triangle bound on all expanded rotations:
+that bound can overcount cancelling fermionic contributions. The lowest-HF-peak
+solver still requires its global phase-order certificate. No residual, overlap,
+energy-accuracy or selected-branch wrapping threshold is relaxed.
+After a verifier upgrade, `hsopt-elote refresh` can recheck an unchanged sealed
+preparation with `--problem`, `--exact-reference` and `--output-dir`, preserving
+its beta, repetitions, precision and reference. New campaigns require validation
+with the current verifier; historical campaign receipts remain immutable.
+
 Use these new `calibration.json` paths in a shared experiment selection. Pass
 `--policy-profile fermionic_nested` to either `abs_protocol/mutate.py prepare`
 or `diff_protocol/mutate.py prepare`. All species of a reaction need matching

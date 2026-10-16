@@ -15,7 +15,7 @@ from typing import Any, Mapping
 import numpy as np
 
 ENERGY_TARGET = "ground_branch"
-CONTRACT_VERSION = "normalized_hamiltonian_ground_input_qpe_t_count_cudaq_elote_v2"
+CONTRACT_VERSION = "normalized_hamiltonian_ground_input_qpe_t_count_cudaq_elote_v3"
 REFERENCE_TARGET = "exact_ground_state_branch"
 
 
