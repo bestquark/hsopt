@@ -222,7 +222,7 @@ def test_lightning_deployment_limits_and_compaction_are_explicit():
     assert model["limit"] == {"context":131072,"output":65536}
     assert config['agents'][openshell.OPENCODE_AGENT]['request']['body']['max_tokens']==65536
     assert config['compaction']['auto'] is True
-    assert config['compaction']['buffer'] == 32768
+    assert config['compaction']['buffer'] == min(65536, openshell.MODEL_CONTEXT_LIMIT // 2)
 
 
 @pytest.mark.parametrize("preparation", [True, False])
