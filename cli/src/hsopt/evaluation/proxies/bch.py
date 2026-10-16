@@ -158,10 +158,16 @@ def evaluate_molecule(
     problem = load_problem(problem_path)
     _, rotations, metrics = _product_formula_schedule(problem, load_policy(policy_path))
     dt = metrics["step_time"]
-    # Palindromic rotations guarantee time symmetry for this scaled schedule.
-    for (left, a), (right, b) in zip(rotations, reversed(rotations), strict=True):
-        if left["label"] != right["label"] or not math.isclose(a, b, rel_tol=1e-12, abs_tol=1e-15):
-            raise ValueError("BCH proxy requires a symmetric (palindromic) rotation schedule")
+    # Restore the physical frame before comparing to the original H. Symmetric
+    # commuting-group stages need not be palindromic in their flat expansion.
+    from ..clifford import conjugate, inverse
+    frame = inverse(metrics["elote"]["basis_change"])
+    rotations = [(dict(term, label=label), sign*angle) for term, angle in rotations
+                 for sign, label in [conjugate(term["label"], frame)]]
+    if not metrics["elote"].get("symmetric_splitting"):
+        for (left, a), (right, b) in zip(rotations, reversed(rotations), strict=True):
+            if left["label"] != right["label"] or not math.isclose(a, b, rel_tol=1e-12, abs_tol=1e-15):
+                raise ValueError("BCH proxy requires a symmetric (palindromic) rotation schedule")
     op = add(*[(1.0, {encode(term["label"]): term["coefficient"]}) for term in problem["terms"]])
     gates = [(encode(term["label"]), angle / dt) for term, angle in rotations]
     first_order = add(*[(1.0, {p: coefficient}) for p, coefficient in gates])

@@ -10,7 +10,7 @@ from collections import Counter
 from pathlib import Path
 from typing import Any
 
-MUTATION_PROTOCOL_VERSION = "hamiltonian_context_history_v8_fixed_hf_qpe_reference"
+MUTATION_PROTOCOL_VERSION = "hamiltonian_context_history_v9_explicit_elote_ingredients"
 
 POLICY_CONTRACT = {
     "repetitions": "Return a positive integer; step_time = target_time / repetitions().",
@@ -18,7 +18,28 @@ POLICY_CONTRACT = {
         "Called ONCE per species. Return a nonempty list/tuple of (trusted term or Pauli label, "
         "finite real angle) pairs. This ONE schedule is repeated unchanged. A self.step_index "
         "counter does not alternate steps. Put all stages of a higher-order or alternating "
-        "composition inside the returned schedule, with the appropriate substep angles."
+        "composition inside the returned schedule, with the appropriate substep angles. "
+        "Alternatively return {groups: [[(term, angle), ...], ...], stages: [(group_index, "
+        "multiplier), ...], merge_adjacent: True|False}. Each group must commute. "
+        "Stages are ordered in application order, can repeat groups and use negative weights. "
+        "Angles inside groups already include step_time. The host checks commutation, expands "
+        "the splitting and optionally merges consecutive identical Pauli rotations before synthesis."
+    ),
+    "basis_change": (
+        "Optional basis_change() returns application-ordered (H|S|SDG, qubit) or "
+        "(CX, control, target) gates. The host supplies C H C-dagger terms to build_step, "
+        "then scores C-dagger U_compiled C against the ORIGINAL reference, including literal "
+        "synthesis X/Y errors and global phases. No free change of physical problem or state. "
+        "General orbital/Givens rotations are not part of this Clifford-only interface."
+    ),
+    "fermionic_nesting": (
+        "A policy declaring hamiltonian_representation = 'fermionic_jw' receives a trusted "
+        "problem['fermionic_decomposition'] of Hermitian one-/two-body JW blocks, each with "
+        "orbitals and Pauli terms. The host verifies reconstruction; no candidate integral edits. "
+        "The nested initializer greedily groups disjoint orbital blocks and uses symmetric PF2. "
+        "Terms supplied to build_step also include original_label and frame_sign for mapping "
+        "these blocks into a chosen Clifford frame. Grouping/splitting are editable. "
+        "Nesting can reduce logical depth; total T95 is never divided by group width."
     ),
     "angle_convention": "Each angle alpha implements exp(+i alpha P); compiled Rz angle is -2*alpha.",
     "custom_angles": (

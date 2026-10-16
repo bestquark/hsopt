@@ -66,7 +66,7 @@ extern "C" __global__ void compiled_gate(
 """
 
 
-def gate_parameters(label, matrix):
+def gate_parameters(label, matrix, frame=()):
     """Constant-size Pauli masks, exactly matching the literal Clifford scaffold."""
     from . import compiled_unitary as ev
 
@@ -74,7 +74,7 @@ def gate_parameters(label, matrix):
     coefficients = [c if abs(c) > 1e-15 else 0j for c in coefficients]
     masks = []
     for index, axis in enumerate("XYZ", 1):
-        sign, transformed = ev._conjugated_pivot_pauli(label, axis)
+        sign, transformed = ev._conjugated_pivot_pauli(label, axis, frame)
         x = sum(1 << i for i, c in enumerate(reversed(transformed)) if c in "XY")
         z = sum(1 << i for i, c in enumerate(reversed(transformed)) if c in "YZ")
         masks.extend((np.uint32(x), np.uint32(z)))
@@ -87,8 +87,8 @@ class CompiledCircuit:
         self.shape = (dimension, dimension)
         self.gates = []
 
-    def add(self, label, matrix):
-        self.gates.append((label, np.asarray(matrix, dtype=np.complex128)))
+    def add(self, label, matrix, *, frame=()):
+        self.gates.append((label, np.asarray(matrix, dtype=np.complex128), frame))
 
     def finish(self):
         import cupy as cp
@@ -101,9 +101,9 @@ class CompiledCircuit:
         self.graphs = []
         for gates in (
             self.gates,
-            [(label, matrix.conj().T) for label, matrix in reversed(self.gates)],
+            [(label, matrix.conj().T, frame) for label, matrix, frame in reversed(self.gates)],
         ):
-            parameters = [gate_parameters(label, matrix) for label, matrix in gates]
+            parameters = [gate_parameters(label, matrix, frame) for label, matrix, frame in gates]
 
             def execute():
                 value, workspace = self.input, self.workspace

@@ -1413,6 +1413,15 @@ declared order. synthesis_epsilon() selects the CUDA-Q tolerance for each
 returned rotation. Inspect evaluate.py for the exact accepted types, angle
 convention, schedule validation, and synthesis-tolerance constraints.
 
+The learned converged protocol is called ELOTE (Error-Limited Optimized
+Trotter Evolution); HSOpt is the search framework. Make its ingredients
+explicit: grouping, splitting, repetitions, angles, and synthesis rule.
+The research_context policy_contract documents explicit commuting groups
+and splitting stages, optional exact Clifford basis_change(), and the
+verified fermionic_jw decomposition when selected. Explore mixed precision
+as well as these structural choices. Grouping is not a free discount on T
+count; only the synthesized circuit and verified energy determine the score.
+
 build_step() is called ONCE per species; the returned schedule is repeated
 unchanged. Counters cannot alternate successive calls. Put every stage of a
 composition inside that one schedule. Each returned alpha implements

@@ -52,6 +52,15 @@ it intentionally selects the numeric beta used by the tight policy.
 Calibration math and sealed-record preparation live in
 `cli/src/hsopt/campaign/calibration.py`; the generator forwards its existing API.
 
+The separately selected `fermionic_nested` profile starts from
+`experiments/initial_nested_pf.py`. `hsopt-elote prepare` calibrates its own
+orbital-disjoint grouped PF2 and validates its unchanged compiled iteration 0;
+never reinterpret historical Pauli calibrations as nested calibrations.
+`--policy-profile fermionic_nested` selects this initializer for a NEW shared
+experiment. The explicit ELOTE interface and reproduction boundaries are in
+`docs/elote.md`. ELOTE names the learned protocol; HSOpt remains
+the search framework. Keep running campaigns on their pinned source and inputs.
+
 Every `experiments/abs_energy/<instance>/` and
 `experiments/diff_energy/<reaction>/` directory contains both generated
 initializers for that dataset element. These checked-in files must be

@@ -99,6 +99,46 @@ def test_proxy_never_compiles_or_diagonalizes_a_full_unitary(monkeypatch):
     assert result["compiled"] is False
 
 
+def test_clifford_frame_preserves_the_physical_bch_prediction(tmp_path):
+    source = (ABS / "initial_pf.py").read_text()
+    source = source.replace('term["label"]', 'term["original_label"]')
+    source = source.replace(
+        "    def build_step(",
+        "    def basis_change(self):\n"
+        '        return [("H", 0), ("S", 2), ("CX", 1, 3)]\n\n'
+        "    def build_step(",
+    )
+    candidate = tmp_path / "framed.py"
+    candidate.write_text(source)
+    reference = bch.evaluate_molecule(ABS / "hamiltonian.json", ABS / "initial_pf.py")
+    framed = bch.evaluate_molecule(ABS / "hamiltonian.json", candidate)
+    assert framed["proxy_bias_hartree"] == pytest.approx(reference["proxy_bias_hartree"], abs=1e-14)
+
+
+def test_bch_accepts_a_symmetric_commuting_group_expansion(tmp_path):
+    from hsopt.campaign.elote import TEMPLATE
+    from hsopt.campaign.protocol import bind_policy
+
+    pytest.importorskip("openfermion")
+    problem = load_problem(DIFF / "hamiltonians/h2_r0_7.json")
+    candidate = tmp_path / "nested.py"
+    bind_policy(
+        TEMPLATE,
+        {
+            problem["name"]: {
+                "n_steps": 8,
+                "uniform_epsilon": 1e-8,
+                "reference_trotter_number_beta": 1.0,
+            }
+        },
+        candidate,
+    )
+    result = bch.evaluate_molecule(DIFF / "hamiltonians/h2_r0_7.json", candidate)
+    assert result["elote"]["symmetric_splitting"]
+    assert result["elote"]["first_order_generator_matches_hamiltonian"]
+    assert result["score"] is None
+
+
 @pytest.mark.parametrize("mutation,reason", [("asymmetric", "symmetric"), ("scaled", "consistent")])
 def test_unsupported_schedules_are_rejected(tmp_path, mutation, reason):
     source = (ABS / "initial_pf.py").read_text()

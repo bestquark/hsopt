@@ -1,5 +1,10 @@
 # Shared reaction-energy protocol
 
+For a fresh grouped baseline, see [ELOTE](../../docs/elote.md) and select
+`--policy-profile fermionic_nested` with new calibrations for every species.
+Reaction preparation apportions their budgets by stoichiometric weight; the
+whole reaction iteration 0 must still pass before mutations can begin.
+
 One short `initial_pf.py` is mutated per round and evaluated on every selected
 reaction, using its species' existing calibrated `r`, epsilon, and tuned beta.
 The objective is the geometric mean of reaction T95 relative to iteration 0,

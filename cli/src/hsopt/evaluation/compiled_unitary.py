@@ -9,6 +9,7 @@ backend, normally cuPyNumeric on an NVIDIA GPU.
 from __future__ import annotations
 
 import ast
+import copy
 import hashlib
 import json
 import math
@@ -34,12 +35,13 @@ PHASE_ENCODING_METHOD = "centered_nonidentity_pauli_one_norm"
 QPE_DIMENSIONLESS_EVOLUTION_TIME = 1.0
 QPE_PHASE_ESTIMATION_ALPHA = 8.0 * math.pi
 QPE_SINGLE_RUN_PHASE_SUCCESS_LOWER_BOUND = 0.5
-EVALUATION_CONTRACT_VERSION = "normalized_hamiltonian_hf_qpe_t_count_cudaq_v4"
+EVALUATION_CONTRACT_VERSION = "normalized_hamiltonian_hf_qpe_t_count_cudaq_elote_v5"
 REFERENCE_TARGET = "lowest_exact_hf_accessible_energy"
 # Exact Hamiltonian references contain no approximate rotation synthesis.
 EXACT_REFERENCE_CONTRACT_VERSIONS = (
     "normalized_hamiltonian_qpe_t_count_v2",
     "normalized_hamiltonian_qpe_t_count_cudaq_v3",
+    "normalized_hamiltonian_hf_qpe_t_count_cudaq_v4",
     EVALUATION_CONTRACT_VERSION,
 )
 SYNTHESIS_OPTIONS = {
@@ -723,7 +725,7 @@ def _identify_pauli(matrix: np.ndarray) -> tuple[complex, str]:
     return coefficient, label
 
 
-def _conjugated_pivot_pauli(label: str, pivot_pauli: str) -> tuple[complex, str]:
+def _conjugated_pivot_pauli(label: str, pivot_pauli: str, frame=()) -> tuple[complex, str]:
     support = [index for index, char in enumerate(label) if char != "I"]
     if not support:
         raise ValueError("identity Pauli rotations are not compiled")
@@ -742,6 +744,10 @@ def _conjugated_pivot_pauli(label: str, pivot_pauli: str) -> tuple[complex, str]
         local_phase, transformed = _identify_pauli(basis.conj().T @ _PAULIS[operator_pauli] @ basis)
         phase *= local_phase
         operator[qubit] = transformed
+    if frame:
+        from .clifford import conjugate, inverse
+        sign, transformed = conjugate("".join(operator), inverse(frame))
+        return phase * sign, transformed
     return phase, "".join(operator)
 
 
@@ -752,6 +758,7 @@ def _apply_compiled_rotation(
     label: str,
     compiled_rz: np.ndarray,
     xp: Any,
+    frame=(),
 ) -> tuple[Any, Any]:
     """Left-multiply using one reusable full-matrix workspace.
 
@@ -785,7 +792,7 @@ def _apply_compiled_rotation(
         coefficient = decomposition[pivot_pauli]
         if abs(coefficient) <= 1.0e-15:
             continue
-        scaffold_phase, transformed_label = _conjugated_pivot_pauli(label, pivot_pauli)
+        scaffold_phase, transformed_label = _conjugated_pivot_pauli(label, pivot_pauli, frame)
         source_for_destination, source_phases = _pauli_left_action(transformed_label)
         source_indices = xp.asarray(source_for_destination, dtype=xp.int64)
         destination_phases = xp.asarray(
@@ -928,49 +935,52 @@ def _product_formula_schedule(
 ) -> tuple[Any, list[tuple[dict[str, Any], float]], dict[str, Any]]:
     """Instantiate the candidate and validate its stationary rotation schedule."""
 
-    candidate_problem = {
-        key: value for key, value in problem.items() if key not in {"_path", "terms"}
-    }
-    candidate_problem["terms"] = [dict(term) for term in problem["terms"]]
+    from . import clifford, elote
+
+    candidate_problem = elote.candidate_problem(problem, policy)
+    decomposition = copy.deepcopy(candidate_problem.get("fermionic_decomposition"))
     product_formula = policy.ProductFormula(candidate_problem)
     repetitions_method = getattr(product_formula, "repetitions", None)
     if not callable(repetitions_method):
         raise ValueError("ProductFormula must define repetitions()")
-    n_steps = int(repetitions_method())
-    if n_steps <= 0:
-        raise ValueError("ProductFormula.repetitions() must be positive")
+    raw_steps = repetitions_method()
+    if type(raw_steps) is not int or raw_steps <= 0:
+        raise ValueError("ProductFormula.repetitions() must be a positive integer")
+    n_steps = raw_steps
     step_time = float(problem["target_time"]) / n_steps
-    trusted_terms = {str(term["label"]): dict(term) for term in problem["terms"]}
-    raw_rotations = product_formula.build_step(
-        [dict(term) for term in problem["terms"]],
-        step_time,
+    basis_method = getattr(product_formula, "basis_change", None)
+    frame = clifford.validate_frame(basis_method() if basis_method else [], int(problem["n_qubits"]))
+    terms = elote.transformed_terms(problem, frame)
+    trusted_terms = {str(term["label"]): dict(term) for term in terms}
+    # Decomposing a fermionic block can introduce Pauli contributions that
+    # cancel in the full H. They are admitted only from the verified host map.
+    if decomposition:
+        for block in decomposition["blocks"]:
+            for term in block["terms"]:
+                sign, label = clifford.conjugate(term["label"], frame)
+                if label not in trusted_terms:
+                    extra = {**elote.term_fields(label, 0.0),
+                             "original_label": term["label"], "frame_sign": sign}
+                    trusted_terms[label] = extra
+                    terms.append(extra)
+    raw_rotations = product_formula.build_step([dict(term) for term in terms], step_time)
+    rotations, recipe = elote.schedule(
+        raw_rotations, trusted_terms,
+        limit=MAX_POLICY_ROTATIONS_PER_TERM * len(problem["terms"]),
     )
-    if not isinstance(raw_rotations, (list, tuple)) or not raw_rotations:
-        raise ValueError("ProductFormula.build_step() must return a nonempty list or tuple")
-    if len(raw_rotations) > MAX_POLICY_ROTATIONS_PER_TERM * len(trusted_terms):
-        raise ValueError("ProductFormula.build_step() returned too many rotations")
-
-    rotations: list[tuple[dict[str, Any], float]] = []
-    for index, item in enumerate(raw_rotations):
-        if not isinstance(item, (list, tuple)) or len(item) != 2:
-            raise ValueError(f"rotation {index} must be a (term, angle) pair")
-        raw_term, raw_angle = item
-        if isinstance(raw_term, Mapping):
-            label = str(raw_term.get("label", ""))
-        else:
-            label = str(raw_term)
-        if label not in trusted_terms:
-            raise ValueError(f"rotation {index} references unknown Pauli term {label!r}")
-        angle = float(raw_angle)
-        if not math.isfinite(angle):
-            raise ValueError(f"rotation {index} has a non-finite angle")
-        rotations.append((dict(trusted_terms[label]), angle))
-
+    recipe.update({"basis_change": frame, "repetitions": n_steps, "step_time": step_time,
+                   "policy_sha256": (_sha256(Path(policy.__file__)) if getattr(policy, "__file__", None) else None),
+                   "problem_sha256": (_sha256(Path(problem["_path"])) if problem.get("_path") else None)})
+    if decomposition:
+        recipe["fermionic_decomposition_sha256"] = decomposition["sha256"]
     classification = _classify_rotation_schedule(
-        list(problem["terms"]),
+        terms,
         rotations,
         step_time=step_time,
     )
+    classification = elote.classify_groups(recipe, terms, step_time) or classification
+    recipe["formula_name"] = classification["formula_name"]
+    recipe["formula_order"] = classification["formula_order"]
     schedule_payload = [
         {"label": str(term["label"]), "angle": float(angle)} for term, angle in rotations
     ]
@@ -981,6 +991,7 @@ def _product_formula_schedule(
         product_formula,
         rotations,
         {
+            "elote": recipe,
             "policy": {
                 "class": "ProductFormula",
                 "formula_name": classification["formula_name"],
@@ -1011,6 +1022,7 @@ def _build_compiled_step(
 ) -> tuple[Any, dict[str, Any]]:
     product_formula, rotations, schedule_metrics = _product_formula_schedule(problem, policy)
     n_steps = int(schedule_metrics["n_steps"])
+    frame = schedule_metrics["elote"]["basis_change"]
     rotation_keys, compiled_rotations, synthesis_execution = _compile_rotations(
         rotations, product_formula
     )
@@ -1038,7 +1050,7 @@ def _build_compiled_step(
         from .gpu_rotations import RotationUpdater
         from .gpu_spectrum import phase_enclosure
 
-        if not matrix_free:
+        if not matrix_free and not frame:
             updater = RotationUpdater(optimized=True)
         gpu_metrics["compiled_phase_enclosure"] = phase_enclosure(
             (compiled_rotations[key]["matrix"] for key in rotation_keys), n_steps
@@ -1050,11 +1062,12 @@ def _build_compiled_step(
     for (term, _alpha), (theta, epsilon) in zip(rotations, rotation_keys, strict=True):
         compiled = compiled_rotations[(theta, epsilon)]
         if matrix_free:
-            unitary.add(str(term["label"]), compiled["matrix"])
+            unitary.add(str(term["label"]), compiled["matrix"], frame=frame)
         else:
             unitary, workspace = updater(
                 unitary, workspace, label=str(term["label"]),
                 compiled_rz=compiled["matrix"], xp=xp,
+                **({"frame": frame} if frame else {}),
             )
         applied_rotations += 1
         if applied_rotations % fence_interval == 0:
@@ -1086,9 +1099,21 @@ def _build_compiled_step(
             "uniform_epsilon": (next(iter(epsilon_values)) if len(epsilon_values) == 1 else None),
         }
     )
+    from .clifford import circuit_metrics
+    from .elote import digest
+
+    recipe = schedule_metrics["elote"]
+    recipe["synthesis_tolerances"] = [epsilon for _theta, epsilon in rotation_keys]
+    recipe["resolved_recipe_sha256"] = digest(recipe)
+    logical_circuit = circuit_metrics(
+        rotations, [compiled_rotations[key]["gate_string"] for key in rotation_keys], frame=frame,
+    )
+    if logical_circuit["one_step_t_count"] != t_count:
+        raise RuntimeError("literal gate ledger disagrees with CUDA-Q T count")
     return unitary, {
         **schedule_metrics,
         **gpu_metrics,
+        "logical_circuit": logical_circuit,
         "policy": policy_metrics,
         "skipped_rotation_count": skipped * n_steps,
         "one_step_t_count": t_count,
@@ -1114,33 +1139,47 @@ def _build_exact_product_formula_step(
     *,
     backend_name: str,
     xp: Any,
+    matrix_free: bool = False,
 ) -> tuple[Any, dict[str, Any]]:
     """Construct the same candidate schedule with ideal Pauli rotations."""
 
     _product_formula, rotations, schedule_metrics = _product_formula_schedule(problem, policy)
     dim = 1 << int(problem["n_qubits"])
     fence_interval = _rotation_fence_interval(dim)
-    unitary = xp.eye(dim, dtype=xp.complex128)
-    workspace = xp.empty_like(unitary)
+    frame = schedule_metrics["elote"]["basis_change"]
+    if matrix_free:
+        if backend_name != "cupy-lanczos":
+            raise ValueError("matrix-free ideal PF requires GPU Lanczos")
+        from .gpu_circuit import CompiledCircuit
+        unitary, workspace = CompiledCircuit(dim), None
+    else:
+        unitary = xp.eye(dim, dtype=xp.complex128)
+        workspace = xp.empty_like(unitary)
+    matrices = []
     for index, (term, alpha) in enumerate(rotations, start=1):
         exact_rz = _rz_matrix(float(round(-2.0 * alpha, 15)))
-        unitary, workspace = _apply_compiled_rotation(
-            unitary,
-            workspace,
-            label=str(term["label"]),
-            compiled_rz=exact_rz,
-            xp=xp,
-        )
+        matrices.append(exact_rz)
+        if matrix_free:
+            unitary.add(str(term["label"]), exact_rz, frame=frame)
+        else:
+            unitary, workspace = _apply_compiled_rotation(
+                unitary, workspace, label=str(term["label"]), compiled_rz=exact_rz, xp=xp,
+                frame=frame,
+            )
         if index % fence_interval == 0:
             _fence(backend_name)
     _fence(backend_name)
     del workspace
+    if matrix_free:
+        from .gpu_spectrum import phase_enclosure
+        unitary.finish()
+        schedule_metrics["compiled_phase_enclosure"] = phase_enclosure(matrices, schedule_metrics["n_steps"])
     return unitary, {
         **schedule_metrics,
         "rotation_implementation": "ideal_pauli_rotations",
         "dense_matrix_dimension": dim,
-        "dense_matrix_bytes": dim * dim * np.dtype(np.complex128).itemsize,
-        "rotation_workspace_bytes": dim * dim * np.dtype(np.complex128).itemsize,
+        "dense_matrix_bytes": 0 if matrix_free else dim * dim * np.dtype(np.complex128).itemsize,
+        "rotation_workspace_bytes": dim * np.dtype(np.complex128).itemsize if matrix_free else dim * dim * np.dtype(np.complex128).itemsize,
         "rotation_fence_interval": fence_interval,
     }
 

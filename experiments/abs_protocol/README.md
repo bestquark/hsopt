@@ -1,5 +1,9 @@
 # Shared absolute-energy protocol
 
+For a fresh grouped baseline, see [ELOTE](../../docs/elote.md) and select
+`--policy-profile fermionic_nested` with its newly prepared calibration records.
+The existing `pauli` profile retains the historical initializer.
+
 One short `initial_pf.py` is mutated once per round, then evaluated on **every
 selected Hamiltonian**. The host binds the selected loose/tight calibration's
 `r`, synthesis epsilon, and tuned beta for each molecule; it never recalibrates

@@ -301,6 +301,7 @@ def _empirical_reference_beta(
     xp: Any,
     reference_error_hartree: float,
     max_steps: int,
+    step_evaluator=None,
 ) -> dict[str, Any]:
     """Find the first passing integer on the observed monotone PF2 branch."""
 
@@ -319,7 +320,7 @@ def _empirical_reference_beta(
 
     def evaluate(n_steps: int) -> dict[str, Any]:
         if n_steps not in evaluations:
-            evaluations[n_steps] = _exact_pf_energy(
+            evaluations[n_steps] = (step_evaluator or _exact_pf_energy)(
                 problem,
                 exact_energy=exact_energy,
                 exact_target=exact_target,
@@ -415,6 +416,7 @@ def _double_commutator_bound(
     problem: Mapping[str, Any],
     *,
     reference_error_hartree: float,
+    ordered_terms=None,
 ) -> dict[str, Any]:
     """Compute the supplement's Eq. (19) bound exactly for Pauli terms.
 
@@ -425,7 +427,9 @@ def _double_commutator_bound(
     than materializing ``M**3`` triples or estimating them by Monte Carlo.
     """
 
-    terms = sorted(problem["terms"], key=lambda term: str(term["label"]))
+    terms = ordered_terms if ordered_terms is not None else sorted(
+        problem["terms"], key=lambda term: str(term["label"])
+    )
     coefficients = np.asarray(
         [abs(float(term["coefficient"])) for term in terms],
         dtype=np.float64,
@@ -572,6 +576,7 @@ def optimize_paper_error_allocation(
     beta: float,
     reference_error_hartree: float,
     total_error_hartree: float,
+    rotations_per_step: int | None = None,
 ) -> tuple[dict[str, Any], dict[str, Any]]:
     """Derive the paper's rigorous Eq. (34) policy without compiling it."""
 
@@ -594,7 +599,9 @@ def optimize_paper_error_allocation(
         math.ceil(target_time * float(beta) * math.sqrt(reference_error_hartree / epsilon_ts)),
     )
     step_time = target_time / n_steps
-    rotations_per_step = 2 * terms - 1
+    rotations_per_step = (2 * terms - 1) if rotations_per_step is None else rotations_per_step
+    if rotations_per_step < 1:
+        raise ValueError("positive rotation count required")
     uniform_epsilon = epsilon_rot * step_time / rotations_per_step
     qpe_full_evolution_queries = max(
         1,

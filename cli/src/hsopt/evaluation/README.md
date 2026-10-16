@@ -1,5 +1,11 @@
 # Evaluation methods
 
+The [ELOTE policy interface](../../../../docs/elote.md) exposes
+commuting groups, splitting stages, repetitions, rotation angles, mixed synthesis
+precision and optional exact Clifford basis changes. Resolved recipes and logical
+Clifford cancellation/T-depth diagnostics are stored alongside the fixed score.
+Depth is separate from total T95; grouping alone does not discount gate count.
+
 - **`exact` (default):** synthesize rotations, measure compiled-unitary energy error,
   and count the T gates needed for QPE. This is the production acceptance score.
 - **`bch`:** estimate leading Trotter energy bias with sparse commutators and a

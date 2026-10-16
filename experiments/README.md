@@ -21,6 +21,12 @@ Two separate experiments optimize one shared protocol per trajectory:
 Both use calibrated baseline parameters, explicit mixed-precision mutation prompts,
 and geometric-mean baseline-relative T95 with case-wise accuracy constraints.
 
+`initial_nested_pf.py` supplies a common orbital-disjoint grouped starting
+protocol for both shared families. Select it with `--policy-profile fermionic_nested`
+after preparing new matching calibrations. [ELOTE](../docs/elote.md) documents
+its editable grouping, splitting, basis and synthesis rules, replayable recipes,
+and the boundary of the Reiher-style baseline reproduction.
+
 `generate_initial_pf.py` exposes the compact `ProductFormula`, returns an object
 via `product_formula(problem, parameters)`, and generates both iteration-0 policies.
 Calibration math and provenance live in `cli/src/hsopt/campaign/calibration.py`.

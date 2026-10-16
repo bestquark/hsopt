@@ -252,6 +252,13 @@ emits the loose/tight starting policies. Calibration and provenance are in
 `cli/src/hsopt/campaign/calibration.py`. Mutations edit the short emitted class:
 repetitions, rotation schedule/angles, and per-rotation synthesis tolerance.
 
+The learned protocol is **ELOTE — Error-Limited Optimized Trotter Evolution**;
+HSOpt is the search framework. Its [explicit ingredients](docs/elote.md) include
+Hamiltonian groups, splitting stages, repetitions, angles, mixed synthesis
+precision and optional Clifford basis changes. A separately calibrated
+`fermionic_nested` initializer implements orbital-disjoint nesting and symmetric
+splitting for new shared-protocol experiments.
+
 ## Installation
 
 HSOpt requires Python 3.12 or newer and uses

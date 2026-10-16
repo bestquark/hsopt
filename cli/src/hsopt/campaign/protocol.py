@@ -141,10 +141,15 @@ def prepare(
     replicate: str,
     error_contract: str | None = None,
     energy_target: str = "hf_accessible",
+    policy_profile: str = "pauli",
 ) -> dict[str, Any]:
     """Reuse beta calibrations and cached references; never recalibrate/diagonalize."""
     if family not in FAMILIES or baseline not in calibration.BASELINE_VARIANTS or iterations < 1:
         raise ValueError("invalid family, baseline or mutation budget")
+    if policy_profile not in ("pauli", "fermionic_nested"):
+        raise ValueError("policy profile must be pauli or fermionic_nested")
+    from . import elote
+    baseline_loader = elote.load_baselines if policy_profile == "fermionic_nested" else calibration.load_baselines
     kind = FAMILIES[family]
     if energy_target not in {"hf_accessible", "ground_branch"} or (
         kind != "absolute" and energy_target != "hf_accessible"
@@ -171,7 +176,7 @@ def prepare(
         base = selection.resolve().parent
         source, reference = (base / row["source"]).resolve(), (base / row["reference"]).resolve()
         _validate_reference(kind, source, reference, energy_target)
-        parameters, _ = calibration.load_baselines(
+        parameters, _ = baseline_loader(
             source,
             baseline=baseline,
             calibration_path=(base / row["calibration"]).resolve()
@@ -196,6 +201,7 @@ def prepare(
     suite = {
         "schema": SCHEMA,
         "family": family,
+        "policy_profile": policy_profile,
         "kind": kind,
         "baseline": baseline,
         "objective": OBJECTIVE,
@@ -213,6 +219,7 @@ def prepare(
         {
             "schema": SCHEMA,
             "family": family,
+            "policy_profile": policy_profile,
             "replicate": replicate,
             "iterations_target": iterations,
             "baseline": baseline,
@@ -227,7 +234,8 @@ def prepare(
             "protocol_evaluator_sha256": sha(Path(__file__)),
         },
     )
-    shutil.copyfile(ROOT / "experiments" / family / "initial_pf.py", run / "initial_pf.py")
+    template = elote.TEMPLATE if policy_profile == "fermionic_nested" else ROOT / "experiments" / family / "initial_pf.py"
+    shutil.copyfile(template, run / "initial_pf.py")
     (run / "initial_pf.py").chmod(0o444)
     shutil.copyfile(run / "initial_pf.py", run / "incumbent.py")
     write(
@@ -610,6 +618,7 @@ def main(*, family: str, worker: bool = False) -> int:
         prepare_parser.add_argument(
             "--baseline", required=True, choices=calibration.BASELINE_VARIANTS
         )
+        prepare_parser.add_argument("--policy-profile", choices=("pauli", "fermionic_nested"), default="pauli")
         prepare_parser.add_argument("--iterations", required=True, type=int)
         prepare_parser.add_argument("--replicate", required=True)
         if family == "abs_protocol":
@@ -638,6 +647,7 @@ def main(*, family: str, worker: bool = False) -> int:
                 replicate=args.replicate,
                 error_contract=getattr(args, "error_contract", None),
                 energy_target=getattr(args, "energy_target", "hf_accessible"),
+                policy_profile=args.policy_profile,
             )
         else:
             if read(args.run_dir / "manifest.json")["family"] != family:

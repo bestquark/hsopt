@@ -61,8 +61,8 @@ pairs for one stationary step. `angle` is the real alpha in
 trusted Hamiltonian and repeats the exact returned schedule. The method may
 define PF1, PF2/Strang, a higher-order composition, grouping, reordered terms,
 or another stationary recurrence; no declared `formula_order` is required.
-It is called **once** per species: encode all stages in the schedule, with at most
-16 times the Hamiltonian term count; an internal counter cannot alternate steps.
+Called **once** per species; at most 16 times the term count. For explicit groups,
+splitting stages, Clifford frames and the learned **ELOTE** protocol, see `docs/elote.md`.
 
 Angles may vary by label, coefficient, support, or species, including negative
 substeps and corrections. The judge compiles `Rz(-2 * angle)` and scores energy;

@@ -18,6 +18,7 @@ dependencies = [
 hsopt = "hsopt.campaign.loop:main"
 hsopt-data = "hsopt.data.acquire:main"
 hsopt-evaluate = "hsopt.evaluation.experiment:main"
+hsopt-elote = "hsopt.campaign.elote:main"
 hsopt-handoff = "hsopt.campaign.interface:main"
 hsopt-baseline-drop = "hsopt.view.baseline_drop:main"
 hsopt-exact-parity = "hsopt.campaign.parity:main"
