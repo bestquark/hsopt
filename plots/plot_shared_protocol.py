@@ -10,7 +10,7 @@ from pathlib import Path
 
 import numpy as np
 
-STYLE_VERSION = "relative-t95-energy-rejected-means-five-seeds-latex-v6"
+STYLE_VERSION = "relative-t95-energy-rejected-means-five-seeds-train-coverage-latex-v7"
 TRIAL_SEMANTICS = (
     "Rejected scatter shows one mean per iteration: available molecule values are averaged "
     "within each rejected seed, then observed seed means receive equal weight. Hollow markers "
@@ -30,14 +30,15 @@ def proposal_trials(snapshot: dict, case_ids: list[str], threshold_mha: float) -
     for seed in snapshot["seeds"]:
         trajectory = seed["trajectory"]
         order = {row["case_id"]: index for index, row in enumerate(trajectory["molecules"])}
-        indices = [order[name] for name in case_ids]
+        selected_ids = [name for name in case_ids if name in order]
+        indices = [order[name] for name in selected_ids]
         seen = set()
         for row in trajectory.get("trials", []):
             iteration = row["iteration"]
             if not isinstance(iteration, int) or not 1 <= iteration <= trajectory["iterations"][-1] or iteration in seen:
                 raise ValueError("A proposal trial is outside its completed seed rounds or repeated")
             seen.add(iteration)
-            if any(len(row[key]) != len(case_ids) for key in (
+            if any(len(row[key]) != len(order) for key in (
                     "relative_t95", "energy_error_hartree", "case_passes_accuracy")):
                 raise ValueError("A proposal trial has an incomplete molecule cohort")
             ratios = [row["relative_t95"][i] for i in indices]
@@ -57,7 +58,7 @@ def proposal_trials(snapshot: dict, case_ids: list[str], threshold_mha: float) -
                            "accepted": bool(row["accepted"]), "reason": row.get("reason"),
                            "candidate_sha256": row.get("candidate_sha256"),
                            "relative_t95": ratios, "energy_error_mha": errors,
-                           "case_passes_accuracy": passes})
+                           "case_passes_accuracy": passes, "case_ids": selected_ids})
             counts["proposals"] += 1
             if not row["accepted"]:
                 counts["rejected_proposals"] += 1
@@ -122,8 +123,10 @@ def aggregate(snapshot: dict) -> dict:
     if any(s.get("trajectory", {}).get("status") != "ready" for s in seeds):
         raise ValueError("Every seed needs a verified accepted-policy trajectory")
     count = int(snapshot["case_count"])
-    case_ids = [r["case_id"] for r in seeds[0]["trajectory"]["molecules"]]
-    if len(case_ids) != count or len(set(case_ids)) != count:
+    varying = snapshot.get("generalization", {}).get("training_ids_by_seed")
+    first_ids = [r["case_id"] for r in seeds[0]["trajectory"]["molecules"]]
+    case_ids = sorted({r["case_id"] for seed in seeds for r in seed["trajectory"]["molecules"]}) if varying else first_ids
+    if len(first_ids) != count or len(set(first_ids)) != count:
         raise ValueError("The molecule cohort is incomplete")
     common = min(s["trajectory"]["iterations"][-1] for s in seeds)
     grid = list(range(common + 1))
@@ -133,53 +136,65 @@ def aggregate(snapshot: dict) -> dict:
         if t["iterations"][:common + 1] != grid:
             raise ValueError("The seed iteration grids differ")
         rows = {r["case_id"]: r["drop_percent"] for r in t["molecules"]}
-        if len(t["molecules"]) != count or set(rows) != set(case_ids):
-            raise ValueError("All seeds must cover the same molecules")
-        if any(len(rows[name]) != len(t["iterations"]) for name in case_ids):
+        expected = set(varying[seed["seed"]]) if varying else set(case_ids)
+        if len(t["molecules"]) != count or len(rows) != count or set(rows) != expected:
+            raise ValueError("All seeds must cover the same molecules, or their explicitly sealed training sets")
+        if any(len(rows[name]) != len(t["iterations"]) for name in rows):
             raise ValueError("A molecule trajectory is incomplete")
         values.append([[1 - drop / 100 for drop in rows[name][:common + 1]]
-                       for name in case_ids])
+                       if name in rows else [np.nan] * (common + 1) for name in case_ids])
         errors = {r["case_id"]: r["energy_error_hartree"] for r in t["molecules"]}
-        if any(len(errors[name]) != len(t["iterations"]) for name in case_ids):
+        if any(len(errors[name]) != len(t["iterations"]) for name in errors):
             raise ValueError("A molecule energy-error trajectory is incomplete")
         energy_values.append([[1000 * abs(error) for error in errors[name][:common + 1]]
-                              for name in case_ids])
+                              if name in errors else [np.nan] * (common + 1) for name in case_ids])
         budgets = {r["case_id"]: r["baseline_simulation_budget_hartree"] for r in t["molecules"]}
-        baseline_budgets.append([1000 * float(budgets[name]) for name in case_ids])
+        baseline_budgets.append([1000 * float(budgets[name]) if name in budgets else np.nan for name in case_ids])
         thresholds.append(float(t["chemical_accuracy_hartree"]) * 1000)
     matrix = np.asarray(values, dtype=float)  # seed, molecule, iteration
-    if not np.isfinite(matrix).all() or np.any(matrix <= 0):
+    observed = np.asarray([[[name in {r["case_id"] for r in seed["trajectory"]["molecules"]}]
+                            * (common+1) for name in case_ids] for seed in seeds], dtype=bool)
+    if not np.isfinite(matrix[observed]).all() or np.any(matrix[observed] <= 0):
         raise ValueError("Invalid relative T95 values")
-    if not np.allclose(matrix[:, :, 0], 1, rtol=0, atol=1e-12):
+    if not np.allclose(matrix[:, :, 0][observed[:, :, 0]], 1, rtol=0, atol=1e-12):
         raise ValueError("Every iteration-zero reference must equal one")
-    seed_means = matrix.mean(axis=1)
+    seed_means = np.nanmean(matrix, axis=1)
     energy_matrix = np.asarray(energy_values, dtype=float)
-    if not np.isfinite(energy_matrix).all():
+    if not np.array_equal(np.isnan(energy_matrix), ~observed) or not np.isfinite(energy_matrix[observed]).all():
         raise ValueError("Invalid energy-error values")
     if not np.isfinite(thresholds).all() or thresholds[0] <= 0 or not np.allclose(
             thresholds, thresholds[0], rtol=0, atol=1e-9):
         raise ValueError("All seeds need the same chemical-accuracy threshold")
-    seed_energy_means = energy_matrix.mean(axis=1)
+    seed_energy_means = np.nanmean(energy_matrix, axis=1)
     budget_matrix = np.asarray(baseline_budgets, dtype=float)
-    if not np.isfinite(budget_matrix).all() or np.any(budget_matrix <= 0) or np.any(
-            budget_matrix >= thresholds[0]):
+    measured_budgets = budget_matrix[~np.isnan(budget_matrix)]
+    if not np.isfinite(measured_budgets).all() or np.any(measured_budgets <= 0) or np.any(
+            measured_budgets >= thresholds[0]):
         raise ValueError("Invalid baseline simulation budget")
-    if not np.allclose(budget_matrix, budget_matrix[0], rtol=0, atol=1e-9):
+    budgets = np.nanmean(budget_matrix, axis=0)
+    if np.nanmax(np.abs(budget_matrix - budgets)) > 1e-9:
         raise ValueError("All seeds need the same per-molecule calibration budgets")
-    budgets = budget_matrix[0]
+    coverage = observed[:, :, 0].sum(axis=0)
+    def molecule_sd(values):
+        means = np.nanmean(values, axis=0)
+        variance = np.nansum((values-means)**2, axis=0)
+        sd = np.sqrt(variance / np.maximum(coverage[:, None]-1, 1))
+        return [[float(v) if coverage[i] > 1 else None for v in row] for i, row in enumerate(sd)]
     trials, trial_summary = proposal_trials(snapshot, case_ids, thresholds[0])
     result = {
         "schema": "hsopt-shared-figure-statistics-v1",
         "style_version": STYLE_VERSION, "common_round": common,
         "iterations": grid, "seed_ids": [s["seed"] for s in seeds], "case_ids": case_ids,
+        "molecule_seed_coverage": coverage.tolist(),
+        "training_cases_per_seed": count,
         "seed_completed_rounds": [s["trajectory"]["iterations"][-1] for s in seeds],
-        "molecule_mean_relative_t95": matrix.mean(axis=0).tolist(),
-        "molecule_std_relative_t95": matrix.std(axis=0, ddof=1).tolist(),
+        "molecule_mean_relative_t95": np.nanmean(matrix, axis=0).tolist(),
+        "molecule_std_relative_t95": molecule_sd(matrix),
         "seed_mean_relative_t95": seed_means.tolist(),
         "mean_relative_t95": seed_means.mean(axis=0).tolist(),
         "std_relative_t95": seed_means.std(axis=0, ddof=1).tolist(),
-        "molecule_mean_energy_error_mha": energy_matrix.mean(axis=0).tolist(),
-        "molecule_std_energy_error_mha": energy_matrix.std(axis=0, ddof=1).tolist(),
+        "molecule_mean_energy_error_mha": np.nanmean(energy_matrix, axis=0).tolist(),
+        "molecule_std_energy_error_mha": molecule_sd(energy_matrix),
         "seed_mean_energy_error_mha": seed_energy_means.tolist(),
         "mean_energy_error_mha": seed_energy_means.mean(axis=0).tolist(),
         "std_energy_error_mha": seed_energy_means.std(axis=0, ddof=1).tolist(),
@@ -187,13 +202,13 @@ def aggregate(snapshot: dict) -> dict:
         "proposal_trials": trials, "trial_summary": trial_summary,
         "trial_last_round": max([common, *(row["iteration"] for row in trials)]),
         "molecule_baseline_simulation_budget_mha": budgets.tolist(),
-        "mean_baseline_simulation_budget_mha": float(budgets.mean()),
+        "mean_baseline_simulation_budget_mha": float(np.nanmean(budget_matrix, axis=1).mean()),
         "min_baseline_simulation_budget_mha": float(budgets.min()),
         "max_baseline_simulation_budget_mha": float(budgets.max()),
         "energy_budget_semantics": "Fixed baseline calibration: chemical accuracy minus its QPE precision allocation. Reference only; current T95 adapts QPE precision to measured simulation error. The horizontal line is the molecule mean; the band is the molecule range, not seed uncertainty.",
         "energy_semantics": "Absolute molecular energy error before averaging; accepted shared policies including iteration zero.",
-        "uncertainty": "Sample standard deviation across five independent seed means (ddof=1); not a confidence interval.",
-        "semantics": "Accepted shared incumbents; matched rounds only; no extrapolation of incomplete seeds.",
+        "uncertainty": "Sample standard deviation across five independent seed means (ddof=1); not a confidence interval. Per-molecule means use observed training seeds only; SD is null for single-seed coverage.",
+        "semantics": "Accepted shared incumbents; matched rounds only; no extrapolation of incomplete seeds. Held-out test values are never pooled into training curves.",
     }
     return current_plot_statistics(result)
 
@@ -268,7 +283,7 @@ def plot(summary: dict, output: Path) -> None:
     output.mkdir(parents=True, exist_ok=True)
     x = np.asarray(summary["iterations"])
     molecule = np.asarray(summary["molecule_mean_relative_t95"])
-    molecule_std = np.asarray(summary["molecule_std_relative_t95"])
+    molecule_std = np.asarray(summary["molecule_std_relative_t95"], dtype=float)
     mean, std = np.asarray(summary["mean_relative_t95"]), np.asarray(summary["std_relative_t95"])
     fig, ax, context = trajectory_axes(plt, summary, "relative_t95")
     for index, values in enumerate(molecule):
@@ -297,7 +312,8 @@ def plot(summary: dict, output: Path) -> None:
                 ecolor="0.25", elinewidth=.65, capsize=1.2,
                 label=r"mean $\pm 1\sigma$ (seeds)")
     ax.axhline(1, color="0.35", linestyle="--", linewidth=1)
-    lower, upper = molecule[:, -1]-molecule_std[:, -1], molecule[:, -1]+molecule_std[:, -1]
+    display_std = np.nan_to_num(molecule_std[:, -1], nan=0.0)
+    lower, upper = molecule[:, -1]-display_std, molecule[:, -1]+display_std
     span = max(.03, max(1, float(upper.max()))-min(1, float(lower.min())))
     ax.set_ylim(min(1, float(lower.min()))-.12*span, max(1, float(upper.max()))+.12*span)
     ax.set_xlim(.3, len(molecule)+.7)

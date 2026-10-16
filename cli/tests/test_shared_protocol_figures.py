@@ -167,3 +167,22 @@ def test_older_exports_get_current_mean_data_and_a_new_figure_key_without_score_
     assert refreshed["mean_relative_t95"] == old["mean_relative_t95"]
     assert refreshed["proposal_trials"] == old["proposal_trials"]
     assert module.current_plot_statistics(refreshed)["figure_key"] == refreshed["figure_key"]
+
+
+def test_explicit_per_seed_training_sets_use_observed_coverage_without_zero_filling():
+    data = snapshot()
+    data['seeds'][1]['trajectory']['molecules'][0]['case_id'] = 'held_in_seed_1'
+    data['generalization'] = {'training_ids_by_seed': {
+        seed['seed']: [r['case_id'] for r in seed['trajectory']['molecules']]
+        for seed in data['seeds']}}
+    result = module.aggregate(data)
+    assert result['case_ids'] == ['a', 'b', 'held_in_seed_1']
+    assert result['molecule_seed_coverage'] == [4, 5, 1]
+    assert result['molecule_mean_relative_t95'][2] == pytest.approx([1, .95])
+    assert result['molecule_std_relative_t95'][2] == [None, None]
+    assert result['mean_relative_t95'] == pytest.approx([1, .85])
+    assert result['mean_energy_error_mha'] == pytest.approx([.2, .3])
+    assert result['molecule_mean_relative_t95'][0][1] == pytest.approx(np.mean([1, .9, .85, .8]))
+    data['generalization']['training_ids_by_seed']['seed-1'] = ['a', 'b']
+    with pytest.raises(ValueError, match='sealed training sets'):
+        module.aggregate(data)

@@ -65,6 +65,7 @@ QPE_TARGET_CONFIDENCE = 0.95
 # energy-error bound. Resolved small weights pay their full repetition cost.
 QPE_PEAK_WEIGHT_THRESHOLD = 1.0e-10
 DENSE_EVALUATOR_MAX_QUBITS = 15
+MATRIX_FREE_MAX_QUBITS = 16
 ROTATION_CHUNK_TARGET_BYTES = 1024**3
 DEFERRED_ROTATION_TARGET_BYTES = 8 * 1024**3
 MAX_ROTATIONS_BETWEEN_FENCES = 32
@@ -299,10 +300,10 @@ def load_problem(path: Path) -> dict[str, Any]:
     electrons = int(problem["electrons"])
     if n_qubits <= 0 or not 0 <= electrons <= n_qubits:
         raise ValueError(f"invalid problem dimensions in {path}")
-    if n_qubits > DENSE_EVALUATOR_MAX_QUBITS:
+    if n_qubits > MATRIX_FREE_MAX_QUBITS:
         raise ValueError(
-            f"{path.name} has {n_qubits} qubits; this exact dense evaluator is intentionally "
-            f"limited to {DENSE_EVALUATOR_MAX_QUBITS} qubits"
+            f"{path.name} has {n_qubits} qubits; validated problem loading is "
+            f"limited to {MATRIX_FREE_MAX_QUBITS} qubits"
         )
     identity_coefficient = float(problem["identity_coefficient"])
     if not math.isfinite(identity_coefficient):
@@ -1020,6 +1021,8 @@ def _build_compiled_step(
     xp: Any,
     matrix_free: bool = False,
 ) -> tuple[Any, dict[str, Any]]:
+    if not matrix_free and int(problem["n_qubits"]) > DENSE_EVALUATOR_MAX_QUBITS:
+        raise ValueError("16-qubit circuits require the matrix-free GPU Lanczos path")
     product_formula, rotations, schedule_metrics = _product_formula_schedule(problem, policy)
     n_steps = int(schedule_metrics["n_steps"])
     frame = schedule_metrics["elote"]["basis_change"]
@@ -1142,6 +1145,9 @@ def _build_exact_product_formula_step(
     matrix_free: bool = False,
 ) -> tuple[Any, dict[str, Any]]:
     """Construct the same candidate schedule with ideal Pauli rotations."""
+
+    if not matrix_free and int(problem["n_qubits"]) > DENSE_EVALUATOR_MAX_QUBITS:
+        raise ValueError("16-qubit circuits require the matrix-free GPU Lanczos path")
 
     _product_formula, rotations, schedule_metrics = _product_formula_schedule(problem, policy)
     dim = 1 << int(problem["n_qubits"])
@@ -1453,6 +1459,8 @@ def evaluate_exact_reference(
     evaluation_started = time.perf_counter()
     problem = load_problem(problem_path)
     backend_name, xp = array_backend(backend)
+    if problem["n_qubits"] > DENSE_EVALUATOR_MAX_QUBITS and backend_name != "cupy-lanczos":
+        raise ValueError("16-qubit references require GPU Lanczos; no dense unitary")
 
     sector_started = time.perf_counter()
     indices_host, sector_host = _fixed_electron_hamiltonian(problem)

@@ -80,3 +80,50 @@ middle and large raw examples. All Hamiltonians remain available for inspection;
 every candidate is still evaluated on every case. Failed reads and conclusively
 blocked writes are audited and recoverable. Successful edits of protected files
 and uncertain writes remain invalid.
+
+## Train/test generalization
+
+The checked-in `inputs/instances100.csv` fixes the 91 historical instances plus
+all eight standard 16-qubit JW instances and H₈ linear at R=1.0. Archive hashes
+are pinned in the shared HamLib checksum manifest. Materialize their physical
+Hamiltonians with the same parser and norm-based encoding:
+
+```bash
+uv run python experiments/abs_protocol/prepare_inputs.py \
+  --download --archive-root /work/data/hamlib --output /work/data/hamlib100
+```
+
+Prepare cached ground references and the selected grouped baseline externally
+before making the selection JSON; no test results select the dataset membership.
+
+`generalize.py split` creates immutable, disjoint random selections. For a fixed
+100-instance selection, use 80 training and 20 test instances and a different
+recorded split seed per replicate:
+
+```bash
+uv run python experiments/abs_protocol/generalize.py split \
+  --selection /work/data/selection100.json --output /work/data/splits/seed-01 \
+  --seed 1 --train-size 80 --test-size 20
+```
+
+The scientific APIs in `hsopt.campaign.generalization` prepare a training run
+from `train.json` alone. Its geometric-mean T95 objective and per-case accuracy
+constraints use those 80 cases. Test Hamiltonians, references, baselines and
+results stay outside the mutation sandbox and feedback. Splits are fixed for
+all iterations, not resampled each round. Inputs and memberships are checksummed.
+
+After all training rounds finish, `prepare_test` freezes that seed's final
+training incumbent. `advance_test` emits ordinary portable GPU requests for the
+20 test baselines and that frozen policy, without an agent or policy selection.
+Its `generalization_report.json` reports the frozen policy even if test accuracy
+fails or its T95 increases. It never substitutes the test baseline, tunes a
+parameter from test performance, or feeds results back into training. Runtime
+code dispatches these requests and triggers the final test automatically.
+
+Five seeds × 100 rounds × 80 training cases require 40,000 mutation evaluations,
+plus 400 training baselines, 100 test baselines and 100 final test evaluations.
+These are random **Hamiltonian-instance** splits: related geometries/active
+spaces may occur on both sides, so this does not claim unseen-species
+extrapolation. Each case still receives its own host-calibrated starting
+parameters; this measures transfer of the learned protocol relative to those
+baselines, rather than eliminating baseline calibration on unseen cases.

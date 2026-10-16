@@ -15,6 +15,7 @@ import pytest
 
 from hsopt.evaluation.compiled_unitary import (
     DENSE_EVALUATOR_MAX_QUBITS,
+    MATRIX_FREE_MAX_QUBITS,
     DIFFERENCE_ERROR_CONTRACT_CANCELLATION,
     DIFFERENCE_ERROR_CONTRACT_INDIVIDUAL,
     EVALUATION_CONTRACT_VERSION,
@@ -915,10 +916,11 @@ def test_compiled_rotation_workspace_matches_dense_left_multiplication(
     ("n_qubits", "accepted"),
     [
         (DENSE_EVALUATOR_MAX_QUBITS, True),
-        (DENSE_EVALUATOR_MAX_QUBITS + 1, False),
+        (MATRIX_FREE_MAX_QUBITS, True),
+        (MATRIX_FREE_MAX_QUBITS + 1, False),
     ],
 )
-def test_dense_evaluator_qubit_limit(
+def test_problem_loading_limit_is_separate_from_dense_allocation_limit(
     tmp_path: Path,
     n_qubits: int,
     accepted: bool,
@@ -941,8 +943,14 @@ def test_dense_evaluator_qubit_limit(
 
     if accepted:
         assert load_problem(problem_path)["n_qubits"] == n_qubits
+        if n_qubits > DENSE_EVALUATOR_MAX_QUBITS:
+            for builder in (_build_compiled_step, _build_exact_product_formula_step):
+                with pytest.raises(ValueError, match="matrix-free GPU Lanczos"):
+                    builder(load_problem(problem_path), object(), backend_name="numpy", xp=object())
+            with pytest.raises(ValueError, match="no dense unitary"):
+                evaluate_exact_reference(problem_path, backend="numpy")
     else:
-        with pytest.raises(ValueError, match=f"limited to {DENSE_EVALUATOR_MAX_QUBITS}"):
+        with pytest.raises(ValueError, match=f"limited to {MATRIX_FREE_MAX_QUBITS}"):
             load_problem(problem_path)
 
 
