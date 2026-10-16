@@ -21,7 +21,19 @@ COMPILER_CACHE_MAXSIZE = 65536
 
 
 def streamed_cudaq_pair(
-    text, n_qubits, center_label, baseline, policy, target_time, workers=2, chunk_size=2048
+    text,
+    n_qubits,
+    center_label,
+    baseline,
+    policy,
+    target_time,
+    workers=2,
+    chunk_size=2048,
+    *,
+    term_stride=1,
+    term_offset=0,
+    term_start=0,
+    term_stop=None,
 ):
     """Count actual synthesized gates with bounded chunks and an LRU cache.
 
@@ -29,11 +41,29 @@ def streamed_cudaq_pair(
     The bounded cache may evict old keys, so ``unique_compilation_count`` counts
     cache misses (including recompilation after eviction), not globally unique
     rotations. No cache proportional to the complete Hamiltonian is created.
+
+    A nondefault ``term_stride`` selects global nonidentity-term indices modulo
+    that stride. The caller must keep the FULL Hamiltonian's normalization,
+    allocation, policy instances and center label fixed, then sum every offset
+    exactly once. Partial results explicitly identify their incomplete scope.
+    A contiguous ``[term_start, term_stop)`` range is also supported, separately
+    from modulo selection, so adjacent equal compiler keys stay together.
     """
     started = time.perf_counter()
     for value, name in ((n_qubits, "n_qubits"), (workers, "workers"), (chunk_size, "chunk_size")):
         if type(value) is not int or value < 1:
             raise ValueError(f"{name} must be a positive integer")
+    if type(term_stride) is not int or term_stride < 1:
+        raise ValueError("term_stride must be a positive integer")
+    if type(term_offset) is not int or not 0 <= term_offset < term_stride:
+        raise ValueError("require 0 <= term_offset < term_stride")
+    if type(term_start) is not int or term_start < 0:
+        raise ValueError("term_start must be a nonnegative integer")
+    if term_stop is not None and (type(term_stop) is not int or term_stop <= term_start):
+        raise ValueError("term_stop must be an integer greater than term_start")
+    ranged = term_start != 0 or term_stop is not None
+    if ranged and term_stride != 1:
+        raise ValueError("choose contiguous ranges or modulo partitions, not both")
     target_time = float(target_time)
     if not math.isfinite(target_time) or target_time <= 0:
         raise ValueError("target_time must be finite and positive")
@@ -59,6 +89,7 @@ def streamed_cudaq_pair(
     minima, maxima = [1.0, 1.0], [0.0, 0.0]
     pending = []
     terms_seen = center_occurrences = 0
+    selected_terms = selected_center_occurrences = 0
     max_label = None
     synthesis_seconds = 0.0
     compilation_count = 0
@@ -99,6 +130,14 @@ def streamed_cudaq_pair(
             max_label = label if max_label is None or label > max_label else max_label
             multiplicity = 1 if label == center_label else 2
             center_occurrences += label == center_label
+            if (terms_seen - 1) % term_stride != term_offset:
+                continue
+            if terms_seen - 1 < term_start or (
+                term_stop is not None and terms_seen - 1 >= term_stop
+            ):
+                continue
+            selected_terms += 1
+            selected_center_occurrences += label == center_label
             for index, (formula, step_time) in enumerate(zip(formulas, step_times, strict=True)):
                 # Match canonical build_step's floating-point operation order:
                 # (.5 * coefficient) * (t/r), not (coefficient * t / r) / 2.
@@ -118,11 +157,15 @@ def streamed_cudaq_pair(
                 minima[index] = min(minima[index], epsilon)
                 maxima[index] = max(maxima[index], epsilon)
                 pending.append((index, multiplicity, key))
-            if terms_seen % chunk_size == 0:
+            if selected_terms % chunk_size == 0:
                 flush(pool)
         flush(pool)
         if not terms_seen or center_occurrences != 1 or max_label != center_label:
             raise ValueError("center_label must occur once and be the lexicographic maximum")
+        if not selected_terms:
+            raise ValueError("term partition contains no nonidentity terms")
+        if term_stop is not None and term_stop > terms_seen:
+            raise ValueError("term_stop exceeds the global nonidentity term count")
         result = {
             "baseline_t_count": totals[0] * repetitions[0],
             "policy_t_count": totals[1] * repetitions[1],
@@ -150,6 +193,25 @@ def streamed_cudaq_pair(
             "synthesis_options": dict(ev.SYNTHESIS_OPTIONS),
             "wall_seconds": time.perf_counter() - started,
         }
+        if term_stride != 1 or ranged:
+            result.update(
+                partial_count=True,
+                count_scope="partition_of_one_complete_evolution_excluding_QPE_and_state_preparation",
+                selected_terms=selected_terms,
+                selected_center_occurrences=selected_center_occurrences,
+                selected_rotations_per_step=2 * selected_terms - selected_center_occurrences,
+                term_partition={
+                    "scheme": "global_nonidentity_index_mod_stride",
+                    "stride": term_stride,
+                    "offset": term_offset,
+                }
+                if not ranged
+                else {
+                    "scheme": "global_nonidentity_index_range",
+                    "start": term_start,
+                    "stop": term_stop if term_stop is not None else terms_seen,
+                },
+            )
         return result
     finally:
         if pool is not None:

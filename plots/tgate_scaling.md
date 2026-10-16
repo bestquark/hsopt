@@ -112,6 +112,12 @@ Merge checks every selected instance ID and refuses an incomplete census.
 Source code contains no site account, host or queue settings; deployment stays
 in the external runtime.
 
+For a very large canonical Pauli PF2 case, the streaming helper can count
+disjoint global term ranges or index partitions in parallel. Every part must
+use the full Hamiltonian's normalization, center rotation, allocation and frozen
+policy state. Only a complete, nonoverlapping partition may be summed into a
+full count; partial outputs explicitly identify their limited scope.
+
 ## Reusing the analysis for grouped ELOTE
 
 Pass the new frozen policy, its grouped baseline policy, and its own grouped

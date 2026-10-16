@@ -235,3 +235,138 @@ def test_invalid_tolerance_is_not_compiled(fake_compiler, epsilon):
 def test_wrong_or_duplicate_center_rejected(fake_compiler, text, center):
     with pytest.raises(ValueError, match="lexicographic maximum"):
         stream.streamed_cudaq_pair(text, 1, center, Formula(), Formula(), 1)
+
+
+@pytest.mark.parametrize("stride", [2, 3, 4])
+def test_h2_term_partitions_sum_to_literal_full_count(fake_compiler, stride):
+    # A standard two-qubit H2 Pauli shape, including a negative center term.
+    text = "-1.05 [] +\n.3979 [Z0] +\n-.3979 [Z1] +\n.1809 [X0 X1] +\n-.01128 [Z0 Z1]"
+    stats = inspect_text(text, 2)
+
+    class MixedPrecision(Formula):
+        def synthesis_epsilon(self, term, angle):
+            return self.epsilon * (term["support_size"] / abs(term["coefficient"])) ** 0.3
+
+    baseline, policy = Formula(3, 1e-6), MixedPrecision(2, 1e-5)
+    time = 1 / stats["one_norm_nonidentity_hartree"]
+    full = stream.streamed_cudaq_pair(text, 2, stats["center_label"], baseline, policy, time)
+    assert "partial_count" not in full
+    pieces = [
+        stream.streamed_cudaq_pair(
+            text,
+            2,
+            stats["center_label"],
+            baseline,
+            policy,
+            time,
+            term_stride=stride,
+            term_offset=offset,
+            chunk_size=1,
+        )
+        for offset in range(stride)
+    ]
+    assert all(p["partial_count"] for p in pieces)
+    assert sum(p["selected_terms"] for p in pieces) == full["nonidentity_terms"] == 4
+    assert sum(p["selected_center_occurrences"] for p in pieces) == 1
+    assert sum(p["selected_rotations_per_step"] for p in pieces) == full["rotations_per_step"]
+    for name in ("baseline", "policy"):
+        assert sum(p[name + "_t_count"] for p in pieces) == full[name + "_t_count"]
+        assert min(p[name + "_epsilon_min"] for p in pieces) == full[name + "_epsilon_min"]
+        assert max(p[name + "_epsilon_max"] for p in pieces) == full[name + "_epsilon_max"]
+
+
+def test_term_partitions_keep_center_weight_negative_angles_and_zero_t(monkeypatch):
+    seen = []
+
+    def compiler(theta, epsilon):
+        seen.append(theta)
+        return {"t_count": 0 if math.isclose(abs(theta), math.pi / 2, abs_tol=1e-14) else 7}
+
+    monkeypatch.setattr(ev, "_cudaq_synth", lambda: None)
+    monkeypatch.setattr(ev, "_compile_rz", compiler)
+    # Y is a half rotation with zero T; the negative Z center is a full
+    # rotation with zero T. The exactly zero coefficient is dropped globally.
+    text = f".25 [X0] +\n{math.pi / 2!r} [Y0] +\n{-math.pi / 4!r} [Z0] +\n0 [X1]"
+    formula = Formula(1)
+    full = stream.streamed_cudaq_pair(text, 2, "ZI", formula, formula, 1, workers=1)
+    pieces = [
+        stream.streamed_cudaq_pair(
+            text,
+            2,
+            "ZI",
+            formula,
+            formula,
+            1,
+            workers=1,
+            term_stride=3,
+            term_offset=i,
+        )
+        for i in range(3)
+    ]
+    assert full["baseline_t_count"] == full["policy_t_count"] == 14
+    assert [p["baseline_t_count"] for p in pieces] == [14, 0, 0]
+    assert sum(p["selected_terms"] for p in pieces) == 3
+    assert [p["selected_center_occurrences"] for p in pieces] == [0, 0, 1]
+    assert any(theta > 0 for theta in seen) and any(theta < 0 for theta in seen)
+
+
+@pytest.mark.parametrize("stride,offset", [(0, 0), (True, 0), (2, -1), (2, 2), (1, 1), (2, False)])
+def test_invalid_term_partition_fails_before_compilation(fake_compiler, stride, offset):
+    with pytest.raises(ValueError):
+        stream.streamed_cudaq_pair(
+            ".1 [Z0]", 1, "Z", Formula(), Formula(), 1, term_stride=stride, term_offset=offset
+        )
+    assert not fake_compiler
+
+
+def test_partial_count_does_not_bypass_global_center_verification(fake_compiler):
+    with pytest.raises(ValueError, match="lexicographic maximum"):
+        stream.streamed_cudaq_pair(
+            ".1 [X0] +\n.2 [Z0]", 1, "X", Formula(), Formula(), 1, term_stride=2, term_offset=1
+        )
+
+
+def test_contiguous_term_ranges_sum_without_changing_normalization(fake_compiler):
+    text = ".4 [X0] +\n-.3 [Y0] +\n.2 [Z0] +\n.1 [X1]"
+    full = stream.streamed_cudaq_pair(text, 2, "ZI", Formula(2), Formula(3), 0.4)
+    pieces = [
+        stream.streamed_cudaq_pair(
+            text,
+            2,
+            "ZI",
+            Formula(2),
+            Formula(3),
+            0.4,
+            term_start=start,
+            term_stop=stop,
+        )
+        for start, stop in [(0, 1), (1, 3), (3, 4)]
+    ]
+    for name in ("baseline", "policy"):
+        assert sum(p[name + "_t_count"] for p in pieces) == full[name + "_t_count"]
+    assert sum(p["selected_center_occurrences"] for p in pieces) == 1
+    assert sum(p["selected_rotations_per_step"] for p in pieces) == 7
+    assert [p["selected_terms"] for p in pieces] == [1, 2, 1]
+    assert pieces[1]["term_partition"] == {
+        "scheme": "global_nonidentity_index_range",
+        "start": 1,
+        "stop": 3,
+    }
+
+
+@pytest.mark.parametrize(
+    "start,stop,stride", [(-1, 2, 1), (True, 2, 1), (2, 2, 1), (0, 4, 1), (0, 2, 2)]
+)
+def test_invalid_contiguous_ranges_are_rejected(fake_compiler, start, stop, stride):
+    with pytest.raises(ValueError):
+        stream.streamed_cudaq_pair(
+            ".1 [X0] +\n.2 [Z0]",
+            1,
+            "Z",
+            Formula(),
+            Formula(),
+            1,
+            term_start=start,
+            term_stop=stop,
+            term_stride=stride,
+        )
