@@ -88,7 +88,7 @@ uv run python plots/plot_tgate_scaling.py count \
   --training-max-qubits 14 --max-qubits 120 --method cudaq \
   --output-dir /analysis/scaling
 
-uv run python plots/plot_tgate_scaling.py plot \
+uv run --extra plots python plots/plot_tgate_scaling.py plot \
   --input-dir /analysis/scaling --output-dir /analysis/figures
 ```
 
@@ -120,7 +120,8 @@ full count; partial outputs explicitly identify their limited scope.
 
 ## Reusing the analysis for grouped ELOTE
 
-Pass the new frozen policy, its grouped baseline policy, and its own grouped
+Install the `chemistry` extra for fermionic decomposition. Pass the new frozen
+policy, its grouped baseline policy, and its own grouped
 small-case calibration/count table. Select `--profile fermionic_nested
 --full-schedule --allow-different-policy --policy-label ELOTE`. The baseline's
 trusted forward decomposition and rotation count feed Eq.34, matching grouped
