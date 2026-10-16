@@ -144,13 +144,16 @@ def test_no_anchor_tries_a_different_projection_without_repeating_the_same_searc
     assert calls == [(False, False), (True, True)]
 
 
-def test_centered_retry_keeps_the_literal_operator_input_and_accumulates_work(monkeypatch):
+@pytest.mark.parametrize("timed_out", [False, True])
+def test_centered_retry_keeps_the_literal_operator_input_and_accumulates_work(
+    monkeypatch, timed_out
+):
     operator, problem, metrics, state = object(), {}, {}, object()
 
     def solve(u, p, m, v, *, refine_initial, center_input=False):
         assert (u, p, m, v) == (operator, problem, metrics, state)
         if not center_input:
-            raise gpu_circuit.GroundLanczosInconclusive([], 128)
+            raise gpu_circuit.GroundLanczosInconclusive([], 128, timed_out=timed_out)
         assert refine_initial
         return (
             np.array([1j]),
@@ -165,6 +168,9 @@ def test_centered_retry_keeps_the_literal_operator_input_and_accumulates_work(mo
     _, _, report = ground_lanczos(operator, problem, metrics, state)
     assert report["verification_retry"]["target_centered_projection"]
     assert report["matvec_calls"] == 448
+    assert report["verification_retry"]["previous_attempts"][0]["timed_out"] == timed_out
+    if timed_out:
+        assert report["verification_retry"]["reason"] == "initial_wall_time_limit"
 
 
 @pytest.mark.parametrize("energy,probability", [(1.01, 0.9), (1.0, 0.51)])

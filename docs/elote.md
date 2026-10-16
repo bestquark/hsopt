@@ -98,6 +98,10 @@ operator and input, without consulting the exact energy. Independent-start
 agreement and literal-U residual checks still apply; prior qualified energies
 and integer QPE repetition costs must also agree across projections. Reported
 overlap spreads are numerical diagnostics, not rigorous absolute error bounds.
+Numerical deadlines also enter this automatic retry path with their search
+diagnostics intact. Each attempt allows 120 seconds through 15 qubits and 240
+seconds at 16 qubits; the accuracy thresholds stay fixed. Failed Krylov buffers
+are released before retrying. An exhausted retry remains inconclusive.
 After a verifier upgrade, `hsopt-elote refresh` can recheck an unchanged sealed
 preparation with `--problem`, `--exact-reference` and `--output-dir`, preserving
 its beta, repetitions, precision and reference. New campaigns require validation

@@ -7,17 +7,24 @@ its Clifford scaffold. No recovered-angle approximation or dense U is used.
 import numpy as np
 
 PROBABILITY_ATOL = 1e-9
-CERTIFIER_VERSION = "matrix_free_ground_lanczos_target_centered_retry_v4"
+CERTIFIER_VERSION = "matrix_free_ground_lanczos_deadline_retry_v5"
 
 
 class GroundLanczosInconclusive(RuntimeError):
     """The fixed verifier has not certified a peak; no energy violation is implied."""
 
-    def __init__(self, trials, calls):
+    def __init__(self, trials, calls, *, timed_out=False, timeout_seconds=120):
         self.trials = trials
         self.calls = calls
+        self.timed_out = timed_out
+        self.timeout_seconds = timeout_seconds
         super().__init__(
-            "Ground-input Lanczos did not certify a stable literal-U peak: " + str(trials)
+            (
+                f"Ground-input Lanczos reached its {timeout_seconds}-second deadline: "
+                if timed_out
+                else "Ground-input Lanczos did not certify a stable literal-U peak: "
+            )
+            + str(trials)
         )
 
 
@@ -199,6 +206,9 @@ def ground_lanczos(unitary, problem, metrics, target_state):
             unitary, problem, metrics, target_state, refine_initial=False
         )
     except GroundLanczosInconclusive as original:
+        # Diagnostics are CPU scalars. Drop the failed stack's large GPU basis
+        # before allocating a retry, rather than retaining it via the exception.
+        original.__traceback__ = None
         failures = [original]
         rays = None
         if any(t["attempt"] == 0 and t["residual_hartree"] <= 1e-10 for t in original.trials):
@@ -207,6 +217,7 @@ def ground_lanczos(unitary, problem, metrics, target_state):
                     unitary, problem, metrics, target_state, refine_initial=True
                 )
             except (GroundLanczosInconclusive, TimeoutError) as retry:
+                retry.__traceback__ = None
                 failures.append(retry)
         centered = rays is None
         if centered:
@@ -257,13 +268,21 @@ def ground_lanczos(unitary, problem, metrics, target_state):
             }
         diagnostics["verification_retry"] = {
             "attempted": True,
-            "reason": "residual_qualified_first_start_not_independently_confirmed",
+            "reason": (
+                "initial_wall_time_limit"
+                if original.timed_out
+                else "residual_qualified_first_start_not_independently_confirmed"
+            ),
             "initial_matvec_calls": original.calls,
             "initial_trials": original.trials,
             "refinement": "stabilize_first_start_energy_and_overlap_before_independent_check",
             "target_centered_projection": centered,
             "previous_attempts": [
-                {"trials": getattr(f, "trials", []), "calls": getattr(f, "calls", 0)}
+                {
+                    "trials": getattr(f, "trials", []),
+                    "calls": getattr(f, "calls", 0),
+                    "timed_out": getattr(f, "timed_out", False),
+                }
                 for f in failures
             ],
         }
@@ -288,6 +307,9 @@ def _ground_lanczos(unitary, problem, metrics, target_state, *, refine_initial, 
     if target_state is None:
         raise ValueError("matrix-free ground Lanczos requires its fixed input")
     dim = unitary.shape[0]
+    # Larger state vectors need more work per Krylov step. This changes only
+    # the numerical effort allowance, never a residual/energy/overlap threshold.
+    timeout_seconds = 120 * max(1, dim // (1 << 15))
     scale = metrics["n_steps"] / problem["target_time"]
     started, calls, trials = time.monotonic(), 0, []
     phase_shift = 0.0
@@ -303,8 +325,12 @@ def _ground_lanczos(unitary, problem, metrics, target_state, *, refine_initial, 
     def action(v):
         nonlocal calls
         calls += 1
-        if time.monotonic() - started > 120:
-            raise TimeoutError("Ground-input Lanczos exceeded 120 seconds")
+        if time.monotonic() - started > timeout_seconds:
+            # Preserve the numerical search diagnostics so the automatic
+            # independent/centered retries also cover a first-start deadline.
+            raise GroundLanczosInconclusive(
+                trials, calls, timed_out=True, timeout_seconds=timeout_seconds
+            )
         if center_input:
             return (-0.5j * scale) * (
                 forward_phase * (unitary @ v) - backward_phase * unitary.adjoint(v)
@@ -398,6 +424,7 @@ def _ground_lanczos(unitary, problem, metrics, target_state, *, refine_initial, 
                                 {
                                     "method": "gpu_matrix_free_ground_input_lanczos",
                                     "hermitian_projection_phase_radians": phase_shift,
+                                    "wall_time_budget_per_attempt_seconds": timeout_seconds,
                                     "spectrum_complete": False,
                                     "full_diagonalization_permitted": False,
                                     "matvec_calls": calls,
