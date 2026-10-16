@@ -13,12 +13,12 @@ from hsopt.evaluation.gpu_circuit import certify_selected_phase
 
 
 def test_selected_literal_phase_checks_repetition_alias_without_a_global_triangle_bound():
-    proof = certify_selected_phase(np.exp(1j*np.array([-.2, -.2+1e-12])), 4)
-    assert proof["selected_repeated_phase_min"] == pytest.approx(-.8)
+    proof = certify_selected_phase(np.exp(1j * np.array([-0.2, -0.2 + 1e-12])), 4)
+    assert proof["selected_repeated_phase_min"] == pytest.approx(-0.8)
     assert proof["wrap_margin_radians"] > 2
     # A principal-phase match after wrapping cannot bypass branch certification.
     with pytest.raises(RuntimeError, match="repetition wrap"):
-        certify_selected_phase(np.exp(1j*np.array([2.])), 4)
+        certify_selected_phase(np.exp(1j * np.array([2.0])), 4)
     with pytest.raises(ValueError, match="finite nonzero"):
         certify_selected_phase(np.array([0j]), 1)
 
@@ -28,11 +28,13 @@ def test_matrix_free_uses_literal_peak_certificate_when_circuit_sum_is_loose(mon
 
     cp = ModuleType("cupy")
     monkeypatch.setitem(sys.modules, "cupy", cp)
-    rays, vectors = np.exp(1j*np.array([-.2])), np.eye(8)[:, :1]
+    rays, vectors = np.exp(1j * np.array([-0.2])), np.eye(8)[:, :1]
     fixed_input = vectors[:, 0]
     guard = {"sin_monotone": False, "no_repetition_wrap": False}
-    report = {"method": "gpu_matrix_free_ground_input_lanczos",
-              "trials": [{"residual_hartree": 1e-12, "probability": .99}]}
+    report = {
+        "method": "gpu_matrix_free_ground_input_lanczos",
+        "trials": [{"residual_hartree": 1e-12, "probability": 0.99}],
+    }
 
     class Operator:
         shape = (8, 8)
@@ -45,11 +47,16 @@ def test_matrix_free_uses_literal_peak_certificate_when_circuit_sum_is_loose(mon
         return rays, vectors, dict(report)
 
     monkeypatch.setattr(gpu_circuit, "ground_lanczos", certified)
-    values, selected, diagnostic = eigensolve(Operator(), {"target_time": 1.},
-        {"n_steps": 2, "compiled_phase_enclosure": guard}, iterative=True, target_state=fixed_input)
+    values, selected, diagnostic = eigensolve(
+        Operator(),
+        {"target_time": 1.0},
+        {"n_steps": 2, "compiled_phase_enclosure": guard},
+        iterative=True,
+        target_state=fixed_input,
+    )
     assert values is rays and selected is vectors
     assert diagnostic["phase_guard"]["global_circuit_sum_enclosure"] == guard
-    assert diagnostic["phase_guard"]["selected_repeated_phase_min"] == pytest.approx(-.4)
+    assert diagnostic["phase_guard"]["selected_repeated_phase_min"] == pytest.approx(-0.4)
     assert not diagnostic["phase_guard"]["global_spectrum_ordering_required"]
 
     def inconclusive(*args):
@@ -57,12 +64,17 @@ def test_matrix_free_uses_literal_peak_certificate_when_circuit_sum_is_loose(mon
 
     monkeypatch.setattr(gpu_circuit, "ground_lanczos", inconclusive)
     with pytest.raises(gpu_circuit.GroundLanczosInconclusive):
-        eigensolve(Operator(), {}, {"n_steps": 2, "compiled_phase_enclosure": guard},
-                   iterative=True, target_state=fixed_input)
+        eigensolve(
+            Operator(),
+            {},
+            {"n_steps": 2, "compiled_phase_enclosure": guard},
+            iterative=True,
+            target_state=fixed_input,
+        )
 
 
 def test_successful_fast_path_keeps_the_same_numerical_result(monkeypatch):
-    rays, vectors = np.array([np.exp(.2j)]), np.array([[1.0]])
+    rays, vectors = np.array([np.exp(0.2j)]), np.array([[1.0]])
     diagnostics = {"matvec_calls": 16, "trials": [{"attempt": 0}, {"attempt": 1}]}
     calls = []
 
@@ -79,7 +91,7 @@ def test_successful_fast_path_keeps_the_same_numerical_result(monkeypatch):
 
 def test_uncertified_anchor_is_automatically_refined_using_the_same_problem(monkeypatch):
     operator, problem, metrics, state = object(), {}, {}, object()
-    initial = [{"attempt": 0, "residual_hartree": 5e-11, "probability": .6834282922}]
+    initial = [{"attempt": 0, "residual_hartree": 5e-11, "probability": 0.6834282922}]
     calls = []
 
     def solve(u, p, m, v, *, refine_initial):
@@ -87,7 +99,14 @@ def test_uncertified_anchor_is_automatically_refined_using_the_same_problem(monk
         calls.append(refine_initial)
         if not refine_initial:
             raise gpu_circuit.GroundLanczosInconclusive(initial, 128)
-        return np.array([1j]), np.array([[1.0]]), {"matvec_calls": 320, "trials": []}
+        return (
+            np.array([1j]),
+            np.array([[1.0]]),
+            {
+                "matvec_calls": 320,
+                "trials": [{"energy": 1.0, "probability": 0.9}],
+            },
+        )
 
     monkeypatch.setattr(gpu_circuit, "_ground_lanczos", solve)
     _, _, report = ground_lanczos(operator, problem, metrics, state)
@@ -100,8 +119,8 @@ def test_uncertified_anchor_is_automatically_refined_using_the_same_problem(monk
 def test_failed_refinement_stays_inconclusive_and_is_never_accepted(monkeypatch):
     calls = []
 
-    def solve(*args, refine_initial):
-        calls.append(refine_initial)
+    def solve(*args, refine_initial, center_input=False):
+        calls.append((refine_initial, center_input))
         raise gpu_circuit.GroundLanczosInconclusive(
             [{"attempt": 0, "residual_hartree": 5e-11}], 128
         )
@@ -109,20 +128,66 @@ def test_failed_refinement_stays_inconclusive_and_is_never_accepted(monkeypatch)
     monkeypatch.setattr(gpu_circuit, "_ground_lanczos", solve)
     with pytest.raises(RuntimeError, match="remains inconclusive after automatic"):
         ground_lanczos(object(), {}, {}, object())
-    assert calls == [False, True]
+    assert calls == [(False, False), (True, False), (True, True)]
 
 
-def test_no_anchor_does_not_repeat_an_identical_deterministic_search(monkeypatch):
+def test_no_anchor_tries_a_different_projection_without_repeating_the_same_search(monkeypatch):
     calls = []
 
-    def solve(*args, refine_initial):
-        calls.append(refine_initial)
+    def solve(*args, refine_initial, center_input=False):
+        calls.append((refine_initial, center_input))
         raise gpu_circuit.GroundLanczosInconclusive([], 128)
 
     monkeypatch.setattr(gpu_circuit, "_ground_lanczos", solve)
-    with pytest.raises(gpu_circuit.GroundLanczosInconclusive):
+    with pytest.raises(RuntimeError, match="remains inconclusive"):
         ground_lanczos(object(), {}, {}, object())
-    assert calls == [False]
+    assert calls == [(False, False), (True, True)]
+
+
+def test_centered_retry_keeps_the_literal_operator_input_and_accumulates_work(monkeypatch):
+    operator, problem, metrics, state = object(), {}, {}, object()
+
+    def solve(u, p, m, v, *, refine_initial, center_input=False):
+        assert (u, p, m, v) == (operator, problem, metrics, state)
+        if not center_input:
+            raise gpu_circuit.GroundLanczosInconclusive([], 128)
+        assert refine_initial
+        return (
+            np.array([1j]),
+            np.array([[1.0]]),
+            {
+                "matvec_calls": 320,
+                "trials": [{"energy": 1.0, "probability": 0.9}],
+            },
+        )
+
+    monkeypatch.setattr(gpu_circuit, "_ground_lanczos", solve)
+    _, _, report = ground_lanczos(operator, problem, metrics, state)
+    assert report["verification_retry"]["target_centered_projection"]
+    assert report["matvec_calls"] == 448
+
+
+@pytest.mark.parametrize("energy,probability", [(1.01, 0.9), (1.0, 0.51)])
+def test_retry_cannot_hide_a_different_qualified_energy_or_integer_cost(
+    monkeypatch, energy, probability
+):
+    def solve(*args, refine_initial, center_input=False):
+        if not center_input:
+            raise gpu_circuit.GroundLanczosInconclusive(
+                [{"attempt": 0, "residual_hartree": 1e-12, "energy": 1.0, "probability": 0.9}], 128
+            )
+        return (
+            np.array([1j]),
+            np.array([[1.0]]),
+            {
+                "matvec_calls": 320,
+                "trials": [{"energy": energy, "probability": probability}],
+            },
+        )
+
+    monkeypatch.setattr(gpu_circuit, "_ground_lanczos", solve)
+    with pytest.raises(RuntimeError, match="disagrees with prior qualified"):
+        ground_lanczos(object(), {}, {}, object())
 
 
 def test_qpe_count_rejects_an_overlap_at_an_integer_repetition_boundary():
@@ -159,7 +224,10 @@ def test_constant_masks_apply_the_entire_compiled_matrix(label):
     np.testing.assert_allclose(actual, expected @ source, atol=2e-14, rtol=2e-14)
 
 
-def test_input_lanczos_finds_an_interior_dominant_peak_without_ground_energy_lookup(monkeypatch):
+@pytest.mark.parametrize("center_input", [False, True])
+def test_input_lanczos_finds_an_interior_dominant_peak_without_ground_energy_lookup(
+    monkeypatch, center_input
+):
     # NumPy supplies an independent known operator; production graphs execute on GPU.
     class Scalar(float):
         def get(self):
@@ -183,7 +251,7 @@ def test_input_lanczos_finds_an_interior_dominant_peak_without_ground_energy_loo
     cp.max = lambda v: Scalar(np.max(v))
     cp.linalg = SimpleNamespace(norm=norm)
     monkeypatch.setitem(sys.modules, "cupy", cp)
-    phases = np.linspace(-0.6, 0.6, 64)
+    phases = np.linspace(2.2, 3.0, 64) if center_input else np.linspace(-0.6, 0.6, 64)
     values = np.exp(1j * phases)
 
     class Operator:
@@ -198,9 +266,13 @@ def test_input_lanczos_finds_an_interior_dominant_peak_without_ground_energy_loo
     target = np.zeros(64, dtype=complex)
     target[27] = np.sqrt(0.999)
     target[30] = np.sqrt(0.001)
-    rays, vectors, diagnostics = ground_lanczos(
-        Operator(), {"target_time": 1.0, "identity_coefficient": 0.0}, {"n_steps": 1}, target
-    )
+    args = Operator(), {"target_time": 1.0, "identity_coefficient": 0.0}, {"n_steps": 1}, target
+    if center_input:
+        rays, vectors, diagnostics = gpu_circuit._ground_lanczos(
+            *args, refine_initial=True, center_input=True
+        )
+    else:
+        rays, vectors, diagnostics = ground_lanczos(*args)
     assert np.angle(rays[0]) == pytest.approx(phases[27], abs=1e-10)
     assert abs(vectors[:, 0].conj() @ target) ** 2 == pytest.approx(0.999, abs=1e-11)
     assert diagnostics["spectrum_complete"] is False

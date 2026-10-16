@@ -172,6 +172,35 @@ def test_clifford_cancellation_keeps_the_exact_t_count():
     assert result["one_step_t_depth"] == 2
 
 
+@pytest.mark.parametrize("coefficient", [1.1e-8, 5e-7])
+def test_small_fermionic_terms_survive_symbolic_library_pruning(coefficient):
+    pytest.importorskip("openfermion")
+    from openfermion import FermionOperator, jordan_wigner
+
+    h = jordan_wigner(FermionOperator("0^ 0", 1.0))
+    # Scale the unit-coefficient transform only AFTER symbolic operations;
+    # OpenFermion itself would prune the small expanded coefficients.
+    hopping = jordan_wigner(FermionOperator("0^ 2") + FermionOperator("2^ 0"))
+    for key, value in hopping.terms.items():
+        h.terms[key] = h.terms.get(key, 0.0) + coefficient * value
+    terms = []
+    for key, value in h.terms.items():
+        if not key:
+            continue
+        label = ["I"] * 4
+        for q, axis in key:
+            label[q] = axis
+        terms.append(elote.term_fields("".join(label), float(value.real)))
+    decomposition = elote.fermionic_blocks({"n_qubits": 4, "terms": terms})
+    actual = {}
+    for block in decomposition["blocks"]:
+        for term in block["terms"]:
+            actual[term["label"]] = actual.get(term["label"], 0.0) + term["coefficient"]
+    expected = {t["label"]: t["coefficient"] for t in terms}
+    for label in actual.keys() | expected.keys():
+        assert actual.get(label, 0.0) == pytest.approx(expected.get(label, 0.0), abs=1e-15)
+
+
 @pytest.mark.parametrize("baseline", ["tight", "loose"])
 def test_new_calibration_isolated_and_shared_profile_uses_nested_template(
     tmp_path, monkeypatch, baseline

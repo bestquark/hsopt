@@ -38,7 +38,7 @@ def term_fields(label, coefficient):
 
 
 @lru_cache(maxsize=128)
-def _fermionic_blocks(n_qubits, terms):
+def _fermionic_blocks(n_qubits, terms, preserve_small=False):
     try:
         from openfermion import (
             FermionOperator,
@@ -53,7 +53,22 @@ def _fermionic_blocks(n_qubits, terms):
     h = QubitOperator()
     for label, coefficient in terms:
         h.terms[tuple((q, c) for q, c in enumerate(label) if c != "I")] = coefficient
-    f = normal_ordered(reverse_jordan_wigner(h, n_qubits=n_qubits))
+    if preserve_small:
+        # SymbolicOperator += prunes coefficients at its library tolerance.
+        # Transform unit coefficients, then accumulate scaled raw maps so real
+        # small chemistry terms cannot disappear before our reconstruction audit.
+        contributions = {}
+        for axes, coefficient in h.terms.items():
+            unit = normal_ordered(reverse_jordan_wigner(QubitOperator(axes), n_qubits))
+            for key, value in unit.terms.items():
+                contributions.setdefault(key, []).append(coefficient * value)
+        f = FermionOperator()
+        f.terms = {
+            key: complex(math.fsum(v.real for v in values), math.fsum(v.imag for v in values))
+            for key, values in contributions.items()
+        }
+    else:
+        f = normal_ordered(reverse_jordan_wigner(h, n_qubits=n_qubits))
     # Reverse JW can introduce floating-point high-body residue. Keep the
     # trusted Hamiltonian exact by explicitly restoring its Pauli residual below.
     threshold = 1e-12 * max(1.0, sum(abs(c) for _, c in terms))
@@ -64,13 +79,35 @@ def _fermionic_blocks(n_qubits, terms):
         if len(key) not in (2, 4) or sum(action for _, action in key) * 2 != len(key):
             raise ValueError("nesting requires a number-conserving one-/two-body JW Hamiltonian")
         operator = FermionOperator(key, coefficient)
-        conjugate = normal_ordered(hermitian_conjugated(operator))
-        self_adjoint = (operator - conjugate).induced_norm() <= threshold
-        if not self_adjoint:
-            operator += conjugate
+        if preserve_small:
+            unit_conjugate = normal_ordered(hermitian_conjugated(FermionOperator(key)))
+            conjugate = FermionOperator()
+            conjugate.terms = {
+                k: coefficient.conjugate() * v for k, v in unit_conjugate.terms.items()
+            }
+            self_adjoint = unit_conjugate.terms == {key: 1.0} and abs(coefficient.imag) <= threshold
+            if not self_adjoint:
+                for k, value in conjugate.terms.items():
+                    operator.terms[k] = operator.terms.get(k, 0.0) + value
+        else:
+            conjugate = normal_ordered(hermitian_conjugated(operator))
+            self_adjoint = (operator - conjugate).induced_norm() <= threshold
+            if not self_adjoint:
+                operator += conjugate
         seen.add(key)
         seen.update(conjugate.terms)
-        paulis = jordan_wigner(operator)
+        if preserve_small:
+            contributions = {}
+            for k, value in operator.terms.items():
+                for axes, factor in jordan_wigner(FermionOperator(k)).terms.items():
+                    contributions.setdefault(axes, []).append(value * factor)
+            paulis = QubitOperator()
+            paulis.terms = {
+                axes: complex(math.fsum(v.real for v in values), math.fsum(v.imag for v in values))
+                for axes, values in contributions.items()
+            }
+        else:
+            paulis = jordan_wigner(operator)
         entries = []
         for axes, value in sorted(paulis.terms.items()):
             if abs(value.imag) > threshold:
@@ -95,6 +132,8 @@ def _fermionic_blocks(n_qubits, terms):
     }
     residual_norm = math.fsum(abs(c) for c in residual.values())
     if residual_norm > 100 * threshold:
+        if not preserve_small:
+            return _fermionic_blocks(n_qubits, terms, preserve_small=True)
         raise ValueError(
             "JW block reconstruction failed; do not infer chemistry from this encoding"
         )
@@ -113,7 +152,9 @@ def _fermionic_blocks(n_qubits, terms):
             }
         )
     return {
-        "method": "normal_ordered_inverse_jw_hermitian_blocks_v1",
+        "method": "normal_ordered_inverse_jw_hermitian_blocks_v2"
+        if preserve_small
+        else "normal_ordered_inverse_jw_hermitian_blocks_v1",
         "blocks": blocks,
         "reconstruction_residual_l1_before_correction": residual_norm,
         "sha256": digest(blocks),

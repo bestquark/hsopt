@@ -55,6 +55,9 @@ corrections explicitly. Unsupported encodings or noncommuting block expansions
 are rejected. The identity shift, trusted Hamiltonian, phase encoding and exact
 reference are unchanged. The agent may edit the grouping, splitting, repetitions,
 angles, Clifford frame and tolerance equation.
+If OpenFermion's default symbolic pruning loses small coefficients, a second
+decomposition transforms unit-coefficient operators and accumulates scaled raw
+coefficient maps before repeating the same reconstruction audit.
 
 This implements the documented nesting construction and adjacent inverse-Clifford
 cancellation in Jordan–Wigner parity circuits. It does not claim to reproduce
@@ -88,6 +91,13 @@ peak. It does not require a global triangle bound on all expanded rotations:
 that bound can overcount cancelling fermionic contributions. The lowest-HF-peak
 solver still requires its global phase-order certificate. No residual, overlap,
 energy-accuracy or selected-branch wrapping threshold is relaxed.
+An inconclusive ground-input solve first refines its anchor and can then retry
+with the Hermitian action `Im(exp(-i theta) U)`, where `theta` comes from the
+fixed input's compiled-unitary Rayleigh quotient. It uses the same literal
+operator and input, without consulting the exact energy. Independent-start
+agreement and literal-U residual checks still apply; prior qualified energies
+and integer QPE repetition costs must also agree across projections. Reported
+overlap spreads are numerical diagnostics, not rigorous absolute error bounds.
 After a verifier upgrade, `hsopt-elote refresh` can recheck an unchanged sealed
 preparation with `--problem`, `--exact-reference` and `--output-dir`, preserving
 its beta, repetitions, precision and reference. New campaigns require validation

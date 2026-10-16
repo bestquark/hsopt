@@ -7,7 +7,7 @@ its Clifford scaffold. No recovered-angle approximation or dense U is used.
 import numpy as np
 
 PROBABILITY_ATOL = 1e-9
-CERTIFIER_VERSION = "matrix_free_ground_lanczos_selected_phase_v3"
+CERTIFIER_VERSION = "matrix_free_ground_lanczos_target_centered_retry_v4"
 
 
 class GroundLanczosInconclusive(RuntimeError):
@@ -49,21 +49,31 @@ def certify_selected_phase(rays, n_steps):
     from . import compiled_unitary as ev
 
     values = ev._host_array(rays, dtype=np.complex128)
-    if (type(n_steps) is not int or n_steps < 1 or values.ndim != 1 or not values.size
-            or not np.isfinite(values).all() or np.any(np.abs(values) == 0)):
-        raise ValueError("selected phase certificate needs finite nonzero rays and positive repetitions")
+    if (
+        type(n_steps) is not int
+        or n_steps < 1
+        or values.ndim != 1
+        or not values.size
+        or not np.isfinite(values).all()
+        or np.any(np.abs(values) == 0)
+    ):
+        raise ValueError(
+            "selected phase certificate needs finite nonzero rays and positive repetitions"
+        )
     phases = np.angle(values)
     repeated = n_steps * phases
     margin = float(np.min(np.pi - np.abs(repeated)))
     if margin <= 1e-6:
         raise RuntimeError("Selected literal-unitary QPE peak has an uncertified repetition wrap")
-    return {"method": "selected_literal_U_peak_no_repetition_wrap",
-            "selected_step_phase_min": float(np.min(phases)),
-            "selected_step_phase_max": float(np.max(phases)),
-            "selected_repeated_phase_min": float(np.min(repeated)),
-            "selected_repeated_phase_max": float(np.max(repeated)),
-            "wrap_margin_radians": margin,
-            "global_spectrum_ordering_required": False}
+    return {
+        "method": "selected_literal_U_peak_no_repetition_wrap",
+        "selected_step_phase_min": float(np.min(phases)),
+        "selected_step_phase_max": float(np.max(phases)),
+        "selected_repeated_phase_min": float(np.min(repeated)),
+        "selected_repeated_phase_max": float(np.max(repeated)),
+        "wrap_margin_radians": margin,
+        "global_spectrum_ordering_required": False,
+    }
 
 
 VECTOR_KERNEL = r"""
@@ -176,7 +186,7 @@ class CompiledCircuit:
 
 
 def ground_lanczos(unitary, problem, metrics, target_state):
-    """Automatically refine a prematurely frozen first start before giving up.
+    """Refine an inconclusive solve, then try a target-centered Hermitian view.
 
     The successful fast path is unchanged. On an uncertified result with a
     residual-qualified first start, rerun the same literal operator and stabilize
@@ -189,33 +199,82 @@ def ground_lanczos(unitary, problem, metrics, target_state):
             unitary, problem, metrics, target_state, refine_initial=False
         )
     except GroundLanczosInconclusive as original:
-        if not any(t["attempt"] == 0 and t["residual_hartree"] <= 1e-10 for t in original.trials):
-            raise
-        try:
-            rays, selected, diagnostics = _ground_lanczos(
-                unitary, problem, metrics, target_state, refine_initial=True
-            )
-        except (GroundLanczosInconclusive, TimeoutError) as retry:
-            raise RuntimeError(
-                "Ground-input Lanczos verification remains inconclusive after automatic "
-                "first-start refinement; this is not a measured energy-accuracy failure. "
-                + str(retry)
-            ) from retry
+        failures = [original]
+        rays = None
+        if any(t["attempt"] == 0 and t["residual_hartree"] <= 1e-10 for t in original.trials):
+            try:
+                rays, selected, diagnostics = _ground_lanczos(
+                    unitary, problem, metrics, target_state, refine_initial=True
+                )
+            except (GroundLanczosInconclusive, TimeoutError) as retry:
+                failures.append(retry)
+        centered = rays is None
+        if centered:
+            try:
+                rays, selected, diagnostics = _ground_lanczos(
+                    unitary, problem, metrics, target_state, refine_initial=True, center_input=True
+                )
+            except (GroundLanczosInconclusive, TimeoutError) as retry:
+                raise RuntimeError(
+                    "Ground-input Lanczos verification remains inconclusive after automatic "
+                    "first-start refinement and target-centered projection; this is not a "
+                    "measured energy-accuracy failure. " + str(retry)
+                ) from retry
+        if centered:
+            # Near-degenerate peaks can be ill-conditioned in different
+            # Hermitian views. Do not let a numerically stable retry silently
+            # change the energy or integer QPE cost of earlier qualified peaks.
+            from . import compiled_unitary as ev
+
+            qualified = [
+                trial
+                for failure in failures
+                for trial in getattr(failure, "trials", [])
+                if trial["residual_hartree"] <= 1e-10
+            ] + diagnostics["trials"][-1:]
+            energies = [t["energy"] for t in qualified]
+            probabilities = [t["probability"] for t in qualified]
+            for probability in probabilities:
+                certify_qpe_repetitions(probability, ev.QPE_TARGET_CONFIDENCE)
+            counts = {
+                ev._qpe_repetitions(
+                    p * ev.QPE_SINGLE_RUN_PHASE_SUCCESS_LOWER_BOUND,
+                    target_confidence=ev.QPE_TARGET_CONFIDENCE,
+                )
+                for p in probabilities
+            }
+            if energies and (max(energies) - min(energies) > 1e-10 or len(counts) != 1):
+                raise RuntimeError(
+                    "Target-centered Lanczos disagrees with prior qualified energy/QPE cost"
+                )
+            diagnostics["projection_comparison"] = {
+                "qualified_peaks": len(qualified),
+                "energy_spread_hartree": max(energies) - min(energies) if energies else 0.0,
+                "probability_spread": max(probabilities) - min(probabilities)
+                if probabilities
+                else 0.0,
+                "integer_qpe_cost_agrees": True,
+            }
         diagnostics["verification_retry"] = {
             "attempted": True,
             "reason": "residual_qualified_first_start_not_independently_confirmed",
             "initial_matvec_calls": original.calls,
             "initial_trials": original.trials,
             "refinement": "stabilize_first_start_energy_and_overlap_before_independent_check",
+            "target_centered_projection": centered,
+            "previous_attempts": [
+                {"trials": getattr(f, "trials", []), "calls": getattr(f, "calls", 0)}
+                for f in failures
+            ],
         }
-        diagnostics["matvec_calls"] += original.calls
+        diagnostics["matvec_calls"] += sum(getattr(f, "calls", 0) for f in failures)
     else:
         diagnostics["verification_retry"] = {"attempted": False}
     diagnostics["certifier_version"] = CERTIFIER_VERSION
     return rays, selected, diagnostics
 
 
-def _ground_lanczos(unitary, problem, metrics, target_state, *, refine_initial):
+def _ground_lanczos(unitary, problem, metrics, target_state, *, refine_initial, center_input=False):
     """Ground-input Krylov search with full reorthogonalization and Ritz checks.
 
     Lanczos starts near the fixed input, rather than spending time resolving
@@ -231,12 +290,25 @@ def _ground_lanczos(unitary, problem, metrics, target_state, *, refine_initial):
     dim = unitary.shape[0]
     scale = metrics["n_steps"] / problem["target_time"]
     started, calls, trials = time.monotonic(), 0, []
+    phase_shift = 0.0
+    if center_input:
+        # The fixed input and compiled U determine this numerical coordinate;
+        # cached exact energies never select a phase branch or solver shift.
+        # A majority spectral component lies within pi/2 of this Rayleigh
+        # phase. The final acceptance still uses the literal U, not arcsin.
+        overlap = cp.vdot(target_state, unitary @ target_state)
+        phase_shift = float(cp.asnumpy(cp.angle(overlap)))
+    forward_phase, backward_phase = np.exp(-1j * phase_shift), np.exp(1j * phase_shift)
 
     def action(v):
         nonlocal calls
         calls += 1
         if time.monotonic() - started > 120:
             raise TimeoutError("Ground-input Lanczos exceeded 120 seconds")
+        if center_input:
+            return (-0.5j * scale) * (
+                forward_phase * (unitary @ v) - backward_phase * unitary.adjoint(v)
+            )
         return (-0.5j * scale) * (unitary @ v - unitary.adjoint(v))
 
     previous = None
@@ -269,7 +341,7 @@ def _ground_lanczos(unitary, problem, metrics, target_state, *, refine_initial):
                 values, rotation = np.linalg.eigh(t)  # small Ritz space, never full U
                 projected = q @ cp.asarray(rotation)
                 overlaps = cp.asnumpy(cp.abs(projected.conj().T @ target_state) ** 2)
-                phases = np.arcsin(np.clip(values / scale, -1, 1))
+                phases = np.arcsin(np.clip(values / scale, -1, 1)) + phase_shift
                 try:
                     peak = ground_branch.select_peak(
                         phases,
@@ -309,7 +381,7 @@ def _ground_lanczos(unitary, problem, metrics, target_state, *, refine_initial):
                                 previous is not None
                                 and abs(record["energy"] - previous["energy"]) <= 1e-10
                                 and abs(record["probability"] - previous["probability"])
-                                <= PROBABILITY_ATOL
+                                <= PROBABILITY_ATOL / 10
                             )
                             previous = record
                             if stable or exhausted:
@@ -325,6 +397,7 @@ def _ground_lanczos(unitary, problem, metrics, target_state, *, refine_initial):
                                 selected,
                                 {
                                     "method": "gpu_matrix_free_ground_input_lanczos",
+                                    "hermitian_projection_phase_radians": phase_shift,
                                     "spectrum_complete": False,
                                     "full_diagonalization_permitted": False,
                                     "matvec_calls": calls,
