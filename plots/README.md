@@ -1,5 +1,10 @@
 # Paper figures
 
+For count-only transfer of a frozen small-system policy to larger HamLib
+Hamiltonians, see [T-gate scaling](tgate_scaling.md). The reusable
+`plot_tgate_scaling.py` entry point separates calibrated circuit counts from
+counts under extrapolated starting parameters and supports later grouped ELOTEs.
+
 This directory has one entry-point script for each data figure currently
 included by the T-gates manuscript. The scripts preserve the paper's filenames
 and visual style while reading the new exact-unitary data contracts:
