@@ -21,6 +21,11 @@ Two separate experiments optimize one shared protocol per trajectory:
 Both use calibrated baseline parameters, explicit mixed-precision mutation prompts,
 and geometric-mean baseline-relative T95 with case-wise accuracy constraints.
 
+[`elote_search/`](elote_search/README.md) compares three independent shared-protocol
+searches: agent-only, PySR-only, and agent with a PySR precision-search tool. Methods
+share train/test splits, starting policies, judge and evaluation caps; all hybrid
+inner probes count toward its cap. Its runs remain separate from existing campaigns.
+
 `initial_nested_pf.py` supplies a common orbital-disjoint grouped starting
 protocol for both shared families. Select it with `--policy-profile fermionic_nested`
 after preparing new matching calibrations. [ELOTE](../docs/elote.md) documents

@@ -29,6 +29,7 @@ from .research_context import (
     benchmark_summary,
     duplicate_policy,
     lane_history,
+    policy_signature,
 )
 
 
@@ -103,6 +104,24 @@ def _websearch_settings() -> dict[str, Any]:
 
 def _websearch_metadata(settings: dict[str, Any]) -> dict[str, Any]:
     return {key: value for key, value in settings.items() if key != "plugin_path"}
+
+
+def _pysr_settings() -> dict[str, Any] | None:
+    """Explicitly opt a NEW hybrid experiment into the host-owned PySR tool."""
+    endpoint = os.environ.get("HSOPT_PYSR_URL")
+    if not endpoint:
+        return None
+    url = urlsplit(endpoint)
+    if (url.scheme not in {"http", "https"} or not url.hostname or url.username is not None
+            or url.password is not None or url.query or url.fragment):
+        raise ValueError("PySR URL must be HTTP(S) without credentials, query or fragment")
+    _ = url.port
+    token = os.environ.get("HSOPT_PYSR_TOKEN")
+    if not token:
+        raise ValueError("PySR tool requires its run-scoped HSOPT_PYSR_TOKEN")
+    plugin = Path(__file__).parents[1] / "search" / "opencode-pysr.js"
+    return {"endpoint": endpoint, "plugin_path": str(plugin), "plugin_sha256": _sha256(plugin),
+            "token": token, "capability_version": "host-budgeted-pysr-v1"}
 
 
 def _run(
@@ -269,6 +288,11 @@ def _configure_research_network(sandbox_name: str) -> dict[str, Any]:
         url = urlsplit(search["endpoint"])
         hostname = f"[{url.hostname}]" if ":" in url.hostname else url.hostname
         endpoints.append(f"{hostname}:{url.port or (443 if url.scheme == 'https' else 80)}")
+    symbolic = _pysr_settings()
+    if symbolic:
+        url = urlsplit(symbolic["endpoint"])
+        hostname = f"[{url.hostname}]" if ":" in url.hostname else url.hostname
+        endpoints.append(f"{hostname}:{url.port or (443 if url.scheme == 'https' else 80)}")
     command = ["openshell", "policy", "update", sandbox_name]
     for endpoint in endpoints:
         command.extend(["--add-endpoint", endpoint])
@@ -345,6 +369,12 @@ def _build_sandbox_bundle(run_dir: Path, candidate: Path, context_files) -> Path
         _write_json(package, {"type": "module", "main": "./index.js"})
         entries["hsopt-websearch/index.js"] = (plugin, 0o444)
         entries["hsopt-websearch/package.json"] = (package, 0o444)
+    symbolic = run_dir / "opencode.pysr.js"
+    if symbolic.is_file():
+        package = run_dir / "opencode.pysr.package.json"
+        _write_json(package, {"type": "module", "main": "./index.js"})
+        entries["hsopt-pysr/index.js"] = (symbolic, 0o444)
+        entries["hsopt-pysr/package.json"] = (package, 0o444)
     for source, relative in context_files:
         relative = PurePosixPath(relative)
         name = "work/" + relative.as_posix()
@@ -575,6 +605,8 @@ def _tool_category(tool: str) -> str:
         return "terminal"
     if tool == "execute":
         return "code_execution"
+    if tool == "hsopt_pysr":
+        return "symbolic_search"
     if any(name in tool for name in ("slurm_submit", "submit_job", "slurm_run")):
         return "job_submission"
     if tool in {"websearch", "codesearch"}:
@@ -797,6 +829,23 @@ def _has_completed_candidate_edit(path: Path) -> bool:
     )
 
 
+def _adopts_symbolic_incumbent(candidate: Path, incumbent: Path, run_dir: Path) -> bool:
+    """A hybrid may write the certified incumbent just found by its own tool.
+
+    Inner probes are scored before the final agent edit, so the ordinary duplicate
+    guard would otherwise reject this legitimate adoption. Keep the default guard
+    for all other repeats, including an unchanged starting policy.
+    """
+    if not _pysr_settings():
+        return False
+    _, actions = summarize_opencode_events(run_dir / "opencode.jsonl")
+    used = any(a["tool"] == "hsopt_pysr" and a["status"] == "completed" for a in actions)
+    before = run_dir / "candidate.before.py"
+    return bool(used and before.is_file()
+                and policy_signature(candidate) == policy_signature(incumbent)
+                and policy_signature(candidate) != policy_signature(before))
+
+
 def _is_scratch_path(target: str) -> bool:
     return target.startswith("scratch/") and all(
         part not in {"", ".", ".."} for part in target.split("/")
@@ -850,6 +899,8 @@ def _validate_agent_action_contract(
         "execute",
         *ONLINE_TOOLS,
     }
+    if _pysr_settings():
+        allowed_tools.add("hsopt_pysr")
     mutation_tools = {"edit", "write", "apply_patch", "patch"}
     mutation_actions = []
     completed_reads: set[str] = set()
@@ -861,6 +912,9 @@ def _validate_agent_action_contract(
             continue
         if tool not in allowed_tools:
             raise RuntimeError(f"OpenCode attempted forbidden tool {tool!r}")
+        if tool == "hsopt_pysr" and not action["permission_denied"]:
+            if preparation or set(required_reads) - completed_reads:
+                raise RuntimeError("PySR requires the verified editing stage and required reads")
         if tool == "read":
             if action["status"] == "error":
                 # No file contents reached the model; retain a recoverable
@@ -1234,6 +1288,7 @@ def opencode_config(*, preparation: bool = False) -> dict[str, Any]:
     if not 0 < MODEL_OUTPUT_LIMIT < MODEL_CONTEXT_LIMIT:
         raise ValueError("Model output allowance must be positive and smaller than context")
     search = _websearch_settings()
+    symbolic = _pysr_settings()
 
     permissions = [{"action": "*", "resource": "*", "effect": "deny"}]
     for resource in ("candidate.py", "evaluate.py", "*.json", "**/*.json"):
@@ -1247,6 +1302,9 @@ def opencode_config(*, preparation: bool = False) -> dict[str, Any]:
         {"action": "webfetch", "resource": "*", "effect": "allow"},
         {"action": "websearch", "resource": "*", "effect": "allow"},
     ])
+    if symbolic:
+        permissions.append({"action": "hsopt_pysr", "resource": "*",
+                            "effect": "deny" if preparation else "allow"})
     system = (
         "Editing is now enabled. Your FIRST tool call in THIS continuation must read "
         "candidate.py AGAIN: OpenCode resets its file-read timestamps between processes, "
@@ -1296,15 +1354,31 @@ def opencode_config(*, preparation: bool = False) -> dict[str, Any]:
         "Scratch edits do not count as candidate.py edits. Do optional checks BEFORE "
         "the single candidate.py edit; do not run the scientific evaluator."
     )
+    if symbolic:
+        system += (
+            " In this HYBRID experiment, hsopt_pysr is available after preparation. "
+            "You may propose a splitting/grouping in base_policy, then call hsopt_pysr "
+            "to tune its mixed-precision equation before the one final candidate.py edit. "
+            "The host, not your code, evaluates every probe against the sealed training suite. "
+            "Its evaluations count against this same run's budget. The tool never writes "
+            "candidate.py; inspect best.source and adopt or revise it in your single edit. "
+            "No held-out test results are available. Numerical evaluator errors are not "
+            "evidence that a proposed physical policy is inaccurate."
+        )
+    plugins = []
+    if search.get("plugin_path"):
+        plugins.append({"package": "/sandbox/hsopt-websearch",
+                        "options": {"endpoint": search["endpoint"]}})
+    if symbolic:
+        plugins.append({"package": "/sandbox/hsopt-pysr",
+                        "options": {"endpoint": symbolic["endpoint"], "token": symbolic["token"]}})
     return {
         "$schema": "https://opencode.ai/config.json",
         "update": "disable",
         "share": "disabled",
         "snapshots": False,
         "websearch": {"provider": search["provider"]},
-        **({"plugins": [{"package": "/sandbox/hsopt-websearch",
-                          "options": {"endpoint": search["endpoint"]}}]}
-           if search.get("plugin_path") else {}),
+        **({"plugins": plugins} if plugins else {}),
         "compaction": {
             "auto": True,
             "keep": {"tokens": 15000},
@@ -1703,6 +1777,16 @@ def _mutate_once(
         **_websearch_metadata(search),
         "usage": "Optional public scientific literature search; never search HSOpt or sibling policies.",
     }
+    symbolic = _pysr_settings()
+    if symbolic:
+        if kind != "protocol":
+            raise ValueError("PySR capability is supported only for new shared-protocol experiments")
+        research_context["mutation_protocol_version"] += "_pysr_hybrid_v1"
+        research_context["pysr"] = {
+            **{key: value for key, value in symbolic.items() if key not in {"plugin_path", "token"}},
+            "tool": "hsopt_pysr",
+            "usage": "Optional inner tolerance search before the final candidate edit; all probes count against the training budget.",
+        }
     if kind == "protocol":
         energy_target = research_context["benchmark"].get("energy_target", "hf_accessible")
         research_context["benchmark"] = _compact_protocol_benchmark(research_context["benchmark"])
@@ -1748,6 +1832,7 @@ def _mutate_once(
             "agent_action_contract": "candidate-once-scratch-code-v1",
             "websearch": research_context["websearch"],
             "shared_protocol": research_context.get("shared_protocol"),
+            **({"pysr": research_context["pysr"]} if symbolic else {}),
             "model": NEMOTRON_MODEL,
             "required_reads": required_reads,
             "context_sha256": _sha256(run_dir / "research_context.json"),
@@ -1765,6 +1850,8 @@ def _mutate_once(
     )
     if search.get("plugin_path"):
         shutil.copyfile(search["plugin_path"], run_dir / "opencode.websearch.js")
+    if symbolic:
+        shutil.copyfile(symbolic["plugin_path"], run_dir / "opencode.pysr.js")
     _write_json(run_dir / "opencode.preparation.json", opencode_config(preparation=True))
     preparation_prompt = (
         "Read-only preparation. FIRST read /sandbox/work/candidate.py, then "
@@ -1997,7 +2084,8 @@ def _mutate_once(
     _validate_agent_action_contract(run_dir / "opencode.jsonl", required_reads=required_reads)
     _validate_candidate(candidate)
     duplicate = duplicate_policy(candidate, policy_file)
-    if duplicate:
+    symbolic_adoption = bool(duplicate and _adopts_symbolic_incumbent(candidate, policy_file, run_dir))
+    if duplicate and not symbolic_adoption:
         raise RuntimeError(
             f"Duplicate policy: matches {duplicate}; propose a new scientific change"
         )
@@ -2009,6 +2097,7 @@ def _mutate_once(
         "candidate": str(candidate),
         "run_dir": str(run_dir),
         "agent_audit": audit,
+        **({"adopts_certified_symbolic_incumbent": True} if symbolic_adoption else {}),
         "agent_completion": ("completed_edit_observed" if stopped_after_edit else "normal_exit"),
         "mutation_protocol_version": research_context["mutation_protocol_version"],
     }

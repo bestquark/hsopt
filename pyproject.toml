@@ -26,6 +26,7 @@ hsopt-export-exact = "hsopt.campaign.export:main"
 hsopt-loop = "hsopt.campaign.loop:main"
 hsopt-layout = "hsopt.campaign.layout:main"
 hsopt-openshell = "hsopt.sandbox.openshell:main"
+hsopt-search = "hsopt.search.experiment:main"
 hsopt-paper-baseline = "hsopt.campaign.baseline:calibration_main"
 hsopt-paper-baseline-batch = "hsopt.campaign.baseline_batch:main"
 hsopt-campaign = "hsopt.campaign.setup:main"
@@ -34,6 +35,7 @@ hsopt-view = "hsopt.view.mutation_history:main"
 t-autoresearch = "hsopt.tgate_opt.t_autoresearch_cli:main"
 
 [project.optional-dependencies]
+symbolic-search = ["pysr==2.7.2"]
 plots = ["matplotlib>=3.10,<4"]
 gpu-lanczos = ["cupy-cuda12x>=13,<14; sys_platform == 'linux'"]
 chemistry = [

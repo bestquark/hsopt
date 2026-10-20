@@ -1,0 +1,6 @@
+{
+  "method": "agent_pysr",
+  "proposal": "OpenCode in OpenShell with optional hsopt_pysr tool",
+  "pysr_tool": true,
+  "editable": "complete permitted ProductFormula; PySR tunes tolerance for an agent-proposed structure"
+}

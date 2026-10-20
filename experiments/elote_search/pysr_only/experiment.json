@@ -1,0 +1,6 @@
+{
+  "method": "pysr_only",
+  "proposal": "PySR 2.7.2 custom fitness",
+  "pysr_tool": false,
+  "editable": "shared synthesis-tolerance equation; fixed initial splitting and repetitions"
+}
