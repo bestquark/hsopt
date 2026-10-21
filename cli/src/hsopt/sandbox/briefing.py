@@ -62,13 +62,15 @@ def mutation_prompt(
     context = context or {}
     shared = context.get("shared_protocol")
     prompt = """Improve the current ProductFormula in candidate.py to reduce T95 while passing
-the fixed energy-accuracy constraint. Propose one useful scientific change.
+the fixed energy-accuracy constraint. Propose a coherent scientific improvement.
 
-You may change term ordering; qubit-wise commuting (QWC), general commuting,
-or orbital-disjoint groups; PF1/PF2/higher-order splitting; repetitions; rotation
-angles; and mixed-precision synthesis schemes in synthesis_epsilon(term, angle).
-Precision can depend on coefficients, Pauli support, angle and diagonal/off-diagonal
-character. Uniform tolerance is not required. Grouping earns no automatic T discount.
+You may redesign the product-formula protocol in any way the interface supports.
+Different product formulas, Hamiltonian groupings, orderings, splitting schemes,
+and mixed-precision synthesis schemes are examples, not an exhaustive list.
+Invent or combine other approaches when useful; the current policy is a starting
+point. You choose what to change and how. Synthesis precision is editable per
+rotation, and uniform tolerance is not required. The fixed evaluator determines
+the actual cost and energy accuracy of your proposal.
 
 The exact hook API, starting parameters, Hamiltonian features and recent feedback
 are in research_context.json, already read during preparation. Re-read it when

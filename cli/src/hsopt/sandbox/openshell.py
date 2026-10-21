@@ -1674,7 +1674,7 @@ def _mutate_once(
             "objective": "geometric_mean_baseline_relative_t95",
             "accuracy": "Every selected molecule/reaction must pass its own fixed energy contract.",
             "baseline_binding": "Preserve baseline_parameters = {}. The host supplies each case's sealed (r, epsilon, beta) starting values. Change self.r/angles/tolerance rules, not this table.",
-            "mixed_precision": "Explicitly explore mixed-precision rotation synthesis: coefficient-, Pauli-support-, angle-, species-feature-, and error-budget-weighted tolerances. Constant epsilon is only the initial policy. Test coherent schemes using synthesis_epsilon(term, angle); exact compiled-energy feasibility remains mandatory for every case.",
+            "mixed_precision": "Synthesis tolerance is editable for every rotation through synthesis_epsilon(term, angle); uniform precision is not required. Coefficient, support, angle or other term/species features are examples, not restrictions. Every case still needs exact compiled-energy feasibility.",
         }
     if kind == "protocol":
         _write_protocol_context(run_dir / "research_context.json", research_context)
@@ -1745,8 +1745,8 @@ def _mutate_once(
             "os, subprocess, filesystem API, fetch, or HTTP file endpoint. "
             "Do not use execute for these required reads. Use it only for optional "
             "small JavaScript calculations from data you already read. "
-            "Choose a coherent hypothesis: ordering/grouping, splitting, repetitions, "
-            "angles or mixed-precision synthesis. You need not change every ingredient. "
+            "Choose a coherent new product-formula hypothesis. The interface defines "
+            "what can be expressed, not a fixed list of methods. "
             "Optional websearch/webfetch can inform it."
         )
     (run_dir / "preparation_prompt.md").write_text(preparation_prompt, encoding="utf-8")

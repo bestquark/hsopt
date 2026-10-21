@@ -80,9 +80,10 @@ mutation-failure/backoff rules. Blocked lanes require repair and explicit resume
 ## Existing deployments
 
 Each mutation gets a short objective/choices brief, the current policy, whole-suite
-features, the exact hook API, and compact feedback. Ordering, QWC/general commuting
-groups, splitting, repetitions, angles and mixed synthesis precision are explicit
-choices. `agent_feedback.json` and `trial_history.json` retain the detailed case
+features, the exact hook API, and compact feedback. The agent may redesign any
+product-formula protocol the interface supports; named formulas, grouping strategies
+and mixed-precision rules are examples, not an exhaustive list. `agent_feedback.json`
+and `trial_history.json` retain the detailed case
 results and recent diffs read-only; the short prompt does not repeat those vectors.
 Raw Hamiltonians and the evaluator remain readable. The operator skill is not
 copied wholesale into the mutation sandbox.

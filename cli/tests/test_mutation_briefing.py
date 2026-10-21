@@ -50,7 +50,7 @@ def test_shared_prompt_is_bounded_without_losing_failure_feedback_or_contract():
     assert "agent_feedback.json" in prompt and "trial_history.json" in prompt
     assert "ALL suite cases" in prompt and "EVERY case must pass" in prompt
     assert "E_compiled,0 - E_0" in prompt
-    assert "QWC" in prompt and "mixed-precision" in prompt
+    assert "not an exhaustive list" in prompt and "mixed-precision" in prompt
     assert "hsopt_pysr" not in prompt
     hybrid = mutation_prompt(context={**context, "pysr": {"tool": "hsopt_pysr"}})
     assert "hsopt_pysr" in hybrid and "All probes consume" in hybrid

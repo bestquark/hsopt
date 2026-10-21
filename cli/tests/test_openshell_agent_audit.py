@@ -701,8 +701,8 @@ def test_mutation_prompt_requires_one_edit_then_terminal_text() -> None:
     assert "tool exactly once" in prompt
     assert "immediately return a final text" in normalized
     assert "Optional websearch and webfetch" in prompt
-    assert "qubit-wise commuting (QWC), general commuting" in normalized
-    assert "PF1/PF2/higher-order splitting" in normalized
+    assert "redesign the product-formula protocol" in normalized
+    assert "not an exhaustive list" in normalized
     assert "Hamiltonians, target time, evaluator, reference and benchmark fixed" in normalized
     assert "mixed-precision synthesis schemes" in normalized
 
