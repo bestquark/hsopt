@@ -18,7 +18,7 @@ from typing import Any
 
 from ..evaluation import compiled_unitary as judge
 from ..evaluation import ground_branch
-from ..sandbox.openshell import mutate
+from ..sandbox.openshell import mutate, pysr_capability
 from ..sandbox.mutation_retry import (
     clear_mutation_retry,
     mutation_readiness,
@@ -632,6 +632,10 @@ def main(*, family: str, worker: bool = False) -> int:
         advance_parser.add_argument("--run-dir", required=True, type=Path)
         advance_parser.add_argument("--no-mutate", action="store_true")
         advance_parser.add_argument("--timeout-seconds", type=int, default=900)
+        advance_parser.add_argument(
+            "--pysr", action=argparse.BooleanOptionalAction, default=None,
+            help="enable/disable the host-managed PySR tool for this proposal (off by default)",
+        )
         deliver = sub.add_parser("deliver")
         deliver.add_argument("--run-dir", required=True, type=Path)
         deliver.add_argument("--case-id", required=True)
@@ -656,8 +660,9 @@ def main(*, family: str, worker: bool = False) -> int:
                 record_receipt(args.run_dir, args.case_id, read(args.receipt))
                 result = {"status": "recorded"}
             else:
-                result = advance(
-                    args.run_dir, propose=not args.no_mutate, timeout_seconds=args.timeout_seconds
-                )
+                with pysr_capability(args.pysr):
+                    result = advance(
+                        args.run_dir, propose=not args.no_mutate, timeout_seconds=args.timeout_seconds
+                    )
     print(json.dumps(result, sort_keys=True))
     return 0

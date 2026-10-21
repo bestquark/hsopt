@@ -432,16 +432,18 @@ def tool_server(search, host="127.0.0.1", port=0, *, token):
 @contextmanager
 def agent_capability(method, endpoint=None, token=None):
     # Never accidentally give the agent-only control a tool inherited from the shell.
-    keys = ("HSOPT_PYSR_URL", "HSOPT_PYSR_TOKEN")
+    keys = ("HSOPT_ENABLE_PYSR", "HSOPT_PYSR_URL", "HSOPT_PYSR_TOKEN")
     old = {key: os.environ.get(key) for key in keys}
     try:
         os.environ.pop("HSOPT_PYSR_URL", None)
         os.environ.pop("HSOPT_PYSR_TOKEN", None)
+        os.environ["HSOPT_ENABLE_PYSR"] = "0"
         if method == "agent_pysr":
             if not endpoint or not token:
                 raise ValueError("hybrid needs a PySR service URL reachable from OpenShell")
             os.environ["HSOPT_PYSR_URL"] = endpoint
             os.environ["HSOPT_PYSR_TOKEN"] = token
+            os.environ["HSOPT_ENABLE_PYSR"] = "1"
         yield
     finally:
         for key, value in old.items():

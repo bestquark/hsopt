@@ -203,6 +203,7 @@ def test_symbolic_language_rejects_code_and_unknown_features(source):
 
 
 def test_agent_only_removes_inherited_capability_and_hybrid_is_stage_gated(monkeypatch):
+    monkeypatch.setenv("HSOPT_ENABLE_PYSR", "1")
     monkeypatch.setenv("HSOPT_PYSR_URL", "http://runtime.example:8787")
     monkeypatch.setenv("HSOPT_PYSR_TOKEN", "test-token")
     with e.agent_capability("agent_only"):
@@ -267,6 +268,7 @@ def test_v2_plugin_registers_and_calls_budgeted_tool_over_http(tmp_path):
 
 
 def test_pysr_calls_get_their_own_telemetry_and_contract(monkeypatch, tmp_path):
+    monkeypatch.setenv("HSOPT_ENABLE_PYSR", "1")
     monkeypatch.setenv("HSOPT_PYSR_URL", "http://runtime.example:8787")
     monkeypatch.setenv("HSOPT_PYSR_TOKEN", "test-token")
     log = tmp_path / "events.jsonl"
@@ -302,6 +304,7 @@ def test_pysr_calls_get_their_own_telemetry_and_contract(monkeypatch, tmp_path):
 def test_hybrid_can_adopt_its_newly_scored_incumbent_without_duplicate_rejection(
     monkeypatch, tmp_path
 ):
+    monkeypatch.setenv("HSOPT_ENABLE_PYSR", "1")
     monkeypatch.setenv("HSOPT_PYSR_URL", "http://runtime.example:8787")
     monkeypatch.setenv("HSOPT_PYSR_TOKEN", "test-token")
     before, candidate, incumbent = [
@@ -325,7 +328,7 @@ def test_hybrid_can_adopt_its_newly_scored_incumbent_without_duplicate_rejection
     assert sandbox._adopts_symbolic_incumbent(candidate, incumbent, tmp_path)
     before.write_text("x = 2\n")
     assert not sandbox._adopts_symbolic_incumbent(candidate, incumbent, tmp_path)
-    monkeypatch.delenv("HSOPT_PYSR_URL")
+    monkeypatch.setenv("HSOPT_ENABLE_PYSR", "0")
     assert not sandbox._adopts_symbolic_incumbent(candidate, incumbent, tmp_path)
 
 

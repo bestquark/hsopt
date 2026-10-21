@@ -22,6 +22,7 @@ from typing import Any, Sequence
 from urllib.parse import urlsplit
 
 from ..evaluation.compiled_unitary import validate_policy_source
+from .briefing import compact_feedback, compact_history, mutation_prompt
 from .mutation_retry import AgentRuntimeError, record_mutation_failure, resume_mutations
 from .research_context import (
     MUTATION_PROTOCOL_VERSION,
@@ -50,7 +51,7 @@ WEBSEARCH_PROVIDER = "exa"
 WEBSEARCH_CAPABILITY_VERSION = "native-v2-exa-v1"
 RESEARCH_CONTAMINATION_MARKERS = ("bestquark", "hsopt", "initial_pf")
 REPOSITORY_ROOT = Path(__file__).resolve().parents[4]
-HSOPT_SKILL_PATH = REPOSITORY_ROOT / "skills" / "hsopt" / "SKILL.md"
+HSOPT_SKILL_PATH = REPOSITORY_ROOT / "skills" / "hsopt" / "references" / "mutation.md"
 EVALUATOR_SOURCE_PATH = Path(__file__).resolve().parents[1] / "evaluation" / "compiled_unitary.py"
 SANDBOX_CONTEXT_ROOT = PurePosixPath("/sandbox/work")
 READABLE_CONTEXT_FILES = frozenset({
@@ -108,9 +109,14 @@ def _websearch_metadata(settings: dict[str, Any]) -> dict[str, Any]:
 
 def _pysr_settings() -> dict[str, Any] | None:
     """Explicitly opt a NEW hybrid experiment into the host-owned PySR tool."""
+    enabled = os.environ.get("HSOPT_ENABLE_PYSR", "0")
+    if enabled not in {"0", "1"}:
+        raise ValueError("HSOPT_ENABLE_PYSR must be 0 or 1")
+    if enabled == "0":
+        return None
     endpoint = os.environ.get("HSOPT_PYSR_URL")
     if not endpoint:
-        return None
+        raise ValueError("PySR is enabled but HSOPT_PYSR_URL is missing")
     url = urlsplit(endpoint)
     if (url.scheme not in {"http", "https"} or not url.hostname or url.username is not None
             or url.password is not None or url.query or url.fragment):
@@ -122,6 +128,23 @@ def _pysr_settings() -> dict[str, Any] | None:
     plugin = Path(__file__).parents[1] / "search" / "opencode-pysr.js"
     return {"endpoint": endpoint, "plugin_path": str(plugin), "plugin_sha256": _sha256(plugin),
             "token": token, "capability_version": "host-budgeted-pysr-v1"}
+
+
+@contextmanager
+def pysr_capability(enabled: bool | None):
+    """Scope an explicit CLI/API choice to this mutation, restoring host settings."""
+    if enabled is None:
+        yield
+        return
+    previous = os.environ.get("HSOPT_ENABLE_PYSR")
+    os.environ["HSOPT_ENABLE_PYSR"] = "1" if enabled else "0"
+    try:
+        yield
+    finally:
+        if previous is None:
+            os.environ.pop("HSOPT_ENABLE_PYSR", None)
+        else:
+            os.environ["HSOPT_ENABLE_PYSR"] = previous
 
 
 def _run(
@@ -1417,172 +1440,6 @@ def opencode_config(*, preparation: bool = False) -> dict[str, Any]:
     }
 
 
-def mutation_prompt(
-    feedback: dict[str, Any] | None = None,
-    *,
-    context: dict[str, Any] | None = None,
-) -> str:
-    prompt = """Editing is now enabled after verified read-only preparation.
-Your FIRST tool call in THIS continuation MUST read /sandbox/work/candidate.py
-AGAIN, even though you read it during preparation. OpenCode resets its file-read
-timestamps between processes, so an edit without this fresh read will fail.
-After that fresh read, make exactly one candidate.py edit and return final text.
-Prefer a complete write of your final policy. The host stops at the first
-completed candidate edit, so prepare all changes before writing the file.
-
-You are proposing one HSOpt product-formula policy mutation.
-
-The working directory contains:
-
-- candidate.py: the only editable scored policy;
-- evaluate.py: the exact fixed evaluator implementation used for scoring;
-- problem.json for an absolute-energy lane, or reaction.json plus its referenced
-  Hamiltonian JSON files for a difference-energy lane.
-- research_context.json: compact Hamiltonian summaries, the exact policy API,
-  lane-local proposal history, and the required-read list.
-- scratch/: optional disposable notes and test drafts, editable in either stage.
-  execute (Code Mode) can read permitted files and run JavaScript data checks.
-  Shell/Python execution is unavailable; Python files here are drafts only.
-
-Before editing, successfully read candidate.py, research_context.json, and ALL
-benchmark files listed in required_reads. Large raw JSON files may require
-paging with read(offset=..., limit=...); inspect the relevant coefficient ranges.
-Read those files so the mutation can use the concrete Hamiltonian
-coefficients, Pauli labels, term metadata, and evaluator interface. The
-evaluator and JSON inputs are read-only. Edit only candidate.py.
-
-You may optionally use an installed skill or browse/search for product-formula
-and synthesis ideas before editing. Web research is optional, and search
-content is inspiration rather than an evaluator result or permission to change
-the benchmark. Do not search for this HSOpt repository, its campaign outputs,
-or another baseline initializer. If an optional research tool is unavailable,
-continue with the mutation instead of retrying it.
-
-The fixed evaluator compiles every Pauli rotation with CUDA-Q, constructs
-the actual compiled product-formula unitary, diagonalizes it, and selects the
-lowest-energy eigenphase with resolved weight from the fixed Hartree--Fock
-input. The immutable problem uses the branch-safe encoding
-U = exp(+i * (H - c0 I) / lambda), where lambda is the nonidentity Pauli
-one-norm and problem["target_time"] = 1 / lambda. The evaluator decodes the
-principal phase back to Hartree as c0 + lambda * phase.
-
-The score multiplies the directly compiled T count of one product-formula
-evolution by the paper's full-evolution QPE query bound at the remaining
-chemical-accuracy precision, then by enough independent attempts for 95%
-confidence. The confidence calculation includes both the resolved HF peak
-weight and the paper's one-half phase-estimation success guarantee. An
-absolute-energy lane is feasible only when its decoded energy error is within
-chemical accuracy. A reaction lane names one immutable feedback contract:
-individual_errors uses sum_s |nu_s delta E_s|, while error_cancellation uses
-|sum_s nu_s delta E_s|. Both reaction metrics are reported, but only the named
-difference_error_contract determines feasibility and acceptance in that
-isolated lane. Small resolved HF peak weight is therefore penalized by a
-larger repetition cost; it is not an energy average.
-
-Make one coherent deterministic mutation intended to lower the
-confidence-adjusted T cost while remaining accurate. Preserve the
-ProductFormula class and its repetitions(), build_step(), and
-synthesis_epsilon() methods. build_step() is the scientific definition of the
-formula: it may implement PF1, PF2/Strang, a higher-order stationary
-composition, grouping, or another deterministic recurrence. The evaluator
-infers standard PF1/PF2 labels from the returned rotations; it never trusts a
-declared order. synthesis_epsilon() selects the CUDA-Q tolerance for each
-returned rotation. Inspect evaluate.py for the exact accepted types, angle
-convention, schedule validation, and synthesis-tolerance constraints.
-
-The learned converged protocol is called ELOTE (Error-Limited Optimized
-Trotter Evolution); HSOpt is the search framework. Make its ingredients
-explicit: grouping, splitting, repetitions, angles, and synthesis rule.
-The research_context policy_contract documents explicit commuting groups
-and splitting stages, optional exact Clifford basis_change(), and the
-verified fermionic_jw decomposition when selected. Explore mixed precision
-as well as these structural choices. Grouping is not a free discount on T
-count; only the synthesized circuit and verified energy determine the score.
-
-build_step() is called ONCE per species; the returned schedule is repeated
-unchanged. Counters cannot alternate successive calls. Put every stage of a
-composition inside that one schedule. Each returned alpha implements
-exp(+i alpha P), with Rz(-2*alpha). You may choose custom angles independently
-by Pauli label, coefficient, support, or species, including negative substeps.
-The synthesis tolerance is a separate per-rotation choice. These freedoms do
-not change the Hamiltonian or exact energy target.
-
-Use recent rejected proposals and failures to choose a new hypothesis. Do not
-repeat an already scored policy or make a formatting-only edit. Prefer a
-coherent change that tests a formula, ordering, term-dependent angle, or
-precision hypothesis over repeatedly changing one scalar without evidence.
-When useful, compare PF1/PF2/higher-order compositions, commuting groups,
-term-dependent angle corrections, and mixed synthesis precisions. None is
-required to win. In your final text state the hypothesis and changed controls.
-Only import math; no generators, private attributes (self._foo), set, getattr,
-hasattr, isinstance, or external helpers. Use only the builtins explicitly
-listed in research_context.json. Summary-only fields such as nonidentity_one_norm
-are NOT keys of problem; derive quantities from problem['terms'] when needed.
-Preserve valid Python indentation: four spaces per level, methods inside the
-class, method bodies another four spaces deeper. Prefer one write of the COMPLETE
-candidate.py file (plain Python, no Markdown fences or diff markers) if replacing
-multiple blocks. Preserve all four interface methods and every unchanged section.
-Check bracket balance and indentation mentally before your single edit.
-The compact API is in research_context.json so reading
-the entire evaluate.py is unnecessary; its read output can be truncated.
-Use read for local files; webfetch accepts only HTTP(S) URLs.
-
-Do not change any Hamiltonian, evaluator, source data, or benchmark definition.
-Do not fabricate an evaluation result. Read the available context as needed.
-Call one edit or write tool exactly once. After that tool succeeds, immediately
-return a final text response without rewriting the file.
-"""
-    if context is not None and context.get("shared_protocol"):
-        if context["shared_protocol"].get("energy_target") == "ground_branch":
-            prompt = prompt.replace(
-                "lowest-energy eigenphase with resolved weight from the fixed Hartree--Fock\ninput.",
-                "dominant compiled eigenspace sampled from the cached EXACT GROUND STATE\ninput used for tight calibration; error is E_compiled,0 - E_0.",
-            ).replace("resolved HF peak", "resolved exact-ground-input peak").replace(
-                "Small resolved HF peak weight", "Small resolved ground-input peak weight"
-            )
-            prompt += (
-                "\nGROUND-INPUT SHARED CONTRACT: GPU Lanczos must certify the compiled QPE peak "
-                "by its overlap with the cached exact ground vector. It never compares to an "
-                "HF-accessible excited-state energy. Ground-state preparation cost is excluded; "
-                "the shared formula is scored for dynamics and T95. All cases must pass.\n"
-            )
-        prompt += (
-            "\nSHARED PROTOCOL EXPERIMENT: this ONE candidate.py is evaluated on ALL suite cases. "
-            "Optimize the geometric mean of case T95/baseline T95, with case-wise accuracy. "
-            "Do not optimize a separate file per molecule. Read suite.json and its fixed baseline "
-            "parameters; preserve the empty baseline_parameters placeholder. The host binds it. "
-            "Actively propose mixed-precision synthesis schemes, not only global epsilon changes: "
-            "coefficient/angle magnitude weighting, diagonal versus off-diagonal terms, Pauli "
-            "support, or normalized error-budget weights. These are hypotheses, not guaranteed "
-            "bounds; the unchanged CUDA-Q/energy judge decides feasibility. Use Code Mode to "
-            "batch permitted reads/calculations across the suite; many direct read turns "
-            "would exceed the agent step budget. Return compact features, not all raw JSON.\n"
-        )
-    if context is not None and context.get("shared_protocol"):
-        # This continuation uses the verified preparation session, which has
-        # already read the entire context. Repeating it can overflow the model
-        # window before OpenCode gets a chance to compact the next tool turn.
-        prompt += (
-            "\nThe immutable policy contract, whole-suite features and recent trial "
-            "history are in research_context.json, already read during preparation "
-            "in this session. Re-read that file when needed, including after "
-            "automatic compaction; do not discard failed-trial feedback.\n"
-        )
-    elif context is not None:
-        prompt += (
-            "\nRequired context and policy contract (immutable):\n"
-            + json.dumps(context, sort_keys=True)
-            + "\n"
-        )
-    if feedback is None:
-        return prompt
-    return (
-        prompt
-        + "\nHere is the immutable evaluator feedback for this proposal:\n\n"
-        + json.dumps(feedback, indent=2, sort_keys=True)
-        + "\n"
-    )
-
 
 def agent_feedback(feedback: dict[str, Any]) -> dict[str, Any]:
     """Keep only evaluator facts that are useful for the next policy mutation."""
@@ -1764,12 +1621,16 @@ def _mutate_once(
         } or any(p.startswith(prefix) for prefix in prefixes)]
     if any(relative.as_posix() == "research_context.json" for _, relative in context_files):
         raise ValueError("benchmark path collides with research_context.json")
+    full_history = lane_history(policy_file.parent, run_dir)
+    _write_json(run_dir / "trial_history.json", full_history)
     research_context = {
         "mutation_protocol_version": MUTATION_PROTOCOL_VERSION,
         "required_reads": required_reads,
         "policy_contract": POLICY_CONTRACT,
         "benchmark": benchmark_summary(source, kind),
-        "history": lane_history(policy_file.parent, run_dir),
+        "history": compact_history(full_history),
+        "current_feedback": compact_feedback(prompt_feedback),
+        "details": {"feedback": "agent_feedback.json", "history": "trial_history.json"},
     }
     search = _websearch_settings()
     research_context["mutation_protocol_version"] += f"_websearch_{search['provider']}_v1"
@@ -1822,6 +1683,10 @@ def _mutate_once(
     context_files.append(
         (run_dir / "research_context.json", PurePosixPath("research_context.json"))
     )
+    for name in ("agent_feedback.json", "trial_history.json"):
+        if any(relative.as_posix() == name for _, relative in context_files):
+            raise ValueError(f"benchmark path collides with {name}")
+        context_files.append((run_dir / name, PurePosixPath(name)))
     prompt = mutation_prompt(prompt_feedback, context=research_context)
     _write_json(
         run_dir / "mutation_protocol.json",
@@ -1832,6 +1697,8 @@ def _mutate_once(
             "agent_action_contract": "candidate-once-scratch-code-v1",
             "websearch": research_context["websearch"],
             "shared_protocol": research_context.get("shared_protocol"),
+            "pysr_enabled": symbolic is not None,
+            "mutation_skill_sha256": _sha256(HSOPT_SKILL_PATH),
             **({"pysr": research_context["pysr"]} if symbolic else {}),
             "model": NEMOTRON_MODEL,
             "required_reads": required_reads,
@@ -1878,7 +1745,9 @@ def _mutate_once(
             "os, subprocess, filesystem API, fetch, or HTTP file endpoint. "
             "Do not use execute for these required reads. Use it only for optional "
             "small JavaScript calculations from data you already read. "
-            "Explicitly plan a mixed-precision rotation-synthesis hypothesis."
+            "Choose a coherent hypothesis: ordering/grouping, splitting, repetitions, "
+            "angles or mixed-precision synthesis. You need not change every ingredient. "
+            "Optional websearch/webfetch can inform it."
         )
     (run_dir / "preparation_prompt.md").write_text(preparation_prompt, encoding="utf-8")
     (run_dir / "prompt.md").write_text(prompt, encoding="utf-8")
@@ -2112,6 +1981,7 @@ def mutate(
     source: Path,
     timeout_seconds: int = 900,
     keep_sandbox: bool = False,
+    pysr: bool | None = None,
 ) -> dict[str, Any]:
     """Create one external candidate and always persist its final outcome."""
 
@@ -2119,15 +1989,16 @@ def mutate(
     may_record_failure = not run_dir.exists() or not any(run_dir.iterdir())
     started_at = datetime.now(UTC).isoformat()
     try:
-        result = _mutate_once(
-            policy_file,
-            feedback_file,
-            run_dir,
-            kind=kind,
-            source=source,
-            timeout_seconds=timeout_seconds,
-            keep_sandbox=keep_sandbox,
-        )
+        with pysr_capability(pysr):
+            result = _mutate_once(
+                policy_file,
+                feedback_file,
+                run_dir,
+                kind=kind,
+                source=source,
+                timeout_seconds=timeout_seconds,
+                keep_sandbox=keep_sandbox,
+            )
     except Exception as exc:
         if may_record_failure:
             run_dir.mkdir(parents=True, exist_ok=True)
@@ -2196,6 +2067,10 @@ def _parser() -> argparse.ArgumentParser:
     mutate_parser.add_argument("--source", type=Path, required=True)
     mutate_parser.add_argument("--timeout-seconds", type=int, default=900)
     mutate_parser.add_argument("--keep-sandbox", action="store_true")
+    mutate_parser.add_argument(
+        "--pysr", action=argparse.BooleanOptionalAction, default=None,
+        help="enable/disable the host-owned PySR tool; otherwise use HSOPT_ENABLE_PYSR (default 0)",
+    )
 
     audit_parser = subparsers.add_parser(
         "audit",
@@ -2225,6 +2100,7 @@ def main() -> int:
             source=args.source,
             timeout_seconds=args.timeout_seconds,
             keep_sandbox=args.keep_sandbox,
+            pysr=args.pysr,
         )
     elif args.command == "resume":
         result = resume_mutations(args.path.resolve(), reason=args.reason)

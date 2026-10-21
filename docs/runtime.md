@@ -79,6 +79,26 @@ mutation-failure/backoff rules. Blocked lanes require repair and explicit resume
 
 ## Existing deployments
 
+Each mutation gets a short objective/choices brief, the current policy, whole-suite
+features, the exact hook API, and compact feedback. Ordering, QWC/general commuting
+groups, splitting, repetitions, angles and mixed synthesis precision are explicit
+choices. `agent_feedback.json` and `trial_history.json` retain the detailed case
+results and recent diffs read-only; the short prompt does not repeat those vectors.
+Raw Hamiltonians and the evaluator remain readable. The operator skill is not
+copied wholesale into the mutation sandbox.
+
+PySR is off by default. `hsopt-openshell mutate --pysr` enables the host-managed
+tool; `--no-pysr` disables it even when service settings are inherited. The shared
+`experiments/{abs_protocol,diff_protocol}/mutate.py advance` commands accept the
+same switch. External launchers can instead set `HSOPT_ENABLE_PYSR=1` or `0`.
+Enabling it requires `HSOPT_PYSR_URL` and the run-scoped `HSOPT_PYSR_TOKEN` from a
+configured runtime service; a flag alone does not start that service. Missing
+configuration fails clearly before launching an agent. Only enabled mutations
+advertise the tool and grant it permission after preparation. Its probes count
+against the run's evaluation budget; the scientific evaluator remains fixed.
+The three-arm [`elote_search`](../experiments/elote_search/README.md) controller
+sets this switch automatically for `agent_pysr` and disables it for `agent_only`.
+
 An external runtime can limit concurrent sandbox startup separately from model
 inference by setting `HSOPT_SANDBOX_SETUP_GATE=module:factory`. The factory takes
 the iteration directory and returns a context manager; HSOpt releases it before

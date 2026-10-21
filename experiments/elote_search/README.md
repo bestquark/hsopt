@@ -79,7 +79,11 @@ The deployment forwards `/search` to that service (the URL's host must route to 
 specified listener). A random per-process capability token protects the service and
 is supplied only to its plugin. OpenShell receives binary-scoped endpoint access,
 a read-only OpenCode v2 plugin, and an explicit `hsopt_pysr` permission in the editing
-stage. Agent-only runs clear this capability even if inherited from the shell.
+stage. The controller explicitly sets `HSOPT_ENABLE_PYSR=1` for the hybrid arm;
+agent-only runs disable and clear this capability even if inherited from the shell.
+For a separately configured shared runtime, `mutate.py advance --pysr` and
+`--no-pysr` override that switch for the next proposal. Enabling the flag requires
+the budgeted service URL and run token; it does not launch PySR by itself.
 Network placement, tunnels and GPU scheduling remain external runtime concerns.
 
 The agent can pass a complete proposed `base_policy`, a starting arithmetic `guess`,

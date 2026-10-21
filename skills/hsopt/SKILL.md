@@ -7,6 +7,10 @@ description: Run or inspect exact compiled-unitary T-gate autoresearch for HSOpt
 
 The repository runtime is ordinary package code under `cli/src/hsopt/`; this skill defines the mutation contract.
 
+OpenShell mutation agents receive the short [mutation brief](references/mutation.md),
+their exact API and selected benchmark context. Operator instructions below are
+not copied into every mutation session.
+
 ## Mutation workspace
 
 `candidate.py` is the only editable scored policy. `evaluate.py`, benchmark JSON, prior feedback,

@@ -137,6 +137,37 @@ def test_shared_mutation_context_contains_entire_suite_and_explicit_mixed_precis
     )
 
 
+def test_mutation_packet_keeps_detailed_feedback_readable_without_prompt_duplication(
+    prepared, monkeypatch
+):
+    from hsopt.sandbox import openshell
+
+    feedback = p.aggregate({"a": result(50), "b": result(80)},
+                           {"a": result(100), "b": result(100)})
+    feedback_file = prepared / "packet-feedback.json"
+    p.write(feedback_file, feedback)
+    packet = prepared / "packet-check"
+
+    def stop_before_external_process(*args, **kwargs):
+        raise RuntimeError("stop-before-sandbox")
+
+    monkeypatch.setattr(openshell, "_run", stop_before_external_process)
+    with pytest.raises(RuntimeError, match="stop-before-sandbox"):
+        openshell._mutate_once(
+            prepared / "initial_pf.py", feedback_file, packet,
+            kind="protocol", source=prepared / "suite.json",
+        )
+    context = p.read(packet / "research_context.json")
+    assert len(context["benchmark"]["cases"]) == 2
+    assert p.read(packet / "agent_feedback.json")["case_metrics"] == feedback["case_metrics"]
+    manifest = p.read(packet / "sandbox_context.json")
+    paths = {row["sandbox_path"] for row in manifest["files"]}
+    assert {"agent_feedback.json", "trial_history.json"} <= paths
+    assert not {"agent_feedback.json", "trial_history.json"} & set(context["required_reads"])
+    assert not p.read(packet / "mutation_protocol.json")["pysr_enabled"]
+    assert len((packet / "hsopt.SKILL.md").read_text()) < 1500
+
+
 def test_receipts_are_idempotent_and_refuse_wrong_backend_case_or_changed_inputs(prepared):
     row = pending(prepared)[0]
     good = receipt(row["request"])

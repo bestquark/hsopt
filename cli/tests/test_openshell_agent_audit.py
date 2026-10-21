@@ -695,16 +695,16 @@ def test_mutation_prompt_requires_one_edit_then_terminal_text() -> None:
     prompt = mutation_prompt()
     normalized = " ".join(prompt.split())
 
-    assert "candidate.py: the only editable scored policy" in prompt
-    assert "evaluate.py: the exact fixed evaluator implementation" in prompt
-    assert "problem.json for an absolute-energy lane" in prompt
-    assert "reaction.json plus its referenced Hamiltonian JSON files" in normalized
+    assert "Improve the current ProductFormula in candidate.py" in prompt
+    assert "exact hook API" in prompt
+    assert "evaluate.py are readable" in normalized
     assert "tool exactly once" in prompt
     assert "immediately return a final text" in normalized
-    assert "Web research is optional" in prompt
-    assert "higher-order stationary composition" in normalized
-    assert "Do not change any Hamiltonian" in normalized
-    assert "Inspect evaluate.py for the exact accepted types" in normalized
+    assert "Optional websearch and webfetch" in prompt
+    assert "qubit-wise commuting (QWC), general commuting" in normalized
+    assert "PF1/PF2/higher-order splitting" in normalized
+    assert "Hamiltonians, target time, evaluator, reference and benchmark fixed" in normalized
+    assert "mixed-precision synthesis schemes" in normalized
 
 
 def test_sandbox_context_exposes_exact_evaluator_and_benchmark_inputs() -> None:
