@@ -49,7 +49,7 @@ def _compiled_lanczos_sizes(dim):
     return (*sizes, sizes[-1])
 
 
-def eigensolve(unitary, problem, metrics, *, iterative, target_state=None):
+def eigensolve(unitary, problem, metrics, *, iterative, target_state=None, reference_energy=None):
     import cupy as cp
     from . import compiled_unitary as ev
 
@@ -68,7 +68,10 @@ def eigensolve(unitary, problem, metrics, *, iterative, target_state=None):
             raise ValueError("Matrix-free certification requires its fixed input state")
         from .gpu_circuit import ground_lanczos, certify_selected_phase
 
-        rays, vectors, report = ground_lanczos(unitary, problem, metrics, target_state)
+        rays, vectors, report = ground_lanczos(
+            unitary, problem, metrics, target_state,
+            **({"reference_energy": reference_energy} if reference_energy is not None else {}),
+        )
         # Unlike lowest-HF-peak selection, majority ground-input selection is
         # independently certified against the literal U. A triangle bound on
         # every expanded rotation can overcount cancelling fermionic terms.

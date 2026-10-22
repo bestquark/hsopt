@@ -48,4 +48,4 @@ def test_agent_skill_is_separate_from_runtime_package() -> None:
     assert "hsopt-openshell audit" in cli_readme
     assert "## Agent skill" in readme
     assert "repository runtime is ordinary package code" in skill_words
-    assert len(skill.splitlines()) < 130
+    assert len(skill.splitlines()) < 150

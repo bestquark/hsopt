@@ -7,7 +7,7 @@ its Clifford scaffold. No recovered-angle approximation or dense U is used.
 import numpy as np
 
 PROBABILITY_ATOL = 1e-9
-CERTIFIER_VERSION = "matrix_free_ground_lanczos_deadline_retry_v5"
+CERTIFIER_VERSION = "matrix_free_ground_lanczos_window_certificate_v6"
 
 
 class GroundLanczosInconclusive(RuntimeError):
@@ -131,9 +131,16 @@ class CompiledCircuit:
     def __init__(self, dimension):
         self.shape = (dimension, dimension)
         self.gates = []
+        self.action_error_bound = 0.0
 
-    def add(self, label, matrix, *, frame=()):
+    def add(self, label, matrix, *, frame=(), gate_count=0):
         self.gates.append((label, np.asarray(matrix, dtype=np.complex128), frame))
+        from .spectral_window import _gamma
+        # Conservative complex128 budget for each literal word's 2x2 products,
+        # Pauli coefficient transform and vector kernel. No synthesis tolerance
+        # is counted here: its actual compiled word is the scientific target.
+        per_gate = _gamma(128 * max(1, int(gate_count)) + 512)
+        self.action_error_bound = (1 + self.action_error_bound) * (1 + per_gate) - 1
 
     def finish(self):
         import cupy as cp
@@ -192,7 +199,7 @@ class CompiledCircuit:
         return self.apply(value, adjoint=True)
 
 
-def ground_lanczos(unitary, problem, metrics, target_state):
+def ground_lanczos(unitary, problem, metrics, target_state, *, reference_energy=None):
     """Refine an inconclusive solve, then try a target-centered Hermitian view.
 
     The successful fast path is unchanged. On an uncertified result with a
@@ -210,6 +217,14 @@ def ground_lanczos(unitary, problem, metrics, target_state):
         # before allocating a retry, rather than retaining it via the exception.
         original.__traceback__ = None
         failures = [original]
+        if reference_energy is not None:
+            from .spectral_window import certify_infeasible, CertifiedGroundInputInfeasible
+            certificate = certify_infeasible(
+                unitary, problem, metrics, target_state, reference_energy
+            )
+            if certificate is not None:
+                certificate["previous_lanczos_matvec_calls"] = original.calls
+                raise CertifiedGroundInputInfeasible(certificate) from original
         rays = None
         if any(t["attempt"] == 0 and t["residual_hartree"] <= 1e-10 for t in original.trials):
             try:

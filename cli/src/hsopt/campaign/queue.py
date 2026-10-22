@@ -350,8 +350,10 @@ def evaluate_task(
                 )
         result["task_id"] = task_id
     except Exception as exc:  # record the scientific evaluation failure
+        from ..evaluation.spectral_window import CertifiedGroundInputInfeasible
+        certified = isinstance(exc, CertifiedGroundInputInfeasible)
         result = {
-            "status": "error",
+            "status": "infeasible" if certified else "error",
             "task_id": task_id,
             "evaluation_contract_version": metadata.get("evaluation_contract_version"),
             "difference_error_contract": metadata.get("difference_error_contract"),
@@ -362,6 +364,13 @@ def evaluate_task(
         }
         if metadata.get("energy_target"):
             result["energy_target"] = metadata["energy_target"]
+        if certified:
+            result.update(
+                rejection_certificate=exc.certificate,
+                passes_chemical_accuracy=False,
+                constraint_violation="accurate_majority_ground_input_qpe_peak",
+                energy_estimate_available=False,
+            )
     result.update(
         {
             "task_started_at": task_started_at,

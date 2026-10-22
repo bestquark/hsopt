@@ -400,8 +400,20 @@ def aggregate(results: dict[str, Any], baselines: dict[str, Any]) -> dict[str, A
     if not results or results.keys() != baselines.keys():
         raise ValueError("incomplete suite results")
     metrics, ratios, errors = [], [], []
+    certified_rejections, unresolved = [], []
     for case_id in sorted(results):
         row, baseline = results[case_id], baselines[case_id]
+        certificate = row.get("rejection_certificate", {})
+        certified_rejection = (
+            row.get("status") == "infeasible"
+            and certificate.get("verified") is True
+            and certificate.get("constraint") == "accurate_majority_ground_input_qpe_peak"
+            and isinstance(certificate.get("accurate_window_probability_upper_bound"), (int, float))
+            and 0 <= certificate["accurate_window_probability_upper_bound"] < 0.5 - 1e-9
+            and certificate.get("acceptance_permitted") is False
+        )
+        if certified_rejection:
+            certified_rejections.append(case_id)
         denominator = baseline.get("confidence_adjusted_t_count")
         if (
             not isinstance(denominator, (int, float))
@@ -418,6 +430,8 @@ def aggregate(results: dict[str, Any], baselines: dict[str, Any]) -> dict[str, A
         )
         error = row.get("contract_error_hartree", row.get("absolute_energy_error_hartree"))
         valid = valid and isinstance(error, (int, float)) and math.isfinite(error) and error >= 0
+        if not valid and not certified_rejection:
+            unresolved.append(case_id)
         passed = bool(
             valid
             and row.get("passes_chemical_accuracy")
@@ -434,7 +448,8 @@ def aggregate(results: dict[str, Any], baselines: dict[str, Any]) -> dict[str, A
                 "relative_t95": ratio,
                 "error_hartree": error if valid else None,
                 "passes_chemical_accuracy": passed,
-                "evaluation_error": row.get("error") if not valid else None,
+                "evaluation_error": row.get("error") if not valid and not certified_rejection else None,
+                **({"certified_constraint_violation": certificate} if certified_rejection else {}),
             }
         )
     failed = [row["case_id"] for row in metrics if not row["passes_chemical_accuracy"]]
@@ -448,7 +463,7 @@ def aggregate(results: dict[str, Any], baselines: dict[str, Any]) -> dict[str, A
         else None
     )
     return {
-        "status": "ok" if score is not None else "error",
+        "status": "infeasible" if certified_rejections else ("ok" if score is not None else "error"),
         "protocol_objective": OBJECTIVE,
         "score": score,
         "mean_relative_t95": math.fsum(ratios) / len(ratios) if score is not None else None,
@@ -457,10 +472,14 @@ def aggregate(results: dict[str, Any], baselines: dict[str, Any]) -> dict[str, A
         "case_metrics": metrics,
         "worst_normalized_error": max(errors) if score is not None else None,
         "case_count": len(results),
+        "certified_infeasible_case_ids": certified_rejections,
+        "unresolved_case_ids": unresolved,
     }
 
 
 def accept(candidate: dict[str, Any], incumbent: dict[str, Any]) -> tuple[bool, str]:
+    if candidate["status"] == "infeasible" and candidate.get("certified_infeasible_case_ids"):
+        return False, "certified_qpe_energy_contract_violation"
     if candidate["status"] != "ok":
         return False, "evaluation_failed"
     if not incumbent["passes_chemical_accuracy"]:

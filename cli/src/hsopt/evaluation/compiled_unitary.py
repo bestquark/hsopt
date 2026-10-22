@@ -1065,7 +1065,8 @@ def _build_compiled_step(
     for (term, _alpha), (theta, epsilon) in zip(rotations, rotation_keys, strict=True):
         compiled = compiled_rotations[(theta, epsilon)]
         if matrix_free:
-            unitary.add(str(term["label"]), compiled["matrix"], frame=frame)
+            unitary.add(str(term["label"]), compiled["matrix"], frame=frame,
+                        gate_count=compiled["gate_count"])
         else:
             unitary, workspace = updater(
                 unitary, workspace, label=str(term["label"]),
@@ -1748,6 +1749,7 @@ def evaluate_molecule(
         eigenvalues, eigenvectors, spectral_solver = eigensolve(
             unitary_step, problem, metrics, iterative=backend_name == "cupy-lanczos",
             **({"target_state": input_state} if ground_input else {}),
+            **({"reference_energy": exact_energy} if ground_input else {}),
         )
     else:
         eigenvalues, eigenvectors = xp.linalg.eig(unitary_step)

@@ -54,9 +54,10 @@ def test_ground_scoring_reuses_cached_input_and_excludes_hf_bias(monkeypatch):
     monkeypatch.setattr(ev, "_build_compiled_step", lambda p, pf, **kw: build(p, pf, backend_name="numpy", xp=np))
     seen = []
 
-    def known_spectrum(unitary, problem, metrics, *, iterative, target_state):
+    def known_spectrum(unitary, problem, metrics, *, iterative, target_state, reference_energy):
         # Tiny full spectrum is an independent test oracle, never a production fallback.
         seen.append(target_state)
+        assert reference_energy == ref["exact_unitary_ground_energy_hartree"]
         values, vectors = np.linalg.eig(unitary)
         return values, vectors, {"method": "test_oracle", "spectrum_complete": True}
 
