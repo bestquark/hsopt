@@ -327,6 +327,32 @@ def test_unavailable_tool_requires_conclusive_nonexecution_receipts(tmp_path, ex
             _validate_agent_action_contract(path)
 
 
+@pytest.mark.parametrize("executed", [False, True, None])
+def test_failed_exact_string_edit_only_ignored_when_proven_unexecuted(tmp_path, executed):
+    events = [
+        {"type": "tool_use", "part": {
+            "callID": "bad-match", "tool": "edit", "state": {
+                "status": "error", "input": {"path": "candidate.py"},
+                "error": "Could not find oldString in candidate.py. It must match exactly.",
+                "metadata": {"providerCall": {"executed": executed},
+                             "providerResult": {"executed": executed}},
+            }}},
+        {"type": "tool_use", "part": {
+            "callID": "good-match", "tool": "edit", "state": {
+                "status": "completed", "input": {"path": "candidate.py"},
+            }}},
+    ]
+    path = tmp_path / "events.jsonl"
+    path.write_text("\n".join(json.dumps(event) for event in events))
+    _, actions = summarize_opencode_events(path)
+    assert actions[0]["noop_edit"] is (executed is False)
+    if executed is False:
+        _validate_agent_action_contract(path)
+    else:
+        with pytest.raises(RuntimeError, match="exactly one"):
+            _validate_agent_action_contract(path)
+
+
 def test_edit_handoff_prevents_a_later_candidate_rewrite(tmp_path):
     def event(call_id):
         return json.dumps({"type": "tool_use", "part": {

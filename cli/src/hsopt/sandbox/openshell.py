@@ -768,6 +768,13 @@ def summarize_opencode_events(path: Path) -> tuple[dict[str, Any], list[dict[str
             and (metadata.get("providerCall") or {}).get("executed") is False
             and (metadata.get("providerResult") or {}).get("executed") is False
         )
+        noop_edit = (
+            tool == "edit"
+            and status == "error"
+            and str(state.get("error") or "").startswith("Could not find oldString in ")
+            and (metadata.get("providerCall") or {}).get("executed") is False
+            and (metadata.get("providerResult") or {}).get("executed") is False
+        )
         actions_by_call[action_key] = {
             "timestamp": event.get("timestamp") or previous.get("timestamp"),
             "session_id": session_id or previous.get("session_id"),
@@ -780,6 +787,7 @@ def summarize_opencode_events(path: Path) -> tuple[dict[str, Any], list[dict[str
             "online": tool in ONLINE_TOOLS,
             "permission_denied": status == "error" and permission_denied,
             "tool_unavailable": status == "error" and tool_unavailable,
+            "noop_edit": noop_edit,
         }
         if tool == "execute":
             metadata = state.get("metadata") or {}
@@ -975,6 +983,10 @@ def _validate_agent_action_contract(
                 raise RuntimeError(
                     "Read required benchmark context before editing: " + ", ".join(sorted(missing))
                 )
+            if action.get("noop_edit"):
+                # OpenCode verified that an exact-string replacement did not
+                # execute. A later successful edit remains the sole mutation.
+                continue
             mutation_actions.append(action)
     if preparation:
         missing = set(required_reads) - completed_reads
