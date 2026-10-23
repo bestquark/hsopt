@@ -1,6 +1,7 @@
 """Ground-input dynamics contract, degeneracy and immutable request isolation."""
 
 import copy
+import hashlib
 import json
 from pathlib import Path
 
@@ -162,6 +163,20 @@ def test_shared_prepare_preserves_beta_and_requires_ground_receipts(tmp_path):
                        "evaluation_contract_version": ev.EVALUATION_CONTRACT_VERSION}
     with pytest.raises(ValueError, match="evaluator contract"):
         protocol.record_receipt(run, "h2", wrong)
+
+    warm_start = tmp_path / "transferred_elote.py"
+    template = protocol.ROOT / "experiments/abs_protocol/initial_pf.py"
+    warm_start.write_text(template.read_text() + "\n# transferred ELOTE\n")
+    warm_run = tmp_path / "warm_start"
+    protocol.prepare(selection, warm_run, family="abs_protocol", baseline="tight",
+                     iterations=50, replicate="seed-02", energy_target="ground_branch",
+                     initial_policy=warm_start)
+    warm_manifest = protocol.read(warm_run / "manifest.json")
+    assert warm_manifest["initial_policy_kind"] == "warm_start"
+    assert warm_manifest["initial_policy_sha256"] == hashlib.sha256(warm_start.read_bytes()).hexdigest()
+    assert (warm_run / "initial_pf.py").read_bytes() == warm_start.read_bytes()
+    assert (warm_run / "iterations/0000/candidate.py").read_bytes() == warm_start.read_bytes()
+    assert (warm_run / "suite.json").read_bytes() == (run / "suite.json").read_bytes()
 
 
 def test_reaction_ground_branch_uses_same_exact_input_for_signed_difference(tmp_path, monkeypatch):

@@ -151,14 +151,22 @@ def prepare(
     error_contract: str | None = None,
     energy_target: str = "hf_accessible",
     policy_profile: str = "pauli",
+    initial_policy: Path | None = None,
 ) -> dict[str, Any]:
-    """Reuse beta calibrations and cached references; never recalibrate/diagonalize."""
+    """Reuse sealed calibrations and references, optionally warm-starting the policy."""
     if family not in FAMILIES or baseline not in calibration.BASELINE_VARIANTS or iterations < 1:
         raise ValueError("invalid family, baseline or mutation budget")
     if policy_profile not in ("pauli", "fermionic_nested"):
         raise ValueError("policy profile must be pauli or fermionic_nested")
     from . import elote
     baseline_loader = elote.load_baselines if policy_profile == "fermionic_nested" else calibration.load_baselines
+    template = (
+        initial_policy.resolve() if initial_policy is not None
+        else elote.TEMPLATE if policy_profile == "fermionic_nested"
+        else ROOT / "experiments" / family / "initial_pf.py"
+    )
+    if not template.is_file():
+        raise FileNotFoundError(template)
     kind = FAMILIES[family]
     if energy_target not in {"hf_accessible", "ground_branch"}:
         raise ValueError("unsupported shared-protocol energy target")
@@ -242,9 +250,12 @@ def prepare(
             "suite_sha256": sha(run / "suite.json"),
             "input_sha256": hashes,
             "protocol_evaluator_sha256": sha(Path(__file__)),
+            "initial_policy_sha256": sha(template),
+            "initial_policy_kind": (
+                "warm_start" if initial_policy is not None else "baseline_template"
+            ),
         },
     )
-    template = elote.TEMPLATE if policy_profile == "fermionic_nested" else ROOT / "experiments" / family / "initial_pf.py"
     shutil.copyfile(template, run / "initial_pf.py")
     (run / "initial_pf.py").chmod(0o444)
     shutil.copyfile(run / "initial_pf.py", run / "incumbent.py")

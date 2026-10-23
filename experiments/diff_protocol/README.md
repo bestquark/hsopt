@@ -48,3 +48,8 @@ separate evaluator version, task hashes, and run directory from HF-accessible
 reaction scoring. Build its references from the cached exact-ground species
 states with `prepare_ground_references.py`; pass `--include-held` only when the
 new suite intentionally admits a previously held reaction such as HNO→NOH.
+To test whether reaction-specific optimization improves a molecular ELOTE
+policy, pass that policy as `initial_policy` to `protocol.prepare`. The run
+seals its hash, evaluates it at iteration 0, and then counts 50 subsequent
+mutations. Keep the tight PF2 baseline in a separate validation run for the
+three-stage baseline → ELOTE → ELOTE-Delta comparison.

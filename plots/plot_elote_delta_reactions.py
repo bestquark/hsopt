@@ -67,6 +67,8 @@ def load(baseline: Path, transfer: Path, delta: Path) -> dict:
     if base != transfer_base:
         raise ValueError("transferred ELOTE was compared with a different tight baseline")
     transfer_result, elote = checked_result(transfer / "iterations/0001/result.json")
+    transferred_policy = transfer / "iterations/0001/candidate.py"
+    transfer_sha256 = hashlib.sha256(transferred_policy.read_bytes()).hexdigest()
     seeds = sorted(delta.glob("seed-*"))
     if len(seeds) != 5:
         raise ValueError("Figure 4 requires all five independent ELOTE-Delta seeds")
@@ -77,9 +79,12 @@ def load(baseline: Path, transfer: Path, delta: Path) -> dict:
         state = read_json(seed / "state.json")
         if manifest.get("iterations_target") != 50 or state.get("iterations_completed") != 50:
             raise ValueError(f"ELOTE-Delta seed has not completed 50 mutations: {seed}")
+        if (manifest.get("initial_policy_kind") != "warm_start"
+                or manifest.get("initial_policy_sha256") != transfer_sha256):
+            raise ValueError(f"ELOTE-Delta seed did not start from transferred ELOTE: {seed}")
         seed_baseline, seed_base = checked_result(seed / "iterations/0000/result.json")
-        if seed_base != base:
-            raise ValueError(f"ELOTE-Delta seed has a different tight baseline: {seed}")
+        if seed_base != elote:
+            raise ValueError(f"ELOTE-Delta seed has a different ELOTE starting policy: {seed}")
         result, costs = checked_result(seed / "incumbent_result.json")
         candidate = seed / "incumbent.py"
         if not candidate.is_file():
