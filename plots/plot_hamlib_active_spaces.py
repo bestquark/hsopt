@@ -1,18 +1,20 @@
 #!/usr/bin/env python3
-"""Recreate the HamLib active-space census and dense-screen figure."""
+"""Recreate the HamLib active-space census and selected campaign cohort."""
 
 from __future__ import annotations
 
 import argparse
+import hashlib
+import json
 from collections import Counter
 from pathlib import Path
 from typing import Any
 
 import matplotlib.pyplot as plt
 import numpy as np
+from matplotlib.ticker import MaxNLocator
 
 from _paper_plot import (
-    LIGHT_GRAPHITE,
     NVIDIA_DARK_GREEN,
     NVIDIA_GREEN,
     apply_paper_style,
@@ -61,34 +63,34 @@ def plot(
     output_path: Path,
 ) -> None:
     apply_paper_style()
+    plt.rcParams.update({"font.size": 22, "axes.labelsize": 24,
+                         "xtick.labelsize": 20, "ytick.labelsize": 20, "legend.fontsize": 18})
     all_qubits = sorted(set(selected_counts) | set(full_counts or {}))
     x = np.asarray(all_qubits, dtype=float)
     selected = np.asarray([selected_counts.get(value, 0) for value in all_qubits], dtype=float)
     total_selected = int(np.sum(selected))
 
-    fig, ax = plt.subplots(figsize=(11.2, 4.9), layout="constrained")
+    fig, ax = plt.subplots(figsize=(12.6, 4.9), layout="constrained")
     if full_counts is not None:
         full = np.asarray([full_counts.get(value, 0) for value in all_qubits], dtype=float)
         ax.bar(
             x,
             full,
-            width=0.92,
-            color=LIGHT_GRAPHITE,
+            width=1.65,
+            color="#BFC7BA",
             edgecolor="#8D9588",
-            linewidth=0.9,
-            alpha=0.55,
-            label=r"HamLib active spaces",
+            linewidth=0.65,
+            label=f"HamLib ({sum(full_counts.values())})",
             zorder=1,
         )
     ax.bar(
         x,
         selected,
-        width=0.92,
+        width=1.65,
         color=NVIDIA_GREEN,
         edgecolor=NVIDIA_DARK_GREEN,
-        linewidth=1.0,
-        alpha=0.95,
-        label=rf"dense exact screen ({total_selected} instances)",
+        linewidth=0.8,
+        label=f"Current campaign ({total_selected})",
         zorder=2,
     )
 
@@ -97,43 +99,41 @@ def plot(
         cutoff,
         color=NVIDIA_DARK_GREEN,
         linestyle="--",
-        linewidth=2.2,
+        linewidth=1.7,
         zorder=3,
     )
-    y_top = 1.12 * max(
+    maximum = max(
         max(selected),
         max(full_counts.values()) if full_counts is not None else 0,
     )
+    y_top = 20 * np.ceil(1.10 * maximum / 20)
     ax.text(
-        cutoff + 0.8,
-        0.96 * y_top,
-        rf"dense screen" "\n" rf"$n_q\leq {cutoff}$",
+        cutoff + 2,
+        0.82 * y_top,
+        rf"$n_q\leq {cutoff}$",
         ha="left",
         va="top",
         color=NVIDIA_DARK_GREEN,
-        bbox={
-            "boxstyle": "round,pad=0.2",
-            "facecolor": "white",
-            "edgecolor": "0.72",
-            "linewidth": 0.8,
-            "alpha": 0.96,
-        },
+        fontsize=21,
     )
-    ax.set_xlabel(r"Qubits in mapped electronic Hamiltonian, $n_q$")
+    ax.set_xlabel(r"Mapped qubits, $n_q$")
     ax.set_ylabel(r"Active-space instances")
-    ax.set_xlim(min(all_qubits) - 1.5, max(all_qubits) + 1.5)
+    ax.set_xlim(min(all_qubits) - 2, max(all_qubits) + 3)
     ax.set_ylim(0.0, y_top)
     if max(all_qubits) <= 20:
         ax.set_xticks(np.arange(min(all_qubits), max(all_qubits) + 1, 2))
     else:
         ax.set_xticks(
-            [value for value in (4, 8, 14, 20, 30, 40, 60, 80, 100, 120) if value <= max(x)]
+            sorted({cutoff, *(value for value in (4, 16, 32, 48, 64, 80, 100, 120)
+                              if min(x) <= value <= max(x))})
         )
-    ax.grid(True, axis="y", color="0.87", linewidth=0.7)
+    ax.yaxis.set_major_locator(MaxNLocator(nbins=6, integer=True))
+    ax.grid(False, which="both")
     ax.set_axisbelow(True)
     ax.spines["top"].set_visible(False)
     ax.spines["right"].set_visible(False)
     ax.legend(loc="upper right", ncol=2 if full_counts is not None else 1)
+    fig.savefig(output_path.with_suffix(".png"), dpi=300)
     save_figure(fig, output_path)
 
 
@@ -143,7 +143,7 @@ def main() -> None:
         "--selected-manifest",
         type=Path,
         default=DEFAULT_SELECTION,
-        help="Current dense-screen instances.csv.",
+        help="Selected cohort CSV with nqubits or n_qubits, e.g. a frozen molecules.csv.",
     )
     parser.add_argument(
         "--full-census",
@@ -164,7 +164,19 @@ def main() -> None:
     if args.full_census is not None:
         read_roots.append(args.full_census)
     output_dir = external_output_dir(args.output_dir, *read_roots)
-    plot(selected, full, output_file(output_dir, OUTPUT_NAME))
+    output_path = output_file(output_dir, OUTPUT_NAME)
+    plot(selected, full, output_path)
+    inputs = [args.selected_manifest, *([args.full_census] if args.full_census else [])]
+    metadata = {
+        "selected_count": sum(selected.values()),
+        "selected_counts_by_qubits": dict(sorted(selected.items())),
+        "full_active_space_count": sum(full.values()) if full is not None else None,
+        "full_counts_by_qubits": dict(sorted(full.items())) if full is not None else None,
+        "cutoff_qubits": max(selected),
+        "inputs": {str(path.resolve()): hashlib.sha256(path.read_bytes()).hexdigest() for path in inputs},
+        "plot_script_sha256": hashlib.sha256(Path(__file__).read_bytes()).hexdigest(),
+    }
+    output_path.with_suffix(".json").write_text(json.dumps(metadata, indent=2) + "\n")
 
 
 if __name__ == "__main__":
