@@ -2,7 +2,7 @@
 """Figure 4: ten-reaction T95 comparison on the exact-ground-input branch.
 
 Inputs are the immutable baseline and transfer validation runs, plus five
-completed Δ-ELOTE trajectories. One complete shared policy is selected by
+completed δ-ELOTE trajectories. One complete shared policy is selected by
 its suite-wide geometric-mean score; no per-reaction cherry-picking is allowed.
 """
 
@@ -73,7 +73,7 @@ def load(baseline: Path, transfer: Path, delta: Path) -> dict:
     transfer_sha256 = hashlib.sha256(transferred_policy.read_bytes()).hexdigest()
     seeds = sorted(delta.glob("seed-*"))
     if len(seeds) != 5:
-        raise ValueError("Figure 4 requires all five independent Δ-ELOTE seeds")
+        raise ValueError("Figure 4 requires all five independent δ-ELOTE seeds")
     candidates = []
     production_elote = None
     for seed in seeds:
@@ -81,15 +81,15 @@ def load(baseline: Path, transfer: Path, delta: Path) -> dict:
         manifest = read_json(seed / "manifest.json")
         state = read_json(seed / "state.json")
         if manifest.get("iterations_target") != 50 or state.get("iterations_completed") != 50:
-            raise ValueError(f"Δ-ELOTE seed has not completed 50 mutations: {seed}")
+            raise ValueError(f"δ-ELOTE seed has not completed 50 mutations: {seed}")
         if (manifest.get("initial_policy_kind") != "warm_start"
                 or manifest.get("initial_policy_sha256") != transfer_sha256):
-            raise ValueError(f"Δ-ELOTE seed did not start from transferred ELOTE: {seed}")
+            raise ValueError(f"δ-ELOTE seed did not start from transferred ELOTE: {seed}")
         seed_baseline, seed_base = checked_result(seed / "iterations/0000/result.json")
         if production_elote is None:
             production_elote = seed_base
         elif seed_base != production_elote:
-            raise ValueError(f"Δ-ELOTE seeds disagree on the A100 ELOTE starting cost: {seed}")
+            raise ValueError(f"δ-ELOTE seeds disagree on the A100 ELOTE starting cost: {seed}")
         if any(abs(seed_base[case] / transfer_elote[case] - 1) > 0.01
                for case in EXPECTED_CASES):
             raise ValueError(f"A100 and L4 ELOTE costs differ by over 1%: {seed}")
@@ -100,7 +100,7 @@ def load(baseline: Path, transfer: Path, delta: Path) -> dict:
         candidates.append((float(result["score"]), seed.name, result, costs, candidate))
     score, winner, delta_result, delta_costs, candidate = min(candidates, key=lambda x: x[:2])
     if not math.isfinite(score):
-        raise ValueError("nonfinite winning Δ-ELOTE score")
+        raise ValueError("nonfinite winning δ-ELOTE score")
     return {
         "order": list(REACTION_ORDER),
         "baseline_t95": base,
@@ -127,7 +127,7 @@ def plot(summary: dict, destination: Path) -> None:
     stages = (
         ("baseline_t95", r"Tight PF2", GRAPHITE, "--", "o"),
         ("elote_t95", r"ELOTE", NVIDIA_GREEN, "-", "s"),
-        ("elote_delta_t95", r"$\Delta$-ELOTE", BLUE, "-", "D"),
+        ("elote_delta_t95", r"$\delta$-ELOTE", BLUE, "-", "D"),
     )
     values = np.array([[summary[key][name] for name in order] for key, *_ in stages], dtype=float)
     radial = np.log10(values)
