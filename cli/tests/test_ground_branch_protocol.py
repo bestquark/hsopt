@@ -130,6 +130,17 @@ def test_mutation_prompt_explains_ground_input_and_mixed_precision():
     assert "fixed Hartree--Fock\ninput" not in prompt
 
 
+def test_reaction_mutation_prompt_explains_signed_ground_error_cancellation():
+    prompt = mutation_prompt(context={"shared_protocol": {
+        "energy_target": "ground_branch", "suite_kind": "difference",
+        "difference_error_contract": "error_cancellation",
+    }})
+    assert "sum_i nu_i (E_compiled,i - E_exact,i)" in prompt
+    assert "species errors may cancel" in prompt
+    assert "Every reaction must pass chemical accuracy" in prompt
+    assert "error is E_compiled,0 - E_0" not in prompt
+
+
 def test_shared_prepare_preserves_beta_and_requires_ground_receipts(tmp_path):
     source = FIXTURE / "hamiltonian.json"
     reference, calibration = tmp_path / "reference.json", tmp_path / "calibration.json"

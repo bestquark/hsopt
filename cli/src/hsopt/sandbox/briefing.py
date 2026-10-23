@@ -100,12 +100,22 @@ a scored policy or fabricate a result.
             "Preserve the empty baseline_parameters placeholder; the host binds it.\n"
         )
         if shared.get("energy_target") == "ground_branch":
-            prompt += (
-                "GROUND-INPUT SHARED CONTRACT: score the dominant compiled QPE peak from "
-                "the cached exact ground input; error is E_compiled,0 - E_0. "
-                "Ground-state preparation cost is excluded. CUDA-Q synthesis and GPU Lanczos "
-                "certification are host work.\n"
-            )
+            if shared.get("suite_kind") == "difference":
+                prompt += (
+                    "GROUND-INPUT REACTION CONTRACT: select each species' dominant compiled "
+                    "QPE peak from its cached exact ground input. The reaction error is "
+                    "|sum_i nu_i (E_compiled,i - E_exact,i)|; species errors may cancel. "
+                    "Every reaction must pass chemical accuracy. Ground-state preparation "
+                    "cost is excluded. CUDA-Q synthesis and GPU Lanczos certification are "
+                    "host work.\n"
+                )
+            else:
+                prompt += (
+                    "GROUND-INPUT SHARED CONTRACT: score the dominant compiled QPE peak from "
+                    "the cached exact ground input; error is E_compiled,0 - E_0. "
+                    "Ground-state preparation cost is excluded. CUDA-Q synthesis and GPU Lanczos "
+                    "certification are host work.\n"
+                )
     if context.get("pysr"):
         prompt += (
             "\nPySR is enabled: hsopt_pysr can optimize a mixed-precision rule for your "

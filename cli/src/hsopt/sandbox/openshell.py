@@ -1655,22 +1655,36 @@ def _mutate_once(
         research_context["mutation_protocol_version"] += "_context_reuse_v1_paged_reads_v4"
         if energy_target == "ground_branch":
             research_context["mutation_protocol_version"] += "_shared_ground_input_v1"
-            research_context["policy_contract"] = {
-                **POLICY_CONTRACT,
-                "objective": (
+            if suite["kind"] == "difference":
+                objective = (
+                    "Minimize geometric-mean starting-policy-relative T95 across ALL reactions. "
+                    "For each species, the compiled QPE peak is selected from its cached exact "
+                    "ground input. The reaction error is the signed stoichiometric sum of "
+                    "compiled-minus-exact species energies; species errors may cancel. "
+                    "EVERY reaction must meet the fixed chemical-accuracy bound. "
+                    "The starting policy is sealed by the host. Ground-state "
+                    "preparation cost is excluded. Only feasible strict aggregate gains count."
+                )
+            else:
+                objective = (
                     "Minimize geometric-mean baseline-relative T95 across ALL molecules, "
                     "with |E_compiled,0 - E_0| below chemical accuracy for EVERY molecule. "
                     "The initial state is the cached exact ground vector used for tight "
                     "calibration. Select its dominant compiled QPE eigenspace; do not use HF. "
                     "Include its probability in the 95% confidence cost. Ideal ground-state "
                     "preparation cost is excluded. Only feasible strict aggregate gains count."
-                ),
+                )
+            research_context["policy_contract"] = {
+                **POLICY_CONTRACT,
+                "objective": objective,
             }
         research_context["shared_protocol"] = {
             "raw_context_strategy": "Read whole-suite features and small/median/large raw cases; all raw cases remain readable and all cases must be evaluated.",
             "required_raw_case_ids": [case["id"] for case in selected],
             "raw_input_paths": "Absolute: /sandbox/work/inputs/{case_id}/problem.json. Reaction: /sandbox/work/inputs/{case_id}/reaction.json; it lists its species paths.",
             "energy_target": energy_target,
+            "suite_kind": suite["kind"],
+            "difference_error_contract": suite["difference_error_contract"],
             "objective": "geometric_mean_baseline_relative_t95",
             "accuracy": "Every selected molecule/reaction must pass its own fixed energy contract.",
             "baseline_binding": "Preserve baseline_parameters = {}. The host supplies each case's sealed (r, epsilon, beta) starting values. Change self.r/angles/tolerance rules, not this table.",
