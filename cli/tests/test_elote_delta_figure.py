@@ -46,6 +46,8 @@ def run(tmp_path):
     delta = tmp_path / "delta"
     suite = {
         "kind": "difference",
+        "baseline": "tight",
+        "policy_profile": "fermionic_nested",
         "energy_target": "ground_branch",
         "difference_error_contract": "error_cancellation",
         "cases": [{"id": case} for case in figure.REACTION_ORDER],

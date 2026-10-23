@@ -51,6 +51,8 @@ def check_run_contract(run: Path) -> None:
     suite = read_json(run / "suite.json")
     if (
         suite.get("kind") != "difference"
+        or suite.get("baseline") != "tight"
+        or suite.get("policy_profile") != "fermionic_nested"
         or suite.get("energy_target") != "ground_branch"
         or suite.get("difference_error_contract") != "error_cancellation"
         or {row["id"] for row in suite["cases"]} != EXPECTED_CASES
