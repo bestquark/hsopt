@@ -66,13 +66,14 @@ def load(baseline: Path, transfer: Path, delta: Path) -> dict:
     transfer_baseline, transfer_base = checked_result(transfer / "iterations/0000/result.json")
     if base != transfer_base:
         raise ValueError("transferred ELOTE was compared with a different tight baseline")
-    transfer_result, elote = checked_result(transfer / "iterations/0001/result.json")
+    _, transfer_elote = checked_result(transfer / "iterations/0001/result.json")
     transferred_policy = transfer / "iterations/0001/candidate.py"
     transfer_sha256 = hashlib.sha256(transferred_policy.read_bytes()).hexdigest()
     seeds = sorted(delta.glob("seed-*"))
     if len(seeds) != 5:
         raise ValueError("Figure 4 requires all five independent ELOTE-Delta seeds")
     candidates = []
+    production_elote = None
     for seed in seeds:
         check_run_contract(seed)
         manifest = read_json(seed / "manifest.json")
@@ -83,8 +84,13 @@ def load(baseline: Path, transfer: Path, delta: Path) -> dict:
                 or manifest.get("initial_policy_sha256") != transfer_sha256):
             raise ValueError(f"ELOTE-Delta seed did not start from transferred ELOTE: {seed}")
         seed_baseline, seed_base = checked_result(seed / "iterations/0000/result.json")
-        if seed_base != elote:
-            raise ValueError(f"ELOTE-Delta seed has a different ELOTE starting policy: {seed}")
+        if production_elote is None:
+            production_elote = seed_base
+        elif seed_base != production_elote:
+            raise ValueError(f"ELOTE-Delta seeds disagree on the A100 ELOTE starting cost: {seed}")
+        if any(abs(seed_base[case] / transfer_elote[case] - 1) > 0.01
+               for case in EXPECTED_CASES):
+            raise ValueError(f"A100 and L4 ELOTE costs differ by over 1%: {seed}")
         result, costs = checked_result(seed / "incumbent_result.json")
         candidate = seed / "incumbent.py"
         if not candidate.is_file():
@@ -96,14 +102,15 @@ def load(baseline: Path, transfer: Path, delta: Path) -> dict:
     return {
         "order": list(REACTION_ORDER),
         "baseline_t95": base,
-        "elote_t95": elote,
+        "elote_t95": production_elote,
         "elote_delta_t95": delta_costs,
         "elote_delta_seed": winner,
         "elote_delta_score": score,
         "elote_delta_candidate_sha256": hashlib.sha256(candidate.read_bytes()).hexdigest(),
         "source_results": {
             "baseline": str(baseline / "iterations/0000/result.json"),
-            "elote": str(transfer / "iterations/0001/result.json"),
+            "elote": str(seeds[0] / "iterations/0000/result.json"),
+            "elote_l4_validation": str(transfer / "iterations/0001/result.json"),
             "elote_delta": str(delta / winner / "incumbent_result.json"),
         },
         "all_seed_scores": {name: value for value, name, *_ in candidates},
