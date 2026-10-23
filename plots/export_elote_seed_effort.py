@@ -196,12 +196,14 @@ def collect(campaign):
             "outcome_semantics": "Not retained means any decision accepted=false. Accuracy rejections, infeasible code/execution errors, and unresolved numerical certificates are separate subtypes; uncertified does not establish physical inaccuracy."}
 
 
-def lower_bound_ktokens(value):
-    """Floor a nonnegative per-round token lower bound to 0.1 ktokens."""
+def lower_bound_tokens(value):
+    """Format a token lower bound with an M/B suffix, rounding downward."""
     value = Decimal(str(value))
     if not value.is_finite() or value < 0:
         raise ValueError("Token lower bounds must be finite and nonnegative")
-    return format((value / 1000).quantize(Decimal("0.1"), rounding=ROUND_FLOOR), ".1f")
+    scale, suffix = (Decimal("1000000000"), "B") if value >= 1000000000 else (Decimal("1000000"), "M")
+    amount = (value / scale).quantize(Decimal("0.0001"), rounding=ROUND_FLOOR)
+    return rf"{amount:.4f}\,\mathrm{{{suffix}}}"
 
 
 def write_outputs(result, output):
@@ -217,7 +219,7 @@ def write_outputs(result, output):
     for row in result["seeds"]:
         a, b = row["input_observed_per_completed_round_lower_bound"], row["output_observed_per_completed_round_lower_bound"]
         tokens = (
-            rf"$\geq {lower_bound_ktokens(a)}$ / $\geq {lower_bound_ktokens(b)}$"
+            rf"$\geq {lower_bound_tokens(a)}$ / $\geq {lower_bound_tokens(b)}$"
             if a is not None and b is not None else "---"
         )
         table.append(f"{int(row['seed'][-2:])} & {row['completed_rounds']} & {row['accepted_percent']:.1f} & {row['not_retained_percent']:.1f} & {row['uncertified_decisions']} & {tokens} " + r"\\")
