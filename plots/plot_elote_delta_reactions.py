@@ -60,6 +60,25 @@ def check_run_contract(run: Path) -> None:
         raise ValueError(f"run has a different scientific contract or membership: {run}")
 
 
+def reaction_widths(run: Path) -> dict[str, int]:
+    """Maximum species-register width for each separately evaluated reaction."""
+    suite = read_json(run / "suite.json")
+    widths = {}
+    for case in suite["cases"]:
+        source = run / case["source"]
+        reaction = read_json(source)
+        qubits = []
+        for term in reaction["terms"]:
+            problem = read_json(source.parent / term["problem"])
+            qubits.append(int(problem["n_qubits"]))
+        if not qubits or min(qubits) < 1:
+            raise ValueError(f"invalid species widths for {case['id']}")
+        widths[case["id"]] = max(qubits)
+    if set(widths) != EXPECTED_CASES:
+        raise ValueError("reaction widths do not cover the ten Figure 4 cases")
+    return widths
+
+
 def load(baseline: Path, transfer: Path, delta: Path) -> dict:
     baseline, transfer, delta = baseline.resolve(), transfer.resolve(), delta.resolve()
     check_run_contract(baseline)
@@ -103,6 +122,7 @@ def load(baseline: Path, transfer: Path, delta: Path) -> dict:
         raise ValueError("nonfinite winning δ-ELOTE score")
     return {
         "order": list(REACTION_ORDER),
+        "reaction_max_qubits": reaction_widths(baseline),
         "baseline_t95": base,
         "elote_t95": production_elote,
         "elote_delta_t95": delta_costs,
@@ -121,39 +141,50 @@ def load(baseline: Path, transfer: Path, delta: Path) -> dict:
 
 def plot(summary: dict, destination: Path) -> None:
     apply_paper_style(compact=True)
-    order = summary["order"]
+    widths = summary["reaction_max_qubits"]
+    sorted_order = sorted(summary["order"],
+                          key=lambda name: (widths[name], summary["baseline_t95"][name]))
+    order = sorted_order[::2] + sorted_order[::-2]
     theta = np.linspace(0.0, 2.0 * np.pi, len(order), endpoint=False)
     closed = np.r_[theta, theta[0]]
     stages = (
-        ("baseline_t95", r"Tight PF2", GRAPHITE, "--", "o"),
+        ("baseline_t95", r"Tight baseline", GRAPHITE, "--", "o"),
         ("elote_t95", r"ELOTE", NVIDIA_GREEN, "-", "s"),
         ("elote_delta_t95", r"$\delta$-ELOTE", BLUE, "-", "D"),
     )
     values = np.array([[summary[key][name] for name in order] for key, *_ in stages], dtype=float)
     radial = np.log10(values)
-    lower = max(0, math.floor(float(radial.min()) - 0.3))
-    upper = math.ceil(float(radial.max()) + 0.3)
-    fig, ax = plt.subplots(figsize=(9.0, 8.4), subplot_kw={"projection": "polar"})
-    ax.set_theta_offset(np.pi / 2.0)
+    lower = max(0, math.floor(float(radial.min())) - 0.5)
+    upper = math.ceil(float(radial.max())) - 0.5
+    if upper - float(radial.max()) < 0.15:
+        upper += 1
+    fig, ax = plt.subplots(figsize=(16, 13.2), subplot_kw={"projection": "polar"})
+    ax.set_position([0.235, 0.17, 0.53, 0.64])
+    ax.set_theta_offset(np.pi / 2)
     ax.set_theta_direction(-1)
     ax.set_ylim(lower, upper)
     ax.set_xticks(theta)
-    ax.set_xticklabels([REACTION_LABELS[name] for name in order], fontsize=13)
-    ax.tick_params(axis="x", pad=12)
-    ticks = np.arange(math.ceil(lower), upper + 1)
+    ax.set_xticklabels([])
+    ticks = np.arange(math.ceil(lower), math.floor(upper) + 1)
     ax.set_yticks(ticks)
-    ax.set_yticklabels([rf"$10^{{{int(tick)}}}$" for tick in ticks], fontsize=12)
-    ax.set_rlabel_position(86)
-    ax.grid(alpha=0.18, linewidth=0.8)
-    ax.spines["polar"].set_color("#A0A0A0")
+    ax.set_yticklabels([rf"$10^{{{int(tick)}}}$" for tick in ticks], fontsize=20)
+    ax.set_rlabel_position(76)
+    ax.grid(color="#D8D8D8", linewidth=0.8)
+    ax.spines["polar"].set_color("#A8A8A8")
+    for angle, name in zip(theta, order):
+        x, y = math.sin(angle), math.cos(angle)
+        ha = "left" if x > 0.25 else "right" if x < -0.25 else "center"
+        va = "bottom" if y > 0.25 else "top" if y < -0.25 else "center"
+        ax.text(0.5 + 0.61 * x, 0.5 + 0.61 * y,
+                REACTION_LABELS[name] + "\n" + rf"$n_{{\max}}={widths[name]}$",
+                transform=ax.transAxes, ha=ha, va=va, fontsize=23,
+                clip_on=False)
     for index, (_, label, color, linestyle, marker) in enumerate(stages):
         ax.plot(closed, np.r_[radial[index], radial[index, 0]], color=color,
-                linestyle=linestyle, marker=marker, markersize=5.5,
+                linestyle=linestyle, marker=marker, markersize=6,
                 linewidth=2.3, label=label)
-    ax.legend(loc="upper center", bbox_to_anchor=(0.5, 1.17), ncol=3,
-              columnspacing=1.3, handlelength=2.0)
-    fig.text(0.5, 0.035, r"Compiled QPE cost $T_{95}$ (logarithmic radial scale)",
-             ha="center", va="center", fontsize=16)
+    ax.legend(loc="upper center", bbox_to_anchor=(0.5, 1.36), ncol=3,
+              fontsize=22, columnspacing=1.4, handlelength=2.0)
     save_figure(fig, destination)
 
 

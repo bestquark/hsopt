@@ -50,11 +50,20 @@ def run(tmp_path):
         "policy_profile": "fermionic_nested",
         "energy_target": "ground_branch",
         "difference_error_contract": "error_cancellation",
-        "cases": [{"id": case} for case in figure.REACTION_ORDER],
+        "cases": [
+            {"id": case, "source": f"inputs/{case}/reaction.json"}
+            for case in figure.REACTION_ORDER
+        ],
     }
     for path in (baseline, transfer):
         save(path / "suite.json", suite)
         save(path / "iterations/0000/result.json", result(1000))
+    for case in figure.REACTION_ORDER:
+        input_dir = baseline / "inputs" / case
+        save(input_dir / "reaction.json", {
+            "terms": [{"problem": "problems/species.json"}],
+        })
+        save(input_dir / "problems/species.json", {"n_qubits": 10})
     save(transfer / "iterations/0001/result.json", result(200, .2))
     policy = b"class ProductFormula: pass\n"
     (transfer / "iterations/0001/candidate.py").write_bytes(policy)
@@ -80,6 +89,7 @@ def test_figure_uses_a100_elote_and_one_suite_winner(tmp_path):
     assert set(summary["baseline_t95"].values()) == {1000}
     assert set(summary["elote_t95"].values()) == {201}
     assert set(summary["elote_delta_t95"].values()) == {185}
+    assert set(summary["reaction_max_qubits"].values()) == {10}
     assert summary["elote_delta_seed"] == "seed-05"
 
 
