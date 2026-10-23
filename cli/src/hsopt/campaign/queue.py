@@ -77,7 +77,11 @@ def _task_id(
     digest.update(b"hsopt-exact-task-v4\0")
     digest.update(EVALUATION_CONTRACT_VERSION.encode())
     if energy_target != "hf_accessible":
-        digest.update(b"\0" + ground_branch.CONTRACT_VERSION.encode())
+        contract = (
+            ground_branch.DIFFERENCE_CONTRACT_VERSION
+            if kind == "difference" else ground_branch.CONTRACT_VERSION
+        )
+        digest.update(b"\0" + contract.encode())
         # A verifier upgrade must not reuse an older inconclusive task receipt.
         # The physical scoring contract remains the same; numerical provenance
         # gets its own content-addressed task identity.
@@ -168,9 +172,9 @@ def enqueue(
     queue_dir = queue_dir.resolve()
     policy = policy.resolve()
     if energy_target not in {"hf_accessible", "ground_branch"} or (
-        energy_target == "ground_branch" and (kind != "absolute" or reference is None)
+        energy_target == "ground_branch" and reference is None
     ):
-        raise ValueError("ground-input tasks require an absolute-energy case and cached reference")
+        raise ValueError("ground-input tasks require a cached exact-ground reference")
     if not policy.is_file():
         raise FileNotFoundError(policy)
     if reference is not None:
@@ -247,7 +251,10 @@ def enqueue(
             }
             if energy_target != "hf_accessible":
                 metadata.update(energy_target=energy_target,
-                                evaluation_contract_version=ground_branch.CONTRACT_VERSION)
+                                evaluation_contract_version=(
+                                    ground_branch.DIFFERENCE_CONTRACT_VERSION
+                                    if kind == "difference" else ground_branch.CONTRACT_VERSION
+                                ))
             _write_json(temporary / "task.json", metadata)
             destination = queue_dir / "pending" / task_id
             temporary.rename(destination)
@@ -316,7 +323,10 @@ def evaluate_task(
     try:
         energy_target = metadata.get("energy_target", "hf_accessible")
         expected_contract = (
-            ground_branch.CONTRACT_VERSION if energy_target == "ground_branch"
+            (
+                ground_branch.DIFFERENCE_CONTRACT_VERSION
+                if metadata["kind"] == "difference" else ground_branch.CONTRACT_VERSION
+            ) if energy_target == "ground_branch"
             else EVALUATION_CONTRACT_VERSION
         )
         if metadata.get("evaluation_contract_version") != expected_contract:
@@ -347,6 +357,7 @@ def evaluate_task(
                     error_contract=metadata["difference_error_contract"],
                     backend=backend,
                     reference_path=reference,
+                    energy_target=energy_target,
                 )
         result["task_id"] = task_id
     except Exception as exc:  # record the scientific evaluation failure

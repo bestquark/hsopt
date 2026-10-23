@@ -36,6 +36,15 @@ Run `error_cancellation` in a **different root**, with its own shared candidate,
 trajectory, and aggregate score. Parameters are bound per reaction, preserving
 its stoichiometric error allocation even when a species appears in several
 reactions. CUDA-Q compilation and GPU Lanczos remain the fixed judge.
-Select the suite explicitly: the existing HNO→NOH hold is not resolved or
-silently included by these new experiments. Do not change suite membership
-mid-trajectory. All selected reactions must return before the next mutation.
+Select the suite explicitly; do not change its membership mid-trajectory. All
+selected reactions must return before the next mutation.
+
+For a reaction-difference dynamics comparison aligned with the molecular ELOTE
+ground-input contract, select `--energy-target ground_branch`. This compares
+each species' compiled QPE peak against its cached exact ground energy before
+forming the signed reaction difference. It excludes ideal ground-state
+preparation cost, as the molecular ground-input experiment does. It has a
+separate evaluator version, task hashes, and run directory from HF-accessible
+reaction scoring. Build its references from the cached exact-ground species
+states with `prepare_ground_references.py`; pass `--include-held` only when the
+new suite intentionally admits a previously held reaction such as HNO→NOH.

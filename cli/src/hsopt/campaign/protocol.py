@@ -118,17 +118,26 @@ def _validate_reference(kind: str, source: Path, reference: Path, energy_target:
         else:
             judge._reference_energy(judge.load_problem(source), payload)
         return
+    reaction_ground = energy_target == "ground_branch"
+    expected_target = ground_branch.REFERENCE_TARGET if reaction_ground else judge.REFERENCE_TARGET
+    expected_version = (
+        (ground_branch.DIFFERENCE_CONTRACT_VERSION,) if reaction_ground
+        else judge.EXACT_REFERENCE_CONTRACT_VERSIONS
+    )
     if (
         payload.get("observable") != "exact_unitary_signed_energy_difference"
-        or payload.get("evaluation_contract_version") not in judge.EXACT_REFERENCE_CONTRACT_VERSIONS
-        or payload.get("reference_target") != judge.REFERENCE_TARGET
+        or payload.get("evaluation_contract_version") not in expected_version
+        or payload.get("reference_target") != expected_target
         or payload.get("reaction_sha256") != sha(source)
     ):
-        raise ValueError("reaction needs a matching, certified HF-accessible reference")
+        raise ValueError("reaction needs a matching, certified reference for its energy target")
     for item in read(source)["terms"]:
-        judge._reference_energy(
-            judge.load_problem(source.parent / item["problem"]), payload["species"][item["species"]]
-        )
+        problem = judge.load_problem(source.parent / item["problem"])
+        species_reference = payload["species"][item["species"]]
+        if reaction_ground:
+            ground_branch.cached_reference(problem, species_reference)
+        else:
+            judge._reference_energy(problem, species_reference)
 
 
 def prepare(
@@ -151,10 +160,8 @@ def prepare(
     from . import elote
     baseline_loader = elote.load_baselines if policy_profile == "fermionic_nested" else calibration.load_baselines
     kind = FAMILIES[family]
-    if energy_target not in {"hf_accessible", "ground_branch"} or (
-        kind != "absolute" and energy_target != "hf_accessible"
-    ):
-        raise ValueError("ground-input scoring is available for abs_protocol only")
+    if energy_target not in {"hf_accessible", "ground_branch"}:
+        raise ValueError("unsupported shared-protocol energy target")
     if (
         kind == "difference"
         and error_contract not in judge.DIFFERENCE_ERROR_CONTRACTS
@@ -226,7 +233,10 @@ def prepare(
             "difference_error_contract": error_contract,
             "energy_target": energy_target,
             "evaluation_contract_version": (
-                ground_branch.CONTRACT_VERSION if energy_target == "ground_branch"
+                (
+                    ground_branch.DIFFERENCE_CONTRACT_VERSION
+                    if kind == "difference" else ground_branch.CONTRACT_VERSION
+                ) if energy_target == "ground_branch"
                 else judge.EVALUATION_CONTRACT_VERSION
             ),
             "suite_sha256": sha(run / "suite.json"),

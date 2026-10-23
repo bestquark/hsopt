@@ -1593,12 +1593,16 @@ def assemble_exact_difference_reference(
     species_references: Mapping[str, Mapping[str, Any]],
     *,
     backend: str,
+    energy_target: str = "hf_accessible",
 ) -> dict[str, Any]:
     """Assemble a reaction reference from already-computed species references."""
 
     assembly_started = time.perf_counter()
     reaction_path = reaction_path.resolve()
     reaction = json.loads(reaction_path.read_text(encoding="utf-8"))
+    if energy_target not in {"hf_accessible", "ground_branch"}:
+        raise ValueError("unsupported reaction energy target")
+    from . import ground_branch
     species_results: dict[str, dict[str, Any]] = {}
     unitary_difference = 0.0
     hamiltonian_difference = 0.0
@@ -1611,8 +1615,12 @@ def assemble_exact_difference_reference(
         problem_path = (reaction_path.parent / str(item["problem"])).resolve()
         problem = load_problem(problem_path)
         result = dict(species_references[species])
-        unitary_energy = _reference_energy(problem, result)
-        hamiltonian_energy = float(result["exact_hf_accessible_energy_hartree"])
+        if energy_target == "ground_branch":
+            unitary_energy, _ = ground_branch.cached_reference(problem, result)
+            hamiltonian_energy = float(result["hamiltonian_ground_energy_hartree"])
+        else:
+            unitary_energy = _reference_energy(problem, result)
+            hamiltonian_energy = float(result["exact_hf_accessible_energy_hartree"])
         ground_difference += coefficient * float(result["hamiltonian_ground_energy_hartree"])
         species_results[species] = result
         unitary_difference += coefficient * unitary_energy
@@ -1626,9 +1634,15 @@ def assemble_exact_difference_reference(
     assembly_seconds = time.perf_counter() - assembly_started
     return {
         "status": "ok",
-        "evaluation_contract_version": EVALUATION_CONTRACT_VERSION,
+        "evaluation_contract_version": (
+            ground_branch.DIFFERENCE_CONTRACT_VERSION
+            if energy_target == "ground_branch" else EVALUATION_CONTRACT_VERSION
+        ),
         "observable": "exact_unitary_signed_energy_difference",
-        "reference_target": REFERENCE_TARGET,
+        "reference_target": (
+            ground_branch.REFERENCE_TARGET if energy_target == "ground_branch" else REFERENCE_TARGET
+        ),
+        "energy_target": energy_target,
         "unitary_definition": ("U_exact = exp(+i (H - c0 I) / lambda) for each species"),
         "reaction": reaction["name"],
         "reaction_path": str(reaction_path),
@@ -1655,6 +1669,7 @@ def evaluate_exact_difference_reference(
     reaction_path: Path,
     *,
     backend: str = "cupynumeric",
+    energy_target: str = "hf_accessible",
 ) -> dict[str, Any]:
     """Compute immutable exact-unitary references for a signed energy difference."""
 
@@ -1674,6 +1689,7 @@ def evaluate_exact_difference_reference(
         reaction_path,
         species_results,
         backend=backend,
+        energy_target=energy_target,
     )
     evaluation_wall_seconds = time.perf_counter() - evaluation_started
     assembled["evaluation_wall_seconds"] = evaluation_wall_seconds
@@ -1892,6 +1908,7 @@ def evaluate_difference(
     error_contract: str,
     backend: str = "cupynumeric",
     reference_path: Path | None = None,
+    energy_target: str = "hf_accessible",
 ) -> dict[str, Any]:
     """Evaluate a reaction under one explicit, immutable error contract.
 
@@ -1905,6 +1922,9 @@ def evaluate_difference(
         raise ValueError(
             f"error_contract must be one of {DIFFERENCE_ERROR_CONTRACTS}, got {error_contract!r}"
         )
+    if energy_target not in {"hf_accessible", "ground_branch"}:
+        raise ValueError("unsupported reaction energy target")
+    from . import ground_branch
 
     evaluation_started = time.perf_counter()
     reaction_path = reaction_path.resolve()
@@ -1912,14 +1932,26 @@ def evaluate_difference(
     reference = (
         json.loads(Path(reference_path).read_text(encoding="utf-8"))
         if reference_path is not None
-        else evaluate_exact_difference_reference(reaction_path, backend=backend)
+        else evaluate_exact_difference_reference(
+            reaction_path, backend=backend, energy_target=energy_target
+        )
     )
     if reference.get("observable") != "exact_unitary_signed_energy_difference":
         raise ValueError("reference is not an exact-unitary signed-difference result")
-    if reference.get("evaluation_contract_version") not in EXACT_REFERENCE_CONTRACT_VERSIONS:
+    expected_version = (
+        ground_branch.DIFFERENCE_CONTRACT_VERSION
+        if energy_target == "ground_branch" else EVALUATION_CONTRACT_VERSION
+    )
+    if reference.get("evaluation_contract_version") not in (
+        (expected_version,) if energy_target == "ground_branch"
+        else EXACT_REFERENCE_CONTRACT_VERSIONS
+    ):
         raise ValueError("reference uses a different evaluator contract")
-    if reference.get("reference_target") != REFERENCE_TARGET:
-        raise ValueError("reaction reference requires HF-accessible reference preparation")
+    reference_target = (
+        ground_branch.REFERENCE_TARGET if energy_target == "ground_branch" else REFERENCE_TARGET
+    )
+    if reference.get("reference_target") != reference_target:
+        raise ValueError("reaction reference uses a different energy target")
     if reference.get("reaction_sha256") != _sha256(reaction_path):
         raise ValueError(f"exact reference does not match {reaction_path}")
     species_results: dict[str, dict[str, Any]] = {}
@@ -1946,6 +1978,7 @@ def evaluate_difference(
                 backend=backend,
                 reference_result=reference["species"][species],
                 target_confidence=species_target_confidence,
+                energy_target=energy_target,
             )
             species_results[species] = result
             total_t_count += int(result["t_count"])
@@ -1984,8 +2017,12 @@ def evaluate_difference(
         if weight <= 0.0:
             raise ValueError(f"reaction has zero net coefficient for species {species!r}")
         species_precision = reaction_qpe_precision / (len(unique_species) * weight)
+        probability_key = (
+            "qpe_success_probability_from_ground_input"
+            if energy_target == "ground_branch" else "qpe_success_probability_from_hf"
+        )
         species_qpe_cost = _qpe_cost_metrics(
-            peak_probability=float(result["qpe_success_probability_from_hf"]),
+            peak_probability=float(result[probability_key]),
             target_confidence=species_target_confidence,
             target_time=float(result["phase_encoding"]["physical_evolution_time_hartree_inverse"]),
             energy_precision_hartree=species_precision,
@@ -2015,11 +2052,12 @@ def evaluate_difference(
     evaluation_wall_seconds = time.perf_counter() - evaluation_started
     return {
         "status": "ok",
-        "evaluation_contract_version": EVALUATION_CONTRACT_VERSION,
+        "evaluation_contract_version": expected_version,
+        "energy_target": energy_target,
         "difference_error_contract": error_contract,
         "difference_error_contract_version": DIFFERENCE_ERROR_CONTRACT_VERSION,
         "observable": "compiled_unitary_signed_energy_difference",
-        "reference_target": REFERENCE_TARGET,
+        "reference_target": reference_target,
         "exact_ground_difference_hartree": reference["exact_ground_difference_hartree"],
         "reaction": reaction["name"],
         "reaction_path": str(reaction_path),

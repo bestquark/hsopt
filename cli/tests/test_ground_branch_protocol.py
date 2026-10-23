@@ -1,6 +1,7 @@
 """Ground-input dynamics contract, degeneracy and immutable request isolation."""
 
 import copy
+import json
 from pathlib import Path
 
 import numpy as np
@@ -161,3 +162,58 @@ def test_shared_prepare_preserves_beta_and_requires_ground_receipts(tmp_path):
                        "evaluation_contract_version": ev.EVALUATION_CONTRACT_VERSION}
     with pytest.raises(ValueError, match="evaluator contract"):
         protocol.record_receipt(run, "h2", wrong)
+
+
+def test_reaction_ground_branch_uses_same_exact_input_for_signed_difference(tmp_path, monkeypatch):
+    source = FIXTURE / "hamiltonian.json"
+    reaction = tmp_path / "reaction.json"
+    local_problem = tmp_path / "h2.json"
+    local_problem.write_bytes(source.read_bytes())
+    reaction.write_text(json.dumps({
+        "name": "ground-input check",
+        "terms": [{"species": "h2", "coefficient": 1.0, "problem": local_problem.name}],
+    }))
+    # Reference hashes are bound to the exact local Hamiltonian file bytes.
+    reference = ev.evaluate_exact_reference(local_problem, backend="numpy")
+    assembled = ev.assemble_exact_difference_reference(
+        reaction, {"h2": reference}, backend="numpy", energy_target="ground_branch"
+    )
+    assert assembled["reference_target"] == g.REFERENCE_TARGET
+    assert assembled["evaluation_contract_version"] == g.DIFFERENCE_CONTRACT_VERSION
+    assert assembled["exact_unitary_difference_hartree"] == pytest.approx(
+        reference["exact_unitary_ground_energy_hartree"]
+    )
+    stored = tmp_path / "reference.json"
+    stored.write_text(json.dumps(assembled))
+    protocol._validate_reference("difference", reaction, stored, "ground_branch")
+    seen = []
+
+    def evaluate(*args, **kwargs):
+        seen.append(kwargs["energy_target"])
+        return {
+            "exact_reference_energy_hartree": assembled["exact_unitary_difference_hartree"],
+            "compiled_pf_energy_hartree": assembled["exact_unitary_difference_hartree"] + 1e-5,
+            "qpe_success_probability_from_ground_input": 0.9,
+            "t_count": 100,
+            "evaluation_wall_seconds": 0.1,
+            "phase_encoding": {"physical_evolution_time_hartree_inverse": 0.1},
+        }
+
+    monkeypatch.setattr(ev, "evaluate_molecule", evaluate)
+    result = ev.evaluate_difference(
+        reaction, tmp_path / "policy.py", error_contract="error_cancellation",
+        backend="cupy-lanczos", reference_path=stored, energy_target="ground_branch"
+    )
+    assert seen == ["ground_branch"]
+    assert result["energy_target"] == "ground_branch"
+    assert result["evaluation_contract_version"] == g.DIFFERENCE_CONTRACT_VERSION
+    assert result["passes_chemical_accuracy"]
+    assert result["absolute_difference_error_hartree"] == pytest.approx(1e-5)
+    queued = queue.enqueue(
+        tmp_path / "queue", kind="difference", source=reaction,
+        policy=FIXTURE / "initial_pf.py", reference=stored,
+        difference_error_contract="error_cancellation", energy_target="ground_branch"
+    )
+    request = interface.evaluation_request(Path(queued["path"]))
+    assert request["task"]["energy_target"] == "ground_branch"
+    assert request["task"]["evaluation_contract_version"] == g.DIFFERENCE_CONTRACT_VERSION
