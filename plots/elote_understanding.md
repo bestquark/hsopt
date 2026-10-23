@@ -60,9 +60,11 @@ python3 plots/export_elote_seed_effort.py \
   --snapshot /path/to/seed_effort.json --output /path/to/rebuilt-table
 ```
 
-The table uses observed lower bounds on mean input/output tokens over **all**
-completed rounds, rounded downward and displayed with M/B suffixes for millions
-and billions. Separate JSON fields give means over fully
-logged rounds. Numerical uncertainty, policy-execution errors, physical accuracy
+The table reports ordinary mean input and output tokens in separate columns,
+using only fully logged rounds, including their identified retries. Values use
+M/B suffixes for millions and billions. Report the logged-round coverage alongside
+the table. Separate JSON fields retain observed lower bounds over all completed
+rounds; these are not the displayed token means. Numerical uncertainty,
+policy-execution errors, physical accuracy
 rejections and nonimproving valid proposals have distinct classifications.
 “Not retained” is not a physical failure rate.

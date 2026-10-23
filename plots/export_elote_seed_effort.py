@@ -14,7 +14,7 @@ import argparse
 from collections import Counter
 import csv
 from datetime import datetime, timezone
-from decimal import Decimal, ROUND_FLOOR
+from decimal import Decimal, ROUND_HALF_UP
 import gzip
 import hashlib
 import json
@@ -33,10 +33,11 @@ TOKEN_SEMANTICS = (
     "and agent_audit.json are not separately summed. Stable "
     "(sessionID,messageID,part.id) keys deduplicate repeated receipts globally. "
     "No missing usage is imputed as zero. Fields ending _mean_per_complete_round "
-    "use only rounds with complete usage for every identified attempt. Fields "
-    "ending _observed_per_completed_round_lower_bound and the LaTeX table divide "
+    "use only rounds with complete usage for every identified attempt. The LaTeX "
+    "table reports these means in separate input and output columns. Fields "
+    "ending _observed_per_completed_round_lower_bound divide "
     "observed totals by all completed rounds, including partially logged rounds. "
-    "Printed lower bounds are rounded downward independently for input and output."
+    "Printed means use ordinary rounding with M/B suffixes."
 )
 
 
@@ -196,13 +197,13 @@ def collect(campaign):
             "outcome_semantics": "Not retained means any decision accepted=false. Accuracy rejections, infeasible code/execution errors, and unresolved numerical certificates are separate subtypes; uncertified does not establish physical inaccuracy."}
 
 
-def lower_bound_tokens(value):
-    """Format a token lower bound with an M/B suffix, rounding downward."""
+def mean_tokens(value):
+    """Format a fully logged-round token mean with an M/B suffix."""
     value = Decimal(str(value))
     if not value.is_finite() or value < 0:
-        raise ValueError("Token lower bounds must be finite and nonnegative")
+        raise ValueError("Token means must be finite and nonnegative")
     scale, suffix = (Decimal("1000000000"), "B") if value >= 1000000000 else (Decimal("1000000"), "M")
-    amount = (value / scale).quantize(Decimal("0.0001"), rounding=ROUND_FLOOR)
+    amount = (value / scale).quantize(Decimal("0.0001"), rounding=ROUND_HALF_UP)
     return rf"{amount:.4f}\,\mathrm{{{suffix}}}"
 
 
@@ -217,12 +218,10 @@ def write_outputs(result, output):
             writer.writerows({k: json.dumps(v, sort_keys=True) if isinstance(v, (dict, list)) else v for k, v in row.items()} for row in rows)
     table = []
     for row in result["seeds"]:
-        a, b = row["input_observed_per_completed_round_lower_bound"], row["output_observed_per_completed_round_lower_bound"]
-        tokens = (
-            rf"$\geq {lower_bound_tokens(a)}$ / $\geq {lower_bound_tokens(b)}$"
-            if a is not None and b is not None else "---"
-        )
-        table.append(f"{int(row['seed'][-2:])} & {row['completed_rounds']} & {row['accepted_percent']:.1f} & {row['not_retained_percent']:.1f} & {row['uncertified_decisions']} & {tokens} " + r"\\")
+        a, b = row["input_mean_per_complete_round"], row["output_mean_per_complete_round"]
+        input_tokens = rf"${mean_tokens(a)}$" if a is not None else "---"
+        output_tokens = rf"${mean_tokens(b)}$" if b is not None else "---"
+        table.append(f"{int(row['seed'][-2:])} & {row['completed_rounds']} & {row['accepted_percent']:.1f} & {row['not_retained_percent']:.1f} & {row['uncertified_decisions']} & {input_tokens} & {output_tokens} " + r"\\")
     (output / "table_body.tex").write_text("\n".join(table) + "\n")
     manifest = {"exporter_sha256": digest(Path(__file__).read_bytes()), "files": {p.name: digest(p.read_bytes()) for p in output.iterdir() if p.is_file() and p.name != "manifest.json"}}
     (output / "manifest.json").write_text(json.dumps(manifest, indent=2) + "\n")
