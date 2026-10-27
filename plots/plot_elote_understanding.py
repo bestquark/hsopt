@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """Explain the frozen Figure 2 ELOTE without another scientific evaluation.
 
-Snapshot mode checks the seed-05/round-78 Figure 2 export against recorded
+Snapshot mode checks a supported frozen Figure 2 export against recorded
 tolerances and the archived policy, then exports compact, self-contained plot
 data.  Replay mode renders that compact export without reading the original
 snapshot or a live campaign.  Observed allocations and conditional responses
@@ -29,7 +29,22 @@ from matplotlib.ticker import MaxNLocator
 from _paper_plot import GRAPHITE, NVIDIA_GREEN, apply_paper_style
 
 
-PINNED_POLICY_SHA256 = "966d815a5dcbace3b9b5538ea450393a5207ebfaf228f99c2decbd4bae6e46d5"
+POLICY_PROFILES = {
+    "966d815a5dcbace3b9b5538ea450393a5207ebfaf228f99c2decbd4bae6e46d5": (0.3, 0.4, 78),
+    "d199f6a4efef965aa015dbd73f69d14f628fd1b9eaa3653391dad8e3a75e472e": (0.1, 0.30, 100),
+}
+PINNED_POLICY_SHA256 = next(iter(POLICY_PROFILES))
+COEFFICIENT_EXPONENT, SYSTEM_EXPONENT, POLICY_ITERATION = POLICY_PROFILES[PINNED_POLICY_SHA256]
+
+
+def configure_policy(digest):
+    """Select a byte-identified formula, never infer it from a plot label."""
+    global PINNED_POLICY_SHA256, COEFFICIENT_EXPONENT, SYSTEM_EXPONENT, POLICY_ITERATION
+    if digest not in POLICY_PROFILES:
+        raise ValueError("No verified explanatory formula for this policy hash")
+    PINNED_POLICY_SHA256 = digest
+    COEFFICIENT_EXPONENT, SYSTEM_EXPONENT, POLICY_ITERATION = POLICY_PROFILES[digest]
+
 BLUE = "#5B829A"
 PLOT_DATA_SCHEMA = "elote-understanding-plot-data-v1"
 
@@ -46,20 +61,21 @@ def read_rows(path):
 
 def factors(x, w, z, xy, W, c_ref, diagonal):
     """Exact dimensionless factors, before the policy's final epsilon clamp."""
-    coefficient = 1 + 1.2 * x**0.3
+    coefficient = 1 + 1.2 * x**COEFFICIENT_EXPONENT
     support = 1 + 0.12 * (w - 1) / W
     character = np.where(
         diagonal,
         (1 + 1.2 * x) * (1 + 0.18 * z / W * (1 + 0.2 * x)),
         1 + 0.3 * xy / W * (1 + 0.2 * x),
     )
-    system = 1 + 0.12 * (c_ref / max(1, W))**0.4
+    system = 1 + 0.12 * (c_ref / max(1, W))**SYSTEM_EXPONENT
     return coefficient, support, character, system
 
 
 def verify(snapshot):
     manifest = json.loads((snapshot / "manifest.json").read_text())
-    assert manifest["seed"] == "seed-05" and manifest["iteration"] == 78
+    configure_policy(manifest["policy_sha256"])
+    assert manifest["seed"] == "seed-05" and manifest["iteration"] == POLICY_ITERATION
     assert manifest["policy_sha256"] == PINNED_POLICY_SHA256
     for name, digest in manifest["files"].items():
         assert sha(snapshot / name) == digest, name
@@ -104,7 +120,7 @@ def verify(snapshot):
             row["x"] = x
         summaries.append({"case_id": case, "c_ref": c_ref, "W": W,
                           "cmax_over_cref": max(abs(float(r["coefficient"])) for r in rows) / c_ref,
-                          "system_factor": 1 + 0.12 * (c_ref / W)**0.4})
+                          "system_factor": 1 + 0.12 * (c_ref / W)**SYSTEM_EXPONENT})
     assert max_factored_error < 1e-12 and max_method_error < 1e-12
     assert clamped_rows == 0
     assert all(int(row["baseline_n_steps"]) == int(row["best_n_steps"]) for row in molecules)
@@ -142,13 +158,13 @@ def verify(snapshot):
 
     summary = {
         "schema": "elote-understanding-v1", "source_snapshot": str(snapshot),
-        "policy_sha256": PINNED_POLICY_SHA256, "seed": "seed-05", "iteration": 78,
+        "policy_sha256": PINNED_POLICY_SHA256, "seed": "seed-05", "iteration": POLICY_ITERATION,
         "case_count": len(molecules), "checked_best_rotation_rows": len(best),
         "maximum_relative_factorization_error": max_factored_error,
         "maximum_relative_policy_method_error": max_method_error,
         "clamped_best_rows": clamped_rows,
         "formula": {
-            "epsilon_j_over_epsilon0": "(1+1.2*x_j^0.3)*(1+0.12*(w_j-1)/W)*D_j*G_H",
+            "epsilon_j_over_epsilon0": f"(1+1.2*x_j^{COEFFICIENT_EXPONENT:g})*(1+0.12*(w_j-1)/W)*D_j*G_H",
             "x_j": "abs(c_j)/c_ref; c_ref is the largest absolute Pauli contribution in the verified fermionic blocks, before aggregation",
             "w_j": "number of nonidentity letters in P_j",
             "z_j": "number of Z letters in P_j",
@@ -156,7 +172,7 @@ def verify(snapshot):
             "W": "maximum Pauli support in the verified block map; equal to observed maximum support for all 115 cases",
             "D_j_diagonal": "(1+1.2*x_j)*(1+0.18*z_j/W*(1+0.2*x_j))",
             "D_j_off_diagonal": "1+0.3*q_j/W*(1+0.2*x_j)",
-            "G_H": "1+0.12*(c_ref/max(1,W))^0.4, with coefficients represented numerically in Hartree",
+            "G_H": f"1+0.12*(c_ref/max(1,W))^{SYSTEM_EXPONENT:g}, with coefficients represented numerically in Hartree",
             "clamp": "epsilon_j=min(1-1e-15,max(1e-15,epsilon0*all_factors)); inactive for every recorded best row",
             "direct_angle_factor": 1,
         },
@@ -233,6 +249,7 @@ def load_compact(path):
     with np.load(path, allow_pickle=False) as archive:
         metadata = json.loads(str(archive["metadata_json"]))
         assert metadata["schema"] == PLOT_DATA_SCHEMA
+        configure_policy(metadata["policy_sha256"])
         assert metadata["policy_sha256"] == PINNED_POLICY_SHA256
         assert set(archive.files) == {"metadata_json", *metadata["arrays"]}
         arrays = {name: archive[name] for name in metadata["arrays"]}
@@ -252,7 +269,7 @@ def load_compact(path):
         assert np.array_equal(arrays[name], value), f"conditional formula changed: {name}"
     summary = metadata["source_scientific_verification"]
     assert summary["case_count"] == 115 and summary["policy_sha256"] == PINNED_POLICY_SHA256
-    assert summary["seed"] == "seed-05" and summary["iteration"] == 78
+    assert summary["seed"] == "seed-05" and summary["iteration"] == POLICY_ITERATION
     return arrays, summary
 
 
@@ -359,7 +376,7 @@ def main():
                                ("elote_policy_features.pdf", "elote_policy_features.png")}
     (output / "policy_diagnostics.json").write_text(json.dumps(summary, indent=2) + "\n")
     (output / "caption.tex").write_text(
-        "Structure of the shared ELOTE used in Figure~2 (seed~5, mutation~78). "
+        "Structure of the selected shared ELOTE used in Figure~2. "
         "(a) Recorded relative synthesis tolerances across all 115 Hamiltonians, "
         "excluding zero-angle identity rotations. The coefficient reference is "
         "the largest Pauli contribution in the verified fermionic block decomposition, "
