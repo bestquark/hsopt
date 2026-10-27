@@ -249,14 +249,21 @@ def plot(snapshot, output, heldout_summary=None):
             hold = np.asarray(heldout)
             low = min(low, float(hold.min()) - padding)
             high = max(high, float(hold.max()) + padding)
-            ax.hist(values, bins=bins, weights=np.full(len(values), 100 / len(values)),
-                    color=NVIDIA_GREEN, edgecolor="black", linewidth=0.7, alpha=0.65,
-                    label=rf"Training ($n={len(values)}$)")
-            ax.hist(hold, bins=bins, weights=np.full(len(hold), 100 / len(hold)),
-                    histtype="step", color="#396FA8", linewidth=2.4,
-                    label=rf"Held-out ($n={len(hold)}$)")
+            # Each stack segment is a percentage of the combined cohort, so
+            # a complete bar shows the observed share of all Hamiltonians.
+            population = len(values) + len(hold)
+            train_bins = np.histogram(values, bins=bins)[0] * (100 / population)
+            heldout_bins = np.histogram(hold, bins=bins)[0] * (100 / population)
+            left, widths = bins[:-1], np.diff(bins)
+            ax.bar(left, train_bins, width=widths, align="edge",
+                   color=NVIDIA_GREEN, edgecolor=NVIDIA_DARK_GREEN,
+                   linewidth=0.65, label=rf"Training ($n={len(values)}$)")
+            ax.bar(left, heldout_bins, width=widths, bottom=train_bins,
+                   align="edge", color="#D8EBAF", edgecolor=NVIDIA_DARK_GREEN,
+                   hatch="///", linewidth=0.8,
+                   label=rf"Held-out ($n={len(hold)}$)")
             ax.axvline(median, color=NVIDIA_DARK_GREEN, linestyle=":", linewidth=1.9)
-            ax.axvline(float(np.median(hold)), color="#396FA8", linestyle=":", linewidth=1.9)
+            ax.axvline(float(np.median(hold)), color="#678C3E", linestyle=":", linewidth=1.9)
         else:
             ax.hist(values, bins=bins, color=NVIDIA_GREEN, edgecolor="black", linewidth=0.7, alpha=0.82)
             ax.axvline(mean, color=NVIDIA_DARK_GREEN, linestyle="--", linewidth=2,
@@ -264,7 +271,7 @@ def plot(snapshot, output, heldout_summary=None):
             ax.axvline(median, color=GRAPHITE, linestyle=":", linewidth=2,
                        label=rf"Median ${median:.2f}\%$")
         ax.set_xlabel(r"Compiled $T$-gate reduction (\%)" if metric == "compiled" else r"$T_{95}$ reduction (\%)")
-        ax.set_ylabel(r"Hamiltonians (\%)" if heldout and metric == "compiled" else "Hamiltonians")
+        ax.set_ylabel(r"All Hamiltonians (\%)" if heldout and metric == "compiled" else "Hamiltonians")
         ax.set_xlim(low, high); ax.set_ylim(bottom=0)
         ax.xaxis.set_major_locator(MaxNLocator(nbins=6))
         ax.yaxis.set_major_locator(MaxNLocator(integer=not (heldout and metric == "compiled")))
@@ -305,8 +312,10 @@ def plot(snapshot, output, heldout_summary=None):
         "This count includes all Trotter repetitions and excludes QPE query and "
         "success-amplification factors; a separate $T_{95}$ version includes them. "
         "Both policies pass the recorded chemical-accuracy criterion on every optimization case. "
-        + (f"Panel (b) additionally outlines {len(heldout)} held-out 18--22-qubit literal circuit counts "
-           "under training-extrapolated starting parameters; those counts alone do not certify energy accuracy. "
+        + (f"Panel (b) stacks {manifest['case_count']} training and {len(heldout)} held-out 18--22-qubit "
+           "literal circuit counts as percentages of their combined cohort; held-out portions are hatched. "
+           "Held-out starting parameters are extrapolated from training calibrations, and those counts "
+           "alone do not certify energy accuracy. "
            if heldout else "") +
         "The learned policy also changes the splitting to flat PF1, so the cost "
         "reduction is not a precision-only ablation.\n"
@@ -320,7 +329,7 @@ def plot(snapshot, output, heldout_summary=None):
         "heldout_statuses": heldout_statuses,
         "heldout_summary_sha256": sha(heldout_summary) if heldout_summary else None,
         "baseline_display": "Constant uniform-tolerance reference at epsilon/epsilon0=1; raw baseline rotations retained in snapshot.",
-        "histogram": "Freedman-Diaconis bins, all Hamiltonians retained, one observation per Hamiltonian.",
+        "histogram": "Freedman-Diaconis bins, one observation per Hamiltonian; training and held-out countable cases stack as shares of their combined cohort when held-out data are supplied.",
         "files": {path.name: sha(path) for path in sorted(output.iterdir())
                   if path.is_file() and path.suffix in ("png", ".png", ".pdf", ".tex")},
     }, indent=2) + "\n")
