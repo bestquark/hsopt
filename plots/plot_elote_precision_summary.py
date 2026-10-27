@@ -264,7 +264,7 @@ def plot(snapshot, output, heldout_summary=None):
                    align="edge", color=to_rgba("#B7E36A", .24),
                    edgecolor=to_rgba(NVIDIA_DARK_GREEN, .27),
                    hatch="/", linewidth=0.8,
-                   label=rf"Held-out ($n={len(hold)}$)")
+                   label=rf"Testing ($n={len(hold)}$)")
             ax.axvline(median, color=NVIDIA_DARK_GREEN, linestyle=":", linewidth=1.9)
             ax.axvline(float(np.median(hold)), color="#678C3E", linestyle=":", linewidth=1.9)
         else:
@@ -315,9 +315,9 @@ def plot(snapshot, output, heldout_summary=None):
         "This count includes all Trotter repetitions and excludes QPE query and "
         "success-amplification factors; a separate $T_{95}$ version includes them. "
         "Both policies pass the recorded chemical-accuracy criterion on every optimization case. "
-        + (f"Panel (b) stacks {manifest['case_count']} training and {len(heldout)} held-out 18--22-qubit "
-           "literal circuit counts as percentages of their combined cohort; held-out portions are hatched. "
-           "Held-out starting parameters are extrapolated from training calibrations, and those counts "
+        + (f"Panel (b) stacks {manifest['case_count']} training and {len(heldout)} testing 18--22-qubit "
+           "literal circuit counts as percentages of their combined cohort; testing portions are hatched. "
+           "Starting parameters for testing are extrapolated from training calibrations, and those counts "
            "alone do not certify energy accuracy. "
            if heldout else "") +
         "The learned policy also changes the splitting to flat PF1, so the cost "
