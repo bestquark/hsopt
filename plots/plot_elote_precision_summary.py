@@ -163,7 +163,7 @@ def export(campaign, output):
     print(json.dumps(summary, indent=2))
 
 
-def plot(snapshot, output):
+def plot(snapshot, output, heldout_summary=None):
     import matplotlib
     matplotlib.use("Agg")
     import matplotlib.pyplot as plt
@@ -180,6 +180,31 @@ def plot(snapshot, output):
         rotations = list(csv.DictReader(stream))
     assert len(molecules) == manifest["case_count"]
     assert len(rotations) == manifest["unique_rotation_rows"]
+    heldout = []
+    heldout_statuses = None
+    if heldout_summary is not None:
+        test = read(heldout_summary)
+        if test.get("schema") != "elote-heldout-audit-v1":
+            raise ValueError("unsupported held-out count summary")
+        if test.get("policy_sha256") != manifest["policy_sha256"]:
+            raise ValueError("held-out counts use a different frozen ELOTE policy")
+        heldout_statuses = test["count_statuses"]
+        seen = set()
+        for row in test["results"]:
+            key = row["case_id"]
+            if key in seen or int(row["n_qubits"]) <= 16:
+                raise ValueError("held-out cases must be unique and larger than training cases")
+            seen.add(key)
+            if row["count_status"] != "ok":
+                continue
+            if row["allocation_extrapolated"] is not True:
+                raise ValueError("held-out allocation provenance is missing")
+            baseline, learned = int(row["baseline_t_count"]), int(row["elote_t_count"])
+            if baseline <= 0 or learned < 0:
+                raise ValueError("invalid held-out compiled count")
+            heldout.append(100 * (1 - learned / baseline))
+        if not heldout:
+            raise ValueError("no countable held-out Hamiltonians")
     output.mkdir(parents=True, exist_ok=True)
     apply_paper_style()
     plt.rcParams.update({"font.size": 22, "axes.labelsize": 24, "axes.titlesize": 23,
@@ -214,19 +239,35 @@ def plot(snapshot, output):
         mean, median = float(values.mean()), float(np.median(values))
         # Show the actual distribution with data-driven bins; retain every
         # Hamiltonian, including any negative reductions, without clipping.
-        bins = np.histogram_bin_edges(values, bins="fd")
+        bins = np.histogram_bin_edges(
+            np.concatenate((values, heldout)) if heldout and metric == "compiled" else values,
+            bins="fd",
+        )
         padding = max(0.5, 0.08 * float(np.ptp(values)))
         low, high = float(values.min()) - padding, float(values.max()) + padding
-        ax.hist(values, bins=bins, color=NVIDIA_GREEN, edgecolor="black", linewidth=0.7, alpha=0.82)
-        ax.axvline(mean, color=NVIDIA_DARK_GREEN, linestyle="--", linewidth=2,
-                   label=rf"Mean ${mean:.2f}\%$")
-        ax.axvline(median, color=GRAPHITE, linestyle=":", linewidth=2,
-                   label=rf"Median ${median:.2f}\%$")
+        if heldout and metric == "compiled":
+            hold = np.asarray(heldout)
+            low = min(low, float(hold.min()) - padding)
+            high = max(high, float(hold.max()) + padding)
+            ax.hist(values, bins=bins, weights=np.full(len(values), 100 / len(values)),
+                    color=NVIDIA_GREEN, edgecolor="black", linewidth=0.7, alpha=0.65,
+                    label=rf"Training ($n={len(values)}$)")
+            ax.hist(hold, bins=bins, weights=np.full(len(hold), 100 / len(hold)),
+                    histtype="step", color="#396FA8", linewidth=2.4,
+                    label=rf"Held-out ($n={len(hold)}$)")
+            ax.axvline(median, color=NVIDIA_DARK_GREEN, linestyle=":", linewidth=1.9)
+            ax.axvline(float(np.median(hold)), color="#396FA8", linestyle=":", linewidth=1.9)
+        else:
+            ax.hist(values, bins=bins, color=NVIDIA_GREEN, edgecolor="black", linewidth=0.7, alpha=0.82)
+            ax.axvline(mean, color=NVIDIA_DARK_GREEN, linestyle="--", linewidth=2,
+                       label=rf"Mean ${mean:.2f}\%$")
+            ax.axvline(median, color=GRAPHITE, linestyle=":", linewidth=2,
+                       label=rf"Median ${median:.2f}\%$")
         ax.set_xlabel(r"Compiled $T$-gate reduction (\%)" if metric == "compiled" else r"$T_{95}$ reduction (\%)")
-        ax.set_ylabel("Hamiltonians")
+        ax.set_ylabel(r"Hamiltonians (\%)" if heldout and metric == "compiled" else "Hamiltonians")
         ax.set_xlim(low, high); ax.set_ylim(bottom=0)
         ax.xaxis.set_major_locator(MaxNLocator(nbins=6))
-        ax.yaxis.set_major_locator(MaxNLocator(integer=True))
+        ax.yaxis.set_major_locator(MaxNLocator(integer=not (heldout and metric == "compiled")))
         ax.legend(loc="upper left", fontsize=17)
 
     def finish(fig, axes, name):
@@ -263,7 +304,10 @@ def plot(snapshot, output):
         "relative to the same tight baseline, with one observation per Hamiltonian. "
         "This count includes all Trotter repetitions and excludes QPE query and "
         "success-amplification factors; a separate $T_{95}$ version includes them. "
-        "Both policies pass the recorded chemical-accuracy criterion on every case. "
+        "Both policies pass the recorded chemical-accuracy criterion on every optimization case. "
+        + (f"Panel (b) additionally outlines {len(heldout)} held-out 18--22-qubit literal circuit counts "
+           "under training-extrapolated starting parameters; those counts alone do not certify energy accuracy. "
+           if heldout else "") +
         "The learned policy also changes the splitting to flat PF1, so the cost "
         "reduction is not a precision-only ablation.\n"
     )
@@ -272,6 +316,9 @@ def plot(snapshot, output):
         "snapshot_manifest_sha256": sha(snapshot / "manifest.json"),
         "latex_rendering": True, "policy_sha256": manifest["policy_sha256"],
         "case_count": manifest["case_count"],
+        "heldout_countable_cases": len(heldout),
+        "heldout_statuses": heldout_statuses,
+        "heldout_summary_sha256": sha(heldout_summary) if heldout_summary else None,
         "baseline_display": "Constant uniform-tolerance reference at epsilon/epsilon0=1; raw baseline rotations retained in snapshot.",
         "histogram": "Freedman-Diaconis bins, all Hamiltonians retained, one observation per Hamiltonian.",
         "files": {path.name: sha(path) for path in sorted(output.iterdir())
@@ -290,11 +337,14 @@ def main():
     render = modes.add_parser("plot")
     render.add_argument("--snapshot", type=Path, required=True)
     render.add_argument("--output", type=Path, required=True)
+    render.add_argument("--heldout-summary", type=Path,
+                        help="optional frozen >16-qubit literal-count audit for panel (b)")
     args = parser.parse_args()
     if args.mode == "export":
         export(args.campaign.resolve(), args.output.resolve())
     else:
-        plot(args.snapshot.resolve(), args.output.resolve())
+        plot(args.snapshot.resolve(), args.output.resolve(),
+             args.heldout_summary.resolve() if args.heldout_summary else None)
 
 
 if __name__ == "__main__":
