@@ -217,11 +217,20 @@ def write_outputs(result, output):
             writer.writeheader()
             writer.writerows({k: json.dumps(v, sort_keys=True) if isinstance(v, (dict, list)) else v for k, v in row.items()} for row in rows)
     table = []
+    mapping = result.get("paper_run_label_to_original_seed")
+    labels = {seed: int(label) for label, seed in mapping.items()} if mapping else {}
+    if mapping and (
+        len(labels) != len(mapping)
+        or set(labels) != {row["seed"] for row in result["seeds"]}
+        or any(label <= 0 for label in labels.values())
+    ):
+        raise ValueError("Paper labels must map one-to-one onto the reported original runs")
     for row in result["seeds"]:
         a, b = row["input_mean_per_complete_round"], row["output_mean_per_complete_round"]
         input_tokens = rf"${mean_tokens(a)}$" if a is not None else "---"
         output_tokens = rf"${mean_tokens(b)}$" if b is not None else "---"
-        table.append(f"{int(row['seed'][-2:])} & {row['completed_rounds']} & {row['accepted_percent']:.1f} & {row['not_retained_percent']:.1f} & {row['uncertified_decisions']} & {input_tokens} & {output_tokens} " + r"\\")
+        label = labels.get(row["seed"], int(row["seed"][-2:]))
+        table.append(f"{label} & {row['completed_rounds']} & {row['accepted_percent']:.1f} & {row['not_retained_percent']:.1f} & {row['uncertified_decisions']} & {input_tokens} & {output_tokens} " + r"\\")
     (output / "table_body.tex").write_text("\n".join(table) + "\n")
     manifest = {"exporter_sha256": digest(Path(__file__).read_bytes()), "files": {p.name: digest(p.read_bytes()) for p in output.iterdir() if p.is_file() and p.name != "manifest.json"}}
     (output / "manifest.json").write_text(json.dumps(manifest, indent=2) + "\n")
