@@ -168,6 +168,7 @@ def plot(snapshot, output, heldout_summary=None):
     matplotlib.use("Agg")
     import matplotlib.pyplot as plt
     import numpy as np
+    from matplotlib.colors import to_rgba
     from matplotlib.ticker import MaxNLocator, LogLocator, FuncFormatter
     from _paper_plot import apply_paper_style, NVIDIA_GREEN, NVIDIA_DARK_GREEN, GRAPHITE
 
@@ -208,7 +209,8 @@ def plot(snapshot, output, heldout_summary=None):
     output.mkdir(parents=True, exist_ok=True)
     apply_paper_style()
     plt.rcParams.update({"font.size": 22, "axes.labelsize": 24, "axes.titlesize": 23,
-                         "xtick.labelsize": 20, "ytick.labelsize": 20, "legend.fontsize": 18})
+                         "xtick.labelsize": 20, "ytick.labelsize": 20, "legend.fontsize": 18,
+                         "hatch.linewidth": 4.0})
 
     def scatter(ax, parameter):
         xkey = "rz_angle" if parameter == "angle" else "coefficient_ratio_cmax"
@@ -259,8 +261,9 @@ def plot(snapshot, output, heldout_summary=None):
                    color=NVIDIA_GREEN, edgecolor=NVIDIA_DARK_GREEN,
                    linewidth=0.65, label=rf"Training ($n={len(values)}$)")
             ax.bar(left, heldout_bins, width=widths, bottom=train_bins,
-                   align="edge", color="#D8EBAF", edgecolor=NVIDIA_DARK_GREEN,
-                   hatch="///", linewidth=0.8,
+                   align="edge", color=to_rgba("#B7E36A", .24),
+                   edgecolor=to_rgba(NVIDIA_DARK_GREEN, .27),
+                   hatch="/", linewidth=0.8,
                    label=rf"Held-out ($n={len(hold)}$)")
             ax.axvline(median, color=NVIDIA_DARK_GREEN, linestyle=":", linewidth=1.9)
             ax.axvline(float(np.median(hold)), color="#678C3E", linestyle=":", linewidth=1.9)
