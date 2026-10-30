@@ -56,9 +56,10 @@ include literal T counts, QPE-inclusive T95, energy values and errors, compiler,
 accelerator and evaluator provenance where recorded. Original result/decision
 hashes are retained. Large expanded circuits, reference vectors, private agent
 messages and mutable dispatcher state remain in the original external archive.
-The scientific exporter is `export_scientific_trajectories.py`; it performs only
-read-only archive access. The frozen inputs are sufficient to reproduce the
-plots without that archive.
+The frozen inputs are sufficient to reproduce the plots without accessing the
+external campaign archive. One-time archive exporters are preserved at
+[the frozen export commit](https://github.com/bestquark/hsopt/tree/c92def0822c7ce717c870795caa6d19ab44092db/figures),
+and their hashes are listed in `experiments/manuscript.json`.
 
 ## Table 1
 
@@ -74,10 +75,12 @@ uv run python figures/export_elote_seed_effort.py \
 The result exactly matches the archived table body. The manuscript embeds those
 rows directly and needs no script during compilation.
 
-## Retired plots and validation libraries
+## Current script scope and retired tools
 
 Optional older figure frontends and superseded images are preserved on
 [`manuscript-assets-archive-20261030`](https://github.com/bestquark/hsopt/tree/manuscript-assets-archive-20261030/plots).
-They are not part of the current figure build. `validation/` retains the tested
-numerical counting, cohort-aggregation and provenance helpers; these support
-auditing scientific measurements rather than additional published figures.
+Only the seven figure generators listed above, their two shared Python helpers,
+`build.py`, `audit.py`, and the Table 1 exporter remain here. Figure 1 retains its
+coefficient-histogram generator and original LaTeX banner assembly. Numerical
+test support lives under `cli/tests/helpers/figure_numerics/`, outside this folder;
+it does not add any manuscript figures.

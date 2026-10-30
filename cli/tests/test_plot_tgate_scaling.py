@@ -10,10 +10,12 @@ from types import SimpleNamespace
 import pytest
 
 
-PLOTS = Path(__file__).parents[2] / "figures" / "validation"
-sys.path.insert(0, str(PLOTS))
+NUMERICS = Path(__file__).parents[2] / "cli" / "tests" / "helpers" / "figure_numerics"
+sys.path.insert(0, str(NUMERICS))
 try:
-    spec = importlib.util.spec_from_file_location("plot_tgate_scaling", PLOTS / "compiled_cost.py")
+    spec = importlib.util.spec_from_file_location(
+        "plot_tgate_scaling", NUMERICS / "compiled_cost.py"
+    )
     plotting = importlib.util.module_from_spec(spec)
     spec.loader.exec_module(plotting)
 finally:
@@ -282,7 +284,7 @@ def test_final_plot_rejects_missing_catalog_ids_even_if_summary_says_complete(
     tmp_path, monkeypatch
 ):
     pytest.importorskip("matplotlib")
-    monkeypatch.syspath_prepend(str(PLOTS))
+    monkeypatch.syspath_prepend(str(NUMERICS))
     import _paper_plot
 
     def must_not_render():

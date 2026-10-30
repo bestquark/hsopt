@@ -5,7 +5,8 @@ import numpy as np
 import pytest
 
 spec = importlib.util.spec_from_file_location(
-    "shared_figures", Path(__file__).parents[2] / "figures/validation/search_statistics.py"
+    "shared_figures",
+    Path(__file__).parents[2] / "cli/tests/helpers/figure_numerics/search_statistics.py",
 )
 module = importlib.util.module_from_spec(spec)
 spec.loader.exec_module(module)

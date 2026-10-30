@@ -97,7 +97,7 @@ def _method_ast(path, name):
 
 def streamable_pf2(baseline_path, policy_path):
     """The bounded-memory fast path is limited to the canonical PF2 schedule."""
-    canonical = Path(__file__).resolve().parents[2] / "experiments/abs_protocol/initial_pf.py"
+    canonical = Path(__file__).resolve().parents[4] / "experiments/abs_protocol/initial_pf.py"
     expected = _method_ast(canonical, "build_step")
     for path in (baseline_path, policy_path):
         module = ev.load_policy(Path(path))
@@ -246,7 +246,7 @@ def streamed_analytic_pair(text, problem, statistics, allocation, baseline, poli
 
 def count(args):
     output = args.output_dir.resolve()
-    repo = Path(__file__).resolve().parents[2]
+    repo = Path(__file__).resolve().parents[4]
     if output.is_relative_to(repo):
         raise ValueError("generated resource tables must live outside the checkout")
     output.mkdir(parents=True, exist_ok=True)

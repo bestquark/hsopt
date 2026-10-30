@@ -129,8 +129,11 @@ Do not regenerate beta calibrations when changing this selected scoring contract
 ## Frozen manuscript artifacts
 
 Current figure generators and released figures live in `figures/`; data processing
-for manuscript figures belongs there. Frozen candidate/decision/case-metric exports
-and plotting inputs live under the matching `experiments/*/results/` directories.
+for manuscript figures belongs there. Keep only active manuscript generators and
+their build/audit/table support in this directory. Numerical test helpers belong
+in `cli/tests/helpers/`, and one-time exporters stay in their archived commit.
+Frozen candidate/decision/case-metric exports and plotting inputs live under the
+matching `experiments/*/results/` directories.
 `experiments/manuscript.json` maps these inputs to their unchanged manuscript assets.
 Never export credentials, raw sandbox messages or mutable dispatcher state. Preserve
 all reported policy and source hashes; scientific aggregate values are not compiler

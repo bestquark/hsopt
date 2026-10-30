@@ -9,11 +9,11 @@ from pathlib import Path
 import pytest
 
 
-PLOTS = Path(__file__).parents[2] / "figures" / "validation"
-sys.path.insert(0, str(PLOTS))
+NUMERICS = Path(__file__).parents[2] / "cli" / "tests" / "helpers" / "figure_numerics"
+sys.path.insert(0, str(NUMERICS))
 try:
     spec = importlib.util.spec_from_file_location(
-        "plot_elote_delta_reactions", PLOTS / "reaction_provenance.py"
+        "plot_elote_delta_reactions", NUMERICS / "reaction_provenance.py"
     )
     figure = importlib.util.module_from_spec(spec)
     spec.loader.exec_module(figure)

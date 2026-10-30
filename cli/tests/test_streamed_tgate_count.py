@@ -11,11 +11,11 @@ import pytest
 from hsopt.evaluation import compiled_unitary as ev
 
 
-PLOTS = Path(__file__).parents[2] / "figures" / "validation"
-sys.path.insert(0, str(PLOTS))
+NUMERICS = Path(__file__).parents[2] / "cli" / "tests" / "helpers" / "figure_numerics"
+sys.path.insert(0, str(NUMERICS))
 try:
     spec = importlib.util.spec_from_file_location(
-        "streamed_tgate_count", PLOTS / "_streamed_tgate_count.py"
+        "streamed_tgate_count", NUMERICS / "_streamed_tgate_count.py"
     )
     stream = importlib.util.module_from_spec(spec)
     spec.loader.exec_module(stream)

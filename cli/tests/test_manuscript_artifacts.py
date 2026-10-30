@@ -1,5 +1,6 @@
 """Frozen publication data stays connected to proposals and released assets."""
 
+import ast
 import importlib.util
 import json
 from pathlib import Path
@@ -58,3 +59,33 @@ def test_historical_dependency_keeps_its_actual_identity(artifacts):
         )
         with pytest.raises(ValueError, match="Historical source identity"):
             _paths.data_path("data/reaction_elote_delta_a100_summary.json", sha256)
+
+
+def test_figures_directory_contains_only_current_reproduction_dependencies():
+    # Follow local imports and the literal generator filenames dispatched by the
+    # build; unrelated plotting utilities must not accumulate in this directory.
+    pending = [FIGURES / name for name in ("build.py", "audit.py", "export_elote_seed_effort.py")]
+    used = set()
+    while pending:
+        path = pending.pop()
+        if path in used:
+            continue
+        used.add(path)
+        for node in ast.walk(ast.parse(path.read_text())):
+            names = []
+            if isinstance(node, ast.ImportFrom) and node.module:
+                names.append(node.module.split(".")[0] + ".py")
+            if isinstance(node, ast.Import):
+                names.extend(alias.name.split(".")[0] + ".py" for alias in node.names)
+            if isinstance(node, ast.Constant) and isinstance(node.value, str):
+                names.append(node.value)
+            for name in names:
+                target = FIGURES / name
+                if target.suffix == ".py" and target.parent == FIGURES and target.is_file():
+                    pending.append(target)
+    assert used == set(FIGURES.rglob("*.py"))
+    # Figure 1's quantitative inset is a real plot, not just the raster artwork.
+    assert FIGURES / "plot_autoresearch_histograms.py" in used
+    assert FIGURES / "_coefficient_data.py" in used
+    banner = (FIGURES / "sources/hsopt_autoresearch_loop/banner.tex").read_text()
+    assert "{coefficient_histograms_2x2.pdf}" in banner

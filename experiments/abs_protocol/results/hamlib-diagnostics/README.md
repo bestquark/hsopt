@@ -11,5 +11,6 @@
   pinned; coefficients at or below 1e-15 are omitted, matching the original
   inset recipe. These illustrative 18–30-qubit examples are not training cases.
 
-All figure processing is under figures/. export_schematic_coefficients.py can
-re-extract the four samples from checksum-verified public HamLib archives.
+All current figure processing is under figures/. The original one-time coefficient
+extractor is preserved at the export commit and hash in experiments/manuscript.json.
+Rebuilding Figure 1 uses the frozen coefficient arrays without another download.
