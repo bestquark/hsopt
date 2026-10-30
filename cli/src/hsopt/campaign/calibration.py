@@ -235,6 +235,7 @@ def _exact_pf_energy(
     matrices = []
     if backend_name == "cupy-lanczos":
         from hsopt.evaluation.gpu_rotations import RotationUpdater
+
         updater = RotationUpdater(optimized=True)
     for term, alpha in rotations:
         theta = -2.0 * float(alpha)
@@ -259,10 +260,13 @@ def _exact_pf_energy(
 
     if backend_name == "cupy-lanczos":
         from hsopt.evaluation.gpu_spectrum import eigensolve, phase_enclosure
+
         eigenvalues, eigenvectors, _diagnostics = eigensolve(
-            unitary, problem,
+            unitary,
+            problem,
             {"n_steps": n_steps, "compiled_phase_enclosure": phase_enclosure(matrices, n_steps)},
-            iterative=True, target_state=exact_target,
+            iterative=True,
+            target_state=exact_target,
         )
     else:
         eigenvalues, eigenvectors = xp.linalg.eig(unitary)
@@ -427,8 +431,10 @@ def _double_commutator_bound(
     than materializing ``M**3`` triples or estimating them by Monte Carlo.
     """
 
-    terms = ordered_terms if ordered_terms is not None else sorted(
-        problem["terms"], key=lambda term: str(term["label"])
+    terms = (
+        ordered_terms
+        if ordered_terms is not None
+        else sorted(problem["terms"], key=lambda term: str(term["label"]))
     )
     coefficients = np.asarray(
         [abs(float(term["coefficient"])) for term in terms],
@@ -817,7 +823,9 @@ def calibration_main() -> int:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("problem", type=Path)
     parser.add_argument("--output", required=True, type=Path)
-    parser.add_argument("--backend", choices=("numpy", "cupynumeric", "cupy-lanczos"), default="numpy")
+    parser.add_argument(
+        "--backend", choices=("numpy", "cupynumeric", "cupy-lanczos"), default="numpy"
+    )
     parser.add_argument(
         "--mode",
         choices=("empirical_exact", "hamiltonian_bound"),
@@ -1189,5 +1197,3 @@ def load_baselines(
         rows[name] = row
         used.append(resolved_calibration)
     return rows, used
-
-

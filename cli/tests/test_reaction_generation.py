@@ -140,7 +140,9 @@ def test_jordan_wigner_labels_and_coefficients_reconstruct_physical_matrix():
 def test_pyscf_h2_integrals_match_fci_energy():
     pyscf = pytest.importorskip("pyscf")
     pytest.importorskip("openfermion")
-    definitions, _ = generation.load_definitions(INPUTS / "reactions.json", INPUTS / "reactions.json")
+    definitions, _ = generation.load_definitions(
+        INPUTS / "reactions.json", INPUTS / "reactions.json"
+    )
     integrals = generation.active_space_integrals(definitions["species"]["h2"], threads=1)
     matrix, _ = _physical_matrix(integrals)
     # FCI is an independent PySCF energy check, including the core constant.
@@ -222,7 +224,9 @@ def test_existing_campaign_inputs_are_never_replaced(tmp_path):
     sentinel = original / "sealed.json"
     sentinel.write_text("original campaign")
     with pytest.raises(FileExistsError, match="fresh output"):
-        generation.generate_reactions(INPUTS / "reactions.json", INPUTS / "reactions.json", original)
+        generation.generate_reactions(
+            INPUTS / "reactions.json", INPUTS / "reactions.json", original
+        )
     assert sentinel.read_text() == "original campaign"
 
 

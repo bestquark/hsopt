@@ -53,7 +53,9 @@ def test_ground_scoring_reuses_cached_input_and_excludes_hf_bias(monkeypatch):
     build = ev._build_compiled_step
     monkeypatch.setattr(ev, "array_backend", lambda _: ("cupy-lanczos", np))
     monkeypatch.setattr(ev, "_fence", lambda _: None)
-    monkeypatch.setattr(ev, "_build_compiled_step", lambda p, pf, **kw: build(p, pf, backend_name="numpy", xp=np))
+    monkeypatch.setattr(
+        ev, "_build_compiled_step", lambda p, pf, **kw: build(p, pf, backend_name="numpy", xp=np)
+    )
     seen = []
 
     def known_spectrum(unitary, problem, metrics, *, iterative, target_state, reference_energy):
@@ -65,8 +67,9 @@ def test_ground_scoring_reuses_cached_input_and_excludes_hf_bias(monkeypatch):
 
     monkeypatch.setattr(gpu_spectrum, "eigensolve", known_spectrum)
     monkeypatch.setattr(ev, "evaluate_exact_reference", lambda *a, **k: pytest.fail("recomputed H"))
-    result = ev.evaluate_molecule(source, policy, backend="cupy-lanczos",
-                                  reference_result=ref, energy_target="ground_branch")
+    result = ev.evaluate_molecule(
+        source, policy, backend="cupy-lanczos", reference_result=ref, energy_target="ground_branch"
+    )
     assert result["evaluation_contract_version"] == g.CONTRACT_VERSION
     assert result["reference_target"] == g.REFERENCE_TARGET
     assert result["passes_chemical_accuracy"]
@@ -108,8 +111,14 @@ def test_task_and_request_fingerprints_separate_ground_from_hf(tmp_path):
     protocol.write(reference, ev.evaluate_exact_reference(source, backend="numpy"))
     calls = []
     for target in ("hf_accessible", "ground_branch"):
-        item = queue.enqueue(tmp_path / "queue", kind="absolute", source=source, policy=policy,
-                             reference=reference, energy_target=target)
+        item = queue.enqueue(
+            tmp_path / "queue",
+            kind="absolute",
+            source=source,
+            policy=policy,
+            reference=reference,
+            energy_target=target,
+        )
         calls.append(interface.evaluation_request(Path(item["path"])))
     hf, ground = calls
     assert hf["task_id"] != ground["task_id"]
@@ -131,10 +140,15 @@ def test_mutation_prompt_explains_ground_input_and_mixed_precision():
 
 
 def test_reaction_mutation_prompt_explains_signed_ground_error_cancellation():
-    prompt = mutation_prompt(context={"shared_protocol": {
-        "energy_target": "ground_branch", "suite_kind": "difference",
-        "difference_error_contract": "error_cancellation",
-    }})
+    prompt = mutation_prompt(
+        context={
+            "shared_protocol": {
+                "energy_target": "ground_branch",
+                "suite_kind": "difference",
+                "difference_error_contract": "error_cancellation",
+            }
+        }
+    )
     assert "sum_i nu_i (E_compiled,i - E_exact,i)" in prompt
     assert "species errors may cancel" in prompt
     assert "Every reaction must pass chemical accuracy" in prompt
@@ -150,28 +164,51 @@ def test_shared_prepare_preserves_beta_and_requires_ground_receipts(tmp_path):
         if key.startswith("exact_hf_") or key in {"reference_target", "hf_basis_index"}:
             ref.pop(key)
     protocol.write(reference, ref)
-    protocol.write(calibration, protocol.calibration.calibrate_problem(
-        source, backend="numpy", mode="empirical_exact"))
+    protocol.write(
+        calibration,
+        protocol.calibration.calibrate_problem(source, backend="numpy", mode="empirical_exact"),
+    )
     selection = tmp_path / "selection.json"
-    protocol.write(selection, {"cases": [{"id": "h2", "source": str(source),
-                                         "reference": str(reference), "calibration": str(calibration)}]})
+    protocol.write(
+        selection,
+        {
+            "cases": [
+                {
+                    "id": "h2",
+                    "source": str(source),
+                    "reference": str(reference),
+                    "calibration": str(calibration),
+                }
+            ]
+        },
+    )
     run = tmp_path / "shared"
-    protocol.prepare(selection, run, family="abs_protocol", baseline="tight", iterations=100,
-                     replicate="seed-01", energy_target="ground_branch")
+    protocol.prepare(
+        selection,
+        run,
+        family="abs_protocol",
+        baseline="tight",
+        iterations=100,
+        replicate="seed-01",
+        energy_target="ground_branch",
+    )
     suite = protocol.suite_at(run)
     manifest = protocol.read(run / "manifest.json")
     assert suite["energy_target"] == "ground_branch"
     assert manifest["evaluation_contract_version"] == g.CONTRACT_VERSION
     assert manifest["iterations_target"] == 100
     parameters = suite["cases"][0]["parameters"]
-    expected, _ = protocol.calibration.load_baselines(source, baseline="tight",
-                                                    calibration_path=calibration, calibration_root=None)
+    expected, _ = protocol.calibration.load_baselines(
+        source, baseline="tight", calibration_path=calibration, calibration_root=None
+    )
     assert parameters == expected
     row = protocol._pending(run)[1]["requests"][0]
     request = row["request"]
     wrong = {k: request[k] for k in ("schema", "task_id", "request_sha256", "evaluator_sha256")}
-    wrong["result"] = {"task_id": request["task_id"],
-                       "evaluation_contract_version": ev.EVALUATION_CONTRACT_VERSION}
+    wrong["result"] = {
+        "task_id": request["task_id"],
+        "evaluation_contract_version": ev.EVALUATION_CONTRACT_VERSION,
+    }
     with pytest.raises(ValueError, match="evaluator contract"):
         protocol.record_receipt(run, "h2", wrong)
 
@@ -179,12 +216,22 @@ def test_shared_prepare_preserves_beta_and_requires_ground_receipts(tmp_path):
     template = protocol.ROOT / "experiments/abs_protocol/initial_pf.py"
     warm_start.write_text(template.read_text() + "\n# transferred ELOTE\n")
     warm_run = tmp_path / "warm_start"
-    protocol.prepare(selection, warm_run, family="abs_protocol", baseline="tight",
-                     iterations=50, replicate="seed-02", energy_target="ground_branch",
-                     initial_policy=warm_start)
+    protocol.prepare(
+        selection,
+        warm_run,
+        family="abs_protocol",
+        baseline="tight",
+        iterations=50,
+        replicate="seed-02",
+        energy_target="ground_branch",
+        initial_policy=warm_start,
+    )
     warm_manifest = protocol.read(warm_run / "manifest.json")
     assert warm_manifest["initial_policy_kind"] == "warm_start"
-    assert warm_manifest["initial_policy_sha256"] == hashlib.sha256(warm_start.read_bytes()).hexdigest()
+    assert (
+        warm_manifest["initial_policy_sha256"]
+        == hashlib.sha256(warm_start.read_bytes()).hexdigest()
+    )
     assert (warm_run / "initial_pf.py").read_bytes() == warm_start.read_bytes()
     assert (warm_run / "iterations/0000/candidate.py").read_bytes() == warm_start.read_bytes()
     assert (warm_run / "suite.json").read_bytes() == (run / "suite.json").read_bytes()
@@ -195,10 +242,14 @@ def test_reaction_ground_branch_uses_same_exact_input_for_signed_difference(tmp_
     reaction = tmp_path / "reaction.json"
     local_problem = tmp_path / "h2.json"
     local_problem.write_bytes(source.read_bytes())
-    reaction.write_text(json.dumps({
-        "name": "ground-input check",
-        "terms": [{"species": "h2", "coefficient": 1.0, "problem": local_problem.name}],
-    }))
+    reaction.write_text(
+        json.dumps(
+            {
+                "name": "ground-input check",
+                "terms": [{"species": "h2", "coefficient": 1.0, "problem": local_problem.name}],
+            }
+        )
+    )
     # Reference hashes are bound to the exact local Hamiltonian file bytes.
     reference = ev.evaluate_exact_reference(local_problem, backend="numpy")
     assembled = ev.assemble_exact_difference_reference(
@@ -227,8 +278,12 @@ def test_reaction_ground_branch_uses_same_exact_input_for_signed_difference(tmp_
 
     monkeypatch.setattr(ev, "evaluate_molecule", evaluate)
     result = ev.evaluate_difference(
-        reaction, tmp_path / "policy.py", error_contract="error_cancellation",
-        backend="cupy-lanczos", reference_path=stored, energy_target="ground_branch"
+        reaction,
+        tmp_path / "policy.py",
+        error_contract="error_cancellation",
+        backend="cupy-lanczos",
+        reference_path=stored,
+        energy_target="ground_branch",
     )
     assert seen == ["ground_branch"]
     assert result["energy_target"] == "ground_branch"
@@ -236,9 +291,13 @@ def test_reaction_ground_branch_uses_same_exact_input_for_signed_difference(tmp_
     assert result["passes_chemical_accuracy"]
     assert result["absolute_difference_error_hartree"] == pytest.approx(1e-5)
     queued = queue.enqueue(
-        tmp_path / "queue", kind="difference", source=reaction,
-        policy=FIXTURE / "initial_pf.py", reference=stored,
-        difference_error_contract="error_cancellation", energy_target="ground_branch"
+        tmp_path / "queue",
+        kind="difference",
+        source=reaction,
+        policy=FIXTURE / "initial_pf.py",
+        reference=stored,
+        difference_error_contract="error_cancellation",
+        energy_target="ground_branch",
     )
     request = interface.evaluation_request(Path(queued["path"]))
     assert request["task"]["energy_target"] == "ground_branch"

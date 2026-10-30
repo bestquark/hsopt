@@ -51,8 +51,7 @@ def run(tmp_path):
         "energy_target": "ground_branch",
         "difference_error_contract": "error_cancellation",
         "cases": [
-            {"id": case, "source": f"inputs/{case}/reaction.json"}
-            for case in figure.REACTION_ORDER
+            {"id": case, "source": f"inputs/{case}/reaction.json"} for case in figure.REACTION_ORDER
         ],
     }
     for path in (baseline, transfer):
@@ -60,25 +59,31 @@ def run(tmp_path):
         save(path / "iterations/0000/result.json", result(1000))
     for case in figure.REACTION_ORDER:
         input_dir = baseline / "inputs" / case
-        save(input_dir / "reaction.json", {
-            "terms": [{"problem": "problems/species.json"}],
-        })
+        save(
+            input_dir / "reaction.json",
+            {
+                "terms": [{"problem": "problems/species.json"}],
+            },
+        )
         save(input_dir / "problems/species.json", {"n_qubits": 10})
-    save(transfer / "iterations/0001/result.json", result(200, .2))
+    save(transfer / "iterations/0001/result.json", result(200, 0.2))
     policy = b"class ProductFormula: pass\n"
     (transfer / "iterations/0001/candidate.py").write_bytes(policy)
     policy_sha = hashlib.sha256(policy).hexdigest()
     for index in range(1, 6):
         seed = delta / f"seed-{index:02d}"
         save(seed / "suite.json", suite)
-        save(seed / "manifest.json", {
-            "iterations_target": 50,
-            "initial_policy_kind": "warm_start",
-            "initial_policy_sha256": policy_sha,
-        })
+        save(
+            seed / "manifest.json",
+            {
+                "iterations_target": 50,
+                "initial_policy_kind": "warm_start",
+                "initial_policy_sha256": policy_sha,
+            },
+        )
         save(seed / "state.json", {"iterations_completed": 50})
         save(seed / "iterations/0000/result.json", result(201))
-        save(seed / "incumbent_result.json", result(190-index, .19-index*.01))
+        save(seed / "incumbent_result.json", result(190 - index, 0.19 - index * 0.01))
         (seed / "incumbent.py").write_bytes(f"# seed {index}\n".encode())
     return baseline, transfer, delta
 

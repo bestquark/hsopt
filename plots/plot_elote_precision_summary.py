@@ -224,7 +224,8 @@ def plot(snapshot, output, heldout_summary=None):
         yy = [float(row["epsilon_ratio"]) for row in points]
         ax.scatter(xx, yy, s=5, color=NVIDIA_GREEN, alpha=0.30, linewidths=0,
                    rasterized=True, label="Best ELOTE")
-        ax.set_xscale("log"); ax.set_yscale("log")
+        ax.set_xscale("log")
+        ax.set_yscale("log")
         ax.yaxis.set_major_locator(LogLocator(base=10, subs=(1, 2, 5)))
         ax.yaxis.set_major_formatter(FuncFormatter(lambda value, _: rf"${value:g}$"))
         ax.set_xlabel(r"Rotation angle $|\theta|$ (rad)" if parameter == "angle" else r"Relative coefficient $|c_j|/c_{\max}$")
@@ -275,7 +276,8 @@ def plot(snapshot, output, heldout_summary=None):
                        label=rf"Median ${median:.2f}\%$")
         ax.set_xlabel(r"Compiled $T$-gate reduction (\%)" if metric == "compiled" else r"$T_{95}$ reduction (\%)")
         ax.set_ylabel(r"All Hamiltonians (\%)" if heldout and metric == "compiled" else "Hamiltonians")
-        ax.set_xlim(low, high); ax.set_ylim(bottom=0)
+        ax.set_xlim(low, high)
+        ax.set_ylim(bottom=0)
         ax.xaxis.set_major_locator(MaxNLocator(nbins=6))
         ax.yaxis.set_major_locator(MaxNLocator(integer=not (heldout and metric == "compiled")))
         ax.legend(loc="upper left", fontsize=17)
@@ -292,14 +294,16 @@ def plot(snapshot, output, heldout_summary=None):
                                      ("coefficient", "compiled", "elote_coefficient_precision_and_compiled_savings"),
                                      ("angle", "t95", "elote_precision_and_t95_savings")):
         fig, axes = plt.subplots(1, 2, figsize=(12.6, 4.9), layout="constrained")
-        scatter(axes[0], parameter); histogram(axes[1], metric)
+        scatter(axes[0], parameter)
+        histogram(axes[1], metric)
         finish(fig, axes, name)
     # Standalone panels for direct two-subfigure use in the manuscript.
     for kind, draw in (("tolerance_angle", lambda ax: scatter(ax, "angle")),
                        ("compiled_reduction_histogram", lambda ax: histogram(ax, "compiled")),
                        ("t95_reduction_histogram", lambda ax: histogram(ax, "t95"))):
         fig, ax = plt.subplots(figsize=(6.1, 4.9), layout="constrained")
-        draw(ax); finish(fig, [ax], "elote_" + kind)
+        draw(ax)
+        finish(fig, [ax], "elote_" + kind)
     (output / "caption.tex").write_text(
         "Mixed-precision allocations and compiled $T$-gate savings for the current "
         f"best shared ELOTE (seed {int(manifest['seed'][-2:])}, mutation {manifest['iteration']}) "

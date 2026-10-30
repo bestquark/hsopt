@@ -142,8 +142,7 @@ def test_mutation_packet_keeps_detailed_feedback_readable_without_prompt_duplica
 ):
     from hsopt.sandbox import openshell
 
-    feedback = p.aggregate({"a": result(50), "b": result(80)},
-                           {"a": result(100), "b": result(100)})
+    feedback = p.aggregate({"a": result(50), "b": result(80)}, {"a": result(100), "b": result(100)})
     feedback_file = prepared / "packet-feedback.json"
     p.write(feedback_file, feedback)
     packet = prepared / "packet-check"
@@ -154,8 +153,11 @@ def test_mutation_packet_keeps_detailed_feedback_readable_without_prompt_duplica
     monkeypatch.setattr(openshell, "_run", stop_before_external_process)
     with pytest.raises(RuntimeError, match="stop-before-sandbox"):
         openshell._mutate_once(
-            prepared / "initial_pf.py", feedback_file, packet,
-            kind="protocol", source=prepared / "suite.json",
+            prepared / "initial_pf.py",
+            feedback_file,
+            packet,
+            kind="protocol",
+            source=prepared / "suite.json",
         )
     context = p.read(packet / "research_context.json")
     assert len(context["benchmark"]["cases"]) == 2

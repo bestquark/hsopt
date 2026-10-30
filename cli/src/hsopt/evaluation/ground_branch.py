@@ -54,10 +54,18 @@ def select_peak(phases, probabilities, *, n_steps, target_time, identity_coeffic
     phases, probabilities = (ev._host_array(a, dtype=np.float64) for a in (phases, probabilities))
     if phases.ndim != 1 or probabilities.shape != phases.shape or not phases.size:
         raise ValueError("ground-input phases and probabilities must be matching nonempty vectors")
-    if not np.isfinite(phases).all() or not np.isfinite(probabilities).all() or min(probabilities) < 0:
+    if (
+        not np.isfinite(phases).all()
+        or not np.isfinite(probabilities).all()
+        or min(probabilities) < 0
+    ):
         raise ValueError("ground-input spectral probabilities must be finite and nonnegative")
-    energies = [ev._decode_energy(n_steps * p, target_time=target_time,
-                                 identity_coefficient=identity_coefficient) for p in phases]
+    energies = [
+        ev._decode_energy(
+            n_steps * p, target_time=target_time, identity_coefficient=identity_coefficient
+        )
+        for p in phases
+    ]
     groups = []
     for i in sorted(range(len(energies)), key=energies.__getitem__):
         if groups and abs(energies[i] - energies[groups[-1][0]]) <= 1e-10:

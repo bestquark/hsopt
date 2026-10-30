@@ -8,15 +8,19 @@ import pytest
 
 
 PLOTS = Path(__file__).parents[2] / "plots"
-spec = importlib.util.spec_from_file_location("policy_sensitivity", PLOTS / "analyze_policy_sensitivity.py")
+spec = importlib.util.spec_from_file_location(
+    "policy_sensitivity", PLOTS / "analyze_policy_sensitivity.py"
+)
 analysis = importlib.util.module_from_spec(spec)
 spec.loader.exec_module(analysis)
 
 
 def test_pauli_action_matches_explicit_kronecker_products():
     matrices = {
-        "I": np.eye(2), "X": np.array([[0, 1], [1, 0]]),
-        "Y": np.array([[0, -1j], [1j, 0]]), "Z": np.diag([1, -1]),
+        "I": np.eye(2),
+        "X": np.array([[0, 1], [1, 0]]),
+        "Y": np.array([[0, -1j], [1j, 0]]),
+        "Z": np.diag([1, -1]),
     }
     rng = np.random.default_rng(5)
     state = rng.normal(size=8) + 1j * rng.normal(size=8)
@@ -27,8 +31,12 @@ def test_pauli_action_matches_explicit_kronecker_products():
 
 def test_all_error_axes_match_eigenphase_finite_differences():
     # Noncommuting schedule with mixed X/Y/Z scaffold conventions.
-    schedule = [({"label": "XI"}, .31), ({"label": "ZZ"}, .27),
-                ({"label": "IY"}, -.17), ({"label": "ZI"}, .23)]
+    schedule = [
+        ({"label": "XI"}, 0.31),
+        ({"label": "ZZ"}, 0.27),
+        ({"label": "IY"}, -0.17),
+        ({"label": "ZI"}, 0.23),
+    ]
     actions = analysis.PauliActions(2)
     unitary = analysis.propagate(actions, schedule, np.eye(4, dtype=complex))
     _, vectors = np.linalg.eig(unitary)
@@ -44,13 +52,21 @@ def test_all_error_axes_match_eigenphase_finite_differences():
 
 def test_tied_tolerance_optimum_counts_rotation_multiplicity(monkeypatch):
     monkeypatch.syspath_prepend(str(PLOTS))
-    plot_spec = importlib.util.spec_from_file_location("sensitivity_plot", PLOTS / "plot_policy_sensitivity.py")
+    plot_spec = importlib.util.spec_from_file_location(
+        "sensitivity_plot", PLOTS / "plot_policy_sensitivity.py"
+    )
     plot = importlib.util.module_from_spec(plot_spec)
     plot_spec.loader.exec_module(plot)
     rows = [
-        {"case_id": "a", "occurrences": 2, "epsilon": 1e-4, "angle_weight": .9, "su2_weight": .95},
-        {"case_id": "a", "occurrences": 1, "epsilon": 2e-4, "angle_weight": .1, "su2_weight": .5},
-        {"case_id": "a", "occurrences": 1, "epsilon": 1e-4, "angle_weight": 0., "su2_weight": .3},
+        {
+            "case_id": "a",
+            "occurrences": 2,
+            "epsilon": 1e-4,
+            "angle_weight": 0.9,
+            "su2_weight": 0.95,
+        },
+        {"case_id": "a", "occurrences": 1, "epsilon": 2e-4, "angle_weight": 0.1, "su2_weight": 0.5},
+        {"case_id": "a", "occurrences": 1, "epsilon": 1e-4, "angle_weight": 0.0, "su2_weight": 0.3},
     ]
     selected = plot.allocation_shapes(rows)
     assert len(selected) == 2  # Zero first-order response has no finite interior optimum.
@@ -59,18 +75,22 @@ def test_tied_tolerance_optimum_counts_rotation_multiplicity(monkeypatch):
         sensitivity = np.array([row[f"{model}_weight"] for row in selected])
         before = np.array([row["epsilon"] for row in selected])
         after = np.array([row[f"{model}_local_budget_matched_epsilon"] for row in selected])
-        assert np.sum(weights * sensitivity * after) == pytest.approx(np.sum(weights * sensitivity * before))
+        assert np.sum(weights * sensitivity * after) == pytest.approx(
+            np.sum(weights * sensitivity * before)
+        )
         assert sensitivity[0] * after[0] == pytest.approx(sensitivity[1] * after[1])
         assert np.sum(weights * np.log(1 / after)) <= np.sum(weights * np.log(1 / before))
-        assert plot.geometric_mean(np.array([row[f"{model}_shape"] for row in selected]), weights) == pytest.approx(1)
+        assert plot.geometric_mean(
+            np.array([row[f"{model}_shape"] for row in selected]), weights
+        ) == pytest.approx(1)
 
 
 def test_bounded_angle_allocation_satisfies_budget_and_kkt_conditions(monkeypatch):
     monkeypatch.syspath_prepend(str(PLOTS))
     from compile_angle_allocation import bounded_allocation
 
-    weights = np.array([2., 1., 3., 1.])
-    response = np.array([1., .2, 1e-12, 0.])
+    weights = np.array([2.0, 1.0, 3.0, 1.0])
+    response = np.array([1.0, 0.2, 1e-12, 0.0])
     agent = np.array([2e-6, 3e-6, 2e-6, 8e-6])
     derived, info = bounded_allocation(weights, response, agent)
     assert len(derived) == len(agent)
@@ -106,8 +126,7 @@ def test_three_axis_response_captures_error_missed_by_angle_only_model():
     # This nondegenerate conjugated-Z circuit has a first gadget whose angle
     # derivative vanishes, although another synthesis-error axis moves its phase.
     actions = analysis.PauliActions(1)
-    schedule = [({"label": "X"}, np.pi / 4), ({"label": "Z"}, .2),
-                ({"label": "X"}, -np.pi / 4)]
+    schedule = [({"label": "X"}, np.pi / 4), ({"label": "Z"}, 0.2), ({"label": "X"}, -np.pi / 4)]
     _, vectors = np.linalg.eig(analysis.propagate(actions, schedule, np.eye(2, dtype=complex)))
     target = vectors[:, 0]
     gradients, _ = analysis.response(actions, schedule, target)
@@ -120,18 +139,36 @@ def test_three_axis_response_captures_error_missed_by_angle_only_model():
 
 def test_baseline_overlay_preserves_actual_tolerance_multipliers(monkeypatch):
     monkeypatch.syspath_prepend(str(PLOTS))
-    plot_spec = importlib.util.spec_from_file_location("sensitivity_plot", PLOTS / "plot_policy_sensitivity.py")
+    plot_spec = importlib.util.spec_from_file_location(
+        "sensitivity_plot", PLOTS / "plot_policy_sensitivity.py"
+    )
     plot = importlib.util.module_from_spec(plot_spec)
     plot_spec.loader.exec_module(plot)
     rows = [
-        {"case_id": "a", "relative_coefficient": .01, "occurrences": 2,
-         "baseline_epsilon": 1e-6, "epsilon": 3e-6, "derived_epsilon": 5e-6,
-         "derived_shape": 1., "learned_shape": 1.},
-        {"case_id": "b", "relative_coefficient": 1., "occurrences": 1,
-         "baseline_epsilon": 1e-8, "epsilon": 2e-8, "derived_epsilon": 4e-8,
-         "derived_shape": 1., "learned_shape": 1.},
+        {
+            "case_id": "a",
+            "relative_coefficient": 0.01,
+            "occurrences": 2,
+            "baseline_epsilon": 1e-6,
+            "epsilon": 3e-6,
+            "derived_epsilon": 5e-6,
+            "derived_shape": 1.0,
+            "learned_shape": 1.0,
+        },
+        {
+            "case_id": "b",
+            "relative_coefficient": 1.0,
+            "occurrences": 1,
+            "baseline_epsilon": 1e-8,
+            "epsilon": 2e-8,
+            "derived_epsilon": 4e-8,
+            "derived_shape": 1.0,
+            "learned_shape": 1.0,
+        },
     ]
-    x, derived, agent = plot.overlay_coordinates(rows, response_model="su2", normalization="baseline")
-    np.testing.assert_allclose(x, [.01, 1])
+    x, derived, agent = plot.overlay_coordinates(
+        rows, response_model="su2", normalization="baseline"
+    )
+    np.testing.assert_allclose(x, [0.01, 1])
     np.testing.assert_allclose(derived, [5, 4])
     np.testing.assert_allclose(agent, [3, 2])

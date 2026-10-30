@@ -122,10 +122,25 @@ def test_opencode_audit_records_skill_name_without_payload(tmp_path: Path) -> No
 def test_terminal_and_submission_events_keep_status_without_credentials(tmp_path):
     log = tmp_path / "opencode.jsonl"
     events = [
-        {"type": "tool_use", "part": {"callID": "terminal", "tool": "bash",
-         "state": {"status": "error", "input": {"command": "API_KEY=private curl example.com"}}}},
-        {"type": "tool_use", "part": {"callID": "submit", "tool": "slurm_submit",
-         "state": {"status": "completed", "input": {"image": "test-image"}}}},
+        {
+            "type": "tool_use",
+            "part": {
+                "callID": "terminal",
+                "tool": "bash",
+                "state": {
+                    "status": "error",
+                    "input": {"command": "API_KEY=private curl example.com"},
+                },
+            },
+        },
+        {
+            "type": "tool_use",
+            "part": {
+                "callID": "submit",
+                "tool": "slurm_submit",
+                "state": {"status": "completed", "input": {"image": "test-image"}},
+            },
+        },
     ]
     log.write_text("\n".join(json.dumps(event) for event in events))
     metrics, actions = summarize_opencode_events(log)
@@ -137,8 +152,12 @@ def test_terminal_and_submission_events_keep_status_without_credentials(tmp_path
 
 def test_structured_security_events_are_deduplicated_and_legacy_logs_remain_readable(tmp_path):
     log = tmp_path / "openshell_ocsf.jsonl"
-    event = {"class_uid": 4001, "activity_name": "Open", "action": "Denied",
-             "metadata": {"uid": "event-1"}}
+    event = {
+        "class_uid": 4001,
+        "activity_name": "Open",
+        "action": "Denied",
+        "metadata": {"uid": "event-1"},
+    }
     log.write_text(json.dumps(event) + "\nOCSF-JSON " + json.dumps(event) + "\n")
     metrics = summarize_openshell_log(log)
     assert metrics["network_events"] == metrics["denied_events"] == 1
@@ -158,14 +177,26 @@ def test_current_config_calls_native_endpoint_with_real_model_and_placeholder_ke
 def test_v2_tool_ids_paths_and_patch_events_are_audited(tmp_path):
     log = tmp_path / "opencode.jsonl"
     events = [
-        {"type": "tool_use", "sessionID": "ses_v2", "part": {
-            "id": "call-v2-read", "partID": "part-read", "tool": "read",
-            "state": {"status": "completed", "input": {"path": "/sandbox/work/problem.json"}},
-        }},
-        {"type": "tool_use", "sessionID": "ses_v2", "part": {
-            "id": "call-v2-patch", "partID": "part-edit", "tool": "patch",
-            "state": {"status": "completed", "input": {"path": "candidate.py"}},
-        }},
+        {
+            "type": "tool_use",
+            "sessionID": "ses_v2",
+            "part": {
+                "id": "call-v2-read",
+                "partID": "part-read",
+                "tool": "read",
+                "state": {"status": "completed", "input": {"path": "/sandbox/work/problem.json"}},
+            },
+        },
+        {
+            "type": "tool_use",
+            "sessionID": "ses_v2",
+            "part": {
+                "id": "call-v2-patch",
+                "partID": "part-edit",
+                "tool": "patch",
+                "state": {"status": "completed", "input": {"path": "candidate.py"}},
+            },
+        },
     ]
     log.write_text("\n".join(json.dumps(event) for event in events))
     metrics, actions = summarize_opencode_events(log)
@@ -177,8 +208,11 @@ def test_v2_tool_ids_paths_and_patch_events_are_audited(tmp_path):
 
 def test_v2_text_only_step_does_not_claim_complete_token_usage(tmp_path):
     log = tmp_path / "opencode.jsonl"
-    log.write_text(json.dumps({"type": "step_start", "sessionID": "ses_v2"}) + "\n"
-                   + json.dumps({"type": "text", "part": {"text": "OK"}}))
+    log.write_text(
+        json.dumps({"type": "step_start", "sessionID": "ses_v2"})
+        + "\n"
+        + json.dumps({"type": "text", "part": {"text": "OK"}})
+    )
     metrics, _ = summarize_opencode_events(log)
     assert metrics["inference_steps"] == 1
     assert metrics["finished_inference_steps"] == 0
@@ -187,10 +221,18 @@ def test_v2_text_only_step_does_not_claim_complete_token_usage(tmp_path):
 
 def test_edit_without_an_observed_path_is_rejected(tmp_path):
     log = tmp_path / "opencode.jsonl"
-    log.write_text(json.dumps({"type": "tool_use", "part": {
-        "id": "call-unknown-target", "tool": "edit",
-        "state": {"status": "completed", "input": {}},
-    }}))
+    log.write_text(
+        json.dumps(
+            {
+                "type": "tool_use",
+                "part": {
+                    "id": "call-unknown-target",
+                    "tool": "edit",
+                    "state": {"status": "completed", "input": {}},
+                },
+            }
+        )
+    )
     assert not _has_completed_candidate_edit(log)
     with pytest.raises(RuntimeError, match="outside candidate.py"):
         _validate_agent_action_contract(log)
@@ -288,33 +330,67 @@ def test_logged_process_stops_after_completed_edit(tmp_path: Path) -> None:
 
 
 def test_read_barrier_stops_a_looping_process_only_after_all_receipts(tmp_path):
-    events = [{"type": "tool_use", "sessionID": "read-session", "part": {
-        "callID": name, "tool": "read", "state": {"status": "completed",
-        "input": {"path": "/sandbox/work/"+name}}}}
-        for name in ["candidate.py", "problem.json"]]
-    code = "import time\n" + "\n".join(f"print({json.dumps(e)!r},flush=True)" for e in events) + "\ntime.sleep(30)"
+    events = [
+        {
+            "type": "tool_use",
+            "sessionID": "read-session",
+            "part": {
+                "callID": name,
+                "tool": "read",
+                "state": {"status": "completed", "input": {"path": "/sandbox/work/" + name}},
+            },
+        }
+        for name in ["candidate.py", "problem.json"]
+    ]
+    code = (
+        "import time\n"
+        + "\n".join(f"print({json.dumps(e)!r},flush=True)" for e in events)
+        + "\ntime.sleep(30)"
+    )
     path = tmp_path / "events.jsonl"
-    returncode, stopped = _run_logged([sys.executable, "-c", code],
-        stdout_path=path, stderr_path=tmp_path/"stderr.log", timeout=5,
-        required_reads_to_stop=["candidate.py", "problem.json"])
+    returncode, stopped = _run_logged(
+        [sys.executable, "-c", code],
+        stdout_path=path,
+        stderr_path=tmp_path / "stderr.log",
+        timeout=5,
+        required_reads_to_stop=["candidate.py", "problem.json"],
+    )
     assert stopped and returncode != 0
-    _validate_agent_action_contract(path, required_reads=["candidate.py", "problem.json"], preparation=True)
+    _validate_agent_action_contract(
+        path, required_reads=["candidate.py", "problem.json"], preparation=True
+    )
 
 
 @pytest.mark.parametrize("executed", [False, True, None])
 def test_unavailable_tool_requires_conclusive_nonexecution_receipts(tmp_path, executed):
     events = [
-        {"type": "tool_use", "part": {
-            "callID": "invented-final", "tool": "final", "state": {
-                "status": "error", "input": {},
-                "error": 'No tool named "final" is currently available. Please use a tool from the available tool list.',
-                "metadata": {"providerCall": {"executed": executed},
-                             "providerResult": {"executed": executed}},
-            }}},
-        {"type": "tool_use", "part": {
-            "callID": "candidate-write", "tool": "write", "state": {
-                "status": "completed", "input": {"path": "candidate.py"},
-            }}},
+        {
+            "type": "tool_use",
+            "part": {
+                "callID": "invented-final",
+                "tool": "final",
+                "state": {
+                    "status": "error",
+                    "input": {},
+                    "error": 'No tool named "final" is currently available. Please use a tool from the available tool list.',
+                    "metadata": {
+                        "providerCall": {"executed": executed},
+                        "providerResult": {"executed": executed},
+                    },
+                },
+            },
+        },
+        {
+            "type": "tool_use",
+            "part": {
+                "callID": "candidate-write",
+                "tool": "write",
+                "state": {
+                    "status": "completed",
+                    "input": {"path": "candidate.py"},
+                },
+            },
+        },
     ]
     path = tmp_path / "events.jsonl"
     path.write_text("\n".join(json.dumps(e) for e in events))
@@ -330,17 +406,33 @@ def test_unavailable_tool_requires_conclusive_nonexecution_receipts(tmp_path, ex
 @pytest.mark.parametrize("executed", [False, True, None])
 def test_failed_exact_string_edit_only_ignored_when_proven_unexecuted(tmp_path, executed):
     events = [
-        {"type": "tool_use", "part": {
-            "callID": "bad-match", "tool": "edit", "state": {
-                "status": "error", "input": {"path": "candidate.py"},
-                "error": "Could not find oldString in candidate.py. It must match exactly.",
-                "metadata": {"providerCall": {"executed": executed},
-                             "providerResult": {"executed": executed}},
-            }}},
-        {"type": "tool_use", "part": {
-            "callID": "good-match", "tool": "edit", "state": {
-                "status": "completed", "input": {"path": "candidate.py"},
-            }}},
+        {
+            "type": "tool_use",
+            "part": {
+                "callID": "bad-match",
+                "tool": "edit",
+                "state": {
+                    "status": "error",
+                    "input": {"path": "candidate.py"},
+                    "error": "Could not find oldString in candidate.py. It must match exactly.",
+                    "metadata": {
+                        "providerCall": {"executed": executed},
+                        "providerResult": {"executed": executed},
+                    },
+                },
+            },
+        },
+        {
+            "type": "tool_use",
+            "part": {
+                "callID": "good-match",
+                "tool": "edit",
+                "state": {
+                    "status": "completed",
+                    "input": {"path": "candidate.py"},
+                },
+            },
+        },
     ]
     path = tmp_path / "events.jsonl"
     path.write_text("\n".join(json.dumps(event) for event in events))
@@ -355,16 +447,32 @@ def test_failed_exact_string_edit_only_ignored_when_proven_unexecuted(tmp_path, 
 
 def test_edit_handoff_prevents_a_later_candidate_rewrite(tmp_path):
     def event(call_id):
-        return json.dumps({"type": "tool_use", "part": {
-            "callID": call_id, "tool": "write", "state": {
-                "status": "completed", "input": {"path": "candidate.py"},
-            }}})
+        return json.dumps(
+            {
+                "type": "tool_use",
+                "part": {
+                    "callID": call_id,
+                    "tool": "write",
+                    "state": {
+                        "status": "completed",
+                        "input": {"path": "candidate.py"},
+                    },
+                },
+            }
+        )
 
     path = tmp_path / "events.jsonl"
-    code = (f"import time; print({event('first')!r}, flush=True); "
-            f"time.sleep(1); print({event('second')!r}, flush=True); time.sleep(30)")
-    _, stopped = _run_logged([sys.executable, "-c", code], stdout_path=path,
-        stderr_path=tmp_path / "stderr.log", timeout=5, completed_edit_grace_seconds=0)
+    code = (
+        f"import time; print({event('first')!r}, flush=True); "
+        f"time.sleep(1); print({event('second')!r}, flush=True); time.sleep(30)"
+    )
+    _, stopped = _run_logged(
+        [sys.executable, "-c", code],
+        stdout_path=path,
+        stderr_path=tmp_path / "stderr.log",
+        timeout=5,
+        completed_edit_grace_seconds=0,
+    )
     assert stopped
     _validate_agent_action_contract(path)
     _, actions = summarize_opencode_events(path)
@@ -462,9 +570,13 @@ def test_opencode_policy_only_allows_candidate_file_mutations() -> None:
 
     def effect(action, resource):
         import fnmatch
-        return next(r["effect"] for r in reversed(rules)
-                    if fnmatch.fnmatchcase(action, r["action"])
-                    and fnmatch.fnmatchcase(resource, r["resource"]))
+
+        return next(
+            r["effect"]
+            for r in reversed(rules)
+            if fnmatch.fnmatchcase(action, r["action"])
+            and fnmatch.fnmatchcase(resource, r["resource"])
+        )
 
     assert agent["steps"] == 20
     assert "exactly once" in agent["system"]
@@ -790,6 +902,7 @@ def test_sandbox_cleanup_terminates_opencode_without_matching_itself(
         "hsopt-deadbeef",
     ]
     import re
+
     pattern = r"[o]pencode(\.exe)? (run|serve)"
     assert pattern in command[-1]
     assert re.search(pattern, "opencode.exe run --standalone")

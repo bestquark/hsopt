@@ -90,10 +90,21 @@ def evaluation_request(task_dir: Path) -> dict[str, Any]:
             b"".join(
                 name.encode() + b"\0" + Path(compiled_unitary.__file__).with_name(name).read_bytes()
                 for name in (
-                    "compiled_unitary.py", "gpu_rotations.py", "gpu_spectrum.py",
-                    "elote.py", "clifford.py",
-                    *(["spectral_window.py"] if metadata.get("energy_target") == "ground_branch" else []),
-                    *(["ground_branch.py", "gpu_circuit.py"] if metadata.get("energy_target") == "ground_branch" else []),
+                    "compiled_unitary.py",
+                    "gpu_rotations.py",
+                    "gpu_spectrum.py",
+                    "elote.py",
+                    "clifford.py",
+                    *(
+                        ["spectral_window.py"]
+                        if metadata.get("energy_target") == "ground_branch"
+                        else []
+                    ),
+                    *(
+                        ["ground_branch.py", "gpu_circuit.py"]
+                        if metadata.get("energy_target") == "ground_branch"
+                        else []
+                    ),
                 )
             )
         ).hexdigest(),

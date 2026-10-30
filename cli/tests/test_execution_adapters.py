@@ -37,14 +37,20 @@ def test_opencode_invocation_is_edit_only_and_reads_key_from_environment(tmp_pat
     assert invocation.command[-1] == "Edit simple_pf.py"
     config = json.loads(invocation.environment["OPENCODE_CONFIG_CONTENT"])
     assert config["providers"]["nvidia"]["env"] == ["NVIDIA_API_KEY"]
-    assert config["providers"]["nvidia"]["models"][NEMOTRON_MODEL.removeprefix("nvidia/")]["modelID"] == NEMOTRON_MODEL
+    assert (
+        config["providers"]["nvidia"]["models"][NEMOTRON_MODEL.removeprefix("nvidia/")]["modelID"]
+        == NEMOTRON_MODEL
+    )
     assert "--standalone" in invocation.command
     assert "--dir" not in invocation.command
     assert invocation.package == "@opencode/cli@2.0.26"
     assert "sk-" not in json.dumps(config)
     rules = config["agents"]["hsopt-mutation"]["permissions"]
     assert rules[0] == {"action": "*", "resource": "*", "effect": "deny"}
-    assert rules[1:] == [{"action": action, "resource": "simple_pf.py", "effect": "allow"} for action in ("read", "edit")]
+    assert rules[1:] == [
+        {"action": action, "resource": "simple_pf.py", "effect": "allow"}
+        for action in ("read", "edit")
+    ]
 
 
 def test_opencode_lifecycle_requires_completed_edit_and_terminal_text(tmp_path: Path) -> None:

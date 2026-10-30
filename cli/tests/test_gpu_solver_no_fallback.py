@@ -39,8 +39,9 @@ def test_cupynumeric_array_does_not_use_cupy_get():
 def test_gpu_reference_is_partial_lanczos_with_analytic_unitary_phase():
     from hsopt.evaluation import compiled_unitary
     import inspect
+
     reference = inspect.getsource(gpu_spectrum.reference_eigensolve)
-    assert 'eigsh(' in reference
-    assert 'linalg.eigh' not in reference
+    assert "eigsh(" in reference
+    assert "linalg.eigh" not in reference
     source = inspect.getsource(compiled_unitary.evaluate_exact_reference)
-    assert 'gpu_hamiltonian_lanczos_analytic_unitary_phase' in source
+    assert "gpu_hamiltonian_lanczos_analytic_unitary_phase" in source

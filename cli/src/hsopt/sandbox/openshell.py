@@ -54,9 +54,15 @@ REPOSITORY_ROOT = Path(__file__).resolve().parents[4]
 HSOPT_SKILL_PATH = REPOSITORY_ROOT / "skills" / "hsopt" / "references" / "mutation.md"
 EVALUATOR_SOURCE_PATH = Path(__file__).resolve().parents[1] / "evaluation" / "compiled_unitary.py"
 SANDBOX_CONTEXT_ROOT = PurePosixPath("/sandbox/work")
-READABLE_CONTEXT_FILES = frozenset({
-    "candidate.py", "evaluate.py", "protocol_evaluate.py", "problem.json", "reaction.json",
-})
+READABLE_CONTEXT_FILES = frozenset(
+    {
+        "candidate.py",
+        "evaluate.py",
+        "protocol_evaluate.py",
+        "problem.json",
+        "reaction.json",
+    }
+)
 OPENCODE_NETWORK_BINARIES = (
     "/usr/lib/node_modules/@opencode/cli/bin/opencode.exe",
     "/usr/local/lib/node_modules/@opencode/cli/bin/opencode.exe",
@@ -95,12 +101,23 @@ def _websearch_settings() -> dict[str, Any]:
     if path.suffix != ".js" or not path.is_file():
         raise ValueError("websearch plugin must be an existing JavaScript file")
     url = urlsplit(endpoint)
-    if (url.scheme not in {"http", "https"} or not url.hostname or url.username is not None
-            or url.password is not None or url.query or url.fragment):
+    if (
+        url.scheme not in {"http", "https"}
+        or not url.hostname
+        or url.username is not None
+        or url.password is not None
+        or url.query
+        or url.fragment
+    ):
         raise ValueError("websearch URL must be HTTP(S) without credentials, query or fragment")
     _ = url.port  # Validate an explicitly configured port before sandbox creation.
-    return {"provider": provider, "capability_version": "native-v2-plugin-v1",
-            "plugin_path": str(path), "plugin_sha256": _sha256(path), "endpoint": endpoint}
+    return {
+        "provider": provider,
+        "capability_version": "native-v2-plugin-v1",
+        "plugin_path": str(path),
+        "plugin_sha256": _sha256(path),
+        "endpoint": endpoint,
+    }
 
 
 def _websearch_metadata(settings: dict[str, Any]) -> dict[str, Any]:
@@ -118,16 +135,27 @@ def _pysr_settings() -> dict[str, Any] | None:
     if not endpoint:
         raise ValueError("PySR is enabled but HSOPT_PYSR_URL is missing")
     url = urlsplit(endpoint)
-    if (url.scheme not in {"http", "https"} or not url.hostname or url.username is not None
-            or url.password is not None or url.query or url.fragment):
+    if (
+        url.scheme not in {"http", "https"}
+        or not url.hostname
+        or url.username is not None
+        or url.password is not None
+        or url.query
+        or url.fragment
+    ):
         raise ValueError("PySR URL must be HTTP(S) without credentials, query or fragment")
     _ = url.port
     token = os.environ.get("HSOPT_PYSR_TOKEN")
     if not token:
         raise ValueError("PySR tool requires its run-scoped HSOPT_PYSR_TOKEN")
     plugin = Path(__file__).parents[1] / "search" / "opencode-pysr.js"
-    return {"endpoint": endpoint, "plugin_path": str(plugin), "plugin_sha256": _sha256(plugin),
-            "token": token, "capability_version": "host-budgeted-pysr-v1"}
+    return {
+        "endpoint": endpoint,
+        "plugin_path": str(plugin),
+        "plugin_sha256": _sha256(plugin),
+        "token": token,
+        "capability_version": "host-budgeted-pysr-v1",
+    }
 
 
 @contextmanager
@@ -173,7 +201,12 @@ def _run_setup_command(sandbox_name: str, command: Sequence[str], run_dir: Path)
     """
     args = list(command)
     bundle_install = args == ["tar", "-xf", "/sandbox/hsopt-bootstrap.tar", "-C", "/sandbox"]
-    config_switch = args == ["cp", "-f", "/sandbox/opencode.mutation.json", "/sandbox/opencode.json"]
+    config_switch = args == [
+        "cp",
+        "-f",
+        "/sandbox/opencode.mutation.json",
+        "/sandbox/opencode.json",
+    ]
     if not (bundle_install or config_switch) and (
         len(args) < 3
         or (args[0], args[1])
@@ -515,8 +548,11 @@ def _run_logged(
             now = time.monotonic()
             if required_reads_to_stop and reads_completed_at is None:
                 _, actions = summarize_opencode_events(stdout_path)
-                completed = {a['target'] for a in actions
-                             if a['tool'] == 'read' and a['status'] == 'completed'}
+                completed = {
+                    a["target"]
+                    for a in actions
+                    if a["tool"] == "read" and a["status"] == "completed"
+                }
                 if set(required_reads_to_stop) <= completed:
                     reads_completed_at = now
             if (
@@ -526,10 +562,9 @@ def _run_logged(
             ):
                 edit_completed_at = now
             if (
-                (edit_completed_at is not None
-                 and now - edit_completed_at >= completed_edit_grace_seconds)
-                or (reads_completed_at is not None and now - reads_completed_at >= 1.0)
-            ):
+                edit_completed_at is not None
+                and now - edit_completed_at >= completed_edit_grace_seconds
+            ) or (reads_completed_at is not None and now - reads_completed_at >= 1.0):
                 process.terminate()
                 try:
                     returncode = process.wait(timeout=5)
@@ -600,15 +635,22 @@ def sandbox_context_files(
         if suite.get("schema") != "hsopt-shared-protocol-v1":
             raise ValueError("unsupported shared protocol suite")
         files.append((source, PurePosixPath("suite.json")))
-        files.append((Path(__file__).parents[1] / "campaign/protocol.py", PurePosixPath("protocol_evaluate.py")))
+        files.append(
+            (
+                Path(__file__).parents[1] / "campaign/protocol.py",
+                PurePosixPath("protocol_evaluate.py"),
+            )
+        )
         seen = set()
         for case in suite["cases"]:
             relative = _safe_sandbox_relative_path(case["source"])
             problem = (source.parent / relative).resolve()
             paths = [relative]
             if suite["kind"] == "difference":
-                paths.extend(relative.parent / _safe_sandbox_relative_path(row["problem"])
-                             for row in json.loads(problem.read_text())["terms"])
+                paths.extend(
+                    relative.parent / _safe_sandbox_relative_path(row["problem"])
+                    for row in json.loads(problem.read_text())["terms"]
+                )
             for path in paths:
                 if path in seen:
                     continue
@@ -670,7 +712,8 @@ def _safe_tool_target(tool: str, payload: Any) -> str | None:
         if isinstance(command, str):
             return re.sub(
                 r"(?:nvapi-|sk-)[A-Za-z0-9_-]+|Bearer\s+\S+|(?i:api[_-]?key|token|password)=\S+",
-                "[REDACTED]", command,
+                "[REDACTED]",
+                command,
             )[:200]
     return None
 
@@ -872,9 +915,12 @@ def _adopts_symbolic_incumbent(candidate: Path, incumbent: Path, run_dir: Path) 
     _, actions = summarize_opencode_events(run_dir / "opencode.jsonl")
     used = any(a["tool"] == "hsopt_pysr" and a["status"] == "completed" for a in actions)
     before = run_dir / "candidate.before.py"
-    return bool(used and before.is_file()
-                and policy_signature(candidate) == policy_signature(incumbent)
-                and policy_signature(candidate) != policy_signature(before))
+    return bool(
+        used
+        and before.is_file()
+        and policy_signature(candidate) == policy_signature(incumbent)
+        and policy_signature(candidate) != policy_signature(before)
+    )
 
 
 def _is_scratch_path(target: str) -> bool:
@@ -889,14 +935,29 @@ def _compact_protocol_benchmark(benchmark):
     for case in benchmark["cases"]:
         systems = []
         for h in case["hamiltonians"]:
-            row = {k: h[k] for k in ("n_qubits", "electrons", "term_count", "nonidentity_one_norm", "target_time", "pauli_families")}
+            row = {
+                k: h[k]
+                for k in (
+                    "n_qubits",
+                    "electrons",
+                    "term_count",
+                    "nonidentity_one_norm",
+                    "target_time",
+                    "pauli_families",
+                )
+            }
             initial = case["parameters"][h["name"]]
-            row.update(initial_r=initial["n_steps"], initial_epsilon=initial["uniform_epsilon"],
-                       initial_beta=initial["reference_trotter_number_beta"])
+            row.update(
+                initial_r=initial["n_steps"],
+                initial_epsilon=initial["uniform_epsilon"],
+                initial_beta=initial["reference_trotter_number_beta"],
+            )
             row["max_abs_coefficient"] = max(abs(t["coefficient"]) for t in h["largest_terms"])
             row["min_abs_coefficient"] = min(abs(t["coefficient"]) for t in h["smallest_terms"])
             systems.append(row)
-        cases.append({**{k: v for k, v in case.items() if k != "parameters"}, "hamiltonians": systems})
+        cases.append(
+            {**{k: v for k, v in case.items() if k != "parameters"}, "hamiltonians": systems}
+        )
     return {**benchmark, "cases": cases}
 
 
@@ -905,8 +966,13 @@ def _write_protocol_context(path, context):
     marker = "__HSOPT_PROTOCOL_CASE_LINES__"
     benchmark = context["benchmark"]
     outer = {**context, "benchmark": {**benchmark, "cases": marker}}
-    rows = "[\n" + ",\n".join(json.dumps(c, separators=(",", ":"), allow_nan=False)
-                              for c in benchmark["cases"]) + "\n]"
+    rows = (
+        "[\n"
+        + ",\n".join(
+            json.dumps(c, separators=(",", ":"), allow_nan=False) for c in benchmark["cases"]
+        )
+        + "\n]"
+    )
     rendered = json.dumps(outer, indent=2, allow_nan=False).replace(json.dumps(marker), rows, 1)
     path.write_text(rendered + "\n")
 
@@ -957,7 +1023,11 @@ def _validate_agent_action_contract(
                 and not target.startswith(("outside:", "/", "../"))
                 and all(part not in {"", ".", ".."} for part in PurePosixPath(target).parts)
             )
-            if target not in READABLE_CONTEXT_FILES and not safe_json and not _is_scratch_path(target):
+            if (
+                target not in READABLE_CONTEXT_FILES
+                and not safe_json
+                and not _is_scratch_path(target)
+            ):
                 raise RuntimeError("OpenCode attempted to read outside the mutation context")
             if action["status"] == "completed":
                 completed_reads.add(target)
@@ -1110,13 +1180,16 @@ def _verify_preparation_candidate(sandbox_name: str, run_dir: Path, *, deadline:
     _download_candidate(sandbox_name, run_dir, timeout_seconds=remaining)
     before = _sha256(run_dir / "candidate.before.py")
     after = _sha256(run_dir / "candidate.py")
-    _write_json(run_dir / "preparation_integrity.json", {
-        "schema": 1,
-        "blocked_candidate_writes": result["blocked_candidate_writes"],
-        "before_sha256": before,
-        "after_sha256": after,
-        "unchanged": before == after,
-    })
+    _write_json(
+        run_dir / "preparation_integrity.json",
+        {
+            "schema": 1,
+            "blocked_candidate_writes": result["blocked_candidate_writes"],
+            "before_sha256": before,
+            "after_sha256": after,
+            "unchanged": before == after,
+        },
+    )
     if before != after:
         raise RuntimeError("Candidate changed during read-only preparation")
 
@@ -1144,9 +1217,15 @@ def summarize_openshell_log(path: Path) -> dict[str, Any]:
                     continue
                 if event_id:
                     seen_ids.add(event_id)
-                event_class = {4001: "NET", 4002: "HTTP", 4007: "SSH", 1007: "PROC",
-                               5019: "CONFIG", 6002: "LIFECYCLE", 2004: "FINDING"}.get(
-                                   event["class_uid"], "EVENT")
+                event_class = {
+                    4001: "NET",
+                    4002: "HTTP",
+                    4007: "SSH",
+                    1007: "PROC",
+                    5019: "CONFIG",
+                    6002: "LIFECYCLE",
+                    2004: "FINDING",
+                }.get(event["class_uid"], "EVENT")
                 activity = str(event.get("activity_name") or event.get("activity_id", "unknown"))
                 decision = str(event.get("disposition") or event.get("action") or "").lower()
                 classes[event_class] += 1
@@ -1188,7 +1267,8 @@ def _capture_openshell_logs(sandbox_name: str, destination: Path) -> None:
     try:
         completed = _run(
             ["openshell", "logs", sandbox_name, "--source", "all", "-n", "10000"],
-            check=False, timeout=45,
+            check=False,
+            timeout=45,
         )
         destination.write_text(completed.stdout, encoding="utf-8")
         if completed.stderr:
@@ -1201,7 +1281,9 @@ def _capture_openshell_logs(sandbox_name: str, destination: Path) -> None:
     collector = os.environ.get("HSOPT_AUDIT_COLLECTOR")
     if collector:
         try:
-            result = _run([collector, sandbox_name, str(destination.parent)], check=False, timeout=45)
+            result = _run(
+                [collector, sandbox_name, str(destination.parent)], check=False, timeout=45
+            )
             collection["structured_collector_returncode"] = result.returncode
         except (OSError, subprocess.SubprocessError) as exc:
             collection["structured_collector_error_type"] = type(exc).__name__
@@ -1214,7 +1296,9 @@ def write_agent_audit(run_dir: Path) -> dict[str, Any]:
     opencode_metrics, actions = summarize_opencode_events(run_dir / "opencode.jsonl")
     structured = run_dir / "openshell_ocsf.jsonl"
     openshell_metrics = summarize_openshell_log(
-        structured if structured.is_file() and structured.stat().st_size else run_dir / "openshell.log"
+        structured
+        if structured.is_file() and structured.stat().st_size
+        else run_dir / "openshell.log"
     )
     _write_json(run_dir / "opencode_metrics.json", opencode_metrics)
     _write_json(run_dir / "openshell_metrics.json", openshell_metrics)
@@ -1242,7 +1326,8 @@ def write_agent_audit(run_dir: Path) -> dict[str, Any]:
         "structured_openshell_log": structured.name if structured.is_file() else None,
         "collection": (
             json.loads((run_dir / "audit_collection.json").read_text())
-            if (run_dir / "audit_collection.json").is_file() else None
+            if (run_dir / "audit_collection.json").is_file()
+            else None
         ),
     }
     _write_json(run_dir / "agent_audit.json", audit)
@@ -1258,13 +1343,27 @@ def _capture_runtime_versions(sandbox_name: str, run_dir: Path) -> None:
     }
     commands = {
         "openshell": ["openshell", "--version"],
-        "opencode": ["openshell", "sandbox", "exec", "--name", sandbox_name,
-                     "--no-tty", "--timeout", "30", "--", "opencode", "--version"],
+        "opencode": [
+            "openshell",
+            "sandbox",
+            "exec",
+            "--name",
+            sandbox_name,
+            "--no-tty",
+            "--timeout",
+            "30",
+            "--",
+            "opencode",
+            "--version",
+        ],
     }
     for name, command in commands.items():
         try:
             result = _run(command, check=False, timeout=45)
-            identity[name] = {"version": result.stdout.strip()[:100], "returncode": result.returncode}
+            identity[name] = {
+                "version": result.stdout.strip()[:100],
+                "returncode": result.returncode,
+            }
         except (OSError, subprocess.SubprocessError) as exc:
             identity[name] = {"version": None, "error_type": type(exc).__name__}
     _write_json(run_dir / "runtime_versions.json", identity)
@@ -1328,18 +1427,25 @@ def opencode_config(*, preparation: bool = False) -> dict[str, Any]:
     permissions = [{"action": "*", "resource": "*", "effect": "deny"}]
     for resource in ("candidate.py", "evaluate.py", "*.json", "**/*.json"):
         permissions.append({"action": "read", "resource": resource, "effect": "allow"})
-    permissions.extend([
-        {"action": "read", "resource": "scratch/*", "effect": "allow"},
-        {"action": "edit", "resource": "scratch/*", "effect": "allow"},
-        {"action": "execute", "resource": "*", "effect": "allow"},
-        {"action": "edit", "resource": "candidate.py", "effect": "deny" if preparation else "allow"},
-        {"action": "skill", "resource": "hsopt", "effect": "allow"},
-        {"action": "webfetch", "resource": "*", "effect": "allow"},
-        {"action": "websearch", "resource": "*", "effect": "allow"},
-    ])
+    permissions.extend(
+        [
+            {"action": "read", "resource": "scratch/*", "effect": "allow"},
+            {"action": "edit", "resource": "scratch/*", "effect": "allow"},
+            {"action": "execute", "resource": "*", "effect": "allow"},
+            {
+                "action": "edit",
+                "resource": "candidate.py",
+                "effect": "deny" if preparation else "allow",
+            },
+            {"action": "skill", "resource": "hsopt", "effect": "allow"},
+            {"action": "webfetch", "resource": "*", "effect": "allow"},
+            {"action": "websearch", "resource": "*", "effect": "allow"},
+        ]
+    )
     if symbolic:
-        permissions.append({"action": "hsopt_pysr", "resource": "*",
-                            "effect": "deny" if preparation else "allow"})
+        permissions.append(
+            {"action": "hsopt_pysr", "resource": "*", "effect": "deny" if preparation else "allow"}
+        )
     system = (
         "Editing is now enabled. Your FIRST tool call in THIS continuation must read "
         "candidate.py AGAIN: OpenCode resets its file-read timestamps between processes, "
@@ -1402,11 +1508,16 @@ def opencode_config(*, preparation: bool = False) -> dict[str, Any]:
         )
     plugins = []
     if search.get("plugin_path"):
-        plugins.append({"package": "/sandbox/hsopt-websearch",
-                        "options": {"endpoint": search["endpoint"]}})
+        plugins.append(
+            {"package": "/sandbox/hsopt-websearch", "options": {"endpoint": search["endpoint"]}}
+        )
     if symbolic:
-        plugins.append({"package": "/sandbox/hsopt-pysr",
-                        "options": {"endpoint": symbolic["endpoint"], "token": symbolic["token"]}})
+        plugins.append(
+            {
+                "package": "/sandbox/hsopt-pysr",
+                "options": {"endpoint": symbolic["endpoint"], "token": symbolic["token"]},
+            }
+        )
     return {
         "$schema": "https://opencode.ai/config.json",
         "update": "disable",
@@ -1443,14 +1554,15 @@ def opencode_config(*, preparation: bool = False) -> dict[str, Any]:
                 "description": "Mutate only the isolated HSOpt candidate.py policy.",
                 "mode": "primary",
                 "model": OPENCODE_MODEL,
-                "request": {"body": {"temperature": 1.0, "top_p": 0.95, "max_tokens": MODEL_OUTPUT_LIMIT}},
+                "request": {
+                    "body": {"temperature": 1.0, "top_p": 0.95, "max_tokens": MODEL_OUTPUT_LIMIT}
+                },
                 "steps": 20,
                 "system": system,
                 "permissions": permissions,
             }
         },
     }
-
 
 
 def agent_feedback(feedback: dict[str, Any]) -> dict[str, Any]:
@@ -1618,19 +1730,28 @@ def _mutate_once(
         # Read the entire suite summary, then representative raw systems.
         # All raw inputs remain available; acceptance still covers every case.
         suite = json.loads(source.read_text())
+
         def case_size(case):
             definition = json.loads((source.parent / case["source"]).read_text())
             if suite["kind"] == "absolute":
                 return (definition["n_qubits"], len(definition["terms"]))
-            systems = [json.loads((source.parent / Path(case["source"]).parent / row["problem"]).read_text())
-                       for row in definition["terms"]]
+            systems = [
+                json.loads(
+                    (source.parent / Path(case["source"]).parent / row["problem"]).read_text()
+                )
+                for row in definition["terms"]
+            ]
             return (max(p["n_qubits"] for p in systems), sum(len(p["terms"]) for p in systems))
+
         ordered = sorted(suite["cases"], key=case_size)
-        selected = [ordered[i] for i in sorted({0, len(ordered)//2, len(ordered)-1})]
+        selected = [ordered[i] for i in sorted({0, len(ordered) // 2, len(ordered) - 1})]
         prefixes = {str(Path(case["source"]).parent) + "/" for case in selected}
-        required_reads = [p for p in required_reads if p in {
-            "candidate.py", "research_context.json", "suite.json"
-        } or any(p.startswith(prefix) for prefix in prefixes)]
+        required_reads = [
+            p
+            for p in required_reads
+            if p in {"candidate.py", "research_context.json", "suite.json"}
+            or any(p.startswith(prefix) for prefix in prefixes)
+        ]
     if any(relative.as_posix() == "research_context.json" for _, relative in context_files):
         raise ValueError("benchmark path collides with research_context.json")
     full_history = lane_history(policy_file.parent, run_dir)
@@ -1653,10 +1774,14 @@ def _mutate_once(
     symbolic = _pysr_settings()
     if symbolic:
         if kind != "protocol":
-            raise ValueError("PySR capability is supported only for new shared-protocol experiments")
+            raise ValueError(
+                "PySR capability is supported only for new shared-protocol experiments"
+            )
         research_context["mutation_protocol_version"] += "_pysr_hybrid_v1"
         research_context["pysr"] = {
-            **{key: value for key, value in symbolic.items() if key not in {"plugin_path", "token"}},
+            **{
+                key: value for key, value in symbolic.items() if key not in {"plugin_path", "token"}
+            },
             "tool": "hsopt_pysr",
             "usage": "Optional inner tolerance search before the final candidate edit; all probes count against the training budget.",
         }
@@ -1733,7 +1858,9 @@ def _mutate_once(
             "model_output_limit": MODEL_OUTPUT_LIMIT,
             "model_context_limit": MODEL_CONTEXT_LIMIT,
             "automatic_compaction": True,
-            "preparation_handoff": "required-read-barrier-v1" if os.environ.get("HSOPT_PREPARATION_READ_BARRIER") == "1" else "model_turn_completion",
+            "preparation_handoff": "required-read-barrier-v1"
+            if os.environ.get("HSOPT_PREPARATION_READ_BARRIER") == "1"
+            else "model_turn_completion",
             "editing_handoff": "first-completed-candidate-edit-v1",
         },
     )
@@ -1927,9 +2054,16 @@ def _mutate_once(
             with _mutation_phase(run_dir, "editing_config_switch"):
                 if os.environ.get("HSOPT_PREPARATION_READ_BARRIER") == "1":
                     _terminate_sandbox_opencode(sandbox_name)
-                _run_setup_command(sandbox_name, [
-                    "cp", "-f", "/sandbox/opencode.mutation.json", "/sandbox/opencode.json",
-                ], run_dir)
+                _run_setup_command(
+                    sandbox_name,
+                    [
+                        "cp",
+                        "-f",
+                        "/sandbox/opencode.mutation.json",
+                        "/sandbox/opencode.json",
+                    ],
+                    run_dir,
+                )
             remaining = int(deadline - time.monotonic())
             if remaining <= 0:
                 raise RuntimeError("Mutation time budget exhausted during preparation")
@@ -1979,7 +2113,9 @@ def _mutate_once(
     _validate_agent_action_contract(run_dir / "opencode.jsonl", required_reads=required_reads)
     _validate_candidate(candidate)
     duplicate = duplicate_policy(candidate, policy_file)
-    symbolic_adoption = bool(duplicate and _adopts_symbolic_incumbent(candidate, policy_file, run_dir))
+    symbolic_adoption = bool(
+        duplicate and _adopts_symbolic_incumbent(candidate, policy_file, run_dir)
+    )
     if duplicate and not symbolic_adoption:
         raise RuntimeError(
             f"Duplicate policy: matches {duplicate}; propose a new scientific change"
@@ -2063,7 +2199,9 @@ def mutate(
             "schema": 1,
             "status": "mutated",
             "started_at": started_at,
-            "mutation_protocol_version": result.get("mutation_protocol_version", MUTATION_PROTOCOL_VERSION),
+            "mutation_protocol_version": result.get(
+                "mutation_protocol_version", MUTATION_PROTOCOL_VERSION
+            ),
             "finished_at": datetime.now(UTC).isoformat(),
             "model": result["model"],
             "candidate": "candidate.py",
@@ -2089,12 +2227,16 @@ def _parser() -> argparse.ArgumentParser:
     mutate_parser.add_argument("--policy-file", type=Path, required=True)
     mutate_parser.add_argument("--feedback-file", type=Path, required=True)
     mutate_parser.add_argument("--run-dir", type=Path, required=True)
-    mutate_parser.add_argument("--kind", choices=("absolute", "difference", "protocol"), required=True)
+    mutate_parser.add_argument(
+        "--kind", choices=("absolute", "difference", "protocol"), required=True
+    )
     mutate_parser.add_argument("--source", type=Path, required=True)
     mutate_parser.add_argument("--timeout-seconds", type=int, default=900)
     mutate_parser.add_argument("--keep-sandbox", action="store_true")
     mutate_parser.add_argument(
-        "--pysr", action=argparse.BooleanOptionalAction, default=None,
+        "--pysr",
+        action=argparse.BooleanOptionalAction,
+        default=None,
         help="enable/disable the host-owned PySR tool; otherwise use HSOPT_ENABLE_PYSR (default 0)",
     )
 

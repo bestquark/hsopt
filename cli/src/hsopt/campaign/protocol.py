@@ -121,7 +121,8 @@ def _validate_reference(kind: str, source: Path, reference: Path, energy_target:
     reaction_ground = energy_target == "ground_branch"
     expected_target = ground_branch.REFERENCE_TARGET if reaction_ground else judge.REFERENCE_TARGET
     expected_version = (
-        (ground_branch.DIFFERENCE_CONTRACT_VERSION,) if reaction_ground
+        (ground_branch.DIFFERENCE_CONTRACT_VERSION,)
+        if reaction_ground
         else judge.EXACT_REFERENCE_CONTRACT_VERSIONS
     )
     if (
@@ -159,10 +160,15 @@ def prepare(
     if policy_profile not in ("pauli", "fermionic_nested"):
         raise ValueError("policy profile must be pauli or fermionic_nested")
     from . import elote
-    baseline_loader = elote.load_baselines if policy_profile == "fermionic_nested" else calibration.load_baselines
+
+    baseline_loader = (
+        elote.load_baselines if policy_profile == "fermionic_nested" else calibration.load_baselines
+    )
     template = (
-        initial_policy.resolve() if initial_policy is not None
-        else elote.TEMPLATE if policy_profile == "fermionic_nested"
+        initial_policy.resolve()
+        if initial_policy is not None
+        else elote.TEMPLATE
+        if policy_profile == "fermionic_nested"
         else ROOT / "experiments" / family / "initial_pf.py"
     )
     if not template.is_file():
@@ -243,8 +249,10 @@ def prepare(
             "evaluation_contract_version": (
                 (
                     ground_branch.DIFFERENCE_CONTRACT_VERSION
-                    if kind == "difference" else ground_branch.CONTRACT_VERSION
-                ) if energy_target == "ground_branch"
+                    if kind == "difference"
+                    else ground_branch.CONTRACT_VERSION
+                )
+                if energy_target == "ground_branch"
                 else judge.EVALUATION_CONTRACT_VERSION
             ),
             "suite_sha256": sha(run / "suite.json"),
@@ -348,12 +356,16 @@ def _check_receipt(
     result = receipt["result"]
     if (
         result.get("task_id") != expected["task_id"]
-        or result.get("evaluation_contract_version") != expected["task"]["evaluation_contract_version"]
+        or result.get("evaluation_contract_version")
+        != expected["task"]["evaluation_contract_version"]
     ):
         raise ValueError("case result has wrong task or evaluator contract")
     if result.get("execution_backend") != "cupy-lanczos":
         raise ValueError("shared case receipt must come from GPU Lanczos")
-    if expected["task"].get("energy_target") and result.get("energy_target") != expected["task"]["energy_target"]:
+    if (
+        expected["task"].get("energy_target")
+        and result.get("energy_target") != expected["task"]["energy_target"]
+    ):
         raise ValueError("case result has a different energy target")
     contract = read(run / "suite.json")["difference_error_contract"]
     if result.get("difference_error_contract") != contract:
@@ -469,7 +481,9 @@ def aggregate(results: dict[str, Any], baselines: dict[str, Any]) -> dict[str, A
                 "relative_t95": ratio,
                 "error_hartree": error if valid else None,
                 "passes_chemical_accuracy": passed,
-                "evaluation_error": row.get("error") if not valid and not certified_rejection else None,
+                "evaluation_error": row.get("error")
+                if not valid and not certified_rejection
+                else None,
                 **({"certified_constraint_violation": certificate} if certified_rejection else {}),
             }
         )
@@ -484,7 +498,9 @@ def aggregate(results: dict[str, Any], baselines: dict[str, Any]) -> dict[str, A
         else None
     )
     return {
-        "status": "infeasible" if certified_rejections else ("ok" if score is not None else "error"),
+        "status": "infeasible"
+        if certified_rejections
+        else ("ok" if score is not None else "error"),
         "protocol_objective": OBJECTIVE,
         "score": score,
         "mean_relative_t95": math.fsum(ratios) / len(ratios) if score is not None else None,
@@ -658,12 +674,17 @@ def main(*, family: str, worker: bool = False) -> int:
         prepare_parser.add_argument(
             "--baseline", required=True, choices=calibration.BASELINE_VARIANTS
         )
-        prepare_parser.add_argument("--policy-profile", choices=("pauli", "fermionic_nested"), default="pauli")
+        prepare_parser.add_argument(
+            "--policy-profile", choices=("pauli", "fermionic_nested"), default="pauli"
+        )
         prepare_parser.add_argument("--iterations", required=True, type=int)
         prepare_parser.add_argument("--replicate", required=True)
         if family == "abs_protocol":
-            prepare_parser.add_argument("--energy-target", choices=("hf_accessible", "ground_branch"),
-                                        default="hf_accessible")
+            prepare_parser.add_argument(
+                "--energy-target",
+                choices=("hf_accessible", "ground_branch"),
+                default="hf_accessible",
+            )
         if family == "diff_protocol":
             prepare_parser.add_argument(
                 "--error-contract", required=True, choices=judge.DIFFERENCE_ERROR_CONTRACTS
@@ -673,7 +694,9 @@ def main(*, family: str, worker: bool = False) -> int:
         advance_parser.add_argument("--no-mutate", action="store_true")
         advance_parser.add_argument("--timeout-seconds", type=int, default=900)
         advance_parser.add_argument(
-            "--pysr", action=argparse.BooleanOptionalAction, default=None,
+            "--pysr",
+            action=argparse.BooleanOptionalAction,
+            default=None,
             help="enable/disable the host-managed PySR tool for this proposal (off by default)",
         )
         deliver = sub.add_parser("deliver")
@@ -702,7 +725,9 @@ def main(*, family: str, worker: bool = False) -> int:
             else:
                 with pysr_capability(args.pysr):
                     result = advance(
-                        args.run_dir, propose=not args.no_mutate, timeout_seconds=args.timeout_seconds
+                        args.run_dir,
+                        propose=not args.no_mutate,
+                        timeout_seconds=args.timeout_seconds,
                     )
     print(json.dumps(result, sort_keys=True))
     return 0

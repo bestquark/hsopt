@@ -136,6 +136,7 @@ class CompiledCircuit:
     def add(self, label, matrix, *, frame=(), gate_count=0):
         self.gates.append((label, np.asarray(matrix, dtype=np.complex128), frame))
         from .spectral_window import _gamma
+
         # Conservative complex128 budget for each literal word's 2x2 products,
         # Pauli coefficient transform and vector kernel. No synthesis tolerance
         # is counted here: its actual compiled word is the scientific target.
@@ -219,6 +220,7 @@ def ground_lanczos(unitary, problem, metrics, target_state, *, reference_energy=
         failures = [original]
         if reference_energy is not None:
             from .spectral_window import certify_infeasible, CertifiedGroundInputInfeasible
+
             certificate = certify_infeasible(
                 unitary, problem, metrics, target_state, reference_energy
             )

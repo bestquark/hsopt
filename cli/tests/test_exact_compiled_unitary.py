@@ -164,7 +164,8 @@ def _encoded_problem(problem: dict[str, object]) -> dict[str, object]:
 
 def test_experiments_tree_contains_only_shared_protocol_workflows() -> None:
     directories = {
-        path.name for path in (REPO / "experiments").iterdir()
+        path.name
+        for path in (REPO / "experiments").iterdir()
         if path.is_dir() and path.name != "__pycache__"
     }
     assert directories == {"abs_protocol", "diff_protocol", "elote_search"}

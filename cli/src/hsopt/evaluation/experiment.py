@@ -30,7 +30,9 @@ def main(argv: Sequence[str] | None = None) -> int:
         "--reference-size", type=int, help="BCH reference determinant cap (default 32)"
     )
     parser.add_argument("--error-contract", choices=DIFFERENCE_ERROR_CONTRACTS)
-    parser.add_argument("--backend", choices=("numpy", "cupynumeric", "cupy-lanczos"), default="cupy-lanczos")
+    parser.add_argument(
+        "--backend", choices=("numpy", "cupynumeric", "cupy-lanczos"), default="cupy-lanczos"
+    )
     parser.add_argument("--output", type=Path)
     args = parser.parse_args(argv)
     if args.method == "exact" and args.exact_reference is None:

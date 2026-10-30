@@ -35,8 +35,16 @@ def _gamma(operations):
     return product / (1 - product)
 
 
-def certify_infeasible(unitary, problem, metrics, target_state, reference_energy,
-                       *, orders=(8, 16, 32, 64, 128, 256), timeout_seconds=30):
+def certify_infeasible(
+    unitary,
+    problem,
+    metrics,
+    target_state,
+    reference_energy,
+    *,
+    orders=(8, 16, 32, 64, 128, 256),
+    timeout_seconds=30,
+):
     """Return a conservative rejection certificate or None; never guess a peak.
 
     The literal circuit supplies a per-action roundoff allowance. A missing
@@ -86,24 +94,32 @@ def certify_infeasible(unitary, problem, metrics, target_state, reference_energy
             arithmetic_allowance = propagated + _gamma(64 * order) + norm_allowance
             lower = math.cos(angle_radius) ** 2
             upper = min(1.0, ((amplitude + arithmetic_allowance) ** 2) / lower)
-            trial = {"order": order, "filtered_norm_squared": amplitude ** 2,
-                     "filter_window_lower_bound": lower,
-                     "amplitude_roundoff_allowance": arithmetic_allowance,
-                     "accurate_window_probability_upper_bound": upper}
+            trial = {
+                "order": order,
+                "filtered_norm_squared": amplitude**2,
+                "filter_window_lower_bound": lower,
+                "amplitude_roundoff_allowance": arithmetic_allowance,
+                "accurate_window_probability_upper_bound": upper,
+            }
             trials.append(trial)
             if upper < 0.5 - 1e-9:
                 return {
-                    "method": VERSION, "verified": True,
+                    "method": VERSION,
+                    "verified": True,
                     "constraint": "accurate_majority_ground_input_qpe_peak",
                     "accurate_window_probability_upper_bound": upper,
                     "required_peak_probability_strictly_greater_than": 0.5,
                     "chemical_accuracy_hartree": ev.CHEMICAL_ACCURACY_HARTREE,
                     "reference_energy_hartree": reference_energy,
                     "reference_energy_allowance_hartree": reference_allowance,
-                    "step_phase_center": theta, "step_phase_halfwidth": delta,
-                    "n_steps": repetitions, "unitary_action_roundoff_bound": action_error,
-                    "matvec_calls": order - 1, "seconds": time.monotonic() - started,
-                    "trials": trials, "acceptance_permitted": False,
+                    "step_phase_center": theta,
+                    "step_phase_halfwidth": delta,
+                    "n_steps": repetitions,
+                    "unitary_action_roundoff_bound": action_error,
+                    "matvec_calls": order - 1,
+                    "seconds": time.monotonic() - started,
+                    "trials": trials,
+                    "acceptance_permitted": False,
                     "full_diagonalization_permitted": False,
                 }
         if time.monotonic() - started >= timeout_seconds:

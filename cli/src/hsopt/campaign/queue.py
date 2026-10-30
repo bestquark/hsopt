@@ -79,7 +79,8 @@ def _task_id(
     if energy_target != "hf_accessible":
         contract = (
             ground_branch.DIFFERENCE_CONTRACT_VERSION
-            if kind == "difference" else ground_branch.CONTRACT_VERSION
+            if kind == "difference"
+            else ground_branch.CONTRACT_VERSION
         )
         digest.update(b"\0" + contract.encode())
         # A verifier upgrade must not reuse an older inconclusive task receipt.
@@ -250,11 +251,14 @@ def enqueue(
                 "queued_at": _now(),
             }
             if energy_target != "hf_accessible":
-                metadata.update(energy_target=energy_target,
-                                evaluation_contract_version=(
-                                    ground_branch.DIFFERENCE_CONTRACT_VERSION
-                                    if kind == "difference" else ground_branch.CONTRACT_VERSION
-                                ))
+                metadata.update(
+                    energy_target=energy_target,
+                    evaluation_contract_version=(
+                        ground_branch.DIFFERENCE_CONTRACT_VERSION
+                        if kind == "difference"
+                        else ground_branch.CONTRACT_VERSION
+                    ),
+                )
             _write_json(temporary / "task.json", metadata)
             destination = queue_dir / "pending" / task_id
             temporary.rename(destination)
@@ -325,8 +329,10 @@ def evaluate_task(
         expected_contract = (
             (
                 ground_branch.DIFFERENCE_CONTRACT_VERSION
-                if metadata["kind"] == "difference" else ground_branch.CONTRACT_VERSION
-            ) if energy_target == "ground_branch"
+                if metadata["kind"] == "difference"
+                else ground_branch.CONTRACT_VERSION
+            )
+            if energy_target == "ground_branch"
             else EVALUATION_CONTRACT_VERSION
         )
         if metadata.get("evaluation_contract_version") != expected_contract:
@@ -348,7 +354,9 @@ def evaluate_task(
                     policy,
                     backend=backend,
                     reference_path=reference,
-                    **({"energy_target": energy_target} if energy_target != "hf_accessible" else {}),
+                    **(
+                        {"energy_target": energy_target} if energy_target != "hf_accessible" else {}
+                    ),
                 )
             else:
                 result = evaluate_difference(
@@ -362,6 +370,7 @@ def evaluate_task(
         result["task_id"] = task_id
     except Exception as exc:  # record the scientific evaluation failure
         from ..evaluation.spectral_window import CertifiedGroundInputInfeasible
+
         certified = isinstance(exc, CertifiedGroundInputInfeasible)
         result = {
             "status": "infeasible" if certified else "error",

@@ -69,7 +69,10 @@ def eigensolve(unitary, problem, metrics, *, iterative, target_state=None, refer
         from .gpu_circuit import ground_lanczos, certify_selected_phase
 
         rays, vectors, report = ground_lanczos(
-            unitary, problem, metrics, target_state,
+            unitary,
+            problem,
+            metrics,
+            target_state,
             **({"reference_energy": reference_energy} if reference_energy is not None else {}),
         )
         # Unlike lowest-HF-peak selection, majority ground-input selection is
@@ -101,6 +104,7 @@ def eigensolve(unitary, problem, metrics, *, iterative, target_state=None, refer
             raise RuntimeError("Lanczos phase-order/repetition guard is not certified")
     scale = metrics["n_steps"] / problem["target_time"]
     from cupyx.scipy.sparse.linalg import LinearOperator, eigsh
+
     hermitian = cp.empty_like(unitary)
     for first in range(0, dim, 128):
         last = min(first + 128, dim)
@@ -164,9 +168,13 @@ def eigensolve(unitary, problem, metrics, *, iterative, target_state=None, refer
                 from .ground_branch import select_peak
 
                 try:
-                    peak = select_peak(phases, overlaps, n_steps=metrics["n_steps"],
-                                       target_time=problem["target_time"],
-                                       identity_coefficient=problem["identity_coefficient"])
+                    peak = select_peak(
+                        phases,
+                        overlaps,
+                        n_steps=metrics["n_steps"],
+                        target_time=problem["target_time"],
+                        identity_coefficient=problem["identity_coefficient"],
+                    )
                 except RuntimeError:
                     trials.append(
                         {"k": k, "resolved": False, "seconds": time.monotonic() - trial_started}
@@ -177,7 +185,8 @@ def eigensolve(unitary, problem, metrics, *, iterative, target_state=None, refer
                 energy = peak["compiled_pf_energy_hartree"]
             selected_residual = (
                 max(residuals[i] for i in peak["selected_eigen_indices"])
-                if target_state is not None else residuals[selected]
+                if target_state is not None
+                else residuals[selected]
             )
             trial = {
                 "k": k,

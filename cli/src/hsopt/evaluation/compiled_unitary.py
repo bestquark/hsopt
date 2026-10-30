@@ -747,6 +747,7 @@ def _conjugated_pivot_pauli(label: str, pivot_pauli: str, frame=()) -> tuple[com
         operator[qubit] = transformed
     if frame:
         from .clifford import conjugate, inverse
+
         sign, transformed = conjugate("".join(operator), inverse(frame))
         return phase * sign, transformed
     return phase, "".join(operator)
@@ -950,7 +951,9 @@ def _product_formula_schedule(
     n_steps = raw_steps
     step_time = float(problem["target_time"]) / n_steps
     basis_method = getattr(product_formula, "basis_change", None)
-    frame = clifford.validate_frame(basis_method() if basis_method else [], int(problem["n_qubits"]))
+    frame = clifford.validate_frame(
+        basis_method() if basis_method else [], int(problem["n_qubits"])
+    )
     terms = elote.transformed_terms(problem, frame)
     trusted_terms = {str(term["label"]): dict(term) for term in terms}
     # Decomposing a fermionic block can introduce Pauli contributions that
@@ -960,18 +963,30 @@ def _product_formula_schedule(
             for term in block["terms"]:
                 sign, label = clifford.conjugate(term["label"], frame)
                 if label not in trusted_terms:
-                    extra = {**elote.term_fields(label, 0.0),
-                             "original_label": term["label"], "frame_sign": sign}
+                    extra = {
+                        **elote.term_fields(label, 0.0),
+                        "original_label": term["label"],
+                        "frame_sign": sign,
+                    }
                     trusted_terms[label] = extra
                     terms.append(extra)
     raw_rotations = product_formula.build_step([dict(term) for term in terms], step_time)
     rotations, recipe = elote.schedule(
-        raw_rotations, trusted_terms,
+        raw_rotations,
+        trusted_terms,
         limit=MAX_POLICY_ROTATIONS_PER_TERM * len(problem["terms"]),
     )
-    recipe.update({"basis_change": frame, "repetitions": n_steps, "step_time": step_time,
-                   "policy_sha256": (_sha256(Path(policy.__file__)) if getattr(policy, "__file__", None) else None),
-                   "problem_sha256": (_sha256(Path(problem["_path"])) if problem.get("_path") else None)})
+    recipe.update(
+        {
+            "basis_change": frame,
+            "repetitions": n_steps,
+            "step_time": step_time,
+            "policy_sha256": (
+                _sha256(Path(policy.__file__)) if getattr(policy, "__file__", None) else None
+            ),
+            "problem_sha256": (_sha256(Path(problem["_path"])) if problem.get("_path") else None),
+        }
+    )
     if decomposition:
         recipe["fermionic_decomposition_sha256"] = decomposition["sha256"]
     classification = _classify_rotation_schedule(
@@ -1059,18 +1074,27 @@ def _build_compiled_step(
             (compiled_rotations[key]["matrix"] for key in rotation_keys), n_steps
         )
         gpu_metrics["matrix_construction"] = (
-            "matrix_free_cuda_graph_literal_circuit" if matrix_free else "fused_complex128_paired_or_generic"
+            "matrix_free_cuda_graph_literal_circuit"
+            if matrix_free
+            else "fused_complex128_paired_or_generic"
         )
     applied_rotations = 0
     for (term, _alpha), (theta, epsilon) in zip(rotations, rotation_keys, strict=True):
         compiled = compiled_rotations[(theta, epsilon)]
         if matrix_free:
-            unitary.add(str(term["label"]), compiled["matrix"], frame=frame,
-                        gate_count=compiled["gate_count"])
+            unitary.add(
+                str(term["label"]),
+                compiled["matrix"],
+                frame=frame,
+                gate_count=compiled["gate_count"],
+            )
         else:
             unitary, workspace = updater(
-                unitary, workspace, label=str(term["label"]),
-                compiled_rz=compiled["matrix"], xp=xp,
+                unitary,
+                workspace,
+                label=str(term["label"]),
+                compiled_rz=compiled["matrix"],
+                xp=xp,
                 **({"frame": frame} if frame else {}),
             )
         applied_rotations += 1
@@ -1110,7 +1134,9 @@ def _build_compiled_step(
     recipe["synthesis_tolerances"] = [epsilon for _theta, epsilon in rotation_keys]
     recipe["resolved_recipe_sha256"] = digest(recipe)
     logical_circuit = circuit_metrics(
-        rotations, [compiled_rotations[key]["gate_string"] for key in rotation_keys], frame=frame,
+        rotations,
+        [compiled_rotations[key]["gate_string"] for key in rotation_keys],
+        frame=frame,
     )
     if logical_circuit["one_step_t_count"] != t_count:
         raise RuntimeError("literal gate ledger disagrees with CUDA-Q T count")
@@ -1124,7 +1150,9 @@ def _build_compiled_step(
         "t_count": t_count * n_steps,
         "dense_matrix_dimension": dim,
         "dense_matrix_bytes": 0 if matrix_free else dim * dim * np.dtype(np.complex128).itemsize,
-        "rotation_workspace_bytes": dim * np.dtype(np.complex128).itemsize if matrix_free else dim * dim * np.dtype(np.complex128).itemsize,
+        "rotation_workspace_bytes": dim * np.dtype(np.complex128).itemsize
+        if matrix_free
+        else dim * dim * np.dtype(np.complex128).itemsize,
         "rotation_chunk_target_bytes": ROTATION_CHUNK_TARGET_BYTES,
         "rotation_fence_interval": fence_interval,
         "synthesis_epsilon_histogram": dict(sorted(epsilon_histogram.items())),
@@ -1158,6 +1186,7 @@ def _build_exact_product_formula_step(
         if backend_name != "cupy-lanczos":
             raise ValueError("matrix-free ideal PF requires GPU Lanczos")
         from .gpu_circuit import CompiledCircuit
+
         unitary, workspace = CompiledCircuit(dim), None
     else:
         unitary = xp.eye(dim, dtype=xp.complex128)
@@ -1170,7 +1199,11 @@ def _build_exact_product_formula_step(
             unitary.add(str(term["label"]), exact_rz, frame=frame)
         else:
             unitary, workspace = _apply_compiled_rotation(
-                unitary, workspace, label=str(term["label"]), compiled_rz=exact_rz, xp=xp,
+                unitary,
+                workspace,
+                label=str(term["label"]),
+                compiled_rz=exact_rz,
+                xp=xp,
                 frame=frame,
             )
         if index % fence_interval == 0:
@@ -1179,14 +1212,19 @@ def _build_exact_product_formula_step(
     del workspace
     if matrix_free:
         from .gpu_spectrum import phase_enclosure
+
         unitary.finish()
-        schedule_metrics["compiled_phase_enclosure"] = phase_enclosure(matrices, schedule_metrics["n_steps"])
+        schedule_metrics["compiled_phase_enclosure"] = phase_enclosure(
+            matrices, schedule_metrics["n_steps"]
+        )
     return unitary, {
         **schedule_metrics,
         "rotation_implementation": "ideal_pauli_rotations",
         "dense_matrix_dimension": dim,
         "dense_matrix_bytes": 0 if matrix_free else dim * dim * np.dtype(np.complex128).itemsize,
-        "rotation_workspace_bytes": dim * np.dtype(np.complex128).itemsize if matrix_free else dim * dim * np.dtype(np.complex128).itemsize,
+        "rotation_workspace_bytes": dim * np.dtype(np.complex128).itemsize
+        if matrix_free
+        else dim * dim * np.dtype(np.complex128).itemsize,
         "rotation_fence_interval": fence_interval,
     }
 
@@ -1603,6 +1641,7 @@ def assemble_exact_difference_reference(
     if energy_target not in {"hf_accessible", "ground_branch"}:
         raise ValueError("unsupported reaction energy target")
     from . import ground_branch
+
     species_results: dict[str, dict[str, Any]] = {}
     unitary_difference = 0.0
     hamiltonian_difference = 0.0
@@ -1636,7 +1675,8 @@ def assemble_exact_difference_reference(
         "status": "ok",
         "evaluation_contract_version": (
             ground_branch.DIFFERENCE_CONTRACT_VERSION
-            if energy_target == "ground_branch" else EVALUATION_CONTRACT_VERSION
+            if energy_target == "ground_branch"
+            else EVALUATION_CONTRACT_VERSION
         ),
         "observable": "exact_unitary_signed_energy_difference",
         "reference_target": (
@@ -1721,8 +1761,12 @@ def evaluate_molecule(
         matrix_free = ground_input
     if matrix_free and not ground_input:
         raise ValueError("matrix-free ground targeting requires the ground-input contract")
-    if ground_input and (backend != "cupy-lanczos" or (reference_path is None and reference_result is None)):
-        raise ValueError("ground-input scoring requires a cached reference and GPU Lanczos; no fallback")
+    if ground_input and (
+        backend != "cupy-lanczos" or (reference_path is None and reference_result is None)
+    ):
+        raise ValueError(
+            "ground-input scoring requires a cached reference and GPU Lanczos; no fallback"
+        )
 
     evaluation_started = time.perf_counter()
     problem = load_problem(problem_path)
@@ -1763,7 +1807,10 @@ def evaluate_molecule(
         from .gpu_spectrum import eigensolve
 
         eigenvalues, eigenvectors, spectral_solver = eigensolve(
-            unitary_step, problem, metrics, iterative=backend_name == "cupy-lanczos",
+            unitary_step,
+            problem,
+            metrics,
+            iterative=backend_name == "cupy-lanczos",
             **({"target_state": input_state} if ground_input else {}),
             **({"reference_energy": exact_energy} if ground_input else {}),
         )
@@ -1795,9 +1842,13 @@ def evaluate_molecule(
     signed_error = estimated_energy - exact_energy
     absolute_error = abs(signed_error)
     passes = absolute_error < CHEMICAL_ACCURACY_HARTREE
-    qpe_success_probability = float(peak[
-        "qpe_success_probability_from_ground_input" if ground_input else "qpe_success_probability_from_hf"
-    ])
+    qpe_success_probability = float(
+        peak[
+            "qpe_success_probability_from_ground_input"
+            if ground_input
+            else "qpe_success_probability_from_hf"
+        ]
+    )
     if matrix_free:
         from .gpu_circuit import certify_qpe_repetitions
 
@@ -1895,8 +1946,12 @@ def evaluate_molecule(
                 "Ideal ground-state preparation cost is excluded from this dynamics benchmark."
             ),
         )
-        for name in ("exact_hf_accessible_energy_hartree", "exact_hf_accessible_probability",
-                     "exact_hf_accessible_ground_gap_hartree", "qpe_peak_weight_threshold"):
+        for name in (
+            "exact_hf_accessible_energy_hartree",
+            "exact_hf_accessible_probability",
+            "exact_hf_accessible_ground_gap_hartree",
+            "qpe_peak_weight_threshold",
+        ):
             result.pop(name, None)
     return result
 
@@ -1940,10 +1995,12 @@ def evaluate_difference(
         raise ValueError("reference is not an exact-unitary signed-difference result")
     expected_version = (
         ground_branch.DIFFERENCE_CONTRACT_VERSION
-        if energy_target == "ground_branch" else EVALUATION_CONTRACT_VERSION
+        if energy_target == "ground_branch"
+        else EVALUATION_CONTRACT_VERSION
     )
     if reference.get("evaluation_contract_version") not in (
-        (expected_version,) if energy_target == "ground_branch"
+        (expected_version,)
+        if energy_target == "ground_branch"
         else EXACT_REFERENCE_CONTRACT_VERSIONS
     ):
         raise ValueError("reference uses a different evaluator contract")
@@ -2019,7 +2076,8 @@ def evaluate_difference(
         species_precision = reaction_qpe_precision / (len(unique_species) * weight)
         probability_key = (
             "qpe_success_probability_from_ground_input"
-            if energy_target == "ground_branch" else "qpe_success_probability_from_hf"
+            if energy_target == "ground_branch"
+            else "qpe_success_probability_from_hf"
         )
         species_qpe_cost = _qpe_cost_metrics(
             peak_probability=float(result[probability_key]),
