@@ -1,0 +1,142 @@
+{
+  "baseline": "tight",
+  "campaign_id": "elote115_abs_tight",
+  "chemical_accuracy_hartree": 0.0015936014376405157,
+  "compiler": "CUDA-Q Clifford+T rotation synthesis",
+  "completed_mutations_per_search": 100,
+  "cost_scope": "T95 includes full evolution, QPE queries and success repetitions; state-preparation cost is excluded. t_count is the literal T count for one full evolution.",
+  "eigensolver": "matrix-free GPU Lanczos",
+  "energy_target": "ground_branch",
+  "evaluation_contract_version": "normalized_hamiltonian_ground_input_qpe_t_count_cudaq_elote_v3",
+  "files": {
+    "best_policy.py": "d199f6a4efef965aa015dbd73f69d14f628fd1b9eaa3653391dad8e3a75e472e",
+    "testing_results.csv": "2824e020948b5d38bcb294a6cdc4bf56ee056489be07e10599d9a96ff0338b5c",
+    "training_parameters.json": "6e315e76730dff6cb6acd2ad182d5d8f1dc629aa1afe241ead66ff9f933951bd",
+    "training_results.csv": "884f313026430ed7ac23e205dd84446b21b38fdea1013aa54868681c86dfc99a"
+  },
+  "initial_policy_profile": "fermionic_nested",
+  "learned_protocol": {
+    "basis_change": [],
+    "coefficient_aggregation": "One signed coefficient per Pauli string after summing block contributions",
+    "repetitions": "Unchanged Hamiltonian-specific baseline n_steps",
+    "representation": "Jordan-Wigner; host-verified fermionic decomposition supplies feature scales",
+    "source_comments": "The archived header and unused groups() method are inherited from the initializer; executable build_step() defines the learned flat first-order schedule.",
+    "splitting": "first_order_lie_trotter",
+    "synthesis": "Mixed tolerances by coefficient, Pauli support, diagonal/off-diagonal character and Hamiltonian feature scales; no independent angle dependence",
+    "term_order": "lexicographic"
+  },
+  "name": "ELOTE: Error-Limited Optimized Trotter Evolution",
+  "objective": "geometric_mean_baseline_relative_t95",
+  "policy_file": "best_policy.py",
+  "policy_sha256": "d199f6a4efef965aa015dbd73f69d14f628fd1b9eaa3653391dad8e3a75e472e",
+  "release_id": "elote115",
+  "retained_policies_by_original_seed": [
+    {
+      "candidate_sha256": "170000a2138ce0a416e1e3e706515e44398008f0071fee313e19ca8fb10e8492",
+      "round": 99,
+      "score": 0.6164409001524734,
+      "seed": "seed-01"
+    },
+    {
+      "candidate_sha256": "1c18fc6407cef14330050e5c4fcee3cf98652193b1f78a038c051328fbdfff78",
+      "round": 84,
+      "score": 0.8750309379611392,
+      "seed": "seed-02"
+    },
+    {
+      "candidate_sha256": "361597979949f9c66aa31957c2167a44ee5c8aa51a47e5cc551ef9bb3daa5279",
+      "round": 99,
+      "score": 0.8567143320433237,
+      "seed": "seed-03"
+    },
+    {
+      "candidate_sha256": "613d3b264a6a189aaddabdbfb4a1569b9dd0868a459808dcd7299806e9f66dfd",
+      "round": 98,
+      "score": 0.8553633934256494,
+      "seed": "seed-04"
+    },
+    {
+      "candidate_sha256": "d199f6a4efef965aa015dbd73f69d14f628fd1b9eaa3653391dad8e3a75e472e",
+      "round": 100,
+      "score": 0.15175594452564578,
+      "seed": "seed-05"
+    }
+  ],
+  "schema": "hsopt-released-elote-v1",
+  "selection_rule": "Lowest geometric-mean baseline-relative T95 among accepted feasible candidates from five completed 100-mutation searches; testing is excluded from selection.",
+  "source_decision": {
+    "acceptance_reason": "aggregate_t95_improved",
+    "accepted": true,
+    "shared_candidate_sha256": "d199f6a4efef965aa015dbd73f69d14f628fd1b9eaa3653391dad8e3a75e472e",
+    "suite_sha256": "abfcb4e5042010f9ebd0d980415092dbf806ba5acc176d91e6a559555b4372c0"
+  },
+  "source_decision_sha256": "97333a9a7d13bb46464e23c944d1b0e77ee5d9ba3cd55cc429b2399450adb5f6",
+  "source_mutation": 100,
+  "source_result_sha256": "02d4076a215fa3f2e05c6b314d0a05f26f6ef83c47ee6ac29bef01162b50c7c4",
+  "source_seed": "seed-05",
+  "sources": {
+    "original_training_results_manifest_sha256": "cee9a77a4305370db480e79f637a0d67e94734847287e23f945ccb1456da0027",
+    "original_training_results_sha256": "315b75d23d4618600b3384699440138e6aef5f4152a161c4b81a345bd47f5e8c",
+    "original_training_suite_manifest_sha256": "09e4665a03df44fa10762fb55e780ce58daa4348f27a1680a71d2be096c25c5b",
+    "paper_commit": "175311350f27540bca1a5510692af1e40c97476e",
+    "paper_policy_path": "data/elote_understanding/selected_policy.py",
+    "paper_repository": "https://github.com/bestquark/eqd-paper",
+    "paper_selection_path": "data/elote_final_artifacts.json",
+    "paper_selection_sha256": "90ddfd56f8754d96de29b548832a756df90bef0a11df4e6185428e2196b76f9e",
+    "paper_testing_summary_path": "data/elote_heldout_summary.json",
+    "paper_testing_summary_sha256": "0fa748eb580dfd5f6c600e93a0ac761b1e698a88683188f5ddbe3058f7af4a14",
+    "verified_training_input_files": 230
+  },
+  "suite_sha256": "abfcb4e5042010f9ebd0d980415092dbf806ba5acc176d91e6a559555b4372c0",
+  "target_success_probability": 0.95,
+  "testing": {
+    "accuracy_failures": [
+      {
+        "baseline_error_mha": 1.833473830828325,
+        "case_id": "standard|HF.hdf5|/ham_JW18",
+        "elote_error_mha": 0.670446280565784
+      }
+    ],
+    "baseline_max_absolute_energy_error_mha": 1.833473830828325,
+    "baseline_passes": 75,
+    "both_pass_pairs": 75,
+    "census_cases": 78,
+    "elote_max_absolute_energy_error_mha": 0.6799942180037988,
+    "elote_passes": 76,
+    "exclusions": [
+      {
+        "case_id": "standard|NaLi.hdf5|/ham_JW-18",
+        "reason": "ValueError: nesting requires a number-conserving one-/two-body JW Hamiltonian",
+        "status": "error"
+      },
+      {
+        "case_id": "standard|NaLi.hdf5|/ham_JW-20",
+        "reason": "ValueError: nesting requires a number-conserving one-/two-body JW Hamiltonian",
+        "status": "error"
+      }
+    ],
+    "paired_cases": 76,
+    "parameter_protocol": "training_fit_frozen_before_testing",
+    "qubit_range": [
+      18,
+      22
+    ],
+    "relative_t95_geometric_mean_of_both_pass_pairs": 0.13193512659873843,
+    "results_file": "testing_results.csv",
+    "testing_refit": false
+  },
+  "training": {
+    "cases": 115,
+    "max_absolute_energy_error_mha": 0.3558855178944498,
+    "parameter_origin": "Original sealed per-Hamiltonian tight baseline calibration; identical parameters are bound to the baseline and learned policy.",
+    "parameters_file": "training_parameters.json",
+    "passes": 115,
+    "qubit_range": [
+      4,
+      16
+    ],
+    "relative_t95_geometric_mean": 0.15175594452564578,
+    "results_file": "training_results.csv",
+    "t95_geometric_reduction_percent": 84.82440554743542
+  }
+}

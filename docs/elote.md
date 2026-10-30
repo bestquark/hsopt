@@ -7,6 +7,12 @@ rotation angles, optional basis change, and rotation-synthesis tolerance rule.
 The Python policy is the algorithm; the resolved per-molecule recipe in each
 evaluation records the concrete groups, stages, angles and tolerances.
 
+The best released molecular ELOTE is checked in at
+[`experiments/elote_search/results/elote115/`](../experiments/elote_search/results/elote115/README.md),
+with the exact selected policy, its 115 training parameter rows, recorded
+training/testing results and checksummed provenance. This frozen snapshot is
+separate from the generated initializers and external mutable campaigns below.
+
 For commuting groups (H_g=\sum_{j\in g}c_jP_j), a splitting defines one step
 
 \[

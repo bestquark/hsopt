@@ -1,0 +1,577 @@
+{
+  "HamLib 0256_hydrogen_data_H2_ES_H2_linear_R0.5_sto-6g_ham_JW": {
+    "n_steps": 2,
+    "reference_trotter_number_beta": 9.308809731516346,
+    "uniform_epsilon": 1.522605882487699e-07
+  },
+  "HamLib 0257_hydrogen_data_H2_ES_H2_linear_R0.6_sto-6g_ham_JW": {
+    "n_steps": 2,
+    "reference_trotter_number_beta": 8.488751417367403,
+    "uniform_epsilon": 1.678308747856081e-07
+  },
+  "HamLib 0258_hydrogen_data_H2_ES_H2_linear_R0.7_sto-6g_ham_JW": {
+    "n_steps": 2,
+    "reference_trotter_number_beta": 7.80096850698585,
+    "uniform_epsilon": 1.7417440886609903e-07
+  },
+  "HamLib 0259_hydrogen_data_H2_ES_H2_linear_R0.8_sto-6g_ham_JW": {
+    "n_steps": 2,
+    "reference_trotter_number_beta": 7.218442316886446,
+    "uniform_epsilon": 1.9398390567025627e-07
+  },
+  "HamLib 0260_hydrogen_data_H2_ES_H2_linear_R0.9_sto-6g_ham_JW": {
+    "n_steps": 2,
+    "reference_trotter_number_beta": 6.721275737311173,
+    "uniform_epsilon": 2.206657493458414e-07
+  },
+  "HamLib 0261_hydrogen_data_H2_ES_H2_linear_R1.0_sto-6g_ham_JW": {
+    "n_steps": 2,
+    "reference_trotter_number_beta": 6.294144182201865,
+    "uniform_epsilon": 2.3020243818913434e-07
+  },
+  "HamLib 0262_hydrogen_data_H2_ES_H2_linear_R1.1_sto-6g_ham_JW": {
+    "n_steps": 2,
+    "reference_trotter_number_beta": 5.924986187892654,
+    "uniform_epsilon": 2.4538984346755516e-07
+  },
+  "HamLib 0263_hydrogen_data_H2_ES_H2_linear_R1.2_sto-6g_ham_JW": {
+    "n_steps": 2,
+    "reference_trotter_number_beta": 5.604302815357139,
+    "uniform_epsilon": 2.47025313750992e-07
+  },
+  "HamLib 0264_hydrogen_data_H2_ES_H2_linear_R1.3_sto-6g_ham_JW": {
+    "n_steps": 2,
+    "reference_trotter_number_beta": 5.324620674005046,
+    "uniform_epsilon": 2.6076386128946387e-07
+  },
+  "HamLib 0265_hydrogen_data_H2_ES_H2_linear_R1.4_sto-6g_ham_JW": {
+    "n_steps": 2,
+    "reference_trotter_number_beta": 5.080007943779212,
+    "uniform_epsilon": 2.8121600500276936e-07
+  },
+  "HamLib 0266_hydrogen_data_H2_ES_H2_linear_R1.5_sto-6g_ham_JW": {
+    "n_steps": 2,
+    "reference_trotter_number_beta": 4.8656740820905275,
+    "uniform_epsilon": 3.0221691767655333e-07
+  },
+  "HamLib 0267_hydrogen_data_H2_ES_H2_linear_R1.6_sto-6g_ham_JW": {
+    "n_steps": 2,
+    "reference_trotter_number_beta": 4.677669811591527,
+    "uniform_epsilon": 3.0686263011040465e-07
+  },
+  "HamLib 0268_hydrogen_data_H2_ES_H2_linear_R1.7_sto-6g_ham_JW": {
+    "n_steps": 2,
+    "reference_trotter_number_beta": 4.512674002762068,
+    "uniform_epsilon": 3.1874499755399446e-07
+  },
+  "HamLib 0269_hydrogen_data_H2_ES_H2_linear_R1.8_sto-6g_ham_JW": {
+    "n_steps": 2,
+    "reference_trotter_number_beta": 3.275884896364961,
+    "uniform_epsilon": 3.270006037493073e-07
+  },
+  "HamLib 0270_hydrogen_data_H2_ES_H2_linear_R1.9_sto-6g_ham_JW": {
+    "n_steps": 2,
+    "reference_trotter_number_beta": 3.2115812137767117,
+    "uniform_epsilon": 3.339391496834439e-07
+  },
+  "HamLib 0271_hydrogen_data_H2_ES_H2_linear_R2.0_sto-6g_ham_JW": {
+    "n_steps": 2,
+    "reference_trotter_number_beta": 3.199248962184828,
+    "uniform_epsilon": 3.5330022323918107e-07
+  },
+  "HamLib 0272_hydrogen_data_H4_ES_H4_linear_R0.5_sto-6g_ham_JW": {
+    "n_steps": 1,
+    "reference_trotter_number_beta": 23.79396016439063,
+    "uniform_epsilon": 3.4144404292567887e-09
+  },
+  "HamLib 0273_hydrogen_data_H4_ES_H4_linear_R0.6_sto-6g_ham_JW": {
+    "n_steps": 1,
+    "reference_trotter_number_beta": 20.553145533545578,
+    "uniform_epsilon": 3.894461289862081e-09
+  },
+  "HamLib 0274_hydrogen_data_H4_ES_H4_linear_R0.7_sto-6g_ham_JW": {
+    "n_steps": 1,
+    "reference_trotter_number_beta": 18.27405613384743,
+    "uniform_epsilon": 4.541772680257089e-09
+  },
+  "HamLib 0275_hydrogen_data_H4_ES_H4_linear_R0.8_sto-6g_ham_JW": {
+    "n_steps": 1,
+    "reference_trotter_number_beta": 16.616249414183333,
+    "uniform_epsilon": 4.856346013477059e-09
+  },
+  "HamLib 0276_hydrogen_data_H4_ES_H4_linear_R0.9_sto-6g_ham_JW": {
+    "n_steps": 1,
+    "reference_trotter_number_beta": 15.322814292686482,
+    "uniform_epsilon": 5.343407358061748e-09
+  },
+  "HamLib 0277_hydrogen_data_H4_ES_H4_linear_R1.0_sto-6g_ham_JW": {
+    "n_steps": 1,
+    "reference_trotter_number_beta": 7.142388093106475,
+    "uniform_epsilon": 5.944774232123987e-09
+  },
+  "HamLib 0278_hydrogen_data_H4_ES_H4_linear_R1.1_sto-6g_ham_JW": {
+    "n_steps": 1,
+    "reference_trotter_number_beta": 6.719274953333737,
+    "uniform_epsilon": 6.372463232455099e-09
+  },
+  "HamLib 0279_hydrogen_data_H4_ES_H4_linear_R1.2_sto-6g_ham_JW": {
+    "n_steps": 1,
+    "reference_trotter_number_beta": 6.3820627002172365,
+    "uniform_epsilon": 6.582799869203577e-09
+  },
+  "HamLib 0280_hydrogen_data_H4_ES_H4_linear_R1.3_sto-6g_ham_JW": {
+    "n_steps": 1,
+    "reference_trotter_number_beta": 6.101038581082931,
+    "uniform_epsilon": 6.925846993334118e-09
+  },
+  "HamLib 0281_hydrogen_data_H4_ES_H4_linear_R1.4_sto-6g_ham_JW": {
+    "n_steps": 1,
+    "reference_trotter_number_beta": 11.720781888719419,
+    "uniform_epsilon": 7.100094915468761e-09
+  },
+  "HamLib 0282_hydrogen_data_H4_ES_H4_linear_R1.5_sto-6g_ham_JW": {
+    "n_steps": 1,
+    "reference_trotter_number_beta": 11.304235527487965,
+    "uniform_epsilon": 7.269252555924799e-09
+  },
+  "HamLib 0283_hydrogen_data_H4_ES_H4_linear_R1.6_sto-6g_ham_JW": {
+    "n_steps": 1,
+    "reference_trotter_number_beta": 10.95982267467194,
+    "uniform_epsilon": 7.617383053161891e-09
+  },
+  "HamLib 0284_hydrogen_data_H4_ES_H4_linear_R1.7_sto-6g_ham_JW": {
+    "n_steps": 1,
+    "reference_trotter_number_beta": 10.688029985745949,
+    "uniform_epsilon": 7.877420426260167e-09
+  },
+  "HamLib 0285_hydrogen_data_H4_ES_H4_linear_R1.8_sto-6g_ham_JW": {
+    "n_steps": 1,
+    "reference_trotter_number_beta": 10.443893800781462,
+    "uniform_epsilon": 7.926108758971886e-09
+  },
+  "HamLib 0286_hydrogen_data_H4_ES_H4_linear_R1.9_sto-6g_ham_JW": {
+    "n_steps": 1,
+    "reference_trotter_number_beta": 10.22265141724728,
+    "uniform_epsilon": 8.268648492391508e-09
+  },
+  "HamLib 0287_hydrogen_data_H4_ES_H4_linear_R2.0_sto-6g_ham_JW": {
+    "n_steps": 1,
+    "reference_trotter_number_beta": 10.020391157589284,
+    "uniform_epsilon": 8.21863416624957e-09
+  },
+  "HamLib 0288_hydrogen_data_H6_ES_H6_linear_R0.5_sto-6g_ham_JW": {
+    "n_steps": 1,
+    "reference_trotter_number_beta": 29.547148845998652,
+    "uniform_epsilon": 2.328960279855204e-10
+  },
+  "HamLib 0289_hydrogen_data_H6_ES_H6_linear_R0.6_sto-6g_ham_JW": {
+    "n_steps": 1,
+    "reference_trotter_number_beta": 25.194929645206418,
+    "uniform_epsilon": 2.7654302959444897e-10
+  },
+  "HamLib 0290_hydrogen_data_H6_ES_H6_linear_R0.7_sto-6g_ham_JW": {
+    "n_steps": 1,
+    "reference_trotter_number_beta": 22.350205408350266,
+    "uniform_epsilon": 3.1333337609813415e-10
+  },
+  "HamLib 0291_hydrogen_data_H6_ES_H6_linear_R0.8_sto-6g_ham_JW": {
+    "n_steps": 1,
+    "reference_trotter_number_beta": 20.314771626007705,
+    "uniform_epsilon": 3.467197729196301e-10
+  },
+  "HamLib 0292_hydrogen_data_H6_ES_H6_linear_R0.9_sto-6g_ham_JW": {
+    "n_steps": 1,
+    "reference_trotter_number_beta": 18.818153342443573,
+    "uniform_epsilon": 3.7679414341027804e-10
+  },
+  "HamLib 0293_hydrogen_data_H6_ES_H6_linear_R1.0_sto-6g_ham_JW": {
+    "n_steps": 1,
+    "reference_trotter_number_beta": 17.650360068655086,
+    "uniform_epsilon": 4.0012799465619515e-10
+  },
+  "HamLib 0294_hydrogen_data_H6_ES_H6_linear_R1.1_sto-6g_ham_JW": {
+    "n_steps": 1,
+    "reference_trotter_number_beta": 16.706355854390768,
+    "uniform_epsilon": 4.2732786215910486e-10
+  },
+  "HamLib 0295_hydrogen_data_H6_ES_H6_linear_R1.2_sto-6g_ham_JW": {
+    "n_steps": 1,
+    "reference_trotter_number_beta": 15.936025007736992,
+    "uniform_epsilon": 4.448329454847066e-10
+  },
+  "HamLib 0296_hydrogen_data_H6_ES_H6_linear_R1.3_sto-6g_ham_JW": {
+    "n_steps": 1,
+    "reference_trotter_number_beta": 15.301762160099724,
+    "uniform_epsilon": 4.664352851935532e-10
+  },
+  "HamLib 0297_hydrogen_data_H6_ES_H6_linear_R1.4_sto-6g_ham_JW": {
+    "n_steps": 1,
+    "reference_trotter_number_beta": 14.763345153670738,
+    "uniform_epsilon": 4.833830611234241e-10
+  },
+  "HamLib 0298_hydrogen_data_H6_ES_H6_linear_R1.5_sto-6g_ham_JW": {
+    "n_steps": 1,
+    "reference_trotter_number_beta": 14.328242105913262,
+    "uniform_epsilon": 5.024318266215545e-10
+  },
+  "HamLib 0299_hydrogen_data_H6_ES_H6_linear_R1.6_sto-6g_ham_JW": {
+    "n_steps": 1,
+    "reference_trotter_number_beta": 13.952866796609205,
+    "uniform_epsilon": 5.118567704208194e-10
+  },
+  "HamLib 0300_hydrogen_data_H6_ES_H6_linear_R1.7_sto-6g_ham_JW": {
+    "n_steps": 1,
+    "reference_trotter_number_beta": 13.627928500339358,
+    "uniform_epsilon": 5.245995230785324e-10
+  },
+  "HamLib 0301_hydrogen_data_H6_ES_H6_linear_R1.8_sto-6g_ham_JW": {
+    "n_steps": 1,
+    "reference_trotter_number_beta": 13.34275732015454,
+    "uniform_epsilon": 5.377526064739408e-10
+  },
+  "HamLib 0302_hydrogen_data_H6_ES_H6_linear_R1.9_sto-6g_ham_JW": {
+    "n_steps": 1,
+    "reference_trotter_number_beta": 13.086915053860038,
+    "uniform_epsilon": 5.503990154033193e-10
+  },
+  "HamLib 0303_hydrogen_data_H6_ES_H6_linear_R2.0_sto-6g_ham_JW": {
+    "n_steps": 1,
+    "reference_trotter_number_beta": 12.855208420277181,
+    "uniform_epsilon": 5.549386663841816e-10
+  },
+  "HamLib 0320_standard_B2_B2_ham_JWm10": {
+    "n_steps": 1,
+    "reference_trotter_number_beta": 7.958876952210355,
+    "uniform_epsilon": 6.5250479455906055e-09
+  },
+  "HamLib 0321_standard_B2_B2_ham_JWm12": {
+    "n_steps": 1,
+    "reference_trotter_number_beta": 8.92140808899036,
+    "uniform_epsilon": 2.7180160939887855e-09
+  },
+  "HamLib 0322_standard_B2_B2_ham_JWm14": {
+    "n_steps": 1,
+    "reference_trotter_number_beta": 10.813820501009767,
+    "uniform_epsilon": 1.2844134981006593e-09
+  },
+  "HamLib 0323_standard_B2_B2_ham_JWm8": {
+    "n_steps": 1,
+    "reference_trotter_number_beta": 14.474021121198383,
+    "uniform_epsilon": 1.0908404060424401e-08
+  },
+  "HamLib 0324_standard_BH_BH_ham_JWm10": {
+    "n_steps": 1,
+    "reference_trotter_number_beta": 5.760735671700008,
+    "uniform_epsilon": 5.22434243666648e-09
+  },
+  "HamLib 0325_standard_BH_BH_ham_JWm12": {
+    "n_steps": 1,
+    "reference_trotter_number_beta": 21.29122942441877,
+    "uniform_epsilon": 1.0957623122337614e-09
+  },
+  "HamLib 0327_standard_BH_BH_ham_JWm8": {
+    "n_steps": 1,
+    "reference_trotter_number_beta": 8.292143656522494,
+    "uniform_epsilon": 1.9439196798295915e-08
+  },
+  "HamLib 0328_standard_Be2_Be2_ham_JWm10": {
+    "n_steps": 1,
+    "reference_trotter_number_beta": 3.56051206112436,
+    "uniform_epsilon": 1.5051696382401356e-08
+  },
+  "HamLib 0329_standard_Be2_Be2_ham_JWm14": {
+    "n_steps": 1,
+    "reference_trotter_number_beta": 10.767576282476089,
+    "uniform_epsilon": 8.541794397684838e-10
+  },
+  "HamLib 0331_standard_Be2_Be2_ham_JWm6": {
+    "n_steps": 1,
+    "reference_trotter_number_beta": 2.594469506542836,
+    "uniform_epsilon": 6.078875173686832e-08
+  },
+  "HamLib 0332_standard_BeH_BeH_ham_JW10": {
+    "n_steps": 1,
+    "reference_trotter_number_beta": 10.093281472214464,
+    "uniform_epsilon": 5.828405730229116e-09
+  },
+  "HamLib 0333_standard_BeH_BeH_ham_JW12": {
+    "n_steps": 1,
+    "reference_trotter_number_beta": 9.515231136219166,
+    "uniform_epsilon": 1.27345892670003e-09
+  },
+  "HamLib 0334_standard_BeH_BeH_ham_JW4": {
+    "n_steps": 1,
+    "reference_trotter_number_beta": 1.7477356863187827,
+    "uniform_epsilon": 2.7249961081325327e-07
+  },
+  "HamLib 0335_standard_BeH_BeH_ham_JW8": {
+    "n_steps": 1,
+    "reference_trotter_number_beta": 2.887215607050835,
+    "uniform_epsilon": 2.9371097477367758e-08
+  },
+  "HamLib 0336_standard_C2_C2_ham_JWm10": {
+    "n_steps": 1,
+    "reference_trotter_number_beta": 30.30833310503956,
+    "uniform_epsilon": 3.223683933338217e-09
+  },
+  "HamLib 0337_standard_C2_C2_ham_JWm14": {
+    "n_steps": 1,
+    "reference_trotter_number_beta": 19.497891282328315,
+    "uniform_epsilon": 4.568587508079211e-10
+  },
+  "HamLib 0340_standard_CH_CH_ham_JWm10": {
+    "n_steps": 2,
+    "reference_trotter_number_beta": 25.046291120555995,
+    "uniform_epsilon": 1.6914875014809653e-09
+  },
+  "HamLib 0341_standard_CH_CH_ham_JWm12": {
+    "n_steps": 2,
+    "reference_trotter_number_beta": 35.05320312952988,
+    "uniform_epsilon": 4.87473198415063e-10
+  },
+  "HamLib 0342_standard_CH_CH_ham_JWm14": {
+    "n_steps": 2,
+    "reference_trotter_number_beta": 56.68953374889431,
+    "uniform_epsilon": 1.5488295940349355e-10
+  },
+  "HamLib 0343_standard_CH_CH_ham_JWm8": {
+    "n_steps": 1,
+    "reference_trotter_number_beta": 7.045723168301739,
+    "uniform_epsilon": 1.153287654776655e-08
+  },
+  "HamLib 0348_standard_H2_H2_ham_JWm12": {
+    "n_steps": 1,
+    "reference_trotter_number_beta": 25.987166934300507,
+    "uniform_epsilon": 8.479327378601778e-10
+  },
+  "HamLib 0350_standard_H2_H2_ham_JWm4": {
+    "n_steps": 1,
+    "reference_trotter_number_beta": 2.4672699275539838,
+    "uniform_epsilon": 6.203929304363179e-07
+  },
+  "HamLib 0351_standard_H2_H2_ham_JWm6": {
+    "n_steps": 2,
+    "reference_trotter_number_beta": 8.948644055907808,
+    "uniform_epsilon": 2.505484657117482e-08
+  },
+  "HamLib 0352_standard_H2_H2_ham_JWm8": {
+    "n_steps": 1,
+    "reference_trotter_number_beta": 8.675173787951243,
+    "uniform_epsilon": 4.857229432372531e-09
+  },
+  "HamLib 0353_standard_HF_HF_ham_JW10": {
+    "n_steps": 2,
+    "reference_trotter_number_beta": 99.03014303203547,
+    "uniform_epsilon": 5.364633621309103e-10
+  },
+  "HamLib 0354_standard_HF_HF_ham_JW12": {
+    "n_steps": 2,
+    "reference_trotter_number_beta": 93.27204478714518,
+    "uniform_epsilon": 1.7750312552711384e-10
+  },
+  "HamLib 0357_standard_Li2_Li2_ham_JW10": {
+    "n_steps": 1,
+    "reference_trotter_number_beta": 3.3443261313011083,
+    "uniform_epsilon": 1.6398142373703725e-08
+  },
+  "HamLib 0358_standard_Li2_Li2_ham_JW14": {
+    "n_steps": 1,
+    "reference_trotter_number_beta": 7.573994577688139,
+    "uniform_epsilon": 1.2295062872094033e-09
+  },
+  "HamLib 0359_standard_Li2_Li2_ham_JW4": {
+    "n_steps": 1,
+    "reference_trotter_number_beta": 0.4670989753220353,
+    "uniform_epsilon": 1.7741407642445426e-06
+  },
+  "HamLib 0360_standard_Li2_Li2_ham_JW8": {
+    "n_steps": 1,
+    "reference_trotter_number_beta": 1.7696733836337895,
+    "uniform_epsilon": 8.211846081519115e-08
+  },
+  "HamLib 0361_standard_LiH_LiH_ham_JWm10": {
+    "n_steps": 1,
+    "reference_trotter_number_beta": 7.567300779408457,
+    "uniform_epsilon": 7.891087016063838e-09
+  },
+  "HamLib 0362_standard_LiH_LiH_ham_JWm12": {
+    "n_steps": 1,
+    "reference_trotter_number_beta": 7.153674899156075,
+    "uniform_epsilon": 1.724590435244972e-09
+  },
+  "HamLib 0363_standard_LiH_LiH_ham_JWm4": {
+    "n_steps": 2,
+    "reference_trotter_number_beta": 2.5807094565951982,
+    "uniform_epsilon": 2.7051042587958237e-07
+  },
+  "HamLib 0364_standard_LiH_LiH_ham_JWm8": {
+    "n_steps": 1,
+    "reference_trotter_number_beta": 2.055851920545609,
+    "uniform_epsilon": 4.200282325717047e-08
+  },
+  "HamLib 0365_standard_N2_N2_ham_JWm14": {
+    "n_steps": 1,
+    "reference_trotter_number_beta": 31.65055294536309,
+    "uniform_epsilon": 2.7788000283587435e-10
+  },
+  "HamLib 0369_standard_NH_NH_ham_JWm10": {
+    "n_steps": 2,
+    "reference_trotter_number_beta": 38.380781750062475,
+    "uniform_epsilon": 1.0829851262141137e-09
+  },
+  "HamLib 0370_standard_NH_NH_ham_JWm12": {
+    "n_steps": 1,
+    "reference_trotter_number_beta": 33.92659571891981,
+    "uniform_epsilon": 6.732210587642326e-10
+  },
+  "HamLib 0371_standard_NH_NH_ham_JWm14": {
+    "n_steps": 2,
+    "reference_trotter_number_beta": 66.18305874769625,
+    "uniform_epsilon": 1.3222276807111934e-10
+  },
+  "HamLib 0372_standard_NH_NH_ham_JWm8": {
+    "n_steps": 1,
+    "reference_trotter_number_beta": 10.627110373453764,
+    "uniform_epsilon": 7.46624741385752e-09
+  },
+  "HamLib 0377_standard_NaLi_NaLi_ham_JWm14": {
+    "n_steps": 1,
+    "reference_trotter_number_beta": 44.84054237664536,
+    "uniform_epsilon": 1.180568883806607e-10
+  },
+  "HamLib 0389_standard_OH_OH_ham_JW10": {
+    "n_steps": 2,
+    "reference_trotter_number_beta": 55.174234664010775,
+    "uniform_epsilon": 7.395621728933613e-10
+  },
+  "HamLib 0390_standard_OH_OH_ham_JW12": {
+    "n_steps": 2,
+    "reference_trotter_number_beta": 69.52109957630839,
+    "uniform_epsilon": 2.388105783493313e-10
+  },
+  "HamLib 0391_standard_OH_OH_ham_JW14": {
+    "n_steps": 2,
+    "reference_trotter_number_beta": 87.19123748264707,
+    "uniform_epsilon": 8.700783433216055e-11
+  },
+  "HamLib hydrogen_H8_linear_R0_5_JW16": {
+    "n_steps": 1,
+    "reference_trotter_number_beta": 55.52654306788552,
+    "uniform_epsilon": 3.5086732964702464e-11
+  },
+  "HamLib hydrogen_H8_linear_R0_6_JW16": {
+    "n_steps": 1,
+    "reference_trotter_number_beta": 47.49703534406836,
+    "uniform_epsilon": 4.109847144020481e-11
+  },
+  "HamLib hydrogen_H8_linear_R0_7_JW16": {
+    "n_steps": 1,
+    "reference_trotter_number_beta": 42.1269722268544,
+    "uniform_epsilon": 4.64250791598359e-11
+  },
+  "HamLib hydrogen_H8_linear_R0_8_JW16": {
+    "n_steps": 1,
+    "reference_trotter_number_beta": 38.40536281098953,
+    "uniform_epsilon": 5.1364163545370754e-11
+  },
+  "HamLib hydrogen_H8_linear_R0_9_JW16": {
+    "n_steps": 1,
+    "reference_trotter_number_beta": 35.65145990459564,
+    "uniform_epsilon": 5.5226396813976574e-11
+  },
+  "HamLib hydrogen_H8_linear_R1_0_JW16": {
+    "n_steps": 1,
+    "reference_trotter_number_beta": 33.514890815990164,
+    "uniform_epsilon": 5.902261922712339e-11
+  },
+  "HamLib hydrogen_H8_linear_R1_1_JW16": {
+    "n_steps": 1,
+    "reference_trotter_number_beta": 31.832125602043178,
+    "uniform_epsilon": 6.212588065017643e-11
+  },
+  "HamLib hydrogen_H8_linear_R1_2_JW16": {
+    "n_steps": 1,
+    "reference_trotter_number_beta": 30.4835697278695,
+    "uniform_epsilon": 6.520365379300585e-11
+  },
+  "HamLib hydrogen_H8_linear_R1_3_JW16": {
+    "n_steps": 1,
+    "reference_trotter_number_beta": 29.367145017805385,
+    "uniform_epsilon": 6.759180926026256e-11
+  },
+  "HamLib hydrogen_H8_linear_R1_4_JW16": {
+    "n_steps": 1,
+    "reference_trotter_number_beta": 28.45092770939262,
+    "uniform_epsilon": 7.069960876245203e-11
+  },
+  "HamLib hydrogen_H8_linear_R1_5_JW16": {
+    "n_steps": 1,
+    "reference_trotter_number_beta": 27.683176735163286,
+    "uniform_epsilon": 7.228211298359183e-11
+  },
+  "HamLib hydrogen_H8_linear_R1_6_JW16": {
+    "n_steps": 1,
+    "reference_trotter_number_beta": 27.036877328615425,
+    "uniform_epsilon": 7.374309488871933e-11
+  },
+  "HamLib hydrogen_H8_linear_R1_7_JW16": {
+    "n_steps": 1,
+    "reference_trotter_number_beta": 26.47611085245871,
+    "uniform_epsilon": 7.574372183931585e-11
+  },
+  "HamLib hydrogen_H8_linear_R1_8_JW16": {
+    "n_steps": 1,
+    "reference_trotter_number_beta": 25.984808144717608,
+    "uniform_epsilon": 7.70148402910883e-11
+  },
+  "HamLib hydrogen_H8_linear_R1_9_JW16": {
+    "n_steps": 1,
+    "reference_trotter_number_beta": 25.557924341001723,
+    "uniform_epsilon": 7.820280899854231e-11
+  },
+  "HamLib hydrogen_H8_linear_R2_0_JW16": {
+    "n_steps": 1,
+    "reference_trotter_number_beta": 25.181330075491577,
+    "uniform_epsilon": 7.981540247008057e-11
+  },
+  "HamLib standard_BH_JW16": {
+    "n_steps": 1,
+    "reference_trotter_number_beta": 31.209185780223283,
+    "uniform_epsilon": 8.153276074542412e-11
+  },
+  "HamLib standard_Be2_JW16": {
+    "n_steps": 1,
+    "reference_trotter_number_beta": 15.525219550626886,
+    "uniform_epsilon": 3.1933001780897403e-10
+  },
+  "HamLib standard_C2_JW16": {
+    "n_steps": 1,
+    "reference_trotter_number_beta": 43.41227121354296,
+    "uniform_epsilon": 2.1767153854319103e-10
+  },
+  "HamLib standard_F2_JW16": {
+    "n_steps": 1,
+    "reference_trotter_number_beta": 65.23184695480401,
+    "uniform_epsilon": 7.126471413048235e-11
+  },
+  "HamLib standard_HF_JW16": {
+    "n_steps": 3,
+    "reference_trotter_number_beta": 240.1418526698147,
+    "uniform_epsilon": 1.628003570430457e-11
+  },
+  "HamLib standard_N2_JW16": {
+    "n_steps": 1,
+    "reference_trotter_number_beta": 69.76565173960616,
+    "uniform_epsilon": 1.3398410361633404e-10
+  },
+  "HamLib standard_O2_JW16": {
+    "n_steps": 1,
+    "reference_trotter_number_beta": 50.99134407010604,
+    "uniform_epsilon": 9.147159029606906e-11
+  },
+  "HamLib standard_OH_JW16": {
+    "n_steps": 2,
+    "reference_trotter_number_beta": 148.48555001900718,
+    "uniform_epsilon": 4.0278086187044305e-11
+  }
+}

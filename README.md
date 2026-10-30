@@ -15,6 +15,10 @@ and one plotting-source tree, [`plots/`](plots/). Raw campaigns, databases,
 Hamiltonian collections, caches, scheduler logs, and agent transcripts stay
 outside the Git checkout.
 
+The **best released ELOTE policy** is in
+[`experiments/elote_search/results/elote115/`](experiments/elote_search/results/elote115/README.md),
+including its sealed training parameters, validation results and provenance.
+
 Follow [Reproduce the paper workflow](docs/reproduce.md) from a fresh clone:
 acquire and verify inputs, inspect Hamiltonians, generate loose/tight policies,
 set up OpenShell, run mutations, and reproduce plots. Keep generated files in

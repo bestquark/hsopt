@@ -65,8 +65,10 @@ regenerate the deterministic definition files.
 The coefficient-heavy production Hamiltonians, sealed per-instance
 calibrations, exact references, mutation lanes, scheduler logs, agent
 transcripts, exports, and reports live below an external `HSOPT_DATA_ROOT`.
-Only the compact generated loose and tight iteration-0 policies and the
-requested folder-level comparison scalar are duplicated in Git.
+The compact generated loose and tight iteration-0 policies and the requested
+folder-level comparison scalar are duplicated in Git. The selected molecular
+[ELOTE release](elote_search/results/elote115/README.md) additionally preserves
+the exact learned policy, its training parameters and compact validation results.
 
 Once matching same-placement loose and tight iteration-0 censuses have both
 completed, `hsopt-baseline-drop` writes

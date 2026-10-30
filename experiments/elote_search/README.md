@@ -1,4 +1,25 @@
-# Three ELOTE search strategies
+# ELOTE searches and saved protocols
+
+## Best released molecular ELOTE
+
+The best feasible molecular protocol from the **five completed 100-mutation
+searches** is saved in [`results/elote115/`](results/elote115/README.md):
+
+- [`best_policy.py`](results/elote115/best_policy.py): the exact selected policy,
+  SHA-256 `d199f6a4efef965aa015dbd73f69d14f628fd1b9eaa3653391dad8e3a75e472e`.
+- [`training_parameters.json`](results/elote115/training_parameters.json): the
+  115 sealed baseline parameter rows that the host binds to the shared policy.
+- [`manifest.json`](results/elote115/manifest.json): selection, hashes, metric
+  definitions, validation results and source provenance.
+
+Its geometric-mean QPE-inclusive $T_{95}$ is **0.151756 times the tight baseline**
+(84.82% reduction), with all 115 training Hamiltonians passing chemical accuracy.
+The snapshot also includes the recorded testing results and replay instructions.
+It is an immutable result of the molecular agent-only campaign, separate from
+the three-strategy comparison configuration below. External campaign histories
+and live candidate files remain outside Git.
+
+## Three search strategies
 
 | Experiment | Proposals | Search space |
 | --- | --- | --- |
