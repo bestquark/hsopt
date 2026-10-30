@@ -62,12 +62,13 @@ package = true
 
 [tool.uv.build-backend]
 module-root = "cli/src"
+source-exclude = ["figures/generated/**"]
 source-include = [
   "baseline/**",
   "experiments/**",
   "cli/tests/**",
   "docs/**",
-  "plots/**",
+  "figures/**",
   "skills/**",
   "AGENTS.md",
   "uv.lock",

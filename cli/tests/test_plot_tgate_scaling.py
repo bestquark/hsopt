@@ -10,12 +10,10 @@ from types import SimpleNamespace
 import pytest
 
 
-PLOTS = Path(__file__).parents[2] / "plots"
+PLOTS = Path(__file__).parents[2] / "figures" / "validation"
 sys.path.insert(0, str(PLOTS))
 try:
-    spec = importlib.util.spec_from_file_location(
-        "plot_tgate_scaling", PLOTS / "plot_tgate_scaling.py"
-    )
+    spec = importlib.util.spec_from_file_location("plot_tgate_scaling", PLOTS / "compiled_cost.py")
     plotting = importlib.util.module_from_spec(spec)
     spec.loader.exec_module(plotting)
 finally:

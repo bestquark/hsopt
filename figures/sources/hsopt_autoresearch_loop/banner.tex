@@ -1,0 +1,14 @@
+\documentclass[border=0pt]{standalone}
+\usepackage{graphicx,tikz}
+\begin{document}
+\begin{tikzpicture}[x=1pt,y=1pt]
+\path[use as bounding box] (0,0) rectangle (1200,400);
+% All typography, equations, arrows, and artwork remain as generated.
+\node[anchor=south west,inner sep=0] at (0,0)
+  {\includegraphics[width=1200pt,height=400pt]{generated-banner.png}};
+% The only replacement is the exact scientific data panel.
+\fill[white] (11,36) rectangle (305,247);
+\node[anchor=south west,inner sep=0] at (24,37)
+  {\includegraphics[width=268pt]{coefficient_histograms_2x2.pdf}};
+\end{tikzpicture}
+\end{document}

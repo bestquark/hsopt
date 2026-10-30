@@ -23,3 +23,13 @@ Per-Hamiltonian `abs_energy/` and per-reaction `diff_energy/` workflows and thei
 Run `uv run hsopt-layout --check` to validate the compact registries and current
 shared-protocol entry points. Export input views with `hsopt-data export` into
 an external workspace; do not recreate per-instance directories in `main`.
+
+## Frozen manuscript data
+
+The current figure-input map is [manuscript.json](manuscript.json). Molecular
+[trajectory/data exports](abs_protocol/results/elote115-paper/README.md), reaction
+[trajectory/data exports](diff_protocol/results/delta-elote-paper/README.md), and
+[HamLib diagnostics](abs_protocol/results/hamlib-diagnostics/README.md) are frozen
+scientific artifacts. They include every evaluated proposal and original decision,
+not live queues, credentials or private agent transcripts. Figure generation and
+table processing live in [figures/](../figures/README.md).

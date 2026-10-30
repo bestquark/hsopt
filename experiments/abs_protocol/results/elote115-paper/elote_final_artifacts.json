@@ -1,0 +1,82 @@
+{
+  "schema": "elote-final-paper-artifacts-v1",
+  "policy_sha256": "d199f6a4efef965aa015dbd73f69d14f628fd1b9eaa3653391dad8e3a75e472e",
+  "reporting": {
+    "reported_original_seeds": [
+      "seed-01",
+      "seed-02",
+      "seed-03",
+      "seed-04",
+      "seed-05"
+    ],
+    "completed_mutations_per_reported_search": 100,
+    "excluded_original_seeds": [],
+    "selection_source_file": "data/elote_understanding/seed_effort.json",
+    "selection_source_sha256": "96ffe10b26c79973ac31dc397256c65cca0947398dd1b5357567570880d63c87",
+    "checked_at_client_utc": "2026-10-29T17:39:24.299653+00:00",
+    "retained_policy_by_original_seed": [
+      {
+        "seed": "seed-01",
+        "round": 99,
+        "score": 0.6164409001524734,
+        "candidate_sha256": "170000a2138ce0a416e1e3e706515e44398008f0071fee313e19ca8fb10e8492"
+      },
+      {
+        "seed": "seed-02",
+        "round": 84,
+        "score": 0.8750309379611392,
+        "candidate_sha256": "1c18fc6407cef14330050e5c4fcee3cf98652193b1f78a038c051328fbdfff78"
+      },
+      {
+        "seed": "seed-03",
+        "round": 99,
+        "score": 0.8567143320433237,
+        "candidate_sha256": "361597979949f9c66aa31957c2167a44ee5c8aa51a47e5cc551ef9bb3daa5279"
+      },
+      {
+        "seed": "seed-04",
+        "round": 98,
+        "score": 0.8553633934256494,
+        "candidate_sha256": "613d3b264a6a189aaddabdbfb4a1569b9dd0868a459808dcd7299806e9f66dfd"
+      },
+      {
+        "seed": "seed-05",
+        "round": 100,
+        "score": 0.15175594452564578,
+        "candidate_sha256": "d199f6a4efef965aa015dbd73f69d14f628fd1b9eaa3653391dad8e3a75e472e"
+      }
+    ],
+    "selected_best_policy_sha256": "d199f6a4efef965aa015dbd73f69d14f628fd1b9eaa3653391dad8e3a75e472e"
+  },
+  "training_cases": 115,
+  "testing_countable_cases": 76,
+  "testing_exclusions": 2,
+  "files": {
+    "assets/figures/elote115_precision_and_compiled_savings.pdf": "ede67bcf81d80faa1a83784b588c7cacebe0116f4795e00b43385fcd4a91e774",
+    "assets/figures/elote115_search_and_energy.pdf": "e370f8bd53ba6ed46a380a22dc80ed9a6417f814731f6954a39f018065fec0b0",
+    "data/elote115_figure2.npz": "091c2e8fba4f57728208e55490a272cc21ff13e0796f10b3130337f1af2126b1",
+    "data/elote115_search_and_energy.json": "d6b6d5269d204679c54e7e02e9e826af6c654b3a3352ef11e99f90dc6bdc63d4",
+    "data/elote_heldout_summary.json": "0fa748eb580dfd5f6c600e93a0ac761b1e698a88683188f5ddbe3058f7af4a14",
+    "data/elote_testing_manifest.json": "2e578b945d5af4941bfe64afd41a89f14249b3b8c8f8087f3f4c661352bdde4d",
+    "data/elote_testing_provenance.json": "dc520f34f0bdd3873668e82e934f2fc24531c92334c04be2185615907c197ecc",
+    "data/elote_understanding/seed_effort.json": "96ffe10b26c79973ac31dc397256c65cca0947398dd1b5357567570880d63c87",
+    "data/elote115_results_summary.json": "53cb1c3ddf08c28036f05f22fd9d2c9c441a7dc08b88135df544700f701d84ba",
+    "assets/figures/hamlib_molecular_dataset_active_spaces.pdf": "a5b611944f12b8daa3d680dded4d6fedb26971bf69109edf0dbf14b25838d51e",
+    "data/elote115_figure2_t95.json": "c1320c6a29c86a7f54b9cb816f067436a7c38da819c43feda7cd73d4ac1d7938"
+  },
+  "plot_scripts": {
+    "scripts/assemble_elote_figure2.py": "cd49163492be9d4dc94cbf09c0b9f5a0654c43b6786f3093ca48910d67945648",
+    "scripts/plot_elote_search_and_energy.py": "4a4d77b49995adb442e3279a9440c10cc64a43d77070313f1a74b69967a0d87e",
+    "scripts/plot_hamlib_molecular_dataset_active_spaces.py": "744cec844e8599391c0cd406a6f1a94d4b199163e8c7b97e6c91b5bc36c01c42"
+  },
+  "testing_parameter_protocol": "training_fit_frozen_before_testing",
+  "testing_baseline_recalibrated_on_testing": false,
+  "figure2_histogram": {
+    "metric": "recorded QPE-inclusive T95 reductions",
+    "training_cases": 115,
+    "testing_cases": 76,
+    "total_cases": 191,
+    "includes_hf18_baseline_accuracy_failure": true,
+    "source": "data/elote115_figure2_t95.json"
+  }
+}

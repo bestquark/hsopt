@@ -125,3 +125,13 @@ scores `|E_compiled,0 - E_0|`, with its compiled QPE peak probability in T95.
 Ideal ground-state preparation cost is excluded. Its task IDs, evaluator version,
 manifests and dashboard labels must remain separate from HF-accessible runs.
 Do not regenerate beta calibrations when changing this selected scoring contract.
+
+## Frozen manuscript artifacts
+
+Current figure generators and released figures live in `figures/`; data processing
+for manuscript figures belongs there. Frozen candidate/decision/case-metric exports
+and plotting inputs live under the matching `experiments/*/results/` directories.
+`experiments/manuscript.json` maps these inputs to their unchanged manuscript assets.
+Never export credentials, raw sandbox messages or mutable dispatcher state. Preserve
+all reported policy and source hashes; scientific aggregate values are not compiler
+proxies. Older optional plotting frontends are on `manuscript-assets-archive-20261030`.

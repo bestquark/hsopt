@@ -9,9 +9,9 @@ from hsopt.campaign.protocol import bind_policy
 from hsopt.evaluation import compiled_unitary as ev
 
 
-PLOTS = Path(__file__).parents[2] / "plots"
+PLOTS = Path(__file__).parents[2] / "figures" / "validation"
 spec = importlib.util.spec_from_file_location(
-    "angle_validation", PLOTS / "validate_angle_allocation.py"
+    "angle_validation", PLOTS / "allocation_validation.py"
 )
 validation = importlib.util.module_from_spec(spec)
 spec.loader.exec_module(validation)

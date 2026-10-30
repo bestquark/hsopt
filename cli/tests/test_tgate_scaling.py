@@ -12,7 +12,7 @@ from hsopt.evaluation.elote import term_fields
 
 
 spec = importlib.util.spec_from_file_location(
-    "tgate_scaling", Path(__file__).parents[2] / "plots/_tgate_scaling.py"
+    "tgate_scaling", Path(__file__).parents[2] / "figures/validation/_tgate_scaling.py"
 )
 scaling = importlib.util.module_from_spec(spec)
 spec.loader.exec_module(scaling)

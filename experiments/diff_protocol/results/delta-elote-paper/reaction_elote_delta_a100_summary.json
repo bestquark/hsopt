@@ -1,0 +1,170 @@
+{
+  "baseline_accelerator": "l4",
+  "baseline_max_reaction_error_mha": 0.275592787247092,
+  "baseline_result_sha256": "739cac300fcf71351255a0d34caddd32c508c2f611fe49844989871311388ef5",
+  "baseline_t95": {
+    "acetylene_vinylidene": 1154109407160,
+    "co_h2_ch4_h2o": 17242544145512,
+    "co_h2o_co2_h2": 9814381846024,
+    "h2_cl2_hcl": 5767494010584,
+    "h2_f2_hf": 16117994970720,
+    "h2co_hcoh": 2505703241568,
+    "hcn_hnc": 2459830988832,
+    "hco_hoc_cation": 2542365500712,
+    "hno_noh": 1738521977472,
+    "n2_h2_nh3": 17632262800800
+  },
+  "compiler": "CUDA-Q Version 0.16.0 (https://github.com/NVIDIA/cuda-quantum 62fce8b862302158e0119c65e3ce57538f3af048)",
+  "eigensolver": "cupy-lanczos",
+  "elote_and_delta_accelerator": "a100",
+  "elote_t95": {
+    "acetylene_vinylidene": 168921314520,
+    "co_h2_ch4_h2o": 2336403450346,
+    "co_h2o_co2_h2": 1607326481880,
+    "h2_cl2_hcl": 943334962368,
+    "h2_f2_hf": 2959831013664,
+    "h2co_hcoh": 491419332192,
+    "hcn_hnc": 472215214176,
+    "hco_hoc_cation": 381363042960,
+    "hno_noh": 268332155088,
+    "n2_h2_nh3": 2468130117120
+  },
+  "evaluation_contract_version": "normalized_hamiltonian_ground_input_signed_difference_cudaq_elote_v1",
+  "evaluator_sha256": "d83713fd07e96bda138f2e473563b4ada8467a173679c18b801298567623fcc7",
+  "order": [
+    "acetylene_vinylidene",
+    "co_h2_ch4_h2o",
+    "co_h2o_co2_h2",
+    "h2_cl2_hcl",
+    "h2_f2_hf",
+    "h2co_hcoh",
+    "hcn_hnc",
+    "hco_hoc_cation",
+    "n2_h2_nh3",
+    "hno_noh"
+  ],
+  "ranked_policies": [
+    {
+      "accepted_iteration": 46,
+      "candidate_sha256": "6952b7d2728cbb4c9eb65562dac8ffa613fbc26f2780019817bbb0aeecf1370c",
+      "chemical_accuracy_mha": 1.5936014376405157,
+      "max_reaction_error_mha": 0.3088223672023105,
+      "result_sha256": "21c264feeeaa02dd9e819e441d1a4620340d3708f7391d7097ae672def883fa1",
+      "score_relative_to_transferred_elote": 0.4109505980838596,
+      "seed": "seed-05",
+      "t95": {
+        "acetylene_vinylidene": 70406751648,
+        "co_h2_ch4_h2o": 924872717594,
+        "co_h2o_co2_h2": 551554470082,
+        "h2_cl2_hcl": 477369796272,
+        "h2_f2_hf": 779993874264,
+        "h2co_hcoh": 192632920416,
+        "hcn_hnc": 185792044548,
+        "hco_hoc_cation": 233944379448,
+        "hno_noh": 260151319476,
+        "n2_h2_nh3": 489564489396
+      }
+    },
+    {
+      "accepted_iteration": 28,
+      "candidate_sha256": "89ba6e221849e9934c6209b9ff5621267c967a375d9904b6ddc5f214935c1e3d",
+      "chemical_accuracy_mha": 1.5936014376405157,
+      "max_reaction_error_mha": 0.09750417035547798,
+      "result_sha256": "e0865d7b62d78b2149a2185e8840ff482a834db34ae636fc9d02556ba2abea5e",
+      "score_relative_to_transferred_elote": 0.9202478163758349,
+      "seed": "seed-01",
+      "t95": {
+        "acetylene_vinylidene": 167222196768,
+        "co_h2_ch4_h2o": 2436039106746,
+        "co_h2o_co2_h2": 1430509138912,
+        "h2_cl2_hcl": 936287990772,
+        "h2_f2_hf": 2668834513800,
+        "h2co_hcoh": 381432761328,
+        "hcn_hnc": 365123952864,
+        "hco_hoc_cation": 357400655376,
+        "hno_noh": 258386891856,
+        "n2_h2_nh3": 2414375012448
+      }
+    },
+    {
+      "accepted_iteration": 47,
+      "candidate_sha256": "4f00f7433fde4dab6a86c7921c26643a8a90485badd6f63c5cbe9a2584727b1b",
+      "chemical_accuracy_mha": 1.5936014376405157,
+      "max_reaction_error_mha": 0.09983453085737892,
+      "result_sha256": "81d2cdf816c7b814844359dec854b831d36ec9e38d0a0c14124d04fc09647ddd",
+      "score_relative_to_transferred_elote": 0.9266892875559428,
+      "seed": "seed-04",
+      "t95": {
+        "acetylene_vinylidene": 167789961360,
+        "co_h2_ch4_h2o": 2462688070598,
+        "co_h2o_co2_h2": 1429974560448,
+        "h2_cl2_hcl": 944554786176,
+        "h2_f2_hf": 2709301677432,
+        "h2co_hcoh": 384513778152,
+        "hcn_hnc": 369024160728,
+        "hco_hoc_cation": 358516414368,
+        "hno_noh": 259497097884,
+        "n2_h2_nh3": 2428766613888
+      }
+    },
+    {
+      "accepted_iteration": 44,
+      "candidate_sha256": "a138550aff53173be3e0416c84fb1072b18f7fcb615c6fc0e001dbd67e09ffac",
+      "chemical_accuracy_mha": 1.5936014376405157,
+      "max_reaction_error_mha": 0.098573725750839,
+      "result_sha256": "24a92f72fd98a07ebb99531a9c9beccc7f576666da2866be46fd1d17aa270c2b",
+      "score_relative_to_transferred_elote": 0.9287464614084322,
+      "seed": "seed-02",
+      "t95": {
+        "acetylene_vinylidene": 169067122248,
+        "co_h2_ch4_h2o": 2456571056940,
+        "co_h2o_co2_h2": 1445672121992,
+        "h2_cl2_hcl": 940401376152,
+        "h2_f2_hf": 2695705833504,
+        "h2co_hcoh": 385202315352,
+        "hcn_hnc": 368824647744,
+        "hco_hoc_cation": 361678285392,
+        "hno_noh": 260374856148,
+        "n2_h2_nh3": 2434098739104
+      }
+    },
+    {
+      "accepted_iteration": 44,
+      "candidate_sha256": "0aeaab9fc4fb595f3772bcdaaa36a37b78aa460ce0102c90c2b51a8d14d0eb76",
+      "chemical_accuracy_mha": 1.5936014376405157,
+      "max_reaction_error_mha": 0.11988054151856886,
+      "result_sha256": "28af3d3722b57f07a499133801a50f6b487f9e59eac06ab77c598b14ce5f8027",
+      "score_relative_to_transferred_elote": 0.9300039659079309,
+      "seed": "seed-03",
+      "t95": {
+        "acetylene_vinylidene": 168493556520,
+        "co_h2_ch4_h2o": 2479624641914,
+        "co_h2o_co2_h2": 1444636119024,
+        "h2_cl2_hcl": 930007255584,
+        "h2_f2_hf": 2773652773536,
+        "h2co_hcoh": 388567675008,
+        "hcn_hnc": 370706113032,
+        "hco_hoc_cation": 354740063760,
+        "hno_noh": 259793997540,
+        "n2_h2_nh3": 2431011000240
+      }
+    }
+  ],
+  "reaction_max_qubits": {
+    "acetylene_vinylidene": 10,
+    "co_h2_ch4_h2o": 10,
+    "co_h2o_co2_h2": 10,
+    "h2_cl2_hcl": 10,
+    "h2_f2_hf": 10,
+    "h2co_hcoh": 10,
+    "hcn_hnc": 10,
+    "hco_hoc_cation": 10,
+    "hno_noh": 10,
+    "n2_h2_nh3": 10
+  },
+  "schema": "reaction-elote-delta-cudaq-a100-figure4-v1",
+  "suite_sha256": "9d07c550c4fc99bee03fdb81fac5565e08c2e77a76a0044a09abb4bb20ec4516",
+  "transferred_max_reaction_error_mha": 0.3504684142399128,
+  "transferred_policy_sha256": "966d815a5dcbace3b9b5538ea450393a5207ebfaf228f99c2decbd4bae6e46d5",
+  "transferred_result_sha256": "133e66b39f21cd07ebf8ae1a09df22a29f7ccbf5df5208a7787a066b0379353e"
+}

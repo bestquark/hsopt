@@ -1,7 +1,7 @@
 # Runtime interface
 
 HSOpt owns the scientific skill, input acquisition/preparation, evaluator,
-acceptance rules, file-based trajectory ledger, exports, and `plots/`.
+acceptance rules, file-based trajectory ledger, exports, and `figures/`.
 Your external `runtime/` owns compute selection, dispatch queues, scheduling,
 staging, environments, retries, and dashboard hosting. It can run tasks on the
 agent host or another machine. HSOpt never imports the runtime.

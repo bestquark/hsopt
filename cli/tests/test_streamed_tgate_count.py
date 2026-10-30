@@ -11,7 +11,7 @@ import pytest
 from hsopt.evaluation import compiled_unitary as ev
 
 
-PLOTS = Path(__file__).parents[2] / "plots"
+PLOTS = Path(__file__).parents[2] / "figures" / "validation"
 sys.path.insert(0, str(PLOTS))
 try:
     spec = importlib.util.spec_from_file_location(

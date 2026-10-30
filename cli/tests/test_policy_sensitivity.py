@@ -7,10 +7,8 @@ import numpy as np
 import pytest
 
 
-PLOTS = Path(__file__).parents[2] / "plots"
-spec = importlib.util.spec_from_file_location(
-    "policy_sensitivity", PLOTS / "analyze_policy_sensitivity.py"
-)
+PLOTS = Path(__file__).parents[2] / "figures" / "validation"
+spec = importlib.util.spec_from_file_location("policy_sensitivity", PLOTS / "sensitivity.py")
 analysis = importlib.util.module_from_spec(spec)
 spec.loader.exec_module(analysis)
 
@@ -53,7 +51,7 @@ def test_all_error_axes_match_eigenphase_finite_differences():
 def test_tied_tolerance_optimum_counts_rotation_multiplicity(monkeypatch):
     monkeypatch.syspath_prepend(str(PLOTS))
     plot_spec = importlib.util.spec_from_file_location(
-        "sensitivity_plot", PLOTS / "plot_policy_sensitivity.py"
+        "sensitivity_plot", PLOTS / "allocation_shapes.py"
     )
     plot = importlib.util.module_from_spec(plot_spec)
     plot_spec.loader.exec_module(plot)
@@ -87,7 +85,7 @@ def test_tied_tolerance_optimum_counts_rotation_multiplicity(monkeypatch):
 
 def test_bounded_angle_allocation_satisfies_budget_and_kkt_conditions(monkeypatch):
     monkeypatch.syspath_prepend(str(PLOTS))
-    from compile_angle_allocation import bounded_allocation
+    from bounded_allocation import bounded_allocation
 
     weights = np.array([2.0, 1.0, 3.0, 1.0])
     response = np.array([1.0, 0.2, 1e-12, 0.0])
@@ -107,7 +105,7 @@ def test_bounded_angle_allocation_satisfies_budget_and_kkt_conditions(monkeypatc
 
 def test_zero_angle_response_uses_finite_cap_for_every_term(monkeypatch):
     monkeypatch.syspath_prepend(str(PLOTS))
-    from compile_angle_allocation import bounded_allocation
+    from bounded_allocation import bounded_allocation
 
     derived, info = bounded_allocation([1, 2], [0, 0], [1e-5, 2e-5])
     np.testing.assert_array_equal(derived, [2e-5, 2e-5])
@@ -116,7 +114,7 @@ def test_zero_angle_response_uses_finite_cap_for_every_term(monkeypatch):
 
 def test_invalid_synthesis_tolerance_is_not_silently_clipped(monkeypatch):
     monkeypatch.syspath_prepend(str(PLOTS))
-    from compile_angle_allocation import bounded_allocation
+    from bounded_allocation import bounded_allocation
 
     with pytest.raises(ValueError, match="invalid"):
         bounded_allocation([1], [1], [1])
@@ -140,7 +138,7 @@ def test_three_axis_response_captures_error_missed_by_angle_only_model():
 def test_baseline_overlay_preserves_actual_tolerance_multipliers(monkeypatch):
     monkeypatch.syspath_prepend(str(PLOTS))
     plot_spec = importlib.util.spec_from_file_location(
-        "sensitivity_plot", PLOTS / "plot_policy_sensitivity.py"
+        "sensitivity_plot", PLOTS / "allocation_shapes.py"
     )
     plot = importlib.util.module_from_spec(plot_spec)
     plot_spec.loader.exec_module(plot)

@@ -1,0 +1,13 @@
+{
+  "schema": "hsopt-scientific-trajectories-export-v1",
+  "campaign_id": "elote115_abs_tight",
+  "seed_count": 5,
+  "mutation_budget_per_seed": 100,
+  "case_count": 115,
+  "round_records": 505,
+  "suite_sha256": "abfcb4e5042010f9ebd0d980415092dbf806ba5acc176d91e6a559555b4372c0",
+  "files": {
+    "trajectories.jsonl.gz": "e5a202b324ffad7de54e1361c080a786f217c4e36976028d6a8746557ffc98b4"
+  },
+  "exporter_sha256": "0445e2d51795f0dd1f49ef5e6a534f6184e94e9c63c280aa93a0831e21b08a46"
+}

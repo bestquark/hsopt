@@ -29,7 +29,7 @@ experiments/
     elote_search/           Agent/PySR comparisons and released protocols
 cli/src/hsopt/              Preparation, evaluator, search and sandbox implementation
 cli/tests/                 Scientific checks and small executable fixtures
-plots/                     Publication-plot source code
+figures/                   Publication-plot source code
 skills/hsopt/              Mutation-agent instructions
 ```
 
@@ -134,4 +134,4 @@ uv build
 ```
 
 The [CLI guide](cli/README.md) describes the runtime and mutation audit. Plot
-sources and reproduction notes live in [plots/](plots/README.md).
+sources and reproduction notes live in [figures/](figures/README.md).

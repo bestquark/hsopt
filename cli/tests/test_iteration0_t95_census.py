@@ -22,7 +22,7 @@ ABSOLUTE = REPO / "cli" / "tests" / "fixtures" / "abs_energy_h2"
 DIFFERENCE = REPO / "cli" / "tests" / "fixtures" / "diff_energy_h2_bond_stretch"
 SPEC = importlib.util.spec_from_file_location(
     "compute_iteration0_t95",
-    REPO / "plots" / "compute_iteration0_t95.py",
+    REPO / "figures" / "validation" / "initialization_census.py",
 )
 assert SPEC is not None and SPEC.loader is not None
 CENSUS = importlib.util.module_from_spec(SPEC)

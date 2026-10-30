@@ -1,0 +1,41 @@
+{
+  "schema": 1,
+  "record_count": 121,
+  "qubit_counts": {
+    "4": 20,
+    "6": 2,
+    "8": 24,
+    "10": 11,
+    "12": 25,
+    "14": 9,
+    "16": 24,
+    "18": 1,
+    "20": 3,
+    "22": 1,
+    "30": 1
+  },
+  "paper_baseline": {
+    "formula": "symmetric second-order Trotter-Suzuki",
+    "term_order": "lexicographic Pauli labels",
+    "reference_error_hartree": 0.0001,
+    "total_error_hartree": 0.0015936014376405157,
+    "allocation": "Reiher et al. supplement Eq. (34) analytic optimum",
+    "phase_estimation_alpha": 25.132741228718345,
+    "synthesis_gamma": 4.0,
+    "synthesis_delta_0": 11.0
+  },
+  "eq19_evaluation": {
+    "exact_records": 91,
+    "importance_sampled_records": 30,
+    "samples_per_component": 5000000,
+    "one_sided_confidence": 0.999999999,
+    "sampling": "coefficient-weighted importance sampling of both nonnegative Eq. (19) ordering contributions",
+    "seed": "first 64 bits of SHA-256(lane_id)",
+    "visual_style_distinction": false
+  },
+  "sha256": {
+    "csv": "e3326a8cdca74765cf779ae3bcc73272cb2564689061da19ce42c3a7e9c81ae1",
+    "source_hamlib121_manifest": "0cbfec9926d6465fea6eb78b832fe1687a40c7edc4a3de98aaf14c284ce72f61",
+    "generation_script": "6de4f190e5b458cb4d00fef22d92b32156b4779af70da354adc07aea7d37d0f7"
+  }
+}

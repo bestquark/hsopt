@@ -40,3 +40,7 @@ dist/
 /.hsopt-data/
 /.hsopt-runs/
 /experiments/_runs/
+
+# Retired local plotting workbench and regenerated manuscript copies
+/plots/
+/figures/generated/

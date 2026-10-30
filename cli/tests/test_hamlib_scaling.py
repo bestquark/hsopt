@@ -14,7 +14,7 @@ from hsopt.campaign.setup import _parse_hamlib_archive
 
 
 spec = importlib.util.spec_from_file_location(
-    "hamlib_scaling", Path(__file__).parents[2] / "plots/_hamlib_scaling.py"
+    "hamlib_scaling", Path(__file__).parents[2] / "figures/validation/_hamlib_scaling.py"
 )
 scaling = importlib.util.module_from_spec(spec)
 spec.loader.exec_module(scaling)
