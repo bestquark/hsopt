@@ -3,7 +3,6 @@
 from __future__ import annotations
 
 import argparse
-import csv
 import hashlib
 import json
 import shutil
@@ -21,6 +20,10 @@ def _sha256(path: Path) -> str:
 
 
 def _checksums(path: Path) -> dict[str, str]:
+    if path.suffix == ".json":
+        from .registry import checksum_records
+
+        return checksum_records(path)
     result = {}
     for line in path.read_text().splitlines():
         if not line.strip():
@@ -42,18 +45,19 @@ def selected_archives(selection: Path, checksum_manifest: Path) -> dict[str, str
     """Resolve the checked-in instance selection to unique, pinned archives."""
     checksums = _checksums(checksum_manifest)
     result = {}
-    with selection.open(newline="") as handle:
-        for row in csv.DictReader(handle):
-            filename = row["file"].removesuffix(".hdf5") + ".zip"
-            matches = [
-                name
-                for name in checksums
-                if PurePosixPath(name).parts[0] == row["collection"]
-                and PurePosixPath(name).name == filename
-            ]
-            if len(matches) != 1:
-                raise ValueError(f"{row['lane_id']}: expected one archive checksum")
-            result[matches[0]] = checksums[matches[0]]
+    from .registry import molecule_rows
+
+    for row in molecule_rows(selection):
+        filename = row["file"].removesuffix(".hdf5") + ".zip"
+        matches = [
+            name
+            for name in checksums
+            if PurePosixPath(name).parts[0] == row["collection"]
+            and PurePosixPath(name).name == filename
+        ]
+        if len(matches) != 1:
+            raise ValueError(f"{row['lane_id']}: expected one archive checksum")
+        result[matches[0]] = checksums[matches[0]]
     if not result:
         raise ValueError("instance selection is empty")
     return result
@@ -102,7 +106,7 @@ def download_hamlib(
 
 def _repo_root() -> Path:
     for parent in (Path.cwd(), *Path(__file__).resolve().parents):
-        if (parent / "experiments/abs_energy/inputs/instances.csv").is_file():
+        if (parent / "baseline/molecules.json").is_file():
             return parent
     raise FileNotFoundError("run from the HSOpt checkout or pass --repo-root")
 
@@ -114,6 +118,9 @@ def main() -> int:
     hamlib = commands.add_parser("hamlib", help="download the selected, checksummed archives")
     hamlib.add_argument("--output-root", type=Path, required=True)
     hamlib.add_argument("--base-url", default=HAMLIB_URL, help="upstream or an exact-data mirror")
+    export = commands.add_parser("export", help="export input metadata to an external workspace")
+    export.add_argument("--output-root", type=Path, required=True)
+    export.add_argument("--selection", default="elote115")
     reactions = commands.add_parser(
         "reactions", help="generate reaction species from fixed geometries"
     )
@@ -128,22 +135,26 @@ def main() -> int:
     args = parser.parse_args()
     repo = args.repo_root.expanduser().resolve() if args.repo_root else _repo_root()
     if args.command == "hamlib":
-        inputs = repo / "experiments/abs_energy/inputs"
+        registry = repo / "baseline/molecules.json"
         result = download_hamlib(
-            inputs / "instances.csv",
-            inputs / "hamlib_zip_sha256.txt",
+            registry,
+            registry,
             args.output_root,
             base_url=args.base_url,
         )
+    elif args.command == "export":
+        from .registry import export_registries
+
+        result = export_registries(repo, args.output_root, selection=args.selection)
     else:
         from hsopt.data.reactions import generate_reactions
 
         if args.output_root.expanduser().resolve().is_relative_to(repo):
             parser.error("generated reaction data must live outside the Git checkout")
-        inputs = repo / "experiments/diff_energy/inputs"
+        registry = repo / "baseline/reactions.json"
         result = generate_reactions(
-            inputs / "species.json",
-            inputs / "reactions.json",
+            registry,
+            registry,
             args.output_root,
             convention=args.convention,
             species=args.species,

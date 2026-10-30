@@ -208,7 +208,7 @@ def test_exact_is_default_and_retains_its_result(monkeypatch):
 
 
 @pytest.mark.parametrize("family", ["abs_energy", "diff_energy"])
-def test_experiment_entry_point_accepts_bch(tmp_path, family):
+def test_public_evaluator_entry_point_accepts_bch(tmp_path, family):
     experiment = tmp_path / "experiment"
     experiment.mkdir()
     if family == "abs_energy":
@@ -238,8 +238,8 @@ def test_experiment_entry_point_accepts_bch(tmp_path, family):
     result = subprocess.run(
         [
             sys.executable,
-            str(ROOT / "experiments" / family / "evaluate.py"),
-            str(experiment),
+            "-c",
+            "from hsopt.evaluation.experiment import main; raise SystemExit(main())",
             "--method",
             "bch",
             *arguments,

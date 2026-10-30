@@ -1,4 +1,4 @@
-"""Materialize the pinned 100-Hamiltonian HamLib selection outside the checkout."""
+"""Materialize the default 115-Hamiltonian shared ELOTE selection externally."""
 
 import argparse
 from pathlib import Path
@@ -15,8 +15,8 @@ def main():
     root = Path(__file__).resolve().parents[2]
     if args.output.resolve().is_relative_to(root):
         parser.error("generated inputs belong outside the Git checkout")
-    selection = Path(__file__).with_name("inputs") / "instances100.csv"
-    checksums = root / "experiments/abs_energy/inputs/hamlib_zip_sha256.txt"
+    selection = root / "baseline/molecules.json"
+    checksums = selection
     if args.download:
         download_hamlib(selection, checksums, args.archive_root)
     manifest = prepare_hamlib(

@@ -22,11 +22,11 @@ def _default_generator() -> Path:
     if configured:
         return Path(configured).expanduser().resolve()
     repository_candidate = (
-        Path(__file__).resolve().parents[4] / "experiments" / "generate_initial_pf.py"
+        Path(__file__).resolve().parents[4] / "baseline" / "generate_initial_pf.py"
     )
     if repository_candidate.is_file():
         return repository_candidate
-    return (Path.cwd() / "experiments" / "generate_initial_pf.py").resolve()
+    return (Path.cwd() / "baseline" / "generate_initial_pf.py").resolve()
 
 
 @lru_cache(maxsize=None)

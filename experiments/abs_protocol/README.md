@@ -83,14 +83,24 @@ and uncertain writes remain invalid.
 
 ## Train/test generalization
 
-The checked-in `inputs/instances100.csv` fixes the 91 historical instances plus
-all eight standard 16-qubit JW instances and H₈ linear at R=1.0. Archive hashes
-are pinned in the shared HamLib checksum manifest. Materialize their physical
-Hamiltonians with the same parser and norm-based encoding:
+The default source registry is [`baseline/molecules.json`](../../baseline/molecules.json),
+with all 115 molecular training Hamiltonians through 16 qubits. Materialize it with:
 
 ```bash
 uv run python experiments/abs_protocol/prepare_inputs.py \
-  --download --archive-root /work/data/hamlib --output /work/data/hamlib100
+  --download --archive-root /work/data/hamlib --output /work/data/hamlib115
+```
+
+For the separately defined historical 100-case generalization experiment, export
+that explicit selection instead of changing the default registry:
+
+```bash
+uv run hsopt-data export --selection generalization100 \
+  --output-root /work/data/registry100
+uv run hsopt-campaign prepare-hamlib \
+  --active-manifest /work/data/registry100/molecules.csv \
+  --checksum-manifest /work/data/registry100/hamlib_zip_sha256.txt \
+  --data-root /work/data/hamlib --output-root /work/data/hamlib100 --max-qubits 16
 ```
 
 Prepare cached ground references and the selected grouped baseline externally

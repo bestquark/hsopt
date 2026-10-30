@@ -15,7 +15,7 @@ from scipy.stats import t as student_t
 from .common import REPO_ROOT
 
 
-DATA_ROOT = REPO_ROOT / "experiments" / "diff_energy" / "problem_cache"
+BASELINE_METADATA = REPO_ROOT / "baseline/reactions.json"
 DEFAULT_FEATURES = (
     "log_active_orbitals",
     "log_total_pauli_rotation_terms",
@@ -93,9 +93,11 @@ def _alias_value(row: Mapping[str, Any], aliases: Sequence[str]) -> Any:
 
 
 def _load_metadata(molecule: str) -> dict[str, Any]:
-    metadata_path = DATA_ROOT / f"{molecule}.json"
-    if metadata_path.exists():
-        return json.loads(metadata_path.read_text())
+    if BASELINE_METADATA.exists():
+        registry = json.loads(BASELINE_METADATA.read_text())
+        metadata = registry["historical_metadata"]["species"].get(molecule)
+        if metadata is not None:
+            return {"molecule": molecule, "display_name": molecule, **metadata}
     return {"molecule": molecule, "display_name": molecule}
 
 

@@ -3,7 +3,6 @@
 from __future__ import annotations
 
 import argparse
-import csv
 import hashlib
 import io
 import json
@@ -249,6 +248,10 @@ def _write_reaction_reference(
 
 
 def _checksum_manifest(path: Path) -> dict[str, str]:
+    if path.suffix == ".json":
+        from ..data.registry import checksum_records
+
+        return checksum_records(path)
     records: dict[str, str] = {}
     for number, raw in enumerate(path.read_text(encoding="utf-8").splitlines(), start=1):
         if not raw:
@@ -345,7 +348,9 @@ def prepare_hamlib(
     """Convert the exact-capable HamLib subset into compact immutable JSON."""
 
     output_root = _require_empty(output_root)
-    rows = list(csv.DictReader(active_manifest.read_text(encoding="utf-8").splitlines()))
+    from ..data.registry import molecule_rows
+
+    rows = molecule_rows(active_manifest)
     selected = [row for row in rows if int(row["nqubits"]) <= max_qubits]
     if max_qubits == 12 and len(selected) != HAMLIB82_INSTANCES:
         raise ValueError(
@@ -467,7 +472,9 @@ def prepare_reactions(
     output_root = _require_empty(output_root)
     checksums = _checksum_manifest(cache_checksums)
     _verify_reaction_cache(cache_root, checksums)
-    registry = json.loads(reaction_manifest.read_text(encoding="utf-8"))
+    from ..data.registry import reaction_definitions
+
+    registry = reaction_definitions(reaction_manifest)
     records = []
     for reaction_key in registry["reaction_keys"]:
         definition = registry["reactions"][reaction_key]

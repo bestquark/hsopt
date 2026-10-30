@@ -15,7 +15,7 @@ cli/
 └── tests/       Unit tests and compact executable evaluator fixtures
 ```
 
-`../experiments/generate_initial_pf.py` defines the compact PF object and emits
+`../baseline/generate_initial_pf.py` defines the compact PF object and emits
 immutable iteration-0 policies. `src/hsopt/campaign/calibration.py` owns the
 Reiher calibration math, sealed records, and baseline parameter preparation;
 the generator delegates its existing calibration API to that module.

@@ -65,6 +65,10 @@ def apply_paper_style(*, compact: bool = False) -> None:
 def read_csv(path: Path) -> list[dict[str, str]]:
     if not path.is_file():
         raise FileNotFoundError(path)
+    if path.suffix == ".json":
+        from hsopt.data.registry import molecule_rows
+
+        return molecule_rows(path)
     with path.open(encoding="utf-8", newline="") as handle:
         return list(csv.DictReader(handle))
 

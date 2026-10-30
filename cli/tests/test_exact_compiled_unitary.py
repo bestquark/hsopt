@@ -1,13 +1,11 @@
 from __future__ import annotations
 
-import csv
 import hashlib
 import json
 import math
 import shutil
 import subprocess
 import sys
-from collections import Counter
 from pathlib import Path
 
 import numpy as np
@@ -49,13 +47,13 @@ from hsopt.campaign.setup import normalize_materialized_inputs
 from hsopt.evaluation.experiment import evaluate_absolute_directory
 from hsopt.campaign.baseline import baseline_module
 from hsopt.campaign.baseline_batch import build_manifest, generate_policies, run_batch
-from hsopt.campaign.layout import sync_layout
+from hsopt.campaign.layout import check_layout
 
 
 REPO = Path(__file__).resolve().parents[2]
 ABSOLUTE = REPO / "cli" / "tests" / "fixtures" / "abs_energy_h2"
 DIFFERENCE = REPO / "cli" / "tests" / "fixtures" / "diff_energy_h2_bond_stretch"
-GENERATOR = REPO / "experiments" / "generate_initial_pf.py"
+GENERATOR = REPO / "baseline" / "generate_initial_pf.py"
 _BASELINE = baseline_module()
 BENCHMARK_TOTAL_ERROR_HARTREE = _BASELINE.BENCHMARK_TOTAL_ERROR_HARTREE
 PAPER_ALLOCATION_METHOD = _BASELINE.PAPER_ALLOCATION_METHOD
@@ -164,59 +162,16 @@ def _encoded_problem(problem: dict[str, object]) -> dict[str, object]:
     return problem
 
 
-def test_experiments_tree_is_the_only_checked_in_benchmark_tree() -> None:
-    experiments = REPO / "experiments"
+def test_experiments_tree_contains_only_shared_protocol_workflows() -> None:
     directories = {
-        path.name for path in experiments.iterdir() if path.is_dir() and path.name != "__pycache__"
+        path.name for path in (REPO / "experiments").iterdir()
+        if path.is_dir() and path.name != "__pycache__"
     }
-
-    assert directories == {"abs_energy", "diff_energy", "abs_protocol", "diff_protocol", "elote_search"}
-    assert not (REPO / "examples").exists()
-
-
-def test_abs_energy_manifest_is_exactly_the_82_instance_dataset() -> None:
-    manifest = REPO / "experiments" / "abs_energy" / "inputs" / "instances.csv"
-    with manifest.open(encoding="utf-8", newline="") as stream:
-        rows = list(csv.DictReader(stream))
-
-    assert len(rows) == 82
-    assert len({row["lane_id"] for row in rows}) == 82
-    assert Counter(int(row["nqubits"]) for row in rows) == {
-        4: 20,
-        6: 2,
-        8: 24,
-        10: 11,
-        12: 25,
-    }
-
-
-def test_checked_in_benchmark_layout_matches_the_82_and_10_registries() -> None:
-    result = sync_layout(
-        abs_manifest=REPO / "experiments/abs_energy/inputs/instances.csv",
-        abs_checksums=REPO / "experiments/abs_energy/inputs/hamlib_zip_sha256.txt",
-        reaction_manifest=REPO / "experiments/diff_energy/inputs/reactions.json",
-        reaction_checksums=REPO / "experiments/diff_energy/inputs/problem_cache.sha256",
-        reaction_metadata=REPO / "experiments/diff_energy/inputs/problem_metadata.json",
-        abs_root=REPO / "experiments/abs_energy",
-        diff_root=REPO / "experiments/diff_energy",
-        check=True,
-    )
-
-    assert result == {
-        "absolute_hamiltonians": 82,
-        "difference_reactions": 10,
-        "definition_files": 92,
-        "evaluator_files": 2,
-        "initial_policies": 184,
-    }
-    for family in ("abs_energy", "diff_energy"):
-        root = REPO / "experiments" / family
-        evaluator = root / "evaluate.py"
-        assert evaluator.is_file()
-        assert not list(root.glob("*/evaluate.py"))
-        source = evaluator.read_text(encoding="utf-8")
-        assert "from hsopt.evaluation.compiled_unitary import" in source
-        assert "hsopt.evaluation.experiment" not in source
+    assert directories == {"abs_protocol", "diff_protocol", "elote_search"}
+    result = check_layout(REPO)
+    assert result["molecular_hamiltonians"] == 115
+    assert result["reaction_species"] == 21
+    assert result["reactions"] == 10
 
 
 def test_normalize_materialized_inputs_copies_only_fresh_phase_encoded_inputs(
@@ -655,8 +610,8 @@ def test_batch_generator_can_materialize_a_checked_in_policy(
     )
 
     repository_root = tmp_path / "repo"
-    (repository_root / "experiments").mkdir(parents=True)
-    (repository_root / "experiments/generate_initial_pf.py").write_text(
+    (repository_root / "baseline").mkdir(parents=True)
+    (repository_root / "baseline/generate_initial_pf.py").write_text(
         "# repository marker\n",
         encoding="utf-8",
     )

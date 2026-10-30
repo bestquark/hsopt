@@ -48,8 +48,10 @@ def _write_json(path: Path, payload: dict) -> None:
 
 def load_definitions(species_path: Path, reactions_path: Path) -> tuple[dict, dict]:
     """Require one consistent fixed species definition per stoichiometric term."""
-    definitions = json.loads(species_path.read_text())
-    reactions = json.loads(reactions_path.read_text())
+    from .registry import reaction_definitions, species_definitions
+
+    definitions = species_definitions(species_path)
+    reactions = reaction_definitions(reactions_path)
     if definitions.get("schema") != 1 or definitions.get("recipe") != RECIPE:
         raise ValueError("unsupported species schema or chemistry recipe")
     keys = reactions["reaction_keys"]

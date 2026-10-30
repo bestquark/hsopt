@@ -10,13 +10,14 @@ Current organization:
   mutation adapter, and redacted tool/security telemetry.
 - `cli/src/hsopt/view/mutation_history.py`: read-only JSON adapter and compact
   mutation-history grid shared with the hosted monitoring site.
-- `experiments/abs_energy/`: compact HamLib absolute-energy fixtures.
-- `experiments/diff_energy/`: ten-reaction definition and compact difference fixture.
-- `experiments/generate_initial_pf.py`: sole loose/tight paper-baseline
-  implementation and immutable policy generator.
-- `experiments/{abs_energy,diff_energy}/<instance>/initial_pf_{loose,tight}.py`:
-  the two generated iteration-0 policies; a campaign copies exactly one into
-  its isolated lane.
+- `baseline/molecules.json`: molecular selections and pinned archive checksums.
+- `baseline/reactions.json`: reaction definitions, species recipes and historical cache audit.
+- `baseline/initial_nested_pf.py`: common grouped PF2 template for shared protocols.
+- `baseline/generate_initial_pf.py`: compact Pauli PF2 generator from sealed calibrations.
+- `experiments/abs_protocol/`: shared molecular ELOTE workflow.
+- `experiments/diff_protocol/`: shared reaction δ-ELOTE workflow.
+- `experiments/elote_search/`: search-strategy comparison and frozen selected ELOTE.
+- `single_molecule` branch: archived single-instance experiment folders and baseline copies.
 - `cli/src/hsopt/campaign/interface.py`: portable task requests and result delivery;
   delivery records the result, applies acceptance, and proposes the next mutation.
 - external `hsopt_workdir/data/`: inputs and sealed references/calibrations.

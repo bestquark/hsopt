@@ -418,7 +418,9 @@ def generate_policies(
     generator = generator.resolve()
     if repository_root is not None:
         repository_root = repository_root.resolve()
-        if not (repository_root / "experiments/generate_initial_pf.py").is_file():
+        if (repository_root / "baseline/molecules.json").is_file():
+            raise ValueError("main keeps generated policies external; omit --repository-root")
+        if not (repository_root / "baseline/generate_initial_pf.py").is_file():
             raise ValueError(f"not an hsopt repository root: {repository_root}")
     audit = audit_batch(
         manifest_path,
@@ -603,8 +605,8 @@ def _parser() -> argparse.ArgumentParser:
         "--repository-root",
         type=Path,
         help=(
-            "also materialize byte-identical initial_pf_<baseline>.py files under "
-            "experiments/{abs_energy,diff_energy}/<instance>/"
+            "legacy-only: mirror policies into an explicitly supplied single-instance tree; "
+            "main keeps generated policies external and rejects this option"
         ),
     )
     return parser

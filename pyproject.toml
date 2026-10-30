@@ -62,6 +62,16 @@ package = true
 
 [tool.uv.build-backend]
 module-root = "cli/src"
+source-include = [
+  "baseline/**",
+  "experiments/**",
+  "cli/tests/**",
+  "docs/**",
+  "plots/**",
+  "skills/**",
+  "AGENTS.md",
+  "uv.lock",
+]
 
 [tool.pytest.ini_options]
 testpaths = ["cli/tests"]

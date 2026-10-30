@@ -15,7 +15,7 @@ from ..evaluation.elote import digest
 from . import calibration
 
 SCHEMA = "hsopt-nested-baseline-v1"
-TEMPLATE = Path(__file__).resolve().parents[4] / "experiments/initial_nested_pf.py"
+TEMPLATE = Path(__file__).resolve().parents[4] / "baseline/initial_nested_pf.py"
 
 
 def _read(path):

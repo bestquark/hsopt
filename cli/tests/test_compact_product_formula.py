@@ -1,38 +1,13 @@
 """Preserve sealed starting policies while exposing a small, mutable PF object."""
 
-import ast
-import re
 from pathlib import Path
 
-import pytest
 
 from hsopt.campaign.baseline import baseline_module
 from hsopt.evaluation import compiled_unitary as evaluator
 
 GENERATOR = baseline_module()
 REPO = Path(__file__).resolve().parents[2]
-POLICIES = sorted((REPO / "experiments").glob("**/initial_pf_*.py"))
-
-
-@pytest.mark.parametrize("policy_path", POLICIES, ids=lambda p: f"{p.parent.name}/{p.name}")
-def test_compact_generator_preserves_every_checked_in_baseline(policy_path, monkeypatch):
-    source = policy_path.read_text()
-    tree = ast.parse(source)
-    formula = next(n for n in tree.body if isinstance(n, ast.ClassDef))
-    assignment = next(n for n in formula.body if isinstance(n, ast.Assign))
-    parameters = ast.literal_eval(assignment.value)
-    digests = re.findall(r"Calibration SHA-256: ([0-9a-f]{64})", ast.get_docstring(tree))
-    assert len(digests) == len(parameters)
-    rows = {
-        name: {"n_steps": pair[0], "uniform_epsilon": pair[1], "calibration_sha256": digest}
-        for (name, pair), digest in zip(sorted(parameters.items()), digests, strict=True)
-    }
-    monkeypatch.setattr(GENERATOR.calibration, "load_baselines", lambda *a, **kw: (rows, []))
-    rendered = GENERATOR.render(
-        Path("unused.json"), baseline="tight" if "tight" in policy_path.name else "loose"
-    )
-    assert rendered == source
-    evaluator.validate_policy_source(policy_path)
 
 
 def test_factory_returns_same_schedule_as_emitted_policy(tmp_path):

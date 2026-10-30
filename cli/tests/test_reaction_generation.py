@@ -12,7 +12,7 @@ from hsopt.data import reactions as generation
 from hsopt.data.acquire import _checksums, _sha256
 
 REPO = Path(__file__).resolve().parents[2]
-INPUTS = REPO / "experiments/diff_energy/inputs"
+INPUTS = REPO / "baseline"
 FIXTURE = Path(__file__).parent / "fixtures/reaction_h2_integrals.json"
 
 
@@ -81,7 +81,7 @@ def _ground_energy(matrix, electrons):
 
 def test_fixed_species_cover_ten_balanced_reactions():
     definitions, reactions = generation.load_definitions(
-        INPUTS / "species.json", INPUTS / "reactions.json"
+        INPUTS / "reactions.json", INPUTS / "reactions.json"
     )
     assert len(definitions["species"]) == 21
     assert len(reactions["reaction_keys"]) == 10
@@ -140,7 +140,7 @@ def test_jordan_wigner_labels_and_coefficients_reconstruct_physical_matrix():
 def test_pyscf_h2_integrals_match_fci_energy():
     pyscf = pytest.importorskip("pyscf")
     pytest.importorskip("openfermion")
-    definitions, _ = generation.load_definitions(INPUTS / "species.json", INPUTS / "reactions.json")
+    definitions, _ = generation.load_definitions(INPUTS / "reactions.json", INPUTS / "reactions.json")
     integrals = generation.active_space_integrals(definitions["species"]["h2"], threads=1)
     matrix, _ = _physical_matrix(integrals)
     # FCI is an independent PySCF energy check, including the core constant.
@@ -178,7 +178,7 @@ def test_generated_checksums_and_metadata_feed_all_reaction_preparation(tmp_path
     _fake_chemistry(monkeypatch)
     output = tmp_path / "raw"
     result = generation.generate_reactions(
-        INPUTS / "species.json", INPUTS / "reactions.json", output
+        INPUTS / "reactions.json", INPUTS / "reactions.json", output
     )
     assert result["species_generated"] == 21
     assert result["hamiltonian_convention"] == "physical"
@@ -198,7 +198,7 @@ def test_generated_checksums_and_metadata_feed_all_reaction_preparation(tmp_path
     metadata = json.loads((output / "problem_metadata.json").read_text())
     assert len(metadata["species"]) == 21
     provenance = json.loads((output / "provenance.json").read_text())
-    assert provenance["source"]["species_sha256"] == _sha256(INPUTS / "species.json")
+    assert provenance["source"]["species_sha256"] == _sha256(INPUTS / "reactions.json")
     with np.load(output / "problem_cache/h2.npz", allow_pickle=False) as arrays:
         assert "hamiltonian_real" not in arrays
 
@@ -212,7 +212,7 @@ def test_generation_failure_leaves_no_partial_output(tmp_path, monkeypatch):
     monkeypatch.setattr(generation, "active_space_integrals", fail)
     output = tmp_path / "raw"
     with pytest.raises(RuntimeError, match="did not converge"):
-        generation.generate_reactions(INPUTS / "species.json", INPUTS / "reactions.json", output)
+        generation.generate_reactions(INPUTS / "reactions.json", INPUTS / "reactions.json", output)
     assert list(tmp_path.iterdir()) == []
 
 
@@ -222,7 +222,7 @@ def test_existing_campaign_inputs_are_never_replaced(tmp_path):
     sentinel = original / "sealed.json"
     sentinel.write_text("original campaign")
     with pytest.raises(FileExistsError, match="fresh output"):
-        generation.generate_reactions(INPUTS / "species.json", INPUTS / "reactions.json", original)
+        generation.generate_reactions(INPUTS / "reactions.json", INPUTS / "reactions.json", original)
     assert sentinel.read_text() == "original campaign"
 
 
@@ -230,7 +230,7 @@ def test_partial_generation_is_labeled_and_historical_mode_explicit(tmp_path, mo
     _fake_chemistry(monkeypatch)
     output = tmp_path / "historical"
     result = generation.generate_reactions(
-        INPUTS / "species.json",
+        INPUTS / "reactions.json",
         INPUTS / "reactions.json",
         output,
         convention="historical-replay",
@@ -245,7 +245,7 @@ def test_partial_generation_is_labeled_and_historical_mode_explicit(tmp_path, mo
 def test_unknown_species_is_rejected_before_calculation(tmp_path):
     with pytest.raises(ValueError, match="fixed registry"):
         generation.generate_reactions(
-            INPUTS / "species.json",
+            INPUTS / "reactions.json",
             INPUTS / "reactions.json",
             tmp_path / "raw",
             species=["unknown"],

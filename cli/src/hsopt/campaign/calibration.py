@@ -8,7 +8,7 @@ The paper uses two different accuracy quantities that must not be conflated:
   target.
 
 This module owns calibration and baseline parameter preparation;
-experiments/generate_initial_pf.py owns the compact PF object and policy
+baseline/generate_initial_pf.py owns the compact PF object and policy
 emission. HSOpt exposes two controlled versions of the same paper PF2/Eq. (34)
 baseline.  ``loose`` computes the paper's Eq. (19) double-commutator
 coefficient bound exactly for the Pauli decomposition and obtains beta(H)

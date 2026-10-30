@@ -52,7 +52,7 @@ separate validated representation and cost model. They are not silently free.
 
 ## Nested starting protocol
 
-`experiments/initial_nested_pf.py` uses the published greedy **disjoint-spin-orbital** nesting idea
+`baseline/initial_nested_pf.py` uses the published greedy **disjoint-spin-orbital** nesting idea
 from [Reiher et al., Appendix E.2.b](https://arxiv.org/pdf/1605.03590), symmetric
 second-order splitting, and uniform synthesis precision. The host recovers
 Hermitian number-conserving one-/two-body blocks from a Jordan–Wigner Hamiltonian

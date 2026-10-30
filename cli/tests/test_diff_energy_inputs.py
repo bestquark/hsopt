@@ -5,10 +5,8 @@ from pathlib import Path
 
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
-INPUT_ROOT = REPO_ROOT / "experiments" / "diff_energy" / "inputs"
-REACTION_MANIFEST = INPUT_ROOT / "reactions.json"
-PROBLEM_METADATA = INPUT_ROOT / "problem_metadata.json"
-CACHE_CHECKSUMS = INPUT_ROOT / "problem_cache.sha256"
+INPUT_ROOT = REPO_ROOT / "baseline"
+REGISTRY = INPUT_ROOT / "reactions.json"
 
 REACTION_KEYS = [
     "hcn_hnc",
@@ -49,8 +47,8 @@ CHEMICAL_ACCURACY_HARTREE = 1.0 / 627.5094740631
 
 
 def test_reaction_inputs_are_minimal_and_baseline_free() -> None:
-    manifest = json.loads(REACTION_MANIFEST.read_text(encoding="utf-8"))
-    metadata = json.loads(PROBLEM_METADATA.read_text(encoding="utf-8"))
+    manifest = json.loads(REGISTRY.read_text())["reaction_definitions"]
+    metadata = json.loads(REGISTRY.read_text())["historical_metadata"]
     assert manifest["schema"] == 1
     assert set(manifest) == {
         "schema",
@@ -67,10 +65,9 @@ def test_reaction_inputs_are_minimal_and_baseline_free() -> None:
 
 
 def test_external_cache_manifest_is_exact_and_minimal() -> None:
-    entries: list[tuple[str, str]] = []
-    for line in CACHE_CHECKSUMS.read_text(encoding="utf-8").splitlines():
-        digest, relative = line.split(maxsplit=1)
-        entries.append((digest, relative))
+    records = json.loads(REGISTRY.read_text())["historical_cache_checksums"]
+    entries = [(digest, name) for name, digest in records.items()]
+    for digest, relative in entries:
         assert len(digest) == 64
         int(digest, 16)
         assert relative.startswith("problem_cache/")

@@ -55,9 +55,9 @@ def test_existing_corrupt_archive_is_not_overwritten(tmp_path):
 
 
 def test_selected_archives_cover_every_checked_in_instance():
-    inputs = REPO_ROOT / "experiments/abs_energy/inputs"
-    selected = selected_archives(inputs / "instances.csv", inputs / "hamlib_zip_sha256.txt")
-    assert len(selected) == 60
+    registry = REPO_ROOT / "baseline/molecules.json"
+    selected = selected_archives(registry, registry)
+    assert len(selected) == 80
 
 
 def test_checksum_paths_cannot_escape_the_data_root(tmp_path):

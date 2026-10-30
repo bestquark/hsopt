@@ -29,7 +29,7 @@ def test_agent_skill_is_separate_from_runtime_package() -> None:
     assert (runtime / "evaluation" / "compiled_unitary.py").is_file()
     assert (runtime / "sandbox" / "openshell.py").is_file()
     assert not (runtime / "paper_baseline.py").exists()
-    generator = REPO_ROOT / "experiments" / "generate_initial_pf.py"
+    generator = REPO_ROOT / "baseline" / "generate_initial_pf.py"
     generator_source = generator.read_text(encoding="utf-8")
     calibration_source = (runtime / "campaign" / "calibration.py").read_text(encoding="utf-8")
     assert "def calibrate_problem(" in calibration_source

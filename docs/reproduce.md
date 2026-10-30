@@ -1,190 +1,168 @@
-# Reproduce the paper workflow
+# Reproduce shared ELOTE and δ-ELOTE workflows
 
-Use one workspace. The Git checkout contains reusable code and benchmark
-definitions; generated files live beside it:
+Use an external workspace next to the source checkout:
 
 ```text
 hsopt_workdir/
-    hsopt/          Git checkout
-    data/           Raw archives, prepared Hamiltonians, sealed calibrations
-    runs/           Separate loose/tight campaigns and their exports
-    figures/        Generated paper plots
-    runtime/        Deployment environments and operational configuration
+    hsopt/       Source, two baseline registries, generic starting policies
+    data/        Acquired/generated Hamiltonians, exact references, calibrations
+    runs/        Shared protocol histories and immutable per-round receipts
+    figures/     Generated plots
+    runtime/     Deployment environments, dispatchers and machine configuration
 ```
 
-A fresh run uses the current selection: 82 HamLib instances through 12 qubits
-and ten reactions. Historical runs retain their own pinned evaluator, inputs,
-candidate files, and manifests. Replaying a saved mutation trace requires those
-archived candidates; a fresh stochastic agent run will propose different code.
+The default molecular registry is the 115-Hamiltonian training selection through
+16 qubits. The reaction registry defines ten reactions over 21 species. The
+[baseline guide](../baseline/README.md) distinguishes new preparation from exact
+historical replay. The [`single_molecule` branch](https://github.com/bestquark/hsopt/tree/single_molecule)
+contains the earlier per-instance experiment workflows.
 
-## Install
-
-Install [uv](https://docs.astral.sh/uv/getting-started/installation/), then:
+## Install and check the source registries
 
 ```bash
-mkdir hsopt_workdir
-cd hsopt_workdir
-git clone https://github.com/bestquark/hsopt.git
-cd hsopt
-uv sync --locked
-export HSOPT_WORKDIR="$(cd .. && pwd)"
-export HSOPT_DATA_ROOT="$HSOPT_WORKDIR/data"
+uv sync --locked --extra chemistry --extra gpu-lanczos
 uv run hsopt-layout --check
-uv run python cli/tests/fixtures/abs_energy_h2/evaluate.py --backend numpy
+uv run hsopt-data export --output-root ../data/registry
 ```
 
-The compact example evaluates supplied code and never invokes an agent.
+On Apple silicon, follow [the CUDA-Q CPU setup](synthesis.md#apple-silicon) for
+small local examples. Production shared-protocol evaluation uses GPU Lanczos.
+The two checked-in input sources are `baseline/molecules.json` and
+`baseline/reactions.json`. Exported CSV/JSON preparation views include source
+hashes and remain outside Git.
 
-## Acquire and prepare inputs
-
-The HamLib command selects only the public NERSC archives required by the
-checked-in instance registry and verifies every SHA-256 checksum. Repeating
-it skips verified archives; changed data raises an error.
-
-Reaction inputs are built from `experiments/diff_energy/inputs/species.json`
-and `reactions.json`: 21 fixed geometries, charges, basis/active-space choices,
-and ten balanced reactions. Install the locked optional chemistry dependencies.
-The generator runs closed-shell RHF, selects frontier active orbitals, localizes
-occupied and virtual blocks separately, obtains frozen-core CAS integrals, and
-maps them to Jordan--Wigner Pauli coefficients. It also writes the compact
-metadata and fresh SHA-256 manifest; no old checkout or private cache is needed.
-
-**The historical generator had a sign/factor error in its two-electron
-conversion.** New generation defaults to the corrected physical Hamiltonian.
-Use fresh reaction inputs, exact references, loose/tight policies, and campaign
-roots below. Existing campaign caches and checked-in historical metadata do
-not establish physical chemistry results for the corrected dataset. See the
-[recipe and historical-replay limitations](../experiments/diff_energy/inputs/README.md).
+## Molecular inputs
 
 ```bash
-uv sync --locked --extra chemistry
-export HSOPT_GENERATED_REACTIONS="$HSOPT_DATA_ROOT/raw/reactions-physical"
-export HSOPT_PREPARED_REACTIONS="$HSOPT_DATA_ROOT/prepared/diff_energy-physical"
-export HSOPT_CALIBRATIONS="$HSOPT_DATA_ROOT/calibrations/physical"
-export HSOPT_POLICIES="$HSOPT_DATA_ROOT/policies/physical"
-uv run hsopt-data hamlib --output-root "$HSOPT_DATA_ROOT/raw/hamlib"
-uv run --extra chemistry hsopt-data reactions \
-  --output-root "$HSOPT_GENERATED_REACTIONS"
-uv run hsopt-campaign prepare-hamlib \
-  --active-manifest experiments/abs_energy/inputs/instances.csv \
-  --checksum-manifest experiments/abs_energy/inputs/hamlib_zip_sha256.txt \
-  --data-root "$HSOPT_DATA_ROOT/raw/hamlib" \
-  --output-root "$HSOPT_DATA_ROOT/prepared/abs_energy"
+uv run hsopt-data hamlib --output-root ../data/hamlib
+uv run python experiments/abs_protocol/prepare_inputs.py \
+  --archive-root ../data/hamlib --output ../data/molecules115
+```
+
+Downloads verify the pinned archive checksums and refuse corrupt existing data.
+Preparation uses the original HamLib parser and norm-based phase encoding,
+with the fixed electron count and signed Pauli coefficients from the registry.
+The public `hsopt-campaign prepare-hamlib` command can also consume
+`--active-manifest baseline/molecules.json --checksum-manifest baseline/molecules.json`
+with `--max-qubits 16`. For an explicit historical selection, first export it
+with `hsopt-data export --selection generalization100` or `single_molecule82`.
+
+## Reaction inputs
+
+```bash
+uv run hsopt-data reactions --output-root ../data/reactions-physical
 uv run hsopt-campaign prepare-reactions \
-  --reaction-manifest experiments/diff_energy/inputs/reactions.json \
-  --cache-checksums "$HSOPT_GENERATED_REACTIONS/problem_cache.sha256" \
-  --cache-root "$HSOPT_GENERATED_REACTIONS/problem_cache" \
-  --output-root "$HSOPT_PREPARED_REACTIONS"
+  --reaction-manifest baseline/reactions.json \
+  --cache-checksums ../data/reactions-physical/problem_cache.sha256 \
+  --cache-root ../data/reactions-physical/problem_cache \
+  --output-root ../data/reactions-prepared
 ```
 
-Generation defaults to one CPU thread. For a small installation check, use
-`--species h2` and a different fresh output directory; that partial cache cannot
-prepare the ten-reaction campaign. Neither generation nor preparation replaces
-an existing campaign input directory. All generated files stay outside the checkout.
+Generation uses the fixed geometries, charges, basis, active spaces, RHF,
+occupied/virtual localization and Jordan–Wigner mapping recorded in the registry.
+It records dependency versions, the chemistry convention and fresh hashes.
+`--species h2` provides a bounded generation check, but that partial output
+cannot prepare all ten reactions. Use a fresh output directory for each run.
 
-## Inspect Hamiltonians and coefficients
+The default chemistry conversion is corrected physical generation. The
+registry's historical cache hashes describe the archived conversion only.
+`--convention historical-replay` explicitly requests that old convention; it
+does not promise byte-identical regeneration of the old cache. Keep archived
+inputs for historical replay, and calibrate/evaluate fresh inputs separately.
 
-`plots/_paper_plot.py` provides the common NVIDIA green/graphite palette and
-LaTeX typography. Install a TeX distribution for the paper figures.
+## References and grouped starting policies
+
+For each prepared molecule/species, cache the exact ground reference once on
+the selected GPU backend. The existing Python reference API is:
+
+```python
+import json
+from pathlib import Path
+from hsopt.evaluation.compiled_unitary import evaluate_exact_reference
+
+problem = Path("/work/data/molecule.json")
+reference = evaluate_exact_reference(problem, backend="cupy-lanczos")
+Path("/work/data/reference.json").write_text(json.dumps(reference, indent=2) + "\n")
+```
+
+Then calibrate and generate the shared grouped PF2 baseline:
 
 ```bash
-uv run python plots/plot_hamlib_active_spaces.py \
-  --output-dir "$HSOPT_WORKDIR/figures/dataset"
-uv run python plots/plot_hamlib_coefficients.py \
-  --hamlib-input-dir "$HSOPT_DATA_ROOT/prepared/abs_energy" \
-  --output-dir "$HSOPT_WORKDIR/figures/dataset"
+uv run hsopt-elote prepare --problem /work/data/molecule.json \
+  --exact-reference /work/data/reference.json --baseline tight \
+  --output-dir /work/data/baselines/molecule
 ```
 
-## Prepare both initial policies
+This uses `baseline/initial_nested_pf.py`, verifies its fermionic decomposition,
+measures tight beta at the original 0.1 mHa reference error, applies Eq. (34),
+and checks the allocated ideal step and unchanged compiled policy before sealing
+`calibration.json`. Reuse the matching exact reference rather than recompute it
+during mutations. Loose grouped preparation is selected explicitly with
+`--baseline loose`. The separate compact Pauli-profile generator is
+`baseline/generate_initial_pf.py`; do not apply its calibration to a different
+nested splitting.
 
-`experiments/generate_initial_pf.py` is the sole baseline generator. The public
-filenames are `initial_pf_loose.py` and `initial_pf_tight.py`. Each campaign
-selects one variant as its immutable `initial_pf.py`; mutations edit only the
-external lane's `candidate.py`.
+For reactions, assemble exact difference references from the species caches
+using `assemble_exact_difference_reference(..., energy_target="ground_branch")`.
+The helper in `experiments/diff_protocol/prepare_ground_references.py` converts
+an existing species-referenced selection while preserving its calibration
+paths and recording source hashes.
 
-Build one manifest of unique Hamiltonians. Loose calibration constructs the
-exact references once; tight calibration reuses them. These are substantive
-benchmark calculations, rather than installation checks.
+## Shared protocol selections and search
+
+Create an external molecular selection listing every selected case:
+
+```json
+{"cases": [{"id": "molecule_01", "source": "molecule.json",
+  "reference": "reference.json", "calibration": "baselines/molecule/calibration.json"}]}
+```
+
+Paths are relative to that selection. Use all 115 cases for the published
+training suite; the one-case object above only illustrates the schema.
 
 ```bash
-uv run hsopt-paper-baseline-batch build-manifest \
-  --abs-inputs "$HSOPT_DATA_ROOT/prepared/abs_energy" \
-  --reaction-inputs "$HSOPT_PREPARED_REACTIONS" \
-  --output "$HSOPT_CALIBRATIONS/manifest.json"
-uv run hsopt-paper-baseline-batch run \
-  "$HSOPT_CALIBRATIONS/manifest.json" \
-  --output-dir "$HSOPT_CALIBRATIONS/loose" \
-  --backend numpy --mode hamiltonian_bound
-uv run hsopt-paper-baseline-batch run \
-  "$HSOPT_CALIBRATIONS/manifest.json" \
-  --output-dir "$HSOPT_CALIBRATIONS/tight" \
-  --backend numpy --mode empirical_exact \
-  --exact-reference-root "$HSOPT_CALIBRATIONS/loose"
-for baseline in loose tight; do
-  uv run hsopt-paper-baseline-batch audit \
-    "$HSOPT_CALIBRATIONS/manifest.json" \
-    --output-dir "$HSOPT_CALIBRATIONS/$baseline" --baseline "$baseline"
-  uv run hsopt-paper-baseline-batch generate \
-    "$HSOPT_CALIBRATIONS/manifest.json" \
-    --calibration-dir "$HSOPT_CALIBRATIONS/$baseline" \
-    --output-dir "$HSOPT_POLICIES/$baseline" \
-    --generator "$PWD/experiments/generate_initial_pf.py" --baseline "$baseline"
-done
+uv run python experiments/abs_protocol/mutate.py prepare \
+  --selection /work/data/molecular-selection.json \
+  --run-dir /work/runs/elote/search-01 --baseline tight \
+  --policy-profile fermionic_nested --energy-target ground_branch \
+  --iterations 100 --replicate search-01
+uv run python experiments/abs_protocol/evaluate.py \
+  --run-dir /work/runs/elote/search-01
+uv run python experiments/abs_protocol/mutate.py advance \
+  --run-dir /work/runs/elote/search-01
 ```
 
-## Install OpenShell and initialize mutation campaigns
+Evaluate unchanged iteration 0 first. Alternate evaluation and `advance`, or
+use an external dispatcher to deliver the ordinary portable requests. No
+mutation can proceed before the starting suite passes. Every proposed shared
+policy is scored on the whole sealed suite. Keep each independent search in a
+separate directory; never edit an existing suite, baseline or trajectory.
 
-OpenShell runs on the agent host. The historical live campaigns used 0.0.89;
-its [tagged installer](https://github.com/NVIDIA/OpenShell/tree/v0.0.89) and
-[release](https://github.com/NVIDIA/OpenShell/releases/tag/v0.0.89) provide a
-versioned setup. The [installation guide](https://docs.nvidia.com/openshell/latest/about/installation)
-describes container-runtime requirements and newer versions.
+Reaction selections point to reaction JSON, assembled references, and the
+species calibration root. Use the `diff_protocol` workflow with an explicit
+`individual_errors` or `error_cancellation` contract and ground-branch target.
+To warm-start δ-ELOTE from molecular ELOTE, call
+`hsopt.campaign.protocol.prepare(..., family="diff_protocol", initial_policy=...,
+policy_profile="fermionic_nested", energy_target="ground_branch", ...)`.
+The transferred policy is measured and sealed as iteration 0; reaction-specific
+mutations follow it. The tight PF2 comparison remains a separate validation.
+See [the reaction workflow](../experiments/diff_protocol/README.md).
 
-```bash
-curl -LsSf https://raw.githubusercontent.com/NVIDIA/OpenShell/v0.0.89/install.sh | \
-  OPENSHELL_VERSION=v0.0.89 sh
-openshell --version
-openshell status
-export NVIDIA_API_KEY="your-key"
-uv run hsopt-openshell configure
-for baseline in loose tight; do
-  uv run hsopt-campaign initialize \
-    --hamlib-inputs "$HSOPT_DATA_ROOT/prepared/abs_energy" \
-    --reaction-inputs "$HSOPT_PREPARED_REACTIONS" \
-    --calibration-root "$HSOPT_CALIBRATIONS/$baseline" \
-    --generator "$PWD/experiments/generate_initial_pf.py" \
-    --campaign-root "$HSOPT_WORKDIR/runs/physical/$baseline" \
-    --baseline "$baseline" --hamlib-replicates 3 --iterations 50
-done
-```
+## Replaying and comparing
 
-The base sandbox includes OpenCode. Credentials remain with the host inference
-provider. Each proposal receives the repo's skill, one editable candidate, and
-read-only benchmark inputs in a disposable sandbox. Record the OpenShell
-version, sandbox image, inference model, and HSOpt commit with the run.
-Keep raw logs and redacted action summaries. Existing gateways retain their
-campaign's version.
+The saved [best molecular ELOTE](../experiments/elote_search/results/elote115/README.md)
+includes its exact shared code, 115 bound-parameter rows, compact recorded
+results and original hashes. Bind those rows for the matching Hamiltonians;
+use archived requests and the pinned scientific environment for exact numerical
+replay. A fresh agent search need not rediscover the same code.
 
-The [campaign lifecycle](../README.md#campaign-lifecycle) and
-[runtime interface](runtime.md) explain how to advance lanes, execute their
-immutable evaluation requests on any configured compute, deliver results, and
-resume mutations. The runtime owns dispatch, resource selection, staging,
-scheduler polling, and retries. HSOpt owns evaluation, recording, and acceptance.
-The [agent guide](../cli/README.md) explains the mutation boundary and audit files.
+Testing freezes the selected training policy and parameter-fit protocol before
+reading testing energies. Record extrapolation failures and construction
+exclusions. Never relabel old-policy energies as results for a new checkpoint.
+For the [three-strategy comparison](../experiments/elote_search/README.md), all
+hybrid PySR probes count toward the evaluation budget.
 
-Stage the complete task snapshot and the recorded evaluator version when
-executing remotely; an agent host's disk is not implicitly shared with workers.
-Keep raw logs and redacted action summaries. Existing campaigns retain their
-pinned deployments; upgrading source does not restart or migrate them.
-
-## Export and plot results
-
-Wait for every expected lane to finish. Run `hsopt-export-exact` and
-`hsopt-reports` for each baseline and experiment family separately, using the
-options in the [campaign lifecycle](../README.md#campaign-lifecycle).
-The completion gate rejects partial runs.
-
-The [paper-figure guide](../plots/README.md) maps each script to its PDF and
-input export. It includes precision/energy trajectories, T-gate reduction,
-reaction comparisons, baseline tolerance, and policy angle violins. Result
-plots verify final-export checksums; live dashboard plots retain partial labels.
+[Runtime dispatch](runtime.md), [the policy interface](elote.md) and
+[numerical certification](numerical-certification.md) document the remaining
+execution and scientific contracts. Source relocation changes no energy,
+compiler, cost or acceptance equations in existing pinned campaigns.

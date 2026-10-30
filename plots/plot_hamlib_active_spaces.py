@@ -28,7 +28,7 @@ from _paper_plot import (
 
 
 REPO_ROOT = Path(__file__).resolve().parents[1]
-DEFAULT_SELECTION = REPO_ROOT / "experiments/abs_energy/inputs/instances.csv"
+DEFAULT_SELECTION = REPO_ROOT / "baseline/molecules.json"
 OUTPUT_NAME = "hamlib_molecular_dataset_active_spaces.pdf"
 
 

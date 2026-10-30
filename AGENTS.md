@@ -41,7 +41,7 @@ are not acceptance metrics.
 
 ## Immutable baseline
 
-`experiments/generate_initial_pf.py` defines the compact `ProductFormula` and is the sole generator of
+`baseline/generate_initial_pf.py` defines the compact `ProductFormula` and is the sole generator of
 `initial_pf_loose.py` and `initial_pf_tight.py`. Both require sealed calibration
 data and embed the Reiher--Wiebe--Svore--Wecker--Troyer citation,
 lexicographic PF2/Strang structure, `beta(H)` referenced to 0.1 mHa, the
@@ -53,7 +53,7 @@ Calibration math and sealed-record preparation live in
 `cli/src/hsopt/campaign/calibration.py`; the generator forwards its existing API.
 
 The separately selected `fermionic_nested` profile starts from
-`experiments/initial_nested_pf.py`. `hsopt-elote prepare` calibrates its own
+`baseline/initial_nested_pf.py`. `hsopt-elote prepare` calibrates its own
 orbital-disjoint grouped PF2 and validates its unchanged compiled iteration 0;
 never reinterpret historical Pauli calibrations as nested calibrations.
 `--policy-profile fermionic_nested` selects this initializer for a NEW shared
@@ -61,15 +61,16 @@ experiment. The explicit ELOTE interface and reproduction boundaries are in
 `docs/elote.md`. ELOTE names the learned protocol; HSOpt remains
 the search framework. Keep running campaigns on their pinned source and inputs.
 
-Every `experiments/abs_energy/<instance>/` and
-`experiments/diff_energy/<reaction>/` directory contains both generated
-initializers for that dataset element. These checked-in files must be
-byte-identical to the matching external batch output. Never invent or
-hand-edit an initializer. A campaign must select one baseline explicitly and
-copy it to the lane as `initial_pf.py`; the OpenShell workspace must never
-expose the sibling baseline. Never mutate a generated initializer, and do not create an in-tree
-`optimized_pf.py`. A lane's mutable `candidate.py` and `incumbent.py`, all
-evaluations, and all transcripts live in its external campaign directory.
+Input metadata lives only in `baseline/molecules.json` and `baseline/reactions.json`.
+The single-instance experiment trees and generated baseline copies are archived on
+`single_molecule`; do not recreate them in main. Use `hsopt-data export` for
+external CSV/JSON preparation views and `hsopt-layout --check` for registry checks.
+Generated calibrations and starting policies belong outside the checkout. Never
+hand-edit a generated initializer. A campaign selects one baseline and exposes
+only that policy as `initial_pf.py`; never expose its sibling in the mutation sandbox.
+A lane's mutable `candidate.py`, `incumbent.py`, evaluations and transcripts remain
+in its external campaign directory. Frozen selected releases may be checked in
+with their source hashes, parameter rows and validation provenance.
 
 Do not change Hamiltonians, molecules, geometries, basis sets, active spaces,
 target times, localization, electron sectors, or evaluator semantics during a
@@ -99,13 +100,14 @@ benchmark framework:
 - `cli/src/hsopt/campaign/queue.py`
 - `cli/src/hsopt/campaign/loop.py`
 - `cli/src/hsopt/campaign/baseline_batch.py`
-- `experiments/generate_initial_pf.py` (the compact baseline policy and generator)
+- `baseline/generate_initial_pf.py` (the compact baseline policy and generator)
 - `cli/src/hsopt/campaign/calibration.py` (baseline math and sealed calibration records)
 
-Campaign histories belong outside the checkout. After every lane completes,
-run `hsopt-export-exact` for `abs_energy` and `diff_energy`, then run
-`hsopt-reports` on both checksummed exports. The external deployment must
-invoke this completion gate automatically and idempotently.
+Campaign histories belong outside the checkout. Preserve every round's candidate,
+per-case results, aggregate decision, sealed inputs and evaluator identity. Replays
+use the archived source and inputs, not newly generated substitutes. Existing
+low-level `abs_energy`/`diff_energy` identifiers in external archives are historical
+schema identifiers; they do not imply checked-in single-instance folders.
 
 ## Shared protocol experiments
 
