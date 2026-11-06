@@ -1,9 +1,10 @@
 # Current manuscript figures
 
-This is the canonical figure-code directory for the 18-page ELOTE manuscript at
-paper commit `4e62b9c501d03068279bd2c92935d144b61dc1b2`. The published PDFs in
+This is the canonical figure-code directory for the ELOTE manuscript.
+[`experiments/manuscript.json`](../experiments/manuscript.json) records the current
+paper commit, source hashes, and presentation updates. The published PDFs in
 [`rendered/`](rendered/) are byte-identical copies of the assets included by
-that manuscript. Its text, captions, equations and table are unchanged.
+that manuscript.
 
 | Figure | Generator | Released output |
 | --- | --- | --- |
@@ -40,6 +41,23 @@ referenced a four-search version of the Figure 3 input; that exact historical
 source is preserved solely to verify its recorded hash. Its per-Hamiltonian
 selected-policy results are identical to the final five-search input. No plotted
 values were changed to repair this historical dependency.
+
+## Figure 3 search view
+
+Panel (a) replays the five retained policies directly from the frozen trajectories.
+Gray curves show each seed's arithmetic mean of baseline-relative T95 over all
+115 Hamiltonians; green shows the lowest of these seed means at each iteration.
+The proposal points include rejected candidates: circles pass chemical accuracy
+on every Hamiltonian, while crosses fail on at least one. Green points come from
+the seed leading after that iteration; their color does not imply acceptance.
+Capped bars show the population standard deviation across the 115 cost ratios.
+
+Of 500 proposals, 350 have complete finite cost evaluations. The plot shows 344:
+it omits six with means above 1.3 and all 150 with incomplete costs, without
+averaging partial subsets or treating missing costs as zero. The axis clips SD
+bars extending outside 0--1.3. All recorded values remain in the archive. This
+arithmetic-mean display does not change the geometric-mean search objective.
+Panel (b) retains the same measured training and testing energy errors.
 
 ## Scientific trajectories and measured results
 

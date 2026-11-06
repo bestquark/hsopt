@@ -12,10 +12,12 @@ import matplotlib
 matplotlib.use("Agg")
 import matplotlib.pyplot as plt
 from matplotlib.lines import Line2D
+from matplotlib.legend_handler import HandlerTuple
 from matplotlib.patches import Patch
 import numpy as np
 
-from _paths import data_path, output_path
+from _paths import MANIFEST, data_path, output_path
+from audit import read_campaign
 
 ROOT = Path(__file__).resolve().parents[1]
 DATA = data_path("data/elote115_search_and_energy.json")
@@ -56,6 +58,151 @@ def apply_paper_style():
 
 def sha(path):
     return hashlib.sha256(path.read_bytes()).hexdigest()
+
+
+def search_data(source):
+    """Replay retained policies and complete proposal costs from frozen records."""
+    published = source["trajectory"]
+    campaign_path = ROOT / json.loads(MANIFEST.read_text())["scientific_trajectories"]["molecular"]
+    _, header, grouped = read_campaign(campaign_path)
+    seeds = published["seed_ids"]
+    cases = published["case_ids"]
+    iterations = np.asarray(published["iterations"])
+    assert len(seeds) == 5 and len(cases) == header["case_count"] == 115
+    assert np.array_equal(iterations, np.arange(101))
+
+    trajectories, policies, proposals = [], [], []
+    plot_ceiling = 1.3
+    for seed in seeds:
+        rows = grouped[seed]
+        baseline = {m["case_id"]: float(m["t95"]) for m in rows[0]["result"]["case_metrics"]}
+        assert set(baseline) == set(cases) and all(v > 0 for v in baseline.values())
+        incumbent = None
+        history, policy_history = [], []
+        for row in rows:
+            if row["iteration"] > 0:
+                trial = {m["case_id"]: m for m in row["result"]["case_metrics"]}
+                assert set(trial) == set(cases)
+                measured = [float(trial[c]["t95"]) / baseline[c] for c in cases
+                            if trial[c].get("t95") is not None and np.isfinite(float(trial[c]["t95"]))]
+                complete = len(measured) == len(cases)
+                mean_ratio = float(np.mean(measured)) if complete else None
+                # Population SD over the complete finite benchmark, after
+                # normalizing each Hamiltonian by its own baseline cost.
+                sd_ratio = float(np.std(measured, ddof=0)) if complete else None
+                if complete:
+                    np.testing.assert_allclose(mean_ratio, row["result"]["mean_relative_t95"], rtol=1e-12, atol=1e-12)
+                    assert bool(row["result"]["passes_chemical_accuracy"]) == all(
+                        m["passes_chemical_accuracy"] for m in trial.values())
+                proposals.append({"seed": seed, "iteration": row["iteration"],
+                                  "candidate_sha256": row["candidate_sha256"],
+                                  "accepted": row["decision"]["accepted"],
+                                  "passes_chemical_accuracy": row["result"]["passes_chemical_accuracy"],
+                                  "decision_reason": row["decision"]["acceptance_reason"],
+                                  "recorded_costs": len(measured), "complete": complete,
+                                  "mean_relative_t95": mean_ratio,
+                                  "hamiltonian_population_sd": sd_ratio,
+                                  "lower_sd": mean_ratio - sd_ratio if complete else None,
+                                  "upper_sd": mean_ratio + sd_ratio if complete else None,
+                                  "mean_reduction_percent": 100 * (1 - mean_ratio) if complete else None,
+                                  "above_plot_range": bool(complete and mean_ratio > plot_ceiling)})
+            if row["decision"]["accepted"]:
+                incumbent = row
+            assert incumbent is not None and incumbent["result"]["passes_chemical_accuracy"]
+            metrics = {m["case_id"]: m for m in incumbent["result"]["case_metrics"]}
+            assert set(metrics) == set(cases)
+            assert all(m["passes_chemical_accuracy"] for m in metrics.values())
+            history.append([float(metrics[c]["t95"]) / baseline[c] for c in cases])
+            policy_history.append({"iteration": incumbent["iteration"], "sha256": incumbent["candidate_sha256"]})
+        trajectories.append(history)
+        policies.append(policy_history)
+    ratios = np.asarray(trajectories)  # seed, iteration, Hamiltonian
+    assert ratios.shape == (5, 101, 115) and np.all(np.isfinite(ratios))
+    np.testing.assert_array_equal(ratios[:, 0], np.ones((5, 115)))
+    seed_means = ratios.mean(axis=2)
+    np.testing.assert_allclose(seed_means, published["seed_mean_relative_t95"], rtol=0, atol=5e-9)
+
+    # Pick one whole shared protocol at each iteration, rather than a separate
+    # minimum for each molecule. Keep the requested best-policy centre line.
+    winners = np.argmin(seed_means, axis=0)
+    selected = ratios[winners, iterations, :]
+    best = selected.mean(axis=1)
+    np.testing.assert_allclose(best, published["min_relative_t95"], rtol=0, atol=5e-9)
+    assert policies[winners[-1]][-1]["sha256"] == source["provenance"]["policy_sha256"]
+    assert len(proposals) == 500
+    assert len({(p["seed"], p["iteration"]) for p in proposals}) == 500
+    for proposal in proposals:
+        proposal["from_leading_seed"] = proposal["seed"] == seeds[winners[proposal["iteration"]]]
+    complete = [p for p in proposals if p["complete"]]
+    visible = [p for p in complete if not p["above_plot_range"]]
+    overflow = [p for p in complete if p["above_plot_range"]]
+    assert len(complete) == 350 and len(overflow) == 6
+    assert all(sum(p["iteration"] == k for p in complete) <= 5 for k in iterations)
+
+    return iterations, seed_means, best, proposals, {
+        "trajectory_archive_sha256": sha(campaign_path.with_name("trajectories.jsonl.gz")),
+        "proposal_count": len(proposals),
+        "complete_proposal_count": len(complete),
+        "incomplete_proposals_omitted": len(proposals) - len(complete),
+        "above_range_proposals_omitted": len(overflow),
+        "displayed_proposals": len(visible),
+        "displayed_accuracy_passing": sum(p["passes_chemical_accuracy"] for p in visible),
+        "displayed_accuracy_failing": sum(not p["passes_chemical_accuracy"] for p in visible),
+        "displayed_proposals_with_clipped_sd": sum(
+            p["lower_sd"] < 0 or p["upper_sd"] > plot_ceiling for p in visible
+        ),
+        "best_seed_at_endpoint": seeds[winners[-1]],
+        "best_arithmetic_mean_relative_t95_at_endpoint": float(best[-1]),
+    }
+
+
+def search(ax, iterations, seed_means, best, proposals):
+    """Plot the approved best-policy view, with proposal accuracy markers."""
+    plot_ceiling = 1.3
+    visible = [p for p in proposals if p["complete"] and not p["above_plot_range"]]
+    for leading, color in ((False, "#929292"), (True, "#76B900")):
+        points = [p for p in visible if p["from_leading_seed"] == leading]
+        ax.errorbar([p["iteration"] for p in points], [p["mean_relative_t95"] for p in points],
+                    yerr=[p["hamiltonian_population_sd"] for p in points], fmt="none",
+                    ecolor=color, alpha=0.20, elinewidth=0.7, capsize=1.1, capthick=0.7, zorder=1)
+        for passes, marker in ((True, "o"), (False, "x")):
+            subset = [p for p in points if p["passes_chemical_accuracy"] == passes]
+            style = {"edgecolors": "none", "linewidths": 0} if passes else {"linewidths": 0.9}
+            ax.scatter([p["iteration"] for p in subset], [p["mean_relative_t95"] for p in subset],
+                       s=23 if passes else 26, marker=marker, color=color, alpha=0.40,
+                       zorder=3, clip_on=False, **style)
+    # Out-of-range and incomplete proposals remain in the frozen archive.
+    for values in seed_means:
+        ax.step(iterations, values, where="post", color="#929292", linewidth=1.65,
+                alpha=0.90, zorder=2)
+    ax.step(iterations, best, where="post", color="#3E7E00", linewidth=2.8, zorder=4)
+    ax.axhline(1, color=".45", linestyle="--", linewidth=1.2, zorder=0)
+    ax.set_xlim(0, 100)
+    ax.set_ylim(0, plot_ceiling)
+    ax.set_xticks(np.arange(0, 101, 10))
+    ax.set_yticks(np.arange(0, 1.21, 0.2))
+    ax.set_xlabel("Iteration")
+    ax.set_ylabel(r"Relative $T_{95}/T_{95}^{(0)}$")
+    ax.spines[["top", "right"]].set_visible(False)
+    ax.grid(False, which="both")
+    proposal_keys = {}
+    for marker in ("o", "x"):
+        proposal_keys[marker] = []
+        for color in ("#929292", "#76B900"):
+            # Invisible NaN points create capped legend handles without
+            # plotting extra data; an empty input would omit the caps.
+            key = ax.errorbar([np.nan], [np.nan], yerr=[0.1], fmt=marker, markersize=5,
+                              color=color, alpha=0.65, elinewidth=0.9, capsize=1.1, capthick=0.7)
+            key.lines[0].set_markeredgewidth(0 if marker == "o" else 0.9)
+            assert len(key.lines[1]) == 2
+            proposal_keys[marker].append(key)
+    handles = [Line2D([], [], color="#3E7E00", lw=2.8, label="Best policy"),
+               Line2D([], [], color="#929292", lw=1.65, label="Independent seeds"),
+               tuple(proposal_keys["o"]), tuple(proposal_keys["x"])]
+    ax.legend(handles=handles, labels=["Best policy", "Independent seeds", r"Pass $\pm 1$ SD", r"Fail $\pm 1$ SD"],
+              handler_map={tuple: HandlerTuple(ndivide=None, pad=0.0)},
+              loc="lower center", bbox_to_anchor=(0.5, 1.03),
+              ncol=4, fontsize=15, handlelength=1.3, columnspacing=1.0)
 
 
 def main():
@@ -292,43 +439,12 @@ def main():
     np.testing.assert_allclose(seed_means.mean(axis=0), data["mean_relative_t95"])
     np.testing.assert_allclose(seed_means.min(axis=0), data["min_relative_t95"])
     np.testing.assert_allclose(seed_means.max(axis=0), data["max_relative_t95"])
-    fig, axes = plt.subplots(1, 2, figsize=(13.2, 5.6), layout="constrained")
+    iterations, seed_means, best, proposals, search_report = search_data(source)
+    fig, axes = plt.subplots(
+        1, 2, figsize=(15.8, 5.8), width_ratios=(1.2, 1), layout="constrained"
+    )
     fig.get_layout_engine().set(rect=(0, 0, 1, 0.93))
-    ax = axes[0]
-    for values in data["molecule_mean_relative_t95"]:
-        (individual,) = ax.step(
-            iterations, values, where="post", color=".60", alpha=0.40, lw=0.65, zorder=2
-        )
-    span = ax.fill_between(
-        iterations,
-        data["min_relative_t95"],
-        data["max_relative_t95"],
-        step="post",
-        color="#B7E36A",
-        alpha=0.40,
-        lw=0,
-        zorder=3,
-    )
-    (mean,) = ax.step(
-        iterations, data["mean_relative_t95"], where="post", color="#3E7E00", lw=2.8, zorder=5
-    )
-    ax.axhline(1, color=".45", ls="--", lw=1.2, zorder=0)
-    ax.set_xlim(0, last_iteration)
-    ax.set_xticks(np.arange(0, last_iteration + 1, 10))
-    ax.set_ylim(0, 1.12)
-    ax.set_yticks(np.arange(0, 1.01, 0.2))
-    ax.set_xlabel("Iteration")
-    ax.set_ylabel(r"Relative $T_{95}/T_{95}^{(0)}$")
-    ax.legend(
-        [mean, span, individual],
-        ["Mean", "Min--max range", "Hamiltonians"],
-        loc="lower center",
-        bbox_to_anchor=(0.5, 1.03),
-        ncol=3,
-        fontsize=15,
-        handlelength=1.6,
-        columnspacing=1.3,
-    )
+    search(axes[0], iterations, seed_means, best, proposals)
     energy(axes[1])
     for i, ax in enumerate(axes):
         ax.text(-0.07, 1.02, f"({chr(97 + i)})", transform=ax.transAxes, fontsize=25, va="bottom")
@@ -345,6 +461,7 @@ def main():
         json.dumps(
             {
                 "output": str(OUTPUT),
+                "panel_a": search_report,
                 "data_sha256": sha(DATA),
                 "case_count": len(rows),
                 "seed_ids": data["seed_ids"],
