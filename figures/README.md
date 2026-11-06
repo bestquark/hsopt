@@ -58,6 +58,9 @@ averaging partial subsets or treating missing costs as zero. The axis clips SD
 bars extending outside 0--1.3. All recorded values remain in the archive. This
 arithmetic-mean display does not change the geometric-mean search objective.
 Panel (b) retains the same measured training and testing energy errors.
+Both panels have equal plotting widths and share one legend row above them.
+The legend matches Figure 2 at its printed size. Figure 4 uses its existing
+legend PDF at `0.613\linewidth` in the manuscript to match that same size.
 
 ## Scientific trajectories and measured results
 

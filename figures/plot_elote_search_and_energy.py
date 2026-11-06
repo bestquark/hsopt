@@ -168,7 +168,7 @@ def search(ax, iterations, seed_means, best, proposals):
         for passes, marker in ((True, "^"), (False, "X")):
             subset = [p for p in points if p["passes_chemical_accuracy"] == passes]
             ax.scatter([p["iteration"] for p in subset], [p["mean_relative_t95"] for p in subset],
-                       s=23 if passes else 26, marker=marker, color=color, alpha=0.40,
+                       s=33 if passes else 38, marker=marker, color=color, alpha=0.40,
                        zorder=3, clip_on=False, edgecolors="none", linewidths=0)
     # Out-of-range and incomplete proposals remain in the frozen archive.
     for values in seed_means:
@@ -190,7 +190,7 @@ def search(ax, iterations, seed_means, best, proposals):
         for color in ("#929292", "#76B900"):
             # Invisible NaN points create capped legend handles without
             # plotting extra data; an empty input would omit the caps.
-            key = ax.errorbar([np.nan], [np.nan], yerr=[0.1], fmt=marker, markersize=5,
+            key = ax.errorbar([np.nan], [np.nan], yerr=[0.1], fmt=marker, markersize=6,
                               color=color, alpha=0.65, elinewidth=0.9, capsize=1.1, capthick=0.7)
             key.lines[0].set_markeredgewidth(0)
             assert len(key.lines[1]) == 2
@@ -198,10 +198,7 @@ def search(ax, iterations, seed_means, best, proposals):
     handles = [Line2D([], [], color="#3E7E00", lw=2.8, label="Best policy"),
                Line2D([], [], color="#929292", lw=1.65, label="Independent seeds"),
                tuple(proposal_keys["^"]), tuple(proposal_keys["X"])]
-    ax.legend(handles=handles, labels=["Best policy", "Independent seeds", r"Pass $\pm 1$ SD", r"Fail $\pm 1$ SD"],
-              handler_map={tuple: HandlerTuple(ndivide=None, pad=0.0)},
-              loc="lower center", bbox_to_anchor=(0.5, 1.03),
-              ncol=4, fontsize=15, handlelength=1.3, columnspacing=1.0)
+    return handles
 
 
 def main():
@@ -413,15 +410,7 @@ def main():
         ]
         if not heldout:
             handles.append(Line2D([], [], color="#212121", lw=2.2, label="Median"))
-        ax.legend(
-            handles=handles,
-            loc="lower center",
-            bbox_to_anchor=(0.5, 1.03),
-            ncol=3,
-            fontsize=15,
-            columnspacing=1.0,
-            handlelength=1.4,
-        )
+        return handles
 
     assert len({r["case_id"] for r in rows}) == 115
     assert data["seed_ids"] == ["seed-01", "seed-02", "seed-03", "seed-04", "seed-05"]
@@ -440,11 +429,21 @@ def main():
     np.testing.assert_allclose(seed_means.max(axis=0), data["max_relative_t95"])
     iterations, seed_means, best, proposals, search_report = search_data(source)
     fig, axes = plt.subplots(
-        1, 2, figsize=(15.8, 5.8), width_ratios=(1.2, 1), layout="constrained"
+        1, 2, figsize=(15.8, 5.8), width_ratios=(1, 1), layout="constrained"
     )
-    fig.get_layout_engine().set(rect=(0, 0, 1, 0.93))
-    search(axes[0], iterations, seed_means, best, proposals)
-    energy(axes[1])
+    fig.get_layout_engine().set(rect=(0, 0, 1, 0.87))
+    search_handles = search(axes[0], iterations, seed_means, best, proposals)
+    energy_handles = energy(axes[1])
+    # One row across both panels accommodates the Figure 2 printed legend size.
+    # This wider PDF needs 21.3 pt here to match Figure 2's 17 pt source text.
+    fig.legend(
+        handles=search_handles + energy_handles,
+        labels=["Best policy", "Independent seeds", r"Pass $\pm 1$ SD", r"Fail $\pm 1$ SD"]
+        + [handle.get_label() for handle in energy_handles],
+        handler_map={tuple: HandlerTuple(ndivide=None, pad=0.0)},
+        loc="upper center", bbox_to_anchor=(0.5, 1.0), ncol=6,
+        fontsize=21.3, handlelength=1.15, columnspacing=0.8, handletextpad=0.4,
+    )
     for i, ax in enumerate(axes):
         ax.text(-0.07, 1.02, f"({chr(97 + i)})", transform=ax.transAxes, fontsize=25, va="bottom")
     for ax in axes:
