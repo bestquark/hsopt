@@ -164,11 +164,11 @@ def search(ax, iterations, seed_means, best, proposals):
         points = [p for p in visible if p["from_leading_seed"] == leading]
         ax.errorbar([p["iteration"] for p in points], [p["mean_relative_t95"] for p in points],
                     yerr=[p["hamiltonian_population_sd"] for p in points], fmt="none",
-                    ecolor=color, alpha=0.20, elinewidth=0.7, capsize=1.1, capthick=0.7, zorder=1)
+                    ecolor=color, alpha=0.30, elinewidth=0.7, capsize=1.1, capthick=0.7, zorder=1)
         for passes, marker in ((True, "^"), (False, "X")):
             subset = [p for p in points if p["passes_chemical_accuracy"] == passes]
             ax.scatter([p["iteration"] for p in subset], [p["mean_relative_t95"] for p in subset],
-                       s=33 if passes else 38, marker=marker, color=color, alpha=0.40,
+                       s=33 if passes else 38, marker=marker, color=color, alpha=0.55,
                        zorder=3, clip_on=False, edgecolors="none", linewidths=0)
     # Out-of-range and incomplete proposals remain in the frozen archive.
     for values in seed_means:
