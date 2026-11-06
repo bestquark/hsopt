@@ -113,14 +113,25 @@
     "nvidiatechreport.cls": "acab8089696fbad75278cc90d9788fcd94fa18f54c97671830e328b906a38a04",
     "references.bib": "739d04e40e9d6604951d7258ae37f0959320a8e1e137dc7d39064084de2aa764",
     "tex/1_introduction.tex": "2ab544d9d2267bb8f2763b1a6f351a68f97b3f7ba404f3e0e5a47a048b18afdd",
-    "tex/2_method.tex": "979f6750976d614ee42124cdc8d6d1609e7247409f6ebfe49209a6eaa61417d5",
-    "tex/3_experiments.tex": "bf887ed9941d51714707842929a3fdfcc17e366db0e61db7187c7e486bc6716d",
+    "tex/2_method.tex": "5c329d892164225adfc1aacb04d4e231b9407b7a9375060e2f64217e1120f429",
+    "tex/3_experiments.tex": "75692c9339a6fc03a6e3cc400992c45166fcd869e9c86fca646d777dc40381fe",
     "tex/4_related_work.tex": "17372dcfe5f80ae7d233db259be582ca149c1cd97c02063a765a04228d5dd14c",
     "tex/5_conclusion.tex": "a3918703580c0e25c1d3e4898bf39465f56c98699e2beee872135d535900863c",
     "tex/appendix/0_main.tex": "78d67270a471e71838748270d0a756345867d8939480bfae860b2d95fe0e1735",
     "tex/appendix/standard_pf_baseline.tex": "1d658799e62ad47feec7baa943e4723b98619f6ee9a6b686ec9b26af90ed2f17",
     "tex/appendix/understanding_elote.tex": "33315976fd680839a0127c931f02b2ba739db67602c911b4773cb33afad6e017",
     "tex/figure4_reaction_key.tex": "1a5dbb01e9dd9b20ae8c7179969db9a9e0b0c7addcd0c835dfe2f6212239bc06"
+  },
+  "figure2_style_update": {
+    "approved_preview_sha256": "8ac7fdb07a49d99f4d6ce4b1256f57c2148d430b1f6f685009e42c71e8b03b40",
+    "date": "2026-11-06",
+    "description": "Contrasting dotted training/testing median lines and opaque pastel testing hatches that remain visible in PDF rendering.",
+    "paper_commit": "c7ba5bbfe8e3cf55b17d0b1cbce2da8f28b2f160",
+    "scientific_inputs_unchanged": true,
+    "testing_facecolor": "#E6F2D1",
+    "testing_hatch_color": "#BCDC82",
+    "testing_median_color": "#4FB88A",
+    "training_median_color": "#174D2B"
   },
   "figure3_proposal_update": {
     "above_range_proposals_omitted": 6,
@@ -193,7 +204,7 @@
     "elote115_precision_and_compiled_savings.pdf": {
       "paper_path": "assets/figures/elote115_precision_and_compiled_savings.pdf",
       "path": "figures/rendered/elote115_precision_and_compiled_savings.pdf",
-      "sha256": "ede67bcf81d80faa1a83784b588c7cacebe0116f4795e00b43385fcd4a91e774"
+      "sha256": "8ac7fdb07a49d99f4d6ce4b1256f57c2148d430b1f6f685009e42c71e8b03b40"
     },
     "elote115_search_and_energy.pdf": {
       "paper_path": "assets/figures/elote115_search_and_energy.pdf",
@@ -257,7 +268,7 @@
     "table_1_rows_unchanged": true
   },
   "paper_repository": "https://github.com/bestquark/eqd-paper",
-  "paper_source_commit": "3e8565e23bac8d28a522ae1daad6d59ccd0bff2e",
+  "paper_source_commit": "c7ba5bbfe8e3cf55b17d0b1cbce2da8f28b2f160",
   "processing_scripts": [
     "figures/assemble_elote_figure2.py",
     "figures/audit.py",
@@ -273,7 +284,7 @@
   "processing_source_files": {
     "figures/_coefficient_data.py": "91821516d83aea485a12a4b526d69c0447551980b42c194e1c4a6328e6dc9f77",
     "figures/_paths.py": "aea17b4f56127ec22c4ad7ab1fe919f37309547c16dca34fa4a9aa193bf7b9e3",
-    "figures/assemble_elote_figure2.py": "f0974ea6f9d781fb2fc4d23f3a9109528ef89800d9707a98e5015bc34f3acd2d",
+    "figures/assemble_elote_figure2.py": "e0aeb75504b77bd1ea7305f13c6544b776f478d054633f4e0fb603d497d7999d",
     "figures/audit.py": "af6b527029dfc4215c83cf6943a582ef06f3a303e56169954c2e741a83732182",
     "figures/build.py": "b947eb640f52ad3d40892bfbe20d0ff2be22b17b434548c886940d24258bbe5c",
     "figures/export_elote_seed_effort.py": "d1c7f26a5d1f20b51f77b82bd21000b1c600878a101b2c7b6803a427ace96b2e",

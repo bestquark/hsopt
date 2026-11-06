@@ -15,7 +15,7 @@ import matplotlib
 
 matplotlib.use("Agg")
 import matplotlib.pyplot as plt
-from matplotlib.colors import LinearSegmentedColormap, Normalize, to_rgba
+from matplotlib.colors import LinearSegmentedColormap, Normalize
 from matplotlib.lines import Line2D
 from matplotlib.ticker import FuncFormatter, LogLocator, MaxNLocator, NullLocator
 import numpy as np
@@ -171,8 +171,9 @@ def main():
         width=np.diff(bins),
         bottom=a,
         align="edge",
-        color=to_rgba(NVIDIA_GREEN, 0.18),
-        edgecolor=to_rgba(NVIDIA_GREEN, 0.38),
+        # Opaque pastel colors avoid disappearing translucent hatches in PDF viewers.
+        color="#E6F2D1",
+        edgecolor="#BCDC82",
         hatch="/",
         lw=0.8,
         label=r"Testing ($n=76$)",
@@ -190,7 +191,7 @@ def main():
         lw=0.65,
         label="_nolegend_",
     )
-    for values, color in [(training, "#3E7E00"), (testing, "#678C3E")]:
+    for values, color in [(training, "#174D2B"), (testing, "#4FB88A")]:
         right.axvline(np.median(values), color=color, ls=":", lw=1.9)
     right.set(xlabel=r"$T_{95}$ reduction (\%)", ylabel=r"All Hamiltonians (\%)", ylim=(0, None))
     right.xaxis.set_major_locator(MaxNLocator(nbins=6))
