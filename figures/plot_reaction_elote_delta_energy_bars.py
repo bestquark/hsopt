@@ -50,12 +50,15 @@ def main():
             or energy["evaluation_contract_version"] != "normalized_hamiltonian_ground_input_signed_difference_cudaq_elote_v1"):
         raise ValueError("Figure 4 energy provenance differs from the frozen campaign")
 
+    # Both panels have the same printed width. Compensate for their different
+    # PDF widths so reaction numbers, value ticks, and axis labels match (a).
+    font_scale = 544.414 / 537.214
     mpl.rcParams.update({
         "text.usetex": True,
         "font.family": "serif", "font.serif": ["Computer Modern Roman"],
         "text.latex.preamble": r"\usepackage{amsmath}\usepackage{amssymb}",
-        "font.size": 24, "axes.labelsize": 26,
-        "xtick.labelsize": 24, "ytick.labelsize": 24,
+        "font.size": 24, "axes.labelsize": 24 * font_scale,
+        "xtick.labelsize": 30 * font_scale, "ytick.labelsize": 26 * font_scale,
         "legend.fontsize": 26, "legend.frameon": False,
         "axes.linewidth": 1.25, "xtick.major.width": 1.15,
         "ytick.major.width": 1.15, "xtick.major.size": 5.5,
