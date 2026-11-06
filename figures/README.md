@@ -53,8 +53,19 @@ the seed leading after that iteration; their color does not imply acceptance.
 Capped bars show the population standard deviation across the 115 cost ratios.
 
 Of 500 proposals, 350 have complete finite cost evaluations. The plot shows 344:
-it omits six with means above 1.3 and all 150 with incomplete costs, without
-averaging partial subsets or treating missing costs as zero. The axis clips SD
+it omits six with means above 1.3 and 150 without costs for every Hamiltonian.
+The latter comprise 107 proposals with unresolved numerical certification,
+26 with policy-execution errors, two with both, and 15 rejected early by a
+certified QPE energy check. For those 15, at least one Hamiltonian had a certified
+upper bound below 0.5 on the probability of an accurate QPE outcome, ruling out
+the required accurate majority peak before a complete cost was available.
+These categories follow the recorded final decisions, giving certified rejection
+priority when other Hamiltonians also had evaluation errors. Execution errors
+include unavailable functions, invalid term access, and invalid synthesis
+tolerances. Numerical uncertainty does not establish physical inaccuracy.
+All 150 have archived mutated source. None are classified here as a failure to
+produce a mutation. The plot does not average partial subsets or treat missing
+costs as zero. The axis clips SD
 bars extending outside 0--1.3. All recorded values remain in the archive. This
 arithmetic-mean display does not change the geometric-mean search objective.
 Panel (b) retains the same measured training and testing energy errors.

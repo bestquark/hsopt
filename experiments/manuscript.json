@@ -114,12 +114,12 @@
     "references.bib": "739d04e40e9d6604951d7258ae37f0959320a8e1e137dc7d39064084de2aa764",
     "tex/1_introduction.tex": "2ab544d9d2267bb8f2763b1a6f351a68f97b3f7ba404f3e0e5a47a048b18afdd",
     "tex/2_method.tex": "979f6750976d614ee42124cdc8d6d1609e7247409f6ebfe49209a6eaa61417d5",
-    "tex/3_experiments.tex": "eb157d9a901a9fc9cb073a922b2a97ba9738391cad05383ed5bdf11a33f1fbfb",
+    "tex/3_experiments.tex": "ae5bc50b338026bd7ac4d046acf899598c001ce07f9c9e39df207f526327c838",
     "tex/4_related_work.tex": "17372dcfe5f80ae7d233db259be582ca149c1cd97c02063a765a04228d5dd14c",
     "tex/5_conclusion.tex": "a3918703580c0e25c1d3e4898bf39465f56c98699e2beee872135d535900863c",
     "tex/appendix/0_main.tex": "78d67270a471e71838748270d0a756345867d8939480bfae860b2d95fe0e1735",
     "tex/appendix/standard_pf_baseline.tex": "1d658799e62ad47feec7baa943e4723b98619f6ee9a6b686ec9b26af90ed2f17",
-    "tex/appendix/understanding_elote.tex": "fd731309977f38c0ebf58db61b80f793ef5ea1e2d633c434795dc723ed266a21",
+    "tex/appendix/understanding_elote.tex": "33315976fd680839a0127c931f02b2ba739db67602c911b4773cb33afad6e017",
     "tex/figure4_reaction_key.tex": "1a5dbb01e9dd9b20ae8c7179969db9a9e0b0c7addcd0c835dfe2f6212239bc06"
   },
   "figure3_proposal_update": {
@@ -137,6 +137,16 @@
     "displayed_proposals_with_clipped_sd": 11,
     "failure_marker": "Filled uppercase X in the scatter and legend.",
     "figure": "3",
+    "incomplete_proposal_reasons": {
+      "all_have_archived_mutated_source": true,
+      "both_numerical_and_execution": 2,
+      "certificate_check": "All 283 archived rejection certificates in those 15 proposals are verified, forbid acceptance, and bound accurate-window probability below 0.5.",
+      "classification": "Recorded final decisions give certified QPE rejection priority over unresolved evaluations on other Hamiltonians.",
+      "early_certified_qpe_constraint_rejection": 15,
+      "null_case_cost_records": 5870,
+      "numerical_certification_only": 107,
+      "policy_execution_only": 26
+    },
     "incomplete_proposals_omitted": 150,
     "layout": "Equal panel widths, with separate one-row legends above each panel; Pass/Fail labels retain capped SD-bar symbols.",
     "legend_fontsize_points": 21.3,
@@ -149,9 +159,9 @@
       "fail": 38,
       "pass": 33
     },
-    "omissions": "Incomplete cost evaluations and proposal means above 1.3; SD bars clipped at axis limits.",
+    "omissions": "Policy-execution errors, inconclusive numerical certification, or early certified QPE-constraint rejection prevent complete costs for 150 proposals. Six complete proposal means above 1.3 are also omitted. SD bars are clipped at axis limits.",
     "panel_b_scientific_content_unchanged": true,
-    "paper_commit": "89742118159ba49935954068e75b219d89d4c52a",
+    "paper_commit": "80a3ca85fd7103f5505523fee9d867f5500bd05f",
     "pass_marker": "Filled upward triangles in the scatter and legend.",
     "preview_values_verified": true,
     "proposal_colors": "Green is the seed whose retained policy leads after that iteration; gray is every other seed.",
@@ -247,7 +257,7 @@
     "table_1_rows_unchanged": true
   },
   "paper_repository": "https://github.com/bestquark/eqd-paper",
-  "paper_source_commit": "89742118159ba49935954068e75b219d89d4c52a",
+  "paper_source_commit": "80a3ca85fd7103f5505523fee9d867f5500bd05f",
   "processing_scripts": [
     "figures/assemble_elote_figure2.py",
     "figures/audit.py",
