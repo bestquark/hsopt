@@ -165,12 +165,11 @@ def search(ax, iterations, seed_means, best, proposals):
         ax.errorbar([p["iteration"] for p in points], [p["mean_relative_t95"] for p in points],
                     yerr=[p["hamiltonian_population_sd"] for p in points], fmt="none",
                     ecolor=color, alpha=0.20, elinewidth=0.7, capsize=1.1, capthick=0.7, zorder=1)
-        for passes, marker in ((True, "o"), (False, "x")):
+        for passes, marker in ((True, "o"), (False, "X")):
             subset = [p for p in points if p["passes_chemical_accuracy"] == passes]
-            style = {"edgecolors": "none", "linewidths": 0} if passes else {"linewidths": 0.9}
             ax.scatter([p["iteration"] for p in subset], [p["mean_relative_t95"] for p in subset],
                        s=23 if passes else 26, marker=marker, color=color, alpha=0.40,
-                       zorder=3, clip_on=False, **style)
+                       zorder=3, clip_on=False, edgecolors="none", linewidths=0)
     # Out-of-range and incomplete proposals remain in the frozen archive.
     for values in seed_means:
         ax.step(iterations, values, where="post", color="#929292", linewidth=1.65,
@@ -186,19 +185,19 @@ def search(ax, iterations, seed_means, best, proposals):
     ax.spines[["top", "right"]].set_visible(False)
     ax.grid(False, which="both")
     proposal_keys = {}
-    for marker in ("o", "x"):
+    for marker in ("o", "X"):
         proposal_keys[marker] = []
         for color in ("#929292", "#76B900"):
             # Invisible NaN points create capped legend handles without
             # plotting extra data; an empty input would omit the caps.
             key = ax.errorbar([np.nan], [np.nan], yerr=[0.1], fmt=marker, markersize=5,
                               color=color, alpha=0.65, elinewidth=0.9, capsize=1.1, capthick=0.7)
-            key.lines[0].set_markeredgewidth(0 if marker == "o" else 0.9)
+            key.lines[0].set_markeredgewidth(0)
             assert len(key.lines[1]) == 2
             proposal_keys[marker].append(key)
     handles = [Line2D([], [], color="#3E7E00", lw=2.8, label="Best policy"),
                Line2D([], [], color="#929292", lw=1.65, label="Independent seeds"),
-               tuple(proposal_keys["o"]), tuple(proposal_keys["x"])]
+               tuple(proposal_keys["o"]), tuple(proposal_keys["X"])]
     ax.legend(handles=handles, labels=["Best policy", "Independent seeds", r"Pass $\pm 1$ SD", r"Fail $\pm 1$ SD"],
               handler_map={tuple: HandlerTuple(ndivide=None, pad=0.0)},
               loc="lower center", bbox_to_anchor=(0.5, 1.03),
