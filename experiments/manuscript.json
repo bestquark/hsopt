@@ -114,7 +114,7 @@
     "references.bib": "739d04e40e9d6604951d7258ae37f0959320a8e1e137dc7d39064084de2aa764",
     "tex/1_introduction.tex": "2ab544d9d2267bb8f2763b1a6f351a68f97b3f7ba404f3e0e5a47a048b18afdd",
     "tex/2_method.tex": "979f6750976d614ee42124cdc8d6d1609e7247409f6ebfe49209a6eaa61417d5",
-    "tex/3_experiments.tex": "ae5bc50b338026bd7ac4d046acf899598c001ce07f9c9e39df207f526327c838",
+    "tex/3_experiments.tex": "bf887ed9941d51714707842929a3fdfcc17e366db0e61db7187c7e486bc6716d",
     "tex/4_related_work.tex": "17372dcfe5f80ae7d233db259be582ca149c1cd97c02063a765a04228d5dd14c",
     "tex/5_conclusion.tex": "a3918703580c0e25c1d3e4898bf39465f56c98699e2beee872135d535900863c",
     "tex/appendix/0_main.tex": "78d67270a471e71838748270d0a756345867d8939480bfae860b2d95fe0e1735",
@@ -161,7 +161,7 @@
     },
     "omissions": "Policy-execution errors, inconclusive numerical certification, or early certified QPE-constraint rejection prevent complete costs for 150 proposals. Six complete proposal means above 1.3 are also omitted. SD bars are clipped at axis limits.",
     "panel_b_scientific_content_unchanged": true,
-    "paper_commit": "80a3ca85fd7103f5505523fee9d867f5500bd05f",
+    "paper_commit": "3e8565e23bac8d28a522ae1daad6d59ccd0bff2e",
     "pass_marker": "Filled upward triangles in the scatter and legend.",
     "preview_values_verified": true,
     "proposal_colors": "Green is the seed whose retained policy leads after that iteration; gray is every other seed.",
@@ -257,7 +257,7 @@
     "table_1_rows_unchanged": true
   },
   "paper_repository": "https://github.com/bestquark/eqd-paper",
-  "paper_source_commit": "80a3ca85fd7103f5505523fee9d867f5500bd05f",
+  "paper_source_commit": "3e8565e23bac8d28a522ae1daad6d59ccd0bff2e",
   "processing_scripts": [
     "figures/assemble_elote_figure2.py",
     "figures/audit.py",
