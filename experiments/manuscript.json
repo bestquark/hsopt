@@ -128,8 +128,9 @@
     "date": "2026-11-06",
     "description": "Touching policy pairs; solid net errors and faint hatched bounds; maximum allowed error annotation.",
     "figure": "4",
+    "layout": "Increased panel b left margin; all 21 text bounding boxes lie inside its PDF crop.",
     "panel_a_unchanged": true,
-    "paper_commit": "5277788b5e8113851b7d031a3eb42cc148768f28",
+    "paper_commit": "4f6c294762562ec2223ff4b016dfd43e5f212347",
     "scientific_inputs_unchanged": true,
     "typography": "Panel b reaction numbers, value ticks, and axis labels match panel a at equal printed widths."
   },
@@ -162,7 +163,7 @@
     "reaction_elote_delta_a100_energy_bars_log.pdf": {
       "paper_path": "assets/figures/reaction_elote_delta_a100_energy_bars_log.pdf",
       "path": "figures/rendered/reaction_elote_delta_a100_energy_bars_log.pdf",
-      "sha256": "8ea824a27cd4a911786aa4e886850f37b2a9ccda0a8840ad3a539669cbd97fe1"
+      "sha256": "9b871eaf4d6bdba7923803b5e5059e0283adc5e8c89129bfc0340107f367dd2d"
     },
     "reaction_elote_delta_a100_radial_log.pdf": {
       "paper_path": "assets/figures/reaction_elote_delta_a100_radial_log.pdf",
@@ -196,7 +197,7 @@
     "table_1_rows_unchanged": true
   },
   "paper_repository": "https://github.com/bestquark/eqd-paper",
-  "paper_source_commit": "5277788b5e8113851b7d031a3eb42cc148768f28",
+  "paper_source_commit": "4f6c294762562ec2223ff4b016dfd43e5f212347",
   "processing_scripts": [
     "figures/assemble_elote_figure2.py",
     "figures/audit.py",
@@ -220,7 +221,7 @@
     "figures/plot_baseline_initialization_vs_qubits.py": "fa767bac6b867c2db2e7db3f4f15a532b3b10e0c1449a814fe2328479f133f60",
     "figures/plot_elote_search_and_energy.py": "b00b9e88afa466de3c937103a8736b276f99b0bf53d0821f0b0257ca3d7e3309",
     "figures/plot_hamlib_molecular_dataset_active_spaces.py": "a32141c9beccb772655d1283931fecd7d836edfc8e2659dc8dfbace15e5b7750",
-    "figures/plot_reaction_elote_delta_energy_bars.py": "aea3798f99bac5533d0dce471049a68edf6993c4b25b5e03fcfcb7a909e7fd8b",
+    "figures/plot_reaction_elote_delta_energy_bars.py": "6c7f8229a1e6ad98c982b0ac8a67e8e0ac6ec62b29b37e9d6d579043fa315481",
     "figures/plot_reaction_elote_delta_radial.py": "d0aaed28cb549a83757171a40b985d25c9c02c95e4ad8d969efb1fed881239ff",
     "figures/sources/hsopt_autoresearch_loop/README.md": "0ee4bf8c359c5508f8f1d8be018db4bdaed46e4fc3ee408c083169162b3ae065",
     "figures/sources/hsopt_autoresearch_loop/banner.tex": "3f193f8ddd9ff0930e925b9b38e7bdd661e5c4286e950661e203e9a368a83733",

@@ -68,7 +68,9 @@ def main():
     # Match the current panel (b)'s PDF MediaBox exactly, including label space.
     size = (544.414 / 72, 525.8 / 72)
     fig = plt.figure(figsize=size)
-    ax = fig.add_axes([0.175, 0.09, 0.795, 0.825])
+    # Leave enough room for the enlarged value ticks and the complete y label
+    # inside the fixed PDF crop; preserve the right edge of the plotting area.
+    ax = fig.add_axes([0.215, 0.09, 0.755, 0.825])
     ax.set_yscale("log")
     ax.set_ylim(FLOOR, CEILING)
     ax.set_xlim(0.35, 10.65)
