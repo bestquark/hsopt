@@ -33,7 +33,7 @@ def main() -> int:
         "assemble_elote_figure2.py",
         "plot_elote_search_and_energy.py",
         "plot_reaction_elote_delta_radial.py",
-        "plot_reaction_elote_delta_energy_radial.py",
+        "plot_reaction_elote_delta_energy_bars.py",
         "plot_hamlib_molecular_dataset_active_spaces.py",
         "plot_baseline_initialization_vs_qubits.py",
     ):

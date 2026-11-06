@@ -111,16 +111,26 @@
     "hsopt-unsrtnat.bst": "73ecd675b2b878edadb1cefbedc6a8cbec983db63a8d4b966b4b6d336b99afa9",
     "main.tex": "cbf345b49ac8516f87f07a9ba7414f68d4b5a02af5372e07ca09ee6f5edb5a30",
     "nvidiatechreport.cls": "acab8089696fbad75278cc90d9788fcd94fa18f54c97671830e328b906a38a04",
-    "references.bib": "4f06d5699c69b39c0bcf6b1e41b57d0e5c7539b573f8771bc0319f7e015fcbc9",
-    "tex/1_introduction.tex": "6a410f5c364da93e1413e1a135d571f666fd096dfcffd1643a35303d5074f670",
+    "references.bib": "739d04e40e9d6604951d7258ae37f0959320a8e1e137dc7d39064084de2aa764",
+    "tex/1_introduction.tex": "2ab544d9d2267bb8f2763b1a6f351a68f97b3f7ba404f3e0e5a47a048b18afdd",
     "tex/2_method.tex": "979f6750976d614ee42124cdc8d6d1609e7247409f6ebfe49209a6eaa61417d5",
-    "tex/3_experiments.tex": "5308c8ad252189eb53a2e6247070afa2e5e225d2ee42f5b30bfbd6f0444550b9",
-    "tex/4_related_work.tex": "d196b3d9f42806d2646d1cf7f22d9e1b95d15b961c5500ec80c6f4885e35d21d",
+    "tex/3_experiments.tex": "7da0efdd73f61f52b6ff2e12135c3f636a4704e1a2d885f4774fbe6eddc6da2a",
+    "tex/4_related_work.tex": "17372dcfe5f80ae7d233db259be582ca149c1cd97c02063a765a04228d5dd14c",
     "tex/5_conclusion.tex": "a3918703580c0e25c1d3e4898bf39465f56c98699e2beee872135d535900863c",
-    "tex/appendix/0_main.tex": "6445d00374fa59789c159fe61eb92148782b9ce1a49efe6e2a7a280724f15563",
-    "tex/appendix/standard_pf_baseline.tex": "fe85674cec58a9545c5797bb9d4c148344852bb8151c22ef2b8a8bef3173d0f1",
+    "tex/appendix/0_main.tex": "78d67270a471e71838748270d0a756345867d8939480bfae860b2d95fe0e1735",
+    "tex/appendix/standard_pf_baseline.tex": "1d658799e62ad47feec7baa943e4723b98619f6ee9a6b686ec9b26af90ed2f17",
     "tex/appendix/understanding_elote.tex": "fd731309977f38c0ebf58db61b80f793ef5ea1e2d633c434795dc723ed266a21",
     "tex/figure4_reaction_key.tex": "1a5dbb01e9dd9b20ae8c7179969db9a9e0b0c7addcd0c835dfe2f6212239bc06"
+  },
+  "figure4_bar_update": {
+    "bar_endpoints_checked": 40,
+    "base_paper_commit": "cacfd02",
+    "date": "2026-11-06",
+    "description": "Touching policy pairs; solid net errors and faint hatched bounds; maximum allowed error annotation.",
+    "figure": "4",
+    "panel_a_unchanged": true,
+    "paper_commit": "7d79678f59b83d32b76a0c9f1177c597235acfdf",
+    "scientific_inputs_unchanged": true
   },
   "figures": {
     "baseline_initialization_vs_qubits.pdf": {
@@ -148,10 +158,10 @@
       "path": "figures/rendered/hsopt_autoresearch_loop.pdf",
       "sha256": "0b06ab3632c67d6b79203459385b90a420392963d0d711d17b228148d80bbb73"
     },
-    "reaction_elote_delta_a100_energy_radial_log.pdf": {
-      "paper_path": "assets/figures/reaction_elote_delta_a100_energy_radial_log.pdf",
-      "path": "figures/rendered/reaction_elote_delta_a100_energy_radial_log.pdf",
-      "sha256": "b3b39ea981459a1c0f35a6deb23f02854f411be21b0655d5da21573a131bb3f6"
+    "reaction_elote_delta_a100_energy_bars_log.pdf": {
+      "paper_path": "assets/figures/reaction_elote_delta_a100_energy_bars_log.pdf",
+      "path": "figures/rendered/reaction_elote_delta_a100_energy_bars_log.pdf",
+      "sha256": "41942747f59cca76a482861f7bb125370be82ef151061611369fff688c882eb7"
     },
     "reaction_elote_delta_a100_radial_log.pdf": {
       "paper_path": "assets/figures/reaction_elote_delta_a100_radial_log.pdf",
@@ -161,7 +171,7 @@
     "reaction_elote_delta_legend.pdf": {
       "paper_path": "assets/figures/reaction_elote_delta_legend.pdf",
       "path": "figures/rendered/reaction_elote_delta_legend.pdf",
-      "sha256": "411dfff43895133a4bfee9c4fecb46ee7d681272989e5f8142fb39890295b7c6"
+      "sha256": "35ee8a27853c100372186d432b6f814aa92a7751aa3e6c1b344f9011255fadb9"
     }
   },
   "historical_source_files": {
@@ -179,12 +189,13 @@
     "manuscript_pages_pixel_identical": 18,
     "manuscript_raster_dpi": 96,
     "no_new_scientific_evaluations": true,
+    "paper_source_commit": "4e62b9c501d03068279bd2c92935d144b61dc1b2",
     "regenerated_figure_pdfs_pixel_identical": 8,
     "source_document_files_unchanged": 14,
     "table_1_rows_unchanged": true
   },
   "paper_repository": "https://github.com/bestquark/eqd-paper",
-  "paper_source_commit": "4e62b9c501d03068279bd2c92935d144b61dc1b2",
+  "paper_source_commit": "7d79678f59b83d32b76a0c9f1177c597235acfdf",
   "processing_scripts": [
     "figures/assemble_elote_figure2.py",
     "figures/audit.py",
@@ -194,7 +205,7 @@
     "figures/plot_baseline_initialization_vs_qubits.py",
     "figures/plot_elote_search_and_energy.py",
     "figures/plot_hamlib_molecular_dataset_active_spaces.py",
-    "figures/plot_reaction_elote_delta_energy_radial.py",
+    "figures/plot_reaction_elote_delta_energy_bars.py",
     "figures/plot_reaction_elote_delta_radial.py"
   ],
   "processing_source_files": {
@@ -202,13 +213,13 @@
     "figures/_paths.py": "aea17b4f56127ec22c4ad7ab1fe919f37309547c16dca34fa4a9aa193bf7b9e3",
     "figures/assemble_elote_figure2.py": "f0974ea6f9d781fb2fc4d23f3a9109528ef89800d9707a98e5015bc34f3acd2d",
     "figures/audit.py": "af6b527029dfc4215c83cf6943a582ef06f3a303e56169954c2e741a83732182",
-    "figures/build.py": "4c6d6d6a41c4eb902866606980c739d580ec6907a53e69f433f04cccb5a0b9fa",
+    "figures/build.py": "b947eb640f52ad3d40892bfbe20d0ff2be22b17b434548c886940d24258bbe5c",
     "figures/export_elote_seed_effort.py": "d1c7f26a5d1f20b51f77b82bd21000b1c600878a101b2c7b6803a427ace96b2e",
     "figures/plot_autoresearch_histograms.py": "cce03d3da5672546e970e9d56456b370492ad07aaf2404d65eb0610199e4a0db",
     "figures/plot_baseline_initialization_vs_qubits.py": "fa767bac6b867c2db2e7db3f4f15a532b3b10e0c1449a814fe2328479f133f60",
     "figures/plot_elote_search_and_energy.py": "b00b9e88afa466de3c937103a8736b276f99b0bf53d0821f0b0257ca3d7e3309",
     "figures/plot_hamlib_molecular_dataset_active_spaces.py": "a32141c9beccb772655d1283931fecd7d836edfc8e2659dc8dfbace15e5b7750",
-    "figures/plot_reaction_elote_delta_energy_radial.py": "22b85aee596fca03192810a45671295eabfa5862155224d1616910f892eed1ac",
+    "figures/plot_reaction_elote_delta_energy_bars.py": "ea136f7ba967a635aa30dde44faa201856a8fbf9298383017a4b3a9854f7d57a",
     "figures/plot_reaction_elote_delta_radial.py": "d0aaed28cb549a83757171a40b985d25c9c02c95e4ad8d969efb1fed881239ff",
     "figures/sources/hsopt_autoresearch_loop/README.md": "0ee4bf8c359c5508f8f1d8be018db4bdaed46e4fc3ee408c083169162b3ae065",
     "figures/sources/hsopt_autoresearch_loop/banner.tex": "3f193f8ddd9ff0930e925b9b38e7bdd661e5c4286e950661e203e9a368a83733",

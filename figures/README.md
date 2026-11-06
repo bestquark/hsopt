@@ -10,7 +10,7 @@ that manuscript. Its text, captions, equations and table are unchanged.
 | 1: research-loop illustration | `plot_autoresearch_histograms.py`, `sources/hsopt_autoresearch_loop/banner.tex` | `hsopt_autoresearch_loop.pdf` |
 | 2: precision and T95 savings | `assemble_elote_figure2.py` | `elote115_precision_and_compiled_savings.pdf` |
 | 3: five-search progress and energy accuracy | `plot_elote_search_and_energy.py` | `elote115_search_and_energy.pdf` |
-| 4: reaction cost and energy errors | `plot_reaction_elote_delta_radial.py`, `plot_reaction_elote_delta_energy_radial.py` | Two radial PDFs and `reaction_elote_delta_legend.pdf` |
+| 4: reaction cost and energy errors | `plot_reaction_elote_delta_radial.py`, `plot_reaction_elote_delta_energy_bars.py` | Radial cost panel, grouped energy-error bars, and `reaction_elote_delta_legend.pdf` |
 | 5: HamLib census | `plot_hamlib_molecular_dataset_active_spaces.py` | `hamlib_molecular_dataset_active_spaces.pdf` |
 | 6: baseline initialization | `plot_baseline_initialization_vs_qubits.py` | `baseline_initialization_vs_qubits.pdf` |
 
