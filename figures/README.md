@@ -47,7 +47,7 @@ values were changed to repair this historical dependency.
 Panel (a) replays the five retained policies directly from the frozen trajectories.
 Gray curves show each seed's arithmetic mean of baseline-relative T95 over all
 115 Hamiltonians; green shows the lowest of these seed means at each iteration.
-The proposal points include rejected candidates: circles pass chemical accuracy
+The proposal points include rejected candidates: triangles pass chemical accuracy
 on every Hamiltonian, while crosses fail on at least one. Green points come from
 the seed leading after that iteration; their color does not imply acceptance.
 Capped bars show the population standard deviation across the 115 cost ratios.
