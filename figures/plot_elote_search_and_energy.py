@@ -431,17 +431,21 @@ def main():
     fig, axes = plt.subplots(
         1, 2, figsize=(15.8, 5.8), width_ratios=(1, 1), layout="constrained"
     )
-    fig.get_layout_engine().set(rect=(0, 0, 1, 0.87))
+    fig.get_layout_engine().set(rect=(0, 0, 1, 0.93))
     search_handles = search(axes[0], iterations, seed_means, best, proposals)
     energy_handles = energy(axes[1])
-    # One row across both panels accommodates the Figure 2 printed legend size.
-    # This wider PDF needs 21.3 pt here to match Figure 2's 17 pt source text.
-    fig.legend(
-        handles=search_handles + energy_handles,
-        labels=["Best policy", "Independent seeds", r"Pass $\pm 1$ SD", r"Fail $\pm 1$ SD"]
-        + [handle.get_label() for handle in energy_handles],
+    # Separate one-row legends retain the Figure 2 printed font size. The
+    # caption defines the SD bars, allowing compact Pass/Fail labels in (a).
+    axes[0].legend(
+        handles=search_handles,
+        labels=["Best policy", "Independent seeds", "Pass", "Fail"],
         handler_map={tuple: HandlerTuple(ndivide=None, pad=0.0)},
-        loc="upper center", bbox_to_anchor=(0.5, 1.0), ncol=6,
+        loc="lower center", bbox_to_anchor=(0.5, 1.03), ncol=4,
+        fontsize=21.3, handlelength=1.0, columnspacing=0.45, handletextpad=0.3,
+    )
+    axes[1].legend(
+        handles=energy_handles,
+        loc="lower center", bbox_to_anchor=(0.5, 1.03), ncol=len(energy_handles),
         fontsize=21.3, handlelength=1.15, columnspacing=0.8, handletextpad=0.4,
     )
     for i, ax in enumerate(axes):
