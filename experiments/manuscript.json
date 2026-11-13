@@ -219,7 +219,7 @@
     "hsopt_autoresearch_loop.pdf": {
       "paper_path": "assets/figures/hsopt_autoresearch_loop.pdf",
       "path": "figures/rendered/hsopt_autoresearch_loop.pdf",
-      "sha256": "09b41af9745b201880306d013eef18f80c6327a6510039c56b2f0d39c9ce2a65"
+      "sha256": "a3b2e0fab7a578ef10c9671b914155ec115e5958f26de51cf91ef5fab0d71115"
     },
     "reaction_elote_delta_a100_energy_bars_log.pdf": {
       "paper_path": "assets/figures/reaction_elote_delta_a100_energy_bars_log.pdf",
@@ -295,7 +295,7 @@
     "figures/plot_reaction_elote_delta_energy_bars.py": "6c7f8229a1e6ad98c982b0ac8a67e8e0ac6ec62b29b37e9d6d579043fa315481",
     "figures/plot_reaction_elote_delta_radial.py": "d0aaed28cb549a83757171a40b985d25c9c02c95e4ad8d969efb1fed881239ff",
     "figures/sources/hsopt_autoresearch_loop/README.md": "c26e61afba478969a32410a83a6d79f7b0c8de3080bd84df1dfd053fd774e8a2",
-    "figures/sources/hsopt_autoresearch_loop/banner.tex": "6f68c6fbc8c55182d9a2d985c3e48b25074c3e61b847f638a6609812f3f58e35",
+    "figures/sources/hsopt_autoresearch_loop/banner.tex": "ca613fe52dec93472c4016c3ebb50a695c0ab54b2697764b61d8b51804bd6fbb",
     "figures/sources/hsopt_autoresearch_loop/generated-banner.png": "f755048871f44b662287639c1755aadada1e7b409df99ccd0e4ab12f6f55e954",
     "figures/sources/hsopt_autoresearch_loop/imagegen-prompt.txt": "d7622e9f05f0cbeb2f823a587b972890db3296e2674a40ce09affa605ef518c9",
     "figures/sources/hsopt_autoresearch_loop/laptop-edit-prompt.txt": "fafba457da04cee4c1ac6d0793320703ebe0c8624b2cbc5004c5e552b394880b",

@@ -8,6 +8,7 @@
 \definecolor{gategray}{HTML}{F1F3F2}
 \definecolor{green}{HTML}{326A4C}
 \definecolor{palegreen}{HTML}{EDF4EE}
+\newcommand{\contenttop}{420}
 \newcommand{\head}[3]{\node[font=\fontsize{31}{34}\selectfont\bfseries] at (#1,473) {#3};}
 \newcommand{\gate}[3]{\draw[fill=gategray,draw=ink,line width=1.2pt] (#1-21,#2-21) rectangle (#1+21,#2+21);\node[font=\fontsize{29}{32}\selectfont] at (#1,#2) {$#3$};}
 \newcommand{\cx}[3]{\draw[ink,line width=1.5pt] (#1,#2)--(#1,#3);\fill[ink] (#1,#2) circle (4pt);\draw[fill=white,line width=1.5pt] (#1,#3) circle (8pt);\draw[line width=1.3pt] (#1-8,#3)--(#1+8,#3);\draw[line width=1.3pt] (#1,#3-8)--(#1,#3+8);}
@@ -20,16 +21,17 @@
 \head{835}{03}{Circuit}
 \head{1120}{04}{Certify}
 \head{1405}{05}{Select}
+% Each column starts on the same visual top edge below its heading.
 % Larger data panel and type; identical frozen samples and binning.
 \foreach \x/\name/\label in {52/CoH/CoH,144/O3/O_3,236/Na2/Na_2,328/NaLi/NaLi}{
- \node[font=\fontsize{28}{32}\selectfont] at (\x,430) {$\mathrm{\label}$};
- \node at (\x,392) {\includegraphics[width=75pt]{\name.png}};
+ \node[anchor=north,inner sep=0pt,font=\fontsize{28}{32}\selectfont] at (\x,\contenttop) {$\mathrm{\label}$};
+ \node at (\x,370) {\includegraphics[width=75pt]{\name.png}};
 }
-\node at (190,203) {\resizebox{378pt}{!}{\input{coefficient_histograms_2x2.pgf}}};
-\node[font=\fontsize{29}{33}\selectfont] at (520,427) {$H=c_0 I+\sum_j c_j P_j$};
+\node at (190,181) {\resizebox{378pt}{!}{\input{coefficient_histograms_2x2.pgf}}};
+\node[anchor=north,inner sep=0pt,font=\fontsize{29}{33}\selectfont] at (520,\contenttop) {$H=c_0 I+\sum_j c_j P_j$};
 % Original robot, unchanged and clipped in the editable assembly.
 \begin{pgfinterruptboundingbox}
-\begin{scope}[shift={(407,400)},scale=0.64,transform shape,x=1pt,y=-1pt]
+\begin{scope}[shift={(407,378)},scale=0.64,transform shape,x=1pt,y=-1pt]
 \clip (110,0)--(180,0)--(180,40)--(300,40)--(310,140)
  --(270,180)--(270,230)--(265,276)--(355,278)--(355,430)
  --(0,440)--(0,245)--(33,230)--(37,200)--(30,195)
@@ -39,6 +41,7 @@
 \end{scope}
 \end{pgfinterruptboundingbox}
 % Circuit typography enlarged without enlarging the five section headings.
+\begin{scope}[yshift=19pt]
 \foreach \y/\q in {380/0,310/1,240/2,150/{n-1}}{
  \node[anchor=east,font=\fontsize{27}{31}\selectfont] at (711,\y) {$q_{\q}$};
  \draw[line width=1.35pt] (721,\y)--(863,\y);
@@ -52,8 +55,9 @@
 \gate{937}{380}{H}\gate{937}{310}{S}\gate{937}{240}{H}\gate{937}{150}{H}
 \foreach \x in {698,829,937}{\node at (\x,195) {$\vdots$};}
 \node at (835,100) {$U_{\mathcal P}(t)$};
+\end{scope}
 % Error label is horizontal, above the plot, rather than rotated.
-\node[font=\fontsize{30}{34}\selectfont] at (1120,403) {$|E_{\mathcal P}-E_0|$};
+\node[anchor=north,inner sep=0pt,font=\fontsize{30}{34}\selectfont] at (1120,\contenttop) {$|E_{\mathcal P}-E_0|$};
 \fill[palegreen] (1038,150) rectangle (1220,280);
 \draw[-{Latex[length=9pt,width=7pt]},line width=2pt] (1038,150)--(1038,365);
 \draw[line width=1.5pt] (1038,150)--(1220,150);
@@ -80,7 +84,7 @@
 \node[anchor=west,text=muted,font=\fontsize{26}{30}\selectfont\ttfamily] at (1305,143) {split\_b(H,dt)};
 \node[anchor=west,text=muted,font=\fontsize{26}{30}\selectfont\ttfamily] at (1305,110) {eps=g(c,w)};
 \foreach \a/\b in {383/411,641/677,975/1005,1241/1270}{\draw[-{Latex[length=15pt,width=12pt]},line width=4.5pt,preaction={draw=white,line width=10pt}] (\a,250)--(\b,250);}
-\draw[-{Latex[length=15pt,width=12pt]},green,line width=4.5pt,rounded corners=12pt] (1405,65)--(1405,24)--(520,24)--(520,108);
+\draw[-{Latex[length=15pt,width=12pt]},green,line width=4.5pt,rounded corners=12pt] (1405,65)--(1405,24)--(520,24)--(520,86);
 \node[fill=white,inner xsep=14pt,text=green,font=\fontsize{28}{32}\selectfont] at (930,24) {Autoresearch};
 \end{tikzpicture}
 \end{document}
