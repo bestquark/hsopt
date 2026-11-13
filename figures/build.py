@@ -41,7 +41,7 @@ def main() -> int:
     banner = output / ".build/banner"
     shutil.copytree(scripts / "sources/hsopt_autoresearch_loop", banner, dirs_exist_ok=True)
     shutil.copyfile(
-        output / ".build/coefficient_histograms_2x2.pdf", banner / "coefficient_histograms_2x2.pdf"
+        output / ".build/coefficient_histograms_2x2.pgf", banner / "coefficient_histograms_2x2.pgf"
     )
     subprocess.run(
         ["pdflatex", "-interaction=nonstopmode", "-halt-on-error", "banner.tex"],
