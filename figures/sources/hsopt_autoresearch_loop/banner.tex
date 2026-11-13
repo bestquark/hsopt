@@ -21,14 +21,14 @@
 \head{835}{03}{Circuit}
 \head{1120}{04}{Certify}
 \head{1405}{05}{Select}
-% Each column starts on the same visual top edge below its heading.
+% Molecule labels and the Hamiltonian share the selection cards' top edge.
 % Larger data panel and type; identical frozen samples and binning.
 \foreach \x/\name/\label in {52/CoH/CoH,144/O3/O_3,236/Na2/Na_2,328/NaLi/NaLi}{
  \node[anchor=north,inner sep=0pt,font=\fontsize{28}{32}\selectfont] at (\x,\contenttop) {$\mathrm{\label}$};
  \node at (\x,370) {\includegraphics[width=75pt]{\name.png}};
 }
 \node at (190,181) {\resizebox{378pt}{!}{\input{coefficient_histograms_2x2.pgf}}};
-\node[anchor=north,inner sep=0pt,font=\fontsize{29}{33}\selectfont] at (520,\contenttop) {$H=c_0 I+\sum_j c_j P_j$};
+\node[anchor=north,inner sep=0pt,font=\fontsize{29}{33}\selectfont] at (520,\contenttop) {$H=c_0 I+\mathop{\Sigma}\nolimits_j c_j P_j$};
 % Original robot, unchanged and clipped in the editable assembly.
 \begin{pgfinterruptboundingbox}
 \begin{scope}[shift={(407,378)},scale=0.64,transform shape,x=1pt,y=-1pt]
@@ -40,8 +40,8 @@
  {\includegraphics[width=2172pt,height=724pt]{generated-banner.png}};
 \end{scope}
 \end{pgfinterruptboundingbox}
-% Circuit typography enlarged without enlarging the five section headings.
-\begin{scope}[yshift=19pt]
+% Center the circuit body within the combined height of the selection cards.
+\begin{scope}[yshift=3pt]
 \foreach \y/\q in {380/0,310/1,240/2,150/{n-1}}{
  \node[anchor=east,font=\fontsize{27}{31}\selectfont] at (711,\y) {$q_{\q}$};
  \draw[line width=1.35pt] (721,\y)--(863,\y);
@@ -57,6 +57,8 @@
 \node at (835,100) {$U_{\mathcal P}(t)$};
 \end{scope}
 % Error label is horizontal, above the plot, rather than rotated.
+% Center this panel alongside the circuit and selection cards.
+\begin{scope}[yshift=-16pt]
 \node[anchor=north,inner sep=0pt,font=\fontsize{30}{34}\selectfont] at (1120,\contenttop) {$|E_{\mathcal P}-E_0|$};
 \fill[palegreen] (1038,150) rectangle (1220,280);
 \draw[-{Latex[length=9pt,width=7pt]},line width=2pt] (1038,150)--(1038,365);
@@ -70,6 +72,7 @@
 \draw[muted,line width=3pt,line cap=round] (1168,328)--(1182,342) (1168,342)--(1182,328);
 \node[text=green] at (1095,124) {$\mathcal P_a$};
 \node[text=muted] at (1175,124) {$\mathcal P_b$};
+\end{scope}
 % Shorter lines leave room for larger monospaced text.
 \draw[green,fill=palegreen,line width=1.3pt,rounded corners=4pt] (1280,260) rectangle (1515,420);
 \node[anchor=west,text=green,font=\fontsize{30}{34}\selectfont] at (1292,395) {$\mathcal P_a$};
