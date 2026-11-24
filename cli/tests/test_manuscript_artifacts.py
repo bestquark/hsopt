@@ -88,4 +88,4 @@ def test_figures_directory_contains_only_current_reproduction_dependencies():
     assert FIGURES / "plot_autoresearch_histograms.py" in used
     assert FIGURES / "_coefficient_data.py" in used
     banner = (FIGURES / "sources/hsopt_autoresearch_loop/banner.tex").read_text()
-    assert "{coefficient_histograms_2x2.pdf}" in banner
+    assert "{coefficient_histograms_2x2.pgf}" in banner
