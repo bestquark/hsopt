@@ -1,7 +1,3 @@
-<p align="center">
-  <img src="docs/assets/hsopt-logo.png" alt="HSOpt logo" width="760">
-</p>
-
 # HSOpt
 
 HSOpt searches for shared product-formula protocols that reduce fault-tolerant
