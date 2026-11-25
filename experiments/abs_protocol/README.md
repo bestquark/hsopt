@@ -1,6 +1,6 @@
 # Shared absolute-energy protocol
 
-For a fresh grouped baseline, see [ELOTE](../../docs/elote.md) and select
+For a fresh grouped baseline, see [ELOTE](../../skills/hsopt/references/elote.md) and select
 `--policy-profile fermionic_nested` with its newly prepared calibration records.
 The existing `pauli` profile retains the historical initializer.
 
@@ -83,7 +83,7 @@ and uncertain writes remain invalid.
 
 ## Train/test generalization
 
-The default source registry is [`baseline/molecules.json`](../../baseline/molecules.json),
+The default source registry is [`experiments/baseline/molecules.json`](../baseline/molecules.json),
 with all 115 molecular training Hamiltonians through 16 qubits. Materialize it with:
 
 ```bash

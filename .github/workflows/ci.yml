@@ -34,7 +34,7 @@ jobs:
           bash "$RUNNER_TEMP/cudaq.run" --tar xf ./cudaq/cudaq ./cudaq/lib ./cudaq/targets ./cudaq/LICENSE ./cudaq/LICENSES ./cudaq/NOTICE
           echo "PYTHONPATH=$RUNNER_TEMP/cudaq-sdk/cudaq" >> "$GITHUB_ENV"
       - name: Check formatting
-        run: uv run --extra chemistry ruff format --check cli/src cli/tests
+        run: uv run --extra chemistry ruff format --check skills tests
       - name: Lint
         run: uv run --extra chemistry ruff check .
       - name: Test runtime, installed commands, and CPU examples

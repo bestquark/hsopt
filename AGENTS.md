@@ -1,13 +1,14 @@
 # hsopt Exact-Unitary Campaign Notes
 
 The production paper workflow is the exact compiled-unitary pipeline in
-`cli/src/hsopt/evaluation/compiled_unitary.py`,
-`cli/src/hsopt/campaign/queue.py`, and
-`cli/src/hsopt/campaign/loop.py`. All checked-in benchmark fixtures,
-paper protocols, and support files live under `experiments/`.
+`skills/hsopt/evaluation/compiled_unitary.py`,
+`skills/hsopt/campaign/queue.py`, and
+`skills/hsopt/campaign/loop.py`. `skills/hsopt/` is both the agent skill and
+the installable `hsopt` package. Paper protocols and their baseline inputs live
+under `experiments/`; frozen released results live under `results/`.
 
 Use `$hsopt` for product-formula T-gate optimization. Execution is provided by
-the external runtime through `hsopt-handoff`; see `docs/runtime.md`.
+the external runtime through `hsopt-handoff`; see `skills/hsopt/references/runtime.md`.
 
 ## Immutable scientific ordering
 
@@ -41,7 +42,7 @@ are not acceptance metrics.
 
 ## Immutable baseline
 
-`baseline/generate_initial_pf.py` defines the compact `ProductFormula` and is the sole generator of
+`experiments/baseline/generate_initial_pf.py` defines the compact `ProductFormula` and is the sole generator of
 `initial_pf_loose.py` and `initial_pf_tight.py`. Both require sealed calibration
 data and embed the Reiher--Wiebe--Svore--Wecker--Troyer citation,
 lexicographic PF2/Strang structure, `beta(H)` referenced to 0.1 mHa, the
@@ -50,18 +51,18 @@ the same paper Eq. (34) Trotter/QPE/rotation-error allocation with a
 1 kcal/mol total target. The exact reference must not affect the loose policy;
 it intentionally selects the numeric beta used by the tight policy.
 Calibration math and sealed-record preparation live in
-`cli/src/hsopt/campaign/calibration.py`; the generator forwards its existing API.
+`skills/hsopt/campaign/calibration.py`; the generator forwards its existing API.
 
 The separately selected `fermionic_nested` profile starts from
-`baseline/initial_nested_pf.py`. `hsopt-elote prepare` calibrates its own
+`experiments/baseline/initial_nested_pf.py`. `hsopt-elote prepare` calibrates its own
 orbital-disjoint grouped PF2 and validates its unchanged compiled iteration 0;
 never reinterpret historical Pauli calibrations as nested calibrations.
 `--policy-profile fermionic_nested` selects this initializer for a NEW shared
 experiment. The explicit ELOTE interface and reproduction boundaries are in
-`docs/elote.md`. ELOTE names the learned protocol; HSOpt remains
+`skills/hsopt/references/elote.md`. ELOTE names the learned protocol; HSOpt remains
 the search framework. Keep running campaigns on their pinned source and inputs.
 
-Input metadata lives only in `baseline/molecules.json` and `baseline/reactions.json`.
+Input metadata lives only in `experiments/baseline/molecules.json` and `experiments/baseline/reactions.json`.
 The single-instance experiment trees and generated baseline copies are archived on
 `single_molecule`; do not recreate them in main. Use `hsopt-data export` for
 external CSV/JSON preparation views and `hsopt-layout --check` for registry checks.
@@ -96,12 +97,12 @@ Loose/tight roots and reaction contracts remain separate on every backend.
 Treat these as fixed during a campaign unless the user explicitly changes the
 benchmark framework:
 
-- `cli/src/hsopt/evaluation/compiled_unitary.py`
-- `cli/src/hsopt/campaign/queue.py`
-- `cli/src/hsopt/campaign/loop.py`
-- `cli/src/hsopt/campaign/baseline_batch.py`
-- `baseline/generate_initial_pf.py` (the compact baseline policy and generator)
-- `cli/src/hsopt/campaign/calibration.py` (baseline math and sealed calibration records)
+- `skills/hsopt/evaluation/compiled_unitary.py`
+- `skills/hsopt/campaign/queue.py`
+- `skills/hsopt/campaign/loop.py`
+- `skills/hsopt/campaign/baseline_batch.py`
+- `experiments/baseline/generate_initial_pf.py` (the compact baseline policy and generator)
+- `skills/hsopt/campaign/calibration.py` (baseline math and sealed calibration records)
 
 Campaign histories belong outside the checkout. Preserve every round's candidate,
 per-case results, aggregate decision, sealed inputs and evaluator identity. Replays
@@ -131,9 +132,12 @@ Do not regenerate beta calibrations when changing this selected scoring contract
 Current figure generators and released figures live in `figures/`; data processing
 for manuscript figures belongs there. Keep only active manuscript generators and
 their build/audit/table support in this directory. Numerical test helpers belong
-in `cli/tests/helpers/`, and one-time exporters stay in their archived commit.
-Frozen candidate/decision/case-metric exports and plotting inputs live under the
-matching `experiments/*/results/` directories.
+in `tests/helpers/`, and one-time exporters stay in their archived commit.
+The development history before `main` was squashed, including that commit, is
+kept under the tag `history-pre-squash-20261124`.
+Frozen candidate/decision/case-metric exports and plotting inputs live under
+`results/`: `elote/` and `delta_elote/` hold the released policies, `paper/` the
+manuscript figure data.
 `experiments/manuscript.json` maps these inputs to their unchanged manuscript assets.
 Never export credentials, raw sandbox messages or mutable dispatcher state. Preserve
 all reported policy and source hashes; scientific aggregate values are not compiler

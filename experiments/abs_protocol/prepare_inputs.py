@@ -15,7 +15,7 @@ def main():
     root = Path(__file__).resolve().parents[2]
     if args.output.resolve().is_relative_to(root):
         parser.error("generated inputs belong outside the Git checkout")
-    selection = root / "baseline/molecules.json"
+    selection = root / "experiments/baseline/molecules.json"
     checksums = selection
     if args.download:
         download_hamlib(selection, checksums, args.archive_root)

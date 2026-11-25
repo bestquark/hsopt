@@ -76,11 +76,11 @@ legend PDF at `0.613\linewidth` in the manuscript to match that same size.
 
 ## Scientific trajectories and measured results
 
-- [Molecular exports](../experiments/abs_protocol/results/elote115-paper/README.md):
+- [Molecular exports](../results/paper/elote115-paper/README.md):
   five searches, 100 mutations each, all proposed policy bytes and decisions.
-- [Reaction exports](../experiments/diff_protocol/results/delta-elote-paper/README.md):
+- [Reaction exports](../results/delta_elote/README.md):
   five searches, 50 mutations each, initialized from the actual transferred ELOTE.
-- [HamLib diagnostics](../experiments/abs_protocol/results/hamlib-diagnostics/README.md):
+- [HamLib diagnostics](../results/paper/hamlib-diagnostics/README.md):
   the census, baseline-initialization sample and exact Figure 1 coefficient samples.
 
 Every proposal retains all scored case metrics, including failed or uncertified
@@ -101,7 +101,7 @@ missing. Regenerate its embedded rows outside the manuscript:
 
 ```bash
 uv run python figures/export_elote_seed_effort.py \
-  --snapshot experiments/abs_protocol/results/elote115-paper/elote_understanding/seed_effort.json \
+  --snapshot results/paper/elote115-paper/elote_understanding/seed_effort.json \
   --output figures/generated/table1
 ```
 
@@ -115,5 +115,5 @@ Optional older figure frontends and superseded images are preserved on
 Only the seven figure generators listed above, their two shared Python helpers,
 `build.py`, `audit.py`, and the Table 1 exporter remain here. Figure 1 retains its
 coefficient-histogram generator and original LaTeX banner assembly. Numerical
-test support lives under `cli/tests/helpers/figure_numerics/`, outside this folder;
+test support lives under `tests/helpers/figure_numerics/`, outside this folder;
 it does not add any manuscript figures.

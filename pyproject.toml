@@ -61,21 +61,19 @@ build-backend = "uv_build"
 package = true
 
 [tool.uv.build-backend]
-module-root = "cli/src"
+module-root = "skills"
 source-exclude = ["figures/generated/**"]
 source-include = [
-  "baseline/**",
   "experiments/**",
-  "cli/tests/**",
-  "docs/**",
+  "results/**",
+  "tests/**",
   "figures/**",
-  "skills/**",
   "AGENTS.md",
   "uv.lock",
 ]
 
 [tool.pytest.ini_options]
-testpaths = ["cli/tests"]
+testpaths = ["tests"]
 
 [tool.ruff]
 line-length = 100

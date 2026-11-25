@@ -1,6 +1,6 @@
 # Shared reaction-energy protocol
 
-For a fresh grouped baseline, see [ELOTE](../../docs/elote.md) and select
+For a fresh grouped baseline, see [ELOTE](../../skills/hsopt/references/elote.md) and select
 `--policy-profile fermionic_nested` with new calibrations for every species.
 Reaction preparation apportions their budgets by stoichiometric weight; the
 whole reaction iteration 0 must still pass before mutations can begin.

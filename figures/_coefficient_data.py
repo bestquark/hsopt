@@ -89,7 +89,7 @@ def apply_mlp_style() -> None:
 
 
 def coefficient_magnitudes(instance):
-    path = ROOT / "experiments/abs_protocol/results/hamlib-diagnostics/schematic_coefficients.npz"
+    path = ROOT / "results/paper/hamlib-diagnostics/schematic_coefficients.npz"
     with np.load(path, allow_pickle=False) as archive:
         metadata = json.loads(str(archive["metadata_json"]))
         key = instance.archive.removesuffix(".zip")

@@ -3,13 +3,13 @@
 ## Best released molecular ELOTE
 
 The best feasible molecular protocol from the **five completed 100-mutation
-searches** is saved in [`results/elote115/`](results/elote115/README.md):
+searches** is saved in [`results/elote/`](../../results/elote/README.md):
 
-- [`best_policy.py`](results/elote115/best_policy.py): the exact selected policy,
+- [`best_policy.py`](../../results/elote/best_policy.py): the exact selected policy,
   SHA-256 `d199f6a4efef965aa015dbd73f69d14f628fd1b9eaa3653391dad8e3a75e472e`.
-- [`training_parameters.json`](results/elote115/training_parameters.json): the
+- [`training_parameters.json`](../../results/elote/training_parameters.json): the
   115 sealed baseline parameter rows that the host binds to the shared policy.
-- [`manifest.json`](results/elote115/manifest.json): selection, hashes, metric
+- [`manifest.json`](../../results/elote/manifest.json): selection, hashes, metric
   definitions, validation results and source provenance.
 
 Its geometric-mean QPE-inclusive $T_{95}$ is **0.151756 times the tight baseline**

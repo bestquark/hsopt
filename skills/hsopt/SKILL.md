@@ -5,7 +5,7 @@ description: Run or inspect exact compiled-unitary T-gate autoresearch for HSOpt
 
 # HSOpt product-formula autoresearch
 
-The repository runtime is ordinary package code under `cli/src/hsopt/`; this skill defines the mutation contract.
+The repository runtime is ordinary package code in this folder (`skills/hsopt/`); this skill defines the mutation contract.
 
 OpenShell mutation agents receive the short [mutation brief](references/mutation.md),
 their exact API and selected benchmark context. Operator instructions below are
@@ -66,7 +66,7 @@ trusted Hamiltonian and repeats the exact returned schedule. The method may
 define PF1, PF2/Strang, a higher-order composition, grouping, reordered terms,
 or another stationary recurrence; no declared `formula_order` is required.
 Called **once** per species; at most 16 times the term count. For explicit groups,
-splitting stages, Clifford frames and the learned **ELOTE** protocol, see `docs/elote.md`.
+splitting stages, Clifford frames and the learned **ELOTE** protocol, see `references/elote.md`.
 
 Angles may vary by label, coefficient, support, or species, including negative
 substeps and corrections. The judge compiles `Rz(-2 * angle)` and scores energy;
@@ -127,7 +127,7 @@ After complete matched loose/tight iteration-0 censuses, `hsopt-baseline-drop`
 records `100 * (T95_loose - T95_tight) / T95_loose` per experiment/contract.
 Require matching grids, hashes, contracts, backends, accelerators, placement,
 and accuracy; never pool hardware.
-Use `uv run`; see `cli/README.md` for setup and `references/layout.md` for layout.
+Use `uv run`; see `references/cli.md` for setup and `references/layout.md` for layout.
 The external runtime uses `hsopt-handoff` to dispatch evaluations, deliver results, record acceptance,
-and resume mutations; see `docs/runtime.md`.
+and resume mutations; see `references/runtime.md`.
 Compute configuration belongs to the deployment; scientific evaluators and acceptance stay fixed.

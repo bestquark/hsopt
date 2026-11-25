@@ -14,7 +14,7 @@ the supplied PNGs and LaTeX, with no browser or npm installation.
 
 The coefficient inset is native PGF, so the figure is typeset in a single LaTeX
 run without nested-PDF font conflicts. It uses the unchanged pinned HamLib arrays in
-`experiments/abs_protocol/results/hamlib-diagnostics/schematic_coefficients.npz`.
+`results/paper/hamlib-diagnostics/schematic_coefficients.npz`.
 The energy-error points, circuit and candidate code are schematic rather than
 recorded evaluations. Candidate acceptance additionally requires a lower objective,
 as described in the manuscript.

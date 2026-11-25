@@ -6,33 +6,37 @@ energy-estimation costs while preserving a fixed accuracy target. **ELOTE**
 **δ-ELOTE** optimizes signed reaction-energy differences. The fixed evaluator
 uses literal CUDA-Q Clifford+T synthesis and matrix-free GPU Lanczos.
 
-The best released molecular ELOTE is in
-[`experiments/elote_search/results/elote115/`](experiments/elote_search/results/elote115/README.md),
-with its exact policy, all 115 training parameter rows, validation results and
-checksummed provenance.
+The protocols the agent found are in [`results/`](results/README.md): the
+molecular ELOTE in [`results/elote/`](results/elote/README.md), with its exact
+policy, all 115 training parameter rows, validation results and checksummed
+provenance, and the reaction δ-ELOTE in
+[`results/delta_elote/`](results/delta_elote/README.md).
 
 ## Repository layout
 
 ```text
-baseline/
-    molecules.json          Molecular selections and pinned HamLib archive hashes
-    reactions.json          Reaction/species definitions and historical cache audit
-    initial_nested_pf.py    Shared grouped PF2 starting-policy template
-    generate_initial_pf.py  Compact Pauli PF2 generator for sealed calibrations
+skills/hsopt/               The agent skill and its Python package
+    SKILL.md                Mutation-agent instructions
+    references/             ELOTE interface, runtime contract, reproduction and CLI guides
+    campaign/ evaluation/ sandbox/ search/ data/ ...
+                            Preparation, evaluator, search and sandbox implementation
+results/
+    elote/                  Released molecular ELOTE policy, parameters and validation
+    delta_elote/            Released reaction δ-ELOTE policy and its search record
+    paper/                  Frozen data behind the manuscript figures
 experiments/
+    baseline/               Input registries and starting-policy templates
     abs_protocol/           Shared molecular ELOTE optimization
     diff_protocol/          Shared reaction δ-ELOTE optimization
-    elote_search/           Agent/PySR comparisons and released protocols
-cli/src/hsopt/              Preparation, evaluator, search and sandbox implementation
-cli/tests/                 Scientific checks and small executable fixtures
-figures/                   Publication-plot source code
-skills/hsopt/              Mutation-agent instructions
+    elote_search/           Agent/PySR search comparison
+tests/                      Scientific checks and small executable fixtures
+figures/                    Publication-plot source code
 ```
 
 Single-molecule and single-reaction experiment folders, their generated
 initializers, and their original reproduction instructions are preserved on
 [the `single_molecule` branch](https://github.com/bestquark/hsopt/tree/single_molecule).
-`main` uses the compact [baseline registries](baseline/README.md). Generated
+`main` uses the compact [baseline registries](experiments/baseline/README.md). Generated
 Hamiltonians, calibrated policies, references, campaigns, caches and raw traces
 belong in an external `hsopt_workdir/`.
 
@@ -48,12 +52,12 @@ uv run hsopt-layout --check
 ```
 
 Linux installs the pinned CUDA-Q synthesis package. Apple silicon requires
-[the CUDA-Q CPU installation](docs/synthesis.md#apple-silicon). The included
+[the CUDA-Q CPU installation](skills/hsopt/references/synthesis.md#apple-silicon). The included
 small fixtures can then be evaluated without an agent:
 
 ```bash
-uv run python cli/tests/fixtures/abs_energy_h2/evaluate.py --backend numpy
-uv run python cli/tests/fixtures/diff_energy_h2_bond_stretch/evaluate.py \
+uv run python tests/fixtures/abs_energy_h2/evaluate.py --backend numpy
+uv run python tests/fixtures/diff_energy_h2_bond_stretch/evaluate.py \
   --error-contract error_cancellation --backend numpy
 ```
 
@@ -62,7 +66,7 @@ they do not fall back to dense diagonalization.
 
 ## Prepare and optimize a shared protocol
 
-Follow [the reproduction guide](docs/reproduce.md) to acquire checksummed
+Follow [the reproduction guide](skills/hsopt/references/reproduce.md) to acquire checksummed
 HamLib inputs, generate reaction species, prepare exact references and grouped
 baselines, and construct an external selection. The default molecular registry
 contains the 115 training Hamiltonians through 16 qubits. Historical 100- and
@@ -84,14 +88,14 @@ signed-difference constraint, with isolated histories for each.
 
 The agent may change repetitions, grouping, splitting, ordering, rotation
 angles, mixed synthesis precision and supported Clifford frames. The executable
-`ProductFormula` defines the algorithm; [the ELOTE interface](docs/elote.md)
+`ProductFormula` defines the algorithm; [the ELOTE interface](skills/hsopt/references/elote.md)
 describes its validated boundaries. Calibration values, reference states,
 Hamiltonians, physical times and acceptance thresholds remain fixed.
 
 - [Molecular protocol workflow](experiments/abs_protocol/README.md)
 - [Reaction protocol workflow](experiments/diff_protocol/README.md)
 - [Agent-only, PySR-only and hybrid comparison](experiments/elote_search/README.md)
-- [Portable worker/runtime contract](docs/runtime.md)
+- [Portable worker/runtime contract](skills/hsopt/references/runtime.md)
 
 ## Installation
 
@@ -113,8 +117,10 @@ uv sync --extra cupynumeric
 
 ## Agent skill
 
-[`skills/hsopt/SKILL.md`](skills/hsopt/SKILL.md) defines the mutation contract;
-the runtime lives separately in `cli/src/hsopt/`. The agent reads its policy,
+[`skills/hsopt/SKILL.md`](skills/hsopt/SKILL.md) defines the mutation contract,
+and the same folder is the installable `hsopt` Python package that runs it. A
+mutation sandbox receives only the short mutation brief, never the runtime
+source. The agent reads its policy,
 research context and required benchmark inputs before editing. It can explore
 new product formulas and mixed precision while the host preserves sealed
 inputs, calibration and evaluation constraints.
@@ -124,10 +130,10 @@ inputs, calibration and evaluation constraints.
 ```bash
 uv sync --extra chemistry
 uv run hsopt-layout --check
-uv run ruff check cli/src cli/tests
+uv run ruff check .
 OPENBLAS_NUM_THREADS=1 OMP_NUM_THREADS=1 uv run pytest -q
 uv build
 ```
 
-The [CLI guide](cli/README.md) describes the runtime and mutation audit. Plot
+The [CLI guide](skills/hsopt/references/cli.md) describes the runtime and mutation audit. Plot
 sources and reproduction notes live in [figures/](figures/README.md).
