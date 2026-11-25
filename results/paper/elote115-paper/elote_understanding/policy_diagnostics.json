@@ -1,0 +1,893 @@
+{
+  "schema": "elote-understanding-v1",
+  "source_snapshot": "/Users/lmantilla/Desktop/Internship/autoresearch/hsopt_workdir/runtime/operations/elote-paper-final-20261027/precision100",
+  "policy_sha256": "d199f6a4efef965aa015dbd73f69d14f628fd1b9eaa3653391dad8e3a75e472e",
+  "seed": "seed-05",
+  "iteration": 100,
+  "case_count": 115,
+  "checked_best_rotation_rows": 146486,
+  "maximum_relative_factorization_error": 6.661338147750939e-16,
+  "maximum_relative_policy_method_error": 7.771561172376096e-16,
+  "clamped_best_rows": 0,
+  "formula": {
+    "epsilon_j_over_epsilon0": "(1+1.2*x_j^0.1)*(1+0.12*(w_j-1)/W)*D_j*G_H",
+    "x_j": "abs(c_j)/c_ref; c_ref is the largest absolute Pauli contribution in the verified fermionic blocks, before aggregation",
+    "w_j": "number of nonidentity letters in P_j",
+    "z_j": "number of Z letters in P_j",
+    "q_j": "number of X or Y letters in P_j",
+    "W": "maximum Pauli support in the verified block map; equal to observed maximum support for all 115 cases",
+    "D_j_diagonal": "(1+1.2*x_j)*(1+0.18*z_j/W*(1+0.2*x_j))",
+    "D_j_off_diagonal": "1+0.3*q_j/W*(1+0.2*x_j)",
+    "G_H": "1+0.12*(c_ref/max(1,W))^0.3, with coefficients represented numerically in Hartree",
+    "clamp": "epsilon_j=min(1-1e-15,max(1e-15,epsilon0*all_factors)); inactive for every recorded best row",
+    "direct_angle_factor": 1
+  },
+  "schedule": {
+    "basis_change": "identity (empty Clifford frame)",
+    "order": "flat lexicographic first-order Lie product formula, one signed coefficient times step_time per label",
+    "groups_method": "defined but not called by build_step; does not create active grouping",
+    "r_unchanged_all_cases": true,
+    "r_range": [
+      1,
+      3
+    ],
+    "same_case_label_set": true,
+    "same_case_label_count": 146486,
+    "maximum_summed_signed_angle_difference_rad": 5.551115123125783e-17,
+    "zero_angle_interpretation": "Zero total aggregated coefficients yield identity rotations; the policy does not threshold-prune nonzero coefficients. Zero T synthesis counts cannot be inferred from this export.",
+    "counts": {
+      "baseline": {
+        "distinct_label_angle_rows": 272261,
+        "pooled_one_step_entries": 642413,
+        "pooled_one_step_zero_angles": 0,
+        "pooled_one_step_nonzero_angles": 642413,
+        "full_evolution_entries": 729809,
+        "full_evolution_zero_angles": 0,
+        "full_evolution_nonzero_angles": 729809
+      },
+      "best": {
+        "distinct_label_angle_rows": 146486,
+        "pooled_one_step_entries": 146486,
+        "pooled_one_step_zero_angles": 53024,
+        "pooled_one_step_nonzero_angles": 93462,
+        "full_evolution_entries": 166778,
+        "full_evolution_zero_angles": 59924,
+        "full_evolution_nonzero_angles": 106854
+      }
+    }
+  },
+  "epsilon_ratio_range": [
+    1.0967169231568286,
+    9.810525668011076
+  ],
+  "coefficient_reference_ratio_range": [
+    0.11821567616955146,
+    2.4099601884484465
+  ],
+  "source_files": {
+    "best_policy.py": "d199f6a4efef965aa015dbd73f69d14f628fd1b9eaa3653391dad8e3a75e472e",
+    "molecules.csv": "315b75d23d4618600b3384699440138e6aef5f4152a161c4b81a345bd47f5e8c",
+    "rotations.csv.gz": "026d75f741d0d2a3a2555a16be2182557dd7f0032c5a838a72836bf5dbdea6a0"
+  },
+  "per_case": [
+    {
+      "case_id": "0256_hydrogen_data_H2_ES_H2_linear_R0.5_sto-6g_ham_JW",
+      "c_ref": 0.7078514576313858,
+      "W": 4,
+      "cmax_over_cref": 0.5195475504842059,
+      "system_factor": 1.0713749616429482
+    },
+    {
+      "case_id": "0257_hydrogen_data_H2_ES_H2_linear_R0.6_sto-6g_ham_JW",
+      "c_ref": 0.6734405398660323,
+      "W": 4,
+      "cmax_over_cref": 0.4417569592177031,
+      "system_factor": 1.0703158167438502
+    },
+    {
+      "case_id": "0258_hydrogen_data_H2_ES_H2_linear_R0.7_sto-6g_ham_JW",
+      "c_ref": 0.6411066345251075,
+      "W": 4,
+      "cmax_over_cref": 0.3763950270394228,
+      "system_factor": 1.069285495949367
+    },
+    {
+      "case_id": "0259_hydrogen_data_H2_ES_H2_linear_R0.8_sto-6g_ham_JW",
+      "c_ref": 0.6109950114638596,
+      "W": 4,
+      "cmax_over_cref": 0.32037063141556676,
+      "system_factor": 1.0682927416360832
+    },
+    {
+      "case_id": "0260_hydrogen_data_H2_ES_H2_linear_R0.9_sto-6g_ham_JW",
+      "c_ref": 0.5830886234805885,
+      "W": 4,
+      "cmax_over_cref": 0.2873847111723142,
+      "system_factor": 1.0673416291970135
+    },
+    {
+      "case_id": "0261_hydrogen_data_H2_ES_H2_linear_R1.0_sto-6g_ham_JW",
+      "c_ref": 0.5573000832649377,
+      "W": 4,
+      "cmax_over_cref": 0.2931584151936632,
+      "system_factor": 1.066433935580522
+    },
+    {
+      "case_id": "0262_hydrogen_data_H2_ES_H2_linear_R1.1_sto-6g_ham_JW",
+      "c_ref": 0.5335144965173074,
+      "W": 4,
+      "cmax_over_cref": 0.2988455011698613,
+      "system_factor": 1.0655702917433003
+    },
+    {
+      "case_id": "0263_hydrogen_data_H2_ES_H2_linear_R1.2_sto-6g_ham_JW",
+      "c_ref": 0.5116112120686225,
+      "W": 4,
+      "cmax_over_cref": 0.3044263048831471,
+      "system_factor": 1.064750818815489
+    },
+    {
+      "case_id": "0264_hydrogen_data_H2_ES_H2_linear_R1.3_sto-6g_ham_JW",
+      "c_ref": 0.4914747483891833,
+      "W": 4,
+      "cmax_over_cref": 0.3098775223685688,
+      "system_factor": 1.0639754885916417
+    },
+    {
+      "case_id": "0265_hydrogen_data_H2_ES_H2_linear_R1.4_sto-6g_ham_JW",
+      "c_ref": 0.4729979582422438,
+      "W": 4,
+      "cmax_over_cref": 0.31517264273148093,
+      "system_factor": 1.063244247339201
+    },
+    {
+      "case_id": "0266_hydrogen_data_H2_ES_H2_linear_R1.5_sto-6g_ham_JW",
+      "c_ref": 0.45608079580124206,
+      "W": 4,
+      "cmax_over_cref": 0.3202830524278425,
+      "system_factor": 1.0625569814147284
+    },
+    {
+      "case_id": "0267_hydrogen_data_H2_ES_H2_linear_R1.6_sto-6g_ham_JW",
+      "c_ref": 0.44062764329155557,
+      "W": 4,
+      "cmax_over_cref": 0.32517976789091824,
+      "system_factor": 1.061913416595933
+    },
+    {
+      "case_id": "0268_hydrogen_data_H2_ES_H2_linear_R1.7_sto-6g_ham_JW",
+      "c_ref": 0.42654488031167004,
+      "W": 4,
+      "cmax_over_cref": 0.3298355903198886,
+      "system_factor": 1.0613130144535932
+    },
+    {
+      "case_id": "0269_hydrogen_data_H2_ES_H2_linear_R1.8_sto-6g_ham_JW",
+      "c_ref": 0.41373941504508027,
+      "W": 4,
+      "cmax_over_cref": 0.334227295941562,
+      "system_factor": 1.060754900994236
+    },
+    {
+      "case_id": "0270_hydrogen_data_H2_ES_H2_linear_R1.9_sto-6g_ham_JW",
+      "c_ref": 0.40211830921441816,
+      "W": 4,
+      "cmax_over_cref": 0.33833741902770764,
+      "system_factor": 1.060237841718654
+    },
+    {
+      "case_id": "0271_hydrogen_data_H2_ES_H2_linear_R2.0_sto-6g_ham_JW",
+      "c_ref": 0.3915892577896059,
+      "W": 4,
+      "cmax_over_cref": 0.3421553345722741,
+      "system_factor": 1.059760260167764
+    },
+    {
+      "case_id": "0272_hydrogen_data_H4_ES_H4_linear_R0.5_sto-6g_ham_JW",
+      "c_ref": 1.3517881825955933,
+      "W": 8,
+      "cmax_over_cref": 1.0160549793870315,
+      "system_factor": 1.0703925736010893
+    },
+    {
+      "case_id": "0273_hydrogen_data_H4_ES_H4_linear_R0.6_sto-6g_ham_JW",
+      "c_ref": 1.2342642095003737,
+      "W": 8,
+      "cmax_over_cref": 0.7921095633094328,
+      "system_factor": 1.0684978106540874
+    },
+    {
+      "case_id": "0274_hydrogen_data_H4_ES_H4_linear_R0.7_sto-6g_ham_JW",
+      "c_ref": 1.1361044191791703,
+      "W": 8,
+      "cmax_over_cref": 0.6364601961416131,
+      "system_factor": 1.0668158849274358
+    },
+    {
+      "case_id": "0275_hydrogen_data_H4_ES_H4_linear_R0.8_sto-6g_ham_JW",
+      "c_ref": 1.052834848018001,
+      "W": 8,
+      "cmax_over_cref": 0.5209372229349469,
+      "system_factor": 1.0653073896618979
+    },
+    {
+      "case_id": "0276_hydrogen_data_H4_ES_H4_linear_R0.9_sto-6g_ham_JW",
+      "c_ref": 0.9812359271289967,
+      "W": 8,
+      "cmax_over_cref": 0.431245338072305,
+      "system_factor": 1.0639420097371461
+    },
+    {
+      "case_id": "0277_hydrogen_data_H4_ES_H4_linear_R1.0_sto-6g_ham_JW",
+      "c_ref": 0.9189618069424456,
+      "W": 8,
+      "cmax_over_cref": 0.3592966733240017,
+      "system_factor": 1.0626965276185678
+    },
+    {
+      "case_id": "0278_hydrogen_data_H4_ES_H4_linear_R1.1_sto-6g_ham_JW",
+      "c_ref": 0.8642722983407543,
+      "W": 8,
+      "cmax_over_cref": 0.3000874045023027,
+      "system_factor": 1.0615530288105128
+    },
+    {
+      "case_id": "0279_hydrogen_data_H4_ES_H4_linear_R1.2_sto-6g_ham_JW",
+      "c_ref": 0.8158540217422204,
+      "W": 8,
+      "cmax_over_cref": 0.2503482014002796,
+      "system_factor": 1.0604975779163246
+    },
+    {
+      "case_id": "0280_hydrogen_data_H4_ES_H4_linear_R1.3_sto-6g_ham_JW",
+      "c_ref": 0.7727023174781389,
+      "W": 8,
+      "cmax_over_cref": 0.20787511111719562,
+      "system_factor": 1.0595193136370362
+    },
+    {
+      "case_id": "0281_hydrogen_data_H4_ES_H4_linear_R1.4_sto-6g_ham_JW",
+      "c_ref": 0.7340394136463217,
+      "W": 8,
+      "cmax_over_cref": 0.17867017365695173,
+      "system_factor": 1.0586097763075508
+    },
+    {
+      "case_id": "0282_hydrogen_data_H4_ES_H4_linear_R1.5_sto-6g_ham_JW",
+      "c_ref": 0.6992538343747549,
+      "W": 8,
+      "cmax_over_cref": 0.1734572098422304,
+      "system_factor": 1.0577623304715404
+    },
+    {
+      "case_id": "0283_hydrogen_data_H4_ES_H4_linear_R1.6_sto-6g_ham_JW",
+      "c_ref": 0.6678584440541087,
+      "W": 8,
+      "cmax_over_cref": 0.16820251314203782,
+      "system_factor": 1.0569717521612683
+    },
+    {
+      "case_id": "0284_hydrogen_data_H4_ES_H4_linear_R1.7_sto-6g_ham_JW",
+      "c_ref": 0.6394562790072221,
+      "W": 8,
+      "cmax_over_cref": 0.16347347628735578,
+      "system_factor": 1.0562338096915824
+    },
+    {
+      "case_id": "0285_hydrogen_data_H4_ES_H4_linear_R1.8_sto-6g_ham_JW",
+      "c_ref": 0.6137176859249117,
+      "W": 8,
+      "cmax_over_cref": 0.16454861854071484,
+      "system_factor": 1.0555449834364454
+    },
+    {
+      "case_id": "0286_hydrogen_data_H4_ES_H4_linear_R1.9_sto-6g_ham_JW",
+      "c_ref": 0.5903640304757,
+      "W": 8,
+      "cmax_over_cref": 0.16557775759153032,
+      "system_factor": 1.0549022593077442
+    },
+    {
+      "case_id": "0287_hydrogen_data_H4_ES_H4_linear_R2.0_sto-6g_ham_JW",
+      "c_ref": 0.5691563347165685,
+      "W": 8,
+      "cmax_over_cref": 0.16654250536739443,
+      "system_factor": 1.0543029873747896
+    },
+    {
+      "case_id": "0288_hydrogen_data_H6_ES_H6_linear_R0.5_sto-6g_ham_JW",
+      "c_ref": 1.7777575469252282,
+      "W": 12,
+      "cmax_over_cref": 1.150814053567213,
+      "system_factor": 1.0676688243858514
+    },
+    {
+      "case_id": "0289_hydrogen_data_H6_ES_H6_linear_R0.6_sto-6g_ham_JW",
+      "c_ref": 1.5954748770484415,
+      "W": 12,
+      "cmax_over_cref": 0.8674726384861673,
+      "system_factor": 1.0655079280331123
+    },
+    {
+      "case_id": "0290_hydrogen_data_H6_ES_H6_linear_R0.7_sto-6g_ham_JW",
+      "c_ref": 1.449286176825477,
+      "W": 12,
+      "cmax_over_cref": 0.6797206602203973,
+      "system_factor": 1.0636462935045305
+    },
+    {
+      "case_id": "0291_hydrogen_data_H6_ES_H6_linear_R0.8_sto-6g_ham_JW",
+      "c_ref": 1.3290325950985364,
+      "W": 12,
+      "cmax_over_cref": 0.5460441751437745,
+      "system_factor": 1.0620136882860816
+    },
+    {
+      "case_id": "0292_hydrogen_data_H6_ES_H6_linear_R0.9_sto-6g_ham_JW",
+      "c_ref": 1.2281341989101284,
+      "W": 12,
+      "cmax_over_cref": 0.4458107579229322,
+      "system_factor": 1.0605620572940375
+    },
+    {
+      "case_id": "0293_hydrogen_data_H6_ES_H6_linear_R1.0_sto-6g_ham_JW",
+      "c_ref": 1.1421149697917667,
+      "W": 12,
+      "cmax_over_cref": 0.3677461916636265,
+      "system_factor": 1.0592570216537467
+    },
+    {
+      "case_id": "0294_hydrogen_data_H6_ES_H6_linear_R1.1_sto-6g_ham_JW",
+      "c_ref": 1.0678131489905143,
+      "W": 12,
+      "cmax_over_cref": 0.3051113864417968,
+      "system_factor": 1.0580731590818817
+    },
+    {
+      "case_id": "0295_hydrogen_data_H6_ES_H6_linear_R1.2_sto-6g_ham_JW",
+      "c_ref": 1.002931062505856,
+      "W": 12,
+      "cmax_over_cref": 0.25362888701873526,
+      "system_factor": 1.0569912518899403
+    },
+    {
+      "case_id": "0296_hydrogen_data_H6_ES_H6_linear_R1.3_sto-6g_ham_JW",
+      "c_ref": 0.945763137722536,
+      "W": 12,
+      "cmax_over_cref": 0.210482294878711,
+      "system_factor": 1.0559965908147586
+    },
+    {
+      "case_id": "0297_hydrogen_data_H6_ES_H6_linear_R1.4_sto-6g_ham_JW",
+      "c_ref": 0.8950202233490668,
+      "W": 12,
+      "cmax_over_cref": 0.1737608685715114,
+      "system_factor": 1.0550778180199738
+    },
+    {
+      "case_id": "0298_hydrogen_data_H6_ES_H6_linear_R1.5_sto-6g_ham_JW",
+      "c_ref": 0.8497109224236267,
+      "W": 12,
+      "cmax_over_cref": 0.1507424032806202,
+      "system_factor": 1.0542260827512213
+    },
+    {
+      "case_id": "0299_hydrogen_data_H6_ES_H6_linear_R1.6_sto-6g_ham_JW",
+      "c_ref": 0.8090596138353078,
+      "W": 12,
+      "cmax_over_cref": 0.14662378053479397,
+      "system_factor": 1.053434411308109
+    },
+    {
+      "case_id": "0300_hydrogen_data_H6_ES_H6_linear_R1.7_sto-6g_ham_JW",
+      "c_ref": 0.7724486920256948,
+      "W": 12,
+      "cmax_over_cref": 0.14237374377325707,
+      "system_factor": 1.0526972272701705
+    },
+    {
+      "case_id": "0301_hydrogen_data_H6_ES_H6_linear_R1.8_sto-6g_ham_JW",
+      "c_ref": 0.739377399604734,
+      "W": 12,
+      "cmax_over_cref": 0.13805216321178865,
+      "system_factor": 1.05200998441881
+    },
+    {
+      "case_id": "0302_hydrogen_data_H6_ES_H6_linear_R1.9_sto-6g_ham_JW",
+      "c_ref": 0.7094319975564091,
+      "W": 12,
+      "cmax_over_cref": 0.13372503989773982,
+      "system_factor": 1.0513688808447141
+    },
+    {
+      "case_id": "0303_hydrogen_data_H6_ES_H6_linear_R2.0_sto-6g_ham_JW",
+      "c_ref": 0.6822645819954303,
+      "W": 12,
+      "cmax_over_cref": 0.1294607533724421,
+      "system_factor": 1.0507706496071567
+    },
+    {
+      "case_id": "0320_standard_B2_B2_ham_JWm10",
+      "c_ref": 1.306693588057603,
+      "W": 10,
+      "cmax_over_cref": 0.3726838211227263,
+      "system_factor": 1.0651678471412045
+    },
+    {
+      "case_id": "0321_standard_B2_B2_ham_JWm12",
+      "c_ref": 1.3066935880576025,
+      "W": 12,
+      "cmax_over_cref": 0.25185684161403954,
+      "system_factor": 1.0616991243192466
+    },
+    {
+      "case_id": "0322_standard_B2_B2_ham_JWm14",
+      "c_ref": 1.3066935880576025,
+      "W": 12,
+      "cmax_over_cref": 0.13633062114232894,
+      "system_factor": 1.0616991243192466
+    },
+    {
+      "case_id": "0323_standard_B2_B2_ham_JWm8",
+      "c_ref": 1.3066935880576025,
+      "W": 8,
+      "cmax_over_cref": 0.5063085716358853,
+      "system_factor": 1.0696797169703125
+    },
+    {
+      "case_id": "0324_standard_BH_BH_ham_JWm10",
+      "c_ref": 0.9618677097788512,
+      "W": 10,
+      "cmax_over_cref": 0.16959474499327654,
+      "system_factor": 1.0594450709473422
+    },
+    {
+      "case_id": "0325_standard_BH_BH_ham_JWm12",
+      "c_ref": 0.9618677097788513,
+      "W": 12,
+      "cmax_over_cref": 0.3681396348145657,
+      "system_factor": 1.056280957303981
+    },
+    {
+      "case_id": "0327_standard_BH_BH_ham_JWm8",
+      "c_ref": 0.9618677097788513,
+      "W": 6,
+      "cmax_over_cref": 0.3147876480727658,
+      "system_factor": 1.0692899861625
+    },
+    {
+      "case_id": "0328_standard_Be2_Be2_ham_JWm10",
+      "c_ref": 0.5830733174454893,
+      "W": 8,
+      "cmax_over_cref": 0.13877041125418849,
+      "system_factor": 1.0546979689371134
+    },
+    {
+      "case_id": "0329_standard_Be2_Be2_ham_JWm14",
+      "c_ref": 0.5830733174454893,
+      "W": 12,
+      "cmax_over_cref": 0.4617510979108841,
+      "system_factor": 1.048433273443104
+    },
+    {
+      "case_id": "0331_standard_Be2_Be2_ham_JWm6",
+      "c_ref": 0.5830733174454893,
+      "W": 6,
+      "cmax_over_cref": 0.46784218616834555,
+      "system_factor": 1.0596283540194842
+    },
+    {
+      "case_id": "0332_standard_BeH_BeH_ham_JW10",
+      "c_ref": 0.6414762415185555,
+      "W": 10,
+      "cmax_over_cref": 0.3249950742216703,
+      "system_factor": 1.0526423682445278
+    },
+    {
+      "case_id": "0333_standard_BeH_BeH_ham_JW12",
+      "c_ref": 0.6414762415185555,
+      "W": 12,
+      "cmax_over_cref": 0.655199720351364,
+      "system_factor": 1.0498403455885383
+    },
+    {
+      "case_id": "0334_standard_BeH_BeH_ham_JW4",
+      "c_ref": 0.6414762415185555,
+      "W": 4,
+      "cmax_over_cref": 0.5818216874866787,
+      "system_factor": 1.069297476751106
+    },
+    {
+      "case_id": "0335_standard_BeH_BeH_ham_JW8",
+      "c_ref": 0.6414762415185554,
+      "W": 6,
+      "cmax_over_cref": 0.21471278095174415,
+      "system_factor": 1.061360663030509
+    },
+    {
+      "case_id": "0336_standard_C2_C2_ham_JWm10",
+      "c_ref": 2.229705598144177,
+      "W": 10,
+      "cmax_over_cref": 0.5209587835173397,
+      "system_factor": 1.0764989551278732
+    },
+    {
+      "case_id": "0337_standard_C2_C2_ham_JWm14",
+      "c_ref": 2.229705598144177,
+      "W": 14,
+      "cmax_over_cref": 0.3358265945387752,
+      "system_factor": 1.0691539660863307
+    },
+    {
+      "case_id": "0340_standard_CH_CH_ham_JWm10",
+      "c_ref": 1.404190097401529,
+      "W": 10,
+      "cmax_over_cref": 0.2898284788006737,
+      "system_factor": 1.066590000452524
+    },
+    {
+      "case_id": "0341_standard_CH_CH_ham_JWm12",
+      "c_ref": 1.404190097401529,
+      "W": 12,
+      "cmax_over_cref": 0.2451355943068261,
+      "system_factor": 1.0630455799381655
+    },
+    {
+      "case_id": "0342_standard_CH_CH_ham_JWm14",
+      "c_ref": 1.4041900974015291,
+      "W": 14,
+      "cmax_over_cref": 0.37544782804585997,
+      "system_factor": 1.0601964121638665
+    },
+    {
+      "case_id": "0343_standard_CH_CH_ham_JWm8",
+      "c_ref": 1.4041900974015287,
+      "W": 6,
+      "cmax_over_cref": 0.40775020130306733,
+      "system_factor": 1.0776182135269627
+    },
+    {
+      "case_id": "0348_standard_H2_H2_ham_JWm12",
+      "c_ref": 0.6252404437092576,
+      "W": 8,
+      "cmax_over_cref": 2.4099601884484465,
+      "system_factor": 1.055855811873263
+    },
+    {
+      "case_id": "0350_standard_H2_H2_ham_JWm4",
+      "c_ref": 0.6252404437092577,
+      "W": 4,
+      "cmax_over_cref": 0.4515876913464182,
+      "system_factor": 1.0687665707406127
+    },
+    {
+      "case_id": "0351_standard_H2_H2_ham_JWm6",
+      "c_ref": 0.6252404437092576,
+      "W": 6,
+      "cmax_over_cref": 0.43975970574820256,
+      "system_factor": 1.0608905630162218
+    },
+    {
+      "case_id": "0352_standard_H2_H2_ham_JWm8",
+      "c_ref": 0.6252404437092577,
+      "W": 8,
+      "cmax_over_cref": 1.1497532289263173,
+      "system_factor": 1.0558558118732633
+    },
+    {
+      "case_id": "0353_standard_HF_HF_ham_JW10",
+      "c_ref": 3.4737095526037023,
+      "W": 10,
+      "cmax_over_cref": 0.5599637632321889,
+      "system_factor": 1.087381460031031
+    },
+    {
+      "case_id": "0354_standard_HF_HF_ham_JW12",
+      "c_ref": 3.4737095526037027,
+      "W": 12,
+      "cmax_over_cref": 0.4827519565445431,
+      "system_factor": 1.0827303617069006
+    },
+    {
+      "case_id": "0357_standard_Li2_Li2_ham_JW10",
+      "c_ref": 0.20755260644920748,
+      "W": 10,
+      "cmax_over_cref": 0.765885026972928,
+      "system_factor": 1.0375249138219929
+    },
+    {
+      "case_id": "0358_standard_Li2_Li2_ham_JW14",
+      "c_ref": 0.20755260644920753,
+      "W": 14,
+      "cmax_over_cref": 1.3032043667919664,
+      "system_factor": 1.0339219877382753
+    },
+    {
+      "case_id": "0359_standard_Li2_Li2_ham_JW4",
+      "c_ref": 0.20755260644920748,
+      "W": 4,
+      "cmax_over_cref": 0.39386571286089295,
+      "system_factor": 1.0493971287744472
+    },
+    {
+      "case_id": "0360_standard_Li2_Li2_ham_JW8",
+      "c_ref": 0.20755260644920748,
+      "W": 4,
+      "cmax_over_cref": 0.48027530800237256,
+      "system_factor": 1.0493971287744472
+    },
+    {
+      "case_id": "0361_standard_LiH_LiH_ham_JWm10",
+      "c_ref": 0.38967788187735725,
+      "W": 10,
+      "cmax_over_cref": 0.4548243006279181,
+      "system_factor": 1.0453307571269488
+    },
+    {
+      "case_id": "0362_standard_LiH_LiH_ham_JWm12",
+      "c_ref": 0.38967788187735725,
+      "W": 12,
+      "cmax_over_cref": 0.8683759896307326,
+      "system_factor": 1.0429179133906479
+    },
+    {
+      "case_id": "0363_standard_LiH_LiH_ham_JWm4",
+      "c_ref": 0.38967788187735697,
+      "W": 4,
+      "cmax_over_cref": 0.4951699149478257,
+      "system_factor": 1.0596726019909128
+    },
+    {
+      "case_id": "0364_standard_LiH_LiH_ham_JWm8",
+      "c_ref": 0.3896778818773571,
+      "W": 6,
+      "cmax_over_cref": 0.30722481783014244,
+      "system_factor": 1.052838149303317
+    },
+    {
+      "case_id": "0365_standard_N2_N2_ham_JWm14",
+      "c_ref": 3.337561247205433,
+      "W": 12,
+      "cmax_over_cref": 0.45611153367128754,
+      "system_factor": 1.0817439548520966
+    },
+    {
+      "case_id": "0369_standard_NH_NH_ham_JWm10",
+      "c_ref": 1.9719231069715308,
+      "W": 10,
+      "cmax_over_cref": 0.41136253611504475,
+      "system_factor": 1.0737306799254136
+    },
+    {
+      "case_id": "0370_standard_NH_NH_ham_JWm12",
+      "c_ref": 1.9719231069715308,
+      "W": 12,
+      "cmax_over_cref": 0.28533127735436165,
+      "system_factor": 1.0698061787587323
+    },
+    {
+      "case_id": "0371_standard_NH_NH_ham_JWm14",
+      "c_ref": 1.9719231069715313,
+      "W": 14,
+      "cmax_over_cref": 0.21904965598775042,
+      "system_factor": 1.066651484723696
+    },
+    {
+      "case_id": "0372_standard_NH_NH_ham_JWm8",
+      "c_ref": 1.9719231069715308,
+      "W": 6,
+      "cmax_over_cref": 0.4981452144635842,
+      "system_factor": 1.08594148699577
+    },
+    {
+      "case_id": "0377_standard_NaLi_NaLi_ham_JWm14",
+      "c_ref": 5.526694080942188,
+      "W": 14,
+      "cmax_over_cref": 0.611168655790376,
+      "system_factor": 1.0907992921901803
+    },
+    {
+      "case_id": "0389_standard_OH_OH_ham_JW10",
+      "c_ref": 2.6621589966035555,
+      "W": 10,
+      "cmax_over_cref": 0.4910636768468364,
+      "system_factor": 1.080677316283319
+    },
+    {
+      "case_id": "0390_standard_OH_OH_ham_JW12",
+      "c_ref": 2.662158996603556,
+      "W": 12,
+      "cmax_over_cref": 0.39283180113836685,
+      "system_factor": 1.0763830628979048
+    },
+    {
+      "case_id": "0391_standard_OH_OH_ham_JW14",
+      "c_ref": 2.6621589966035564,
+      "W": 14,
+      "cmax_over_cref": 0.29337010017753024,
+      "system_factor": 1.0729311450707644
+    },
+    {
+      "case_id": "standard_O2_JW16",
+      "c_ref": 4.069263956261362,
+      "W": 16,
+      "cmax_over_cref": 0.4605641735227703,
+      "system_factor": 1.0795792807753697
+    },
+    {
+      "case_id": "standard_OH_JW16",
+      "c_ref": 2.662158996603556,
+      "W": 16,
+      "cmax_over_cref": 0.18764450493899262,
+      "system_factor": 1.0700673106010268
+    },
+    {
+      "case_id": "standard_HF_JW16",
+      "c_ref": 3.473709552603703,
+      "W": 16,
+      "cmax_over_cref": 0.29129642283390317,
+      "system_factor": 1.0758897814506427
+    },
+    {
+      "case_id": "standard_BH_JW16",
+      "c_ref": 0.9618677097788512,
+      "W": 16,
+      "cmax_over_cref": 0.8076437877735845,
+      "system_factor": 1.051627352540341
+    },
+    {
+      "case_id": "standard_C2_JW16",
+      "c_ref": 2.229705598144177,
+      "W": 16,
+      "cmax_over_cref": 0.2731527630046949,
+      "system_factor": 1.0664384525481168
+    },
+    {
+      "case_id": "standard_Be2_JW16",
+      "c_ref": 0.5830733174454894,
+      "W": 16,
+      "cmax_over_cref": 0.6414161862624086,
+      "system_factor": 1.0444285563449893
+    },
+    {
+      "case_id": "standard_F2_JW16",
+      "c_ref": 4.66407966827035,
+      "W": 16,
+      "cmax_over_cref": 0.5291442472195343,
+      "system_factor": 1.082903914887383
+    },
+    {
+      "case_id": "standard_N2_JW16",
+      "c_ref": 3.337561247205433,
+      "W": 16,
+      "cmax_over_cref": 0.4023950805790504,
+      "system_factor": 1.0749849358886505
+    },
+    {
+      "case_id": "hydrogen_H8_linear_R1_0_JW16",
+      "c_ref": 1.2994050888915576,
+      "W": 16,
+      "cmax_over_cref": 0.3559817077390052,
+      "system_factor": 1.0565026244123052
+    },
+    {
+      "case_id": "hydrogen_H8_linear_R0_5_JW16",
+      "c_ref": 2.0819913844054523,
+      "W": 16,
+      "cmax_over_cref": 1.1485094125052904,
+      "system_factor": 1.0650862019883056
+    },
+    {
+      "case_id": "hydrogen_H8_linear_R0_6_JW16",
+      "c_ref": 1.8522507808520838,
+      "W": 16,
+      "cmax_over_cref": 0.8580603156167362,
+      "system_factor": 1.0628427508238907
+    },
+    {
+      "case_id": "hydrogen_H8_linear_R0_7_JW16",
+      "c_ref": 1.6711787800710902,
+      "W": 16,
+      "cmax_over_cref": 0.6672557721014029,
+      "system_factor": 1.0609329388452606
+    },
+    {
+      "case_id": "hydrogen_H8_linear_R0_8_JW16",
+      "c_ref": 1.5242574762097834,
+      "W": 16,
+      "cmax_over_cref": 0.5328515370267796,
+      "system_factor": 1.0592737974024844
+    },
+    {
+      "case_id": "hydrogen_H8_linear_R0_9_JW16",
+      "c_ref": 1.4023584406382006,
+      "W": 16,
+      "cmax_over_cref": 0.433047369009298,
+      "system_factor": 1.057809998897824
+    },
+    {
+      "case_id": "hydrogen_H8_linear_R1_1_JW16",
+      "c_ref": 1.2111761809615245,
+      "W": 16,
+      "cmax_over_cref": 0.2946312416081937,
+      "system_factor": 1.055323219754763
+    },
+    {
+      "case_id": "hydrogen_H8_linear_R1_2_JW16",
+      "c_ref": 1.1346461892347026,
+      "W": 16,
+      "cmax_over_cref": 0.2445668922645221,
+      "system_factor": 1.0542504554917724
+    },
+    {
+      "case_id": "hydrogen_H8_linear_R1_3_JW16",
+      "c_ref": 1.0675950502085563,
+      "W": 16,
+      "cmax_over_cref": 0.2028824530888613,
+      "system_factor": 1.0532681012689384
+    },
+    {
+      "case_id": "hydrogen_H8_linear_R1_4_JW16",
+      "c_ref": 1.0083609412889498,
+      "W": 16,
+      "cmax_over_cref": 0.16761118890106497,
+      "system_factor": 1.0523636674090906
+    },
+    {
+      "case_id": "hydrogen_H8_linear_R1_5_JW16",
+      "c_ref": 0.9556761235077709,
+      "W": 16,
+      "cmax_over_cref": 0.1373812341229914,
+      "system_factor": 1.0515274288144527
+    },
+    {
+      "case_id": "hydrogen_H8_linear_R1_6_JW16",
+      "c_ref": 0.90855731699684,
+      "W": 16,
+      "cmax_over_cref": 0.13332907455949766,
+      "system_factor": 1.0507517416256962
+    },
+    {
+      "case_id": "hydrogen_H8_linear_R1_7_JW16",
+      "c_ref": 0.8662270664760087,
+      "W": 16,
+      "cmax_over_cref": 0.12965318910701357,
+      "system_factor": 1.0500304922783845
+    },
+    {
+      "case_id": "hydrogen_H8_linear_R1_8_JW16",
+      "c_ref": 0.8280605128591295,
+      "W": 16,
+      "cmax_over_cref": 0.12586332741043119,
+      "system_factor": 1.0493587182994277
+    },
+    {
+      "case_id": "hydrogen_H8_linear_R1_9_JW16",
+      "c_ref": 0.7935464054287334,
+      "W": 16,
+      "cmax_over_cref": 0.12202770868200914,
+      "system_factor": 1.0487323045752588
+    },
+    {
+      "case_id": "hydrogen_H8_linear_R2_0_JW16",
+      "c_ref": 0.762259174552113,
+      "W": 16,
+      "cmax_over_cref": 0.11821567616955146,
+      "system_factor": 1.048147755817098
+    }
+  ],
+  "verification_mode": "full_snapshot",
+  "verification_scope": "Rechecked all recorded allocations, archived policy method, and schedule sums; compact coordinates round-trip exactly.",
+  "plot_data": {
+    "file": "elote_policy_plot_data.npz",
+    "sha256": "8c07c40bda9ac4fec7183ceb4993c49912d5827c775f550393487c735fa217c7",
+    "bytes": 439274,
+    "scatter_points": 93462,
+    "all_plot_arrays_round_trip_exactly": true
+  },
+  "script_sha256": "4e4f2623ce3d406ab41c7c89e056eabc3bd6d91ad9bdcd947c60a0be8d130d09",
+  "output_files": {
+    "elote_policy_features.pdf": "6b329be1028377acb1a0c75b0bd0c952ff91a9dd3ba6431dd663a9487e1850fe",
+    "elote_policy_features.png": "a96ab0716fa35b88ee667d6476aaa8c7d8f5317ac1e70cf316ae3c5ea97c0715"
+  }
+}

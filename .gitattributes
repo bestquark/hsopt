@@ -1,0 +1,2 @@
+# Preserve the archived CSV's original CRLF bytes and source checksum.
+results/paper/hamlib-diagnostics/baseline_initialization_vs_qubits.csv -text whitespace=cr-at-eol

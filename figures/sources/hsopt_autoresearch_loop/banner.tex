@@ -1,0 +1,93 @@
+\documentclass[border=5pt]{standalone}
+\usepackage[T1]{fontenc}
+\usepackage{lmodern,amsmath,amssymb,graphicx,tikz}
+\usetikzlibrary{arrows.meta,calc}
+\definecolor{ink}{HTML}{24302E}
+\definecolor{muted}{HTML}{66716C}
+\definecolor{linegray}{HTML}{D8DEDA}
+\definecolor{gategray}{HTML}{F1F3F2}
+\definecolor{green}{HTML}{326A4C}
+\definecolor{palegreen}{HTML}{EDF4EE}
+\newcommand{\contenttop}{420}
+\newcommand{\head}[3]{\node[font=\fontsize{31}{34}\selectfont\bfseries] at (#1,473) {#3};}
+\newcommand{\gate}[3]{\draw[fill=gategray,draw=ink,line width=1.2pt] (#1-21,#2-21) rectangle (#1+21,#2+21);\node[font=\fontsize{29}{32}\selectfont] at (#1,#2) {$#3$};}
+\newcommand{\cx}[3]{\draw[ink,line width=1.5pt] (#1,#2)--(#1,#3);\fill[ink] (#1,#2) circle (4pt);\draw[fill=white,line width=1.5pt] (#1,#3) circle (8pt);\draw[line width=1.3pt] (#1-8,#3)--(#1+8,#3);\draw[line width=1.3pt] (#1,#3-8)--(#1,#3+8);}
+\providecommand{\mathdefault}[1]{#1}
+\begin{document}
+\begin{tikzpicture}[x=1pt,y=1pt,text=ink,draw=ink,font=\fontsize{29}{33}\selectfont,>=Latex]
+\path[use as bounding box] (0,0) rectangle (1520,500);
+\head{190}{01}{Molecules}
+\head{520}{02}{Coding agent}
+\head{835}{03}{Circuit}
+\head{1120}{04}{Certify}
+\head{1405}{05}{Select}
+% Molecule labels and the Hamiltonian share the selection cards' top edge.
+% Larger data panel and type; identical frozen samples and binning.
+\foreach \x/\name/\label in {52/CoH/CoH,144/O3/O_3,236/Na2/Na_2,328/NaLi/NaLi}{
+ \node[anchor=north,inner sep=0pt,font=\fontsize{28}{32}\selectfont] at (\x,\contenttop) {$\mathrm{\label}$};
+ \node at (\x,370) {\includegraphics[width=75pt]{\name.png}};
+}
+\node at (190,181) {\resizebox{378pt}{!}{\input{coefficient_histograms_2x2.pgf}}};
+\node[anchor=north,inner sep=0pt,font=\fontsize{29}{33}\selectfont] at (520,\contenttop) {$H=c_0 I+\mathop{\Sigma}\nolimits_j c_j P_j$};
+% Original robot, unchanged and clipped in the editable assembly.
+\begin{pgfinterruptboundingbox}
+\begin{scope}[shift={(407,378)},scale=0.64,transform shape,x=1pt,y=-1pt]
+\clip (110,0)--(180,0)--(180,40)--(300,40)--(310,140)
+ --(270,180)--(270,230)--(265,276)--(355,278)--(355,430)
+ --(0,440)--(0,245)--(33,230)--(37,200)--(30,195)
+ --(30,160)--(50,100)--(110,55)--cycle;
+\node[anchor=north west,inner sep=0] at (-570,-160)
+ {\includegraphics[width=2172pt,height=724pt]{generated-banner.png}};
+\end{scope}
+\end{pgfinterruptboundingbox}
+% Center the circuit body within the combined height of the selection cards.
+\begin{scope}[yshift=3pt]
+\foreach \y/\q in {380/0,310/1,240/2,150/{n-1}}{
+ \node[anchor=east,font=\fontsize{27}{31}\selectfont] at (711,\y) {$q_{\q}$};
+ \draw[line width=1.35pt] (721,\y)--(863,\y);
+ \draw[line width=1.35pt] (900,\y)--(968,\y);
+ \node[font=\fontsize{29}{32}\selectfont] at (881,\y) {$\cdots$};
+}
+\gate{746}{380}{H}\gate{746}{310}{T}\gate{746}{240}{H}\gate{746}{150}{H}
+\cx{789}{380}{310}
+\gate{820}{380}{T}\gate{820}{310}{T^\dagger}\gate{820}{240}{T}\gate{820}{150}{T}
+\cx{856}{310}{240}
+\gate{937}{380}{H}\gate{937}{310}{S}\gate{937}{240}{H}\gate{937}{150}{H}
+\foreach \x in {698,829,937}{\node at (\x,195) {$\vdots$};}
+\node at (835,100) {$U_{\mathcal P}(t)$};
+\end{scope}
+% Error label is horizontal, above the plot, rather than rotated.
+% Center this panel alongside the circuit and selection cards.
+\begin{scope}[yshift=-16pt]
+\node[anchor=north,inner sep=0pt,font=\fontsize{30}{34}\selectfont] at (1120,\contenttop) {$|E_{\mathcal P}-E_0|$};
+\fill[palegreen] (1038,150) rectangle (1220,280);
+\draw[-{Latex[length=9pt,width=7pt]},line width=2pt] (1038,150)--(1038,365);
+\draw[line width=1.5pt] (1038,150)--(1220,150);
+\draw[green,dashed,line width=1.7pt] (1038,280)--(1220,280);
+\node[anchor=south west,text=green,font=\fontsize{30}{34}\selectfont] at (1045,288) {$\varepsilon_{\rm chem}$};
+\node[anchor=east,font=\fontsize{27}{31}\selectfont] at (1027,150) {$0$};
+\draw[green,line width=1.1pt,densely dotted] (1095,150)--(1095,220);
+\draw[muted,line width=1.1pt,densely dotted] (1175,150)--(1175,335);
+\fill[green] (1095,220) circle (7pt);
+\draw[muted,line width=3pt,line cap=round] (1168,328)--(1182,342) (1168,342)--(1182,328);
+\node[text=green] at (1095,124) {$\mathcal P_a$};
+\node[text=muted] at (1175,124) {$\mathcal P_b$};
+\end{scope}
+% Shorter lines leave room for larger monospaced text.
+\draw[green,fill=palegreen,line width=1.3pt,rounded corners=4pt] (1280,260) rectangle (1515,420);
+\node[anchor=west,text=green,font=\fontsize{30}{34}\selectfont] at (1292,395) {$\mathcal P_a$};
+\draw[green,line width=3.5pt,line cap=round,line join=round] (1474,395)--(1483,386)--(1500,404);
+\node[anchor=west,font=\fontsize{26}{30}\selectfont\ttfamily] at (1292,358) {def PF(H):};
+\node[anchor=west,font=\fontsize{26}{30}\selectfont\ttfamily] at (1305,325) {split\_a(H,dt)};
+\node[anchor=west,font=\fontsize{26}{30}\selectfont\ttfamily] at (1305,292) {eps=f(c,w)};
+\draw[linegray,fill=gategray,line width=1.3pt,rounded corners=4pt] (1280,78) rectangle (1515,238);
+\node[anchor=west,text=muted,font=\fontsize{30}{34}\selectfont] at (1292,213) {$\mathcal P_b$};
+\draw[muted,line width=3pt,line cap=round] (1478,206)--(1492,220) (1478,220)--(1492,206);
+\node[anchor=west,text=muted,font=\fontsize{26}{30}\selectfont\ttfamily] at (1292,176) {def PF(H):};
+\node[anchor=west,text=muted,font=\fontsize{26}{30}\selectfont\ttfamily] at (1305,143) {split\_b(H,dt)};
+\node[anchor=west,text=muted,font=\fontsize{26}{30}\selectfont\ttfamily] at (1305,110) {eps=g(c,w)};
+\foreach \a/\b in {383/411,641/677,975/1005,1241/1270}{\draw[-{Latex[length=15pt,width=12pt]},line width=4.5pt,preaction={draw=white,line width=10pt}] (\a,250)--(\b,250);}
+\draw[-{Latex[length=15pt,width=12pt]},green,line width=4.5pt,rounded corners=12pt] (1405,65)--(1405,24)--(520,24)--(520,86);
+\node[fill=white,inner xsep=14pt,text=green,font=\fontsize{28}{32}\selectfont] at (930,24) {Autoresearch};
+\end{tikzpicture}
+\end{document}

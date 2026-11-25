@@ -1,0 +1,76 @@
+{
+  "generator_repository": "https://github.com/bestquark/hsopt",
+  "scripts": {
+    "plots/plot_elote_understanding.py": "4e4f2623ce3d406ab41c7c89e056eabc3bd6d91ad9bdcd947c60a0be8d130d09",
+    "plots/export_elote_seed_effort.py": "e1027f8cf8a5776ec9fb2517335f0acb9c30ded682fa43c11d45a1d8100a9f72"
+  },
+  "files": {
+    "seed_effort_table_body.tex": "347357b1f27a277405a03b441257fb47a6a7418775b3d116c6a650316b8d6bde",
+    "policy_diagnostics.json": "470caaead850bd923e78714e00eaed03420ab194643d5eb340e37beb935673b9",
+    "README.md": "cca5acbed9f45a6b45db2988063424eaf2dd641c9403e5af7fba446ed24b1660",
+    "elote_policy_plot_data.npz": "8c07c40bda9ac4fec7183ceb4993c49912d5827c775f550393487c735fa217c7",
+    "selected_policy.py": "d199f6a4efef965aa015dbd73f69d14f628fd1b9eaa3653391dad8e3a75e472e",
+    "seed_effort.json": "96ffe10b26c79973ac31dc397256c65cca0947398dd1b5357567570880d63c87",
+    "selected_delta_policy.py": "6952b7d2728cbb4c9eb65562dac8ffa613fbc26f2780019817bbb0aeecf1370c"
+  },
+  "generator_commit": "b79bfdc898fff521bdc74d5a8757621470f616a6",
+  "figure": {
+    "path": "assets/figures/elote_policy_features.pdf",
+    "sha256": "6b329be1028377acb1a0c75b0bd0c952ff91a9dd3ba6431dd663a9487e1850fe",
+    "in_manuscript": false
+  },
+  "table": {
+    "token_columns": [
+      "input_mean_per_complete_round",
+      "output_mean_per_complete_round"
+    ],
+    "token_summary": "Arithmetic means over fully logged rounds, including identified retries. Coverage is stated in the caption.",
+    "fully_logged_rounds_by_seed": [
+      87,
+      90,
+      85,
+      88,
+      86
+    ],
+    "rounds_by_seed": [
+      100,
+      100,
+      100,
+      100,
+      100
+    ],
+    "paper_run_label_to_original_seed": {
+      "1": "seed-01",
+      "2": "seed-02",
+      "3": "seed-03",
+      "4": "seed-04",
+      "5": "seed-05"
+    },
+    "mutation_interval": [
+      1,
+      100
+    ],
+    "source_export_manifest_sha256": "1206a16d61b2a9fe06d75358435188460ed8f54951c42f42cb81d9b61b3cca03"
+  },
+  "delta_policy": {
+    "file": "selected_delta_policy.py",
+    "sha256": "6952b7d2728cbb4c9eb65562dac8ffa613fbc26f2780019817bbb0aeecf1370c",
+    "source_campaign": "elote_delta_ground10_warm_a100_20261023",
+    "seed": "seed-05",
+    "iteration": 46,
+    "result_sha256": "21c264feeeaa02dd9e819e441d1a4620340d3708f7391d7097ae672def883fa1",
+    "cost_and_selection_source": "../reaction_elote_delta_a100_summary.json",
+    "coefficient_exponent": 0.3,
+    "system_factor_exponent": 0.4,
+    "support_factor": 0.13,
+    "diagonal_z_factor": 0.3,
+    "system_factor_prefactor": 0.25,
+    "repetition_mean_coefficient_offset_hartree": 0.03,
+    "ordering": [
+      "ascending Pauli support",
+      "diagonal before off-diagonal",
+      "lexicographic Pauli label"
+    ],
+    "formula_scope": "Selected molecular and reaction policies reported in the manuscript, without rerunning scientific evaluations."
+  }
+}

@@ -1,0 +1,43 @@
+name: CPU checks
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  cpu:
+    name: Python 3.12 / ${{ matrix.os }}
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 15
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, macos-latest]
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: astral-sh/setup-uv@c771a70e6277c0a99b617c7a806ffedaca235ff9 # v9.0.0
+        with:
+          python-version: "3.12"
+      - name: Install locked dependencies
+        run: uv sync --locked --extra chemistry
+      - name: Install CUDA-Q CPU synthesis on Apple silicon
+        if: runner.os == 'macOS'
+        run: |
+          curl -fsSL https://github.com/NVIDIA/cuda-quantum/releases/download/0.16.0/install_cuda_quantum_darwin-0.16.0.arm64 -o "$RUNNER_TEMP/cudaq.run"
+          mkdir -p "$RUNNER_TEMP/cudaq-sdk"
+          cd "$RUNNER_TEMP/cudaq-sdk"
+          bash "$RUNNER_TEMP/cudaq.run" --tar xf ./cudaq/cudaq ./cudaq/lib ./cudaq/targets ./cudaq/LICENSE ./cudaq/LICENSES ./cudaq/NOTICE
+          echo "PYTHONPATH=$RUNNER_TEMP/cudaq-sdk/cudaq" >> "$GITHUB_ENV"
+      - name: Check formatting
+        run: uv run --extra chemistry ruff format --check skills tests
+      - name: Lint
+        run: uv run --extra chemistry ruff check .
+      - name: Test runtime, installed commands, and CPU examples
+        run: OPENBLAS_NUM_THREADS=1 OMP_NUM_THREADS=1 uv run --extra chemistry pytest -q
+      - name: Build distribution
+        run: uv build

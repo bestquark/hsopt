@@ -1,0 +1,1999 @@
+{
+  "backend": "cupy-lanczos",
+  "case_count": 76,
+  "cases": [
+    {
+      "archive_sha256": "1640d8ccc83d41157e2c1939c81309fcd01922ace0682aa3b80e12d403e08765",
+      "case_id": "hydrogen_data|ES_H10_linear_R0.8_sto-6g_ham.hdf5|/ham_JW",
+      "count_problem_sha256": "307b8285523feddead89508dea0992cf80d6f0003d090480286c18282d41d22c",
+      "electrons": 10,
+      "expected_counts": {
+        "baseline": 5528916,
+        "elote": 772876
+      },
+      "expected_schedules": {
+        "baseline": "d7db6e6b4d41b6832f9004dc7b00fb01fec917a27e4e94641d28e9ffd7fa9f2c",
+        "elote": "e53d76239c8de74d83ad82a3085ea951a14bd0657211f9365c1b828a7c46f8e7"
+      },
+      "id": "5ad6aa510d960aac",
+      "n_qubits": 20,
+      "parameters": {
+        "n_steps": 1,
+        "reference_trotter_number_beta": 62.972358527397425,
+        "uniform_epsilon": 1.1705181868161797e-11
+      },
+      "problem": "inputs/5ad6aa510d960aac/hamiltonian.json",
+      "problem_sha256": "2908881e1a66bb186cfe056f8fcfa5ac4ae6e86d73b9a39e2c88f443a220db38",
+      "sector_dimension": 184756,
+      "terms": 7150,
+      "work": 66732425216
+    },
+    {
+      "archive_sha256": "31ff66188915c5a4a2106b45f5f75c483cf9893a00b6c52c15d261599c487248",
+      "case_id": "hydrogen_data|ES_H10_linear_R1.1_sto-6g_ham.hdf5|/ham_JW",
+      "count_problem_sha256": "bd5fec694a9f0d2aa7501c31e2665f6c33a198a5f38e116b20d7503592d00f12",
+      "electrons": 10,
+      "expected_counts": {
+        "baseline": 5478828,
+        "elote": 766638
+      },
+      "expected_schedules": {
+        "baseline": "da1fea2144ba2f0b7c9c6b7420b9bb12a4bf0dc5c565dc461009213523515b23",
+        "elote": "b80638baabb1f7e298a0c592071080b6c8988a6c002172a6d94ede61082c67db"
+      },
+      "id": "c768fbcc6ee6e08b",
+      "n_qubits": 20,
+      "parameters": {
+        "n_steps": 1,
+        "reference_trotter_number_beta": 52.526401849957594,
+        "uniform_epsilon": 1.4115300895315184e-11
+      },
+      "problem": "inputs/c768fbcc6ee6e08b/hamiltonian.json",
+      "problem_sha256": "1662e013479ba03bb7f9c60f442f6e0cfb6d3594642d66ad8b240eb7e4b38f1c",
+      "sector_dimension": 184756,
+      "terms": 7150,
+      "work": 66782756864
+    },
+    {
+      "archive_sha256": "c852f3992437377f3c1c7d622009fada03885c5ae33c53db0a38702c4818eb61",
+      "case_id": "hydrogen_data|ES_H10_linear_R1.7_sto-6g_ham.hdf5|/ham_JW",
+      "count_problem_sha256": "4523c4292e6e67c29d36ee21f2ecf8477b3c28a389c2037e2ea362de3bd0a88b",
+      "electrons": 10,
+      "expected_counts": {
+        "baseline": 5440408,
+        "elote": 761694
+      },
+      "expected_schedules": {
+        "baseline": "e83536089cc3fd6919330f3fe75352cb5d33a06f26c0708362a3fd0be0a30e56",
+        "elote": "13ca79f0e95862df4b1ff1786d69b1c2e975d01e99abebba03a80a7c3549aa5b"
+      },
+      "id": "65aaa9f2fe768928",
+      "n_qubits": 20,
+      "parameters": {
+        "n_steps": 1,
+        "reference_trotter_number_beta": 44.25193695058628,
+        "uniform_epsilon": 1.690738878654803e-11
+      },
+      "problem": "inputs/65aaa9f2fe768928/hamiltonian.json",
+      "problem_sha256": "e316f9008f50d308e0658f4c0ba7fad4aa4e000600554128e5f97aca9d1f9516",
+      "sector_dimension": 184756,
+      "terms": 7150,
+      "work": 66646441984
+    },
+    {
+      "archive_sha256": "1fb0a64c64740cae2e343bd28c02204bcf05dec1018ee280d5f5deb254aea728",
+      "case_id": "hydrogen_data|ES_H10_linear_R1.2_sto-6g_ham.hdf5|/ham_JW",
+      "count_problem_sha256": "a3a877e4fa38eda8cfad4c7a54ef5a75454ac274a8514c4279044499dc52f673",
+      "electrons": 10,
+      "expected_counts": {
+        "baseline": 5470892,
+        "elote": 764774
+      },
+      "expected_schedules": {
+        "baseline": "f1e2f214ec57e74d01351f9d9e01d2f48f354fd2c0f90d444262ed9de730962b",
+        "elote": "378be2b5a46363fc0537a9f4e7493e6ce0aaf9c3848977c7385ed2b81ff04a76"
+      },
+      "id": "edd6486970ab3202",
+      "n_qubits": 20,
+      "parameters": {
+        "n_steps": 1,
+        "reference_trotter_number_beta": 50.38633965305056,
+        "uniform_epsilon": 1.4757932374444644e-11
+      },
+      "problem": "inputs/edd6486970ab3202/hamiltonian.json",
+      "problem_sha256": "8d2b8e6d2155aa4946411118f4073cb7e00ee6fa1fe6ca56c89d98ffe9b76e3e",
+      "sector_dimension": 184756,
+      "terms": 7150,
+      "work": 66711453696
+    },
+    {
+      "archive_sha256": "cc59ed7ca55b6c2f428319c0372bc279d32086bc831b3ade8acc223e7407a5cb",
+      "case_id": "hydrogen_data|ES_H10_linear_R0.5_sto-6g_ham.hdf5|/ham_JW",
+      "count_problem_sha256": "5a3cb5f20da820716c652300f3f01219c06084735223092e88827aedb8617836",
+      "electrons": 10,
+      "expected_counts": {
+        "baseline": 5600180,
+        "elote": 783774
+      },
+      "expected_schedules": {
+        "baseline": "acf20e0177b40cd329d6b70d054d37a9629eac7a9cf2058e0608445319218bed",
+        "elote": "1def923b35a6065db7c843e3b1335234722cd6714bf06626e02523263ff7d737"
+      },
+      "id": "2b7806924fee2e37",
+      "n_qubits": 20,
+      "parameters": {
+        "n_steps": 1,
+        "reference_trotter_number_beta": 96.99703786110169,
+        "uniform_epsilon": 8.057459723194887e-12
+      },
+      "problem": "inputs/2b7806924fee2e37/hamiltonian.json",
+      "problem_sha256": "58558c15ccc37f437adab7a9c604199db24439cd6e5930f91babbbadbbac4ce3",
+      "sector_dimension": 184756,
+      "terms": 7150,
+      "work": 66568847360
+    },
+    {
+      "archive_sha256": "2eaeb462a93a1677994e91f3ec7a51abec6427f210cf0b82a3cf7166d03fa423",
+      "case_id": "hydrogen_data|ES_H10_linear_R1.9_sto-6g_ham.hdf5|/ham_JW",
+      "count_problem_sha256": "29aeb22019303ee24021f74571930c1c198174637f62904bbeff4a0378e3bb8a",
+      "electrons": 10,
+      "expected_counts": {
+        "baseline": 5433696,
+        "elote": 758358
+      },
+      "expected_schedules": {
+        "baseline": "b2e0464eac400f6afb80cd736ecf5df4aee39f09790a6398de6dbe7b5623812c",
+        "elote": "82cf9cd1af8f880b7549bcf4f0d7b0eca28f5be953ee6542f3b559ec664fc7a9"
+      },
+      "id": "354c41365a9ed13b",
+      "n_qubits": 20,
+      "parameters": {
+        "n_steps": 1,
+        "reference_trotter_number_beta": 42.88184465266911,
+        "uniform_epsilon": 1.7488714161383926e-11
+      },
+      "problem": "inputs/354c41365a9ed13b/hamiltonian.json",
+      "problem_sha256": "562ec8159ef02656a44c3e1a68f3139c696ebbf28ddbc4e7b8b1aef58203bf3a",
+      "sector_dimension": 184756,
+      "terms": 7150,
+      "work": 66585624576
+    },
+    {
+      "archive_sha256": "cf593ec631ca607cd4ec2ec030082314d4636d59f51f2a31fd23c74986929454",
+      "case_id": "hydrogen_data|ES_H10_linear_R1.4_sto-6g_ham.hdf5|/ham_JW",
+      "count_problem_sha256": "19883a85c46c5e304e74c390a8c9a147e05943a00d07afe174fb6695a9d5502b",
+      "electrons": 10,
+      "expected_counts": {
+        "baseline": 5458128,
+        "elote": 763104
+      },
+      "expected_schedules": {
+        "baseline": "0595f8605ed5bc0208358e1f405819b57e1cb080feb13720b3483a61966ac6ed",
+        "elote": "4aae5d026898f72e4bd066842d7ccd5288227a684861db1e9d651bd78dd42ee2"
+      },
+      "id": "4d9b1e85dc77d6b0",
+      "n_qubits": 20,
+      "parameters": {
+        "n_steps": 1,
+        "reference_trotter_number_beta": 47.26199783106552,
+        "uniform_epsilon": 1.5733254247073496e-11
+      },
+      "problem": "inputs/4d9b1e85dc77d6b0/hamiltonian.json",
+      "problem_sha256": "8d2ef8b3557c1638908d04307f5205b914e4c939037080b8fd8b25da7afaa1ed",
+      "sector_dimension": 184756,
+      "terms": 7150,
+      "work": 66839379968
+    },
+    {
+      "archive_sha256": "de2bcb0ed93959828f2cc59524f22939c1b35b96805c00f4729fb8b4b84093df",
+      "case_id": "hydrogen_data|ES_H10_linear_R0.6_sto-6g_ham.hdf5|/ham_JW",
+      "count_problem_sha256": "2bf340c172ff90bce85136e0382cd01c18a3c0ca14c55d60318e03422344e990",
+      "electrons": 10,
+      "expected_counts": {
+        "baseline": 5568352,
+        "elote": 779636
+      },
+      "expected_schedules": {
+        "baseline": "7d28692e4860b752548b4621eadaeb8c3d6837a6f9266b6ad8cfd378518eb2ce",
+        "elote": "a4874f99e49a1c6ef6cc3ddc412c588e355cf6c7c280129341a5f5f9dc64a966"
+      },
+      "id": "4b2d85df6b1ed33a",
+      "n_qubits": 20,
+      "parameters": {
+        "n_steps": 1,
+        "reference_trotter_number_beta": 78.90596735969326,
+        "uniform_epsilon": 9.440493973678716e-12
+      },
+      "problem": "inputs/4b2d85df6b1ed33a/hamiltonian.json",
+      "problem_sha256": "65606ee88d8b421b01a362b42aa238804e0511d8e5c19d85d686783066673f64",
+      "sector_dimension": 184756,
+      "terms": 7150,
+      "work": 66644344832
+    },
+    {
+      "archive_sha256": "e2d6af7bd6d3ff3025f5696f42fba927aa87bdf9e388739bf8685b08860a6298",
+      "case_id": "hydrogen_data|ES_H10_linear_R2.0_sto-6g_ham.hdf5|/ham_JW",
+      "count_problem_sha256": "2b34790c5ec545f20cb77b5a1a06758822321405c1df2387d1698f5c01af1e17",
+      "electrons": 10,
+      "expected_counts": {
+        "baseline": 5430328,
+        "elote": 759166
+      },
+      "expected_schedules": {
+        "baseline": "4283fa4a6c8f9f579661cd34dd9500114dd68380d5244f8fedfe1921b0e41c28",
+        "elote": "17b3de068fa1cb47f38b79d5de9c78ca3754d00333e416d8db8317a5db99debf"
+      },
+      "id": "8e930c95a2bd7004",
+      "n_qubits": 20,
+      "parameters": {
+        "n_steps": 1,
+        "reference_trotter_number_beta": 42.288070813234526,
+        "uniform_epsilon": 1.7752203749244646e-11
+      },
+      "problem": "inputs/8e930c95a2bd7004/hamiltonian.json",
+      "problem_sha256": "66239707629bb2161a252f46bfea60ba05a0178bad87c69767ce35e26666048f",
+      "sector_dimension": 184756,
+      "terms": 7150,
+      "work": 66560458752
+    },
+    {
+      "archive_sha256": "f79c610f7d9d394d1ec44974eadc1594dd31f04830d8561519861c660222c961",
+      "case_id": "hydrogen_data|ES_H10_linear_R0.9_sto-6g_ham.hdf5|/ham_JW",
+      "count_problem_sha256": "6bbf23e62e0f0a90377c5e483625aad3d026215262e0f3c2263b119395334cbe",
+      "electrons": 10,
+      "expected_counts": {
+        "baseline": 5503428,
+        "elote": 769798
+      },
+      "expected_schedules": {
+        "baseline": "00a29f0c1df7d119d09397d50a65c08e3fd44dcf0d1ea3de80d45c4cce686786",
+        "elote": "ad649c8d76fc0b0b959592d068fcc7087d0cad1555f18ded5eef66ad159ce5c7"
+      },
+      "id": "48add7751ef87f55",
+      "n_qubits": 20,
+      "parameters": {
+        "n_steps": 1,
+        "reference_trotter_number_beta": 58.56578748524843,
+        "uniform_epsilon": 1.2671752307376656e-11
+      },
+      "problem": "inputs/48add7751ef87f55/hamiltonian.json",
+      "problem_sha256": "c9bd1ba34efb100bc38eec961a93b26f8ac1ed69c632b0ed45ded183874b4486",
+      "sector_dimension": 184756,
+      "terms": 7150,
+      "work": 66518515712
+    },
+    {
+      "archive_sha256": "c0d1e2d86a9ba258760bfc5487ecbbce55fdb26a2b03a2fab2da4bbadcc5e200",
+      "case_id": "hydrogen_data|ES_H10_linear_R1.8_sto-6g_ham.hdf5|/ham_JW",
+      "count_problem_sha256": "ca1b3db887c2e2b0e398b82ec1acfdb0ccee284ec28f27306b7175a4fd12ee2b",
+      "electrons": 10,
+      "expected_counts": {
+        "baseline": 5439716,
+        "elote": 759616
+      },
+      "expected_schedules": {
+        "baseline": "3421d7d0917d281c149191f696c63771d3fa560787a01d91988a4a66beae16cd",
+        "elote": "3a7520c720b785e03e30f1546933e8a3bfe6f5993b059b0c32da95f1b03c4de4"
+      },
+      "id": "1abd426a59be9a55",
+      "n_qubits": 20,
+      "parameters": {
+        "n_steps": 1,
+        "reference_trotter_number_beta": 43.52403023911259,
+        "uniform_epsilon": 1.725413707761724e-11
+      },
+      "problem": "inputs/1abd426a59be9a55/hamiltonian.json",
+      "problem_sha256": "b58d6d3664bf0c7c02500acd6322afec1bfb18f750c827a615729805de11ad47",
+      "sector_dimension": 184756,
+      "terms": 7150,
+      "work": 66484961280
+    },
+    {
+      "archive_sha256": "1bfc73009a4264f6db65f2957da47d9bdd5358219ce9a34a1eda697479d36e9d",
+      "case_id": "hydrogen_data|ES_H10_linear_R1.5_sto-6g_ham.hdf5|/ham_JW",
+      "count_problem_sha256": "f25eaabb05eca916a2f8b393324ab5fa696e98121ec805e88ed9214bc140d421",
+      "electrons": 10,
+      "expected_counts": {
+        "baseline": 5453488,
+        "elote": 761976
+      },
+      "expected_schedules": {
+        "baseline": "346f213be4c6880044d797950663c66cbdc001d78b5573d15b3080c305b2fdb1",
+        "elote": "c5e924e15a705bf6706e1c152a96bf8b3e16bc7757dddc3aca299a47e6df2ae7"
+      },
+      "id": "6b096cd3296abde6",
+      "n_qubits": 20,
+      "parameters": {
+        "n_steps": 1,
+        "reference_trotter_number_beta": 46.097512900551436,
+        "uniform_epsilon": 1.622420358310463e-11
+      },
+      "problem": "inputs/6b096cd3296abde6/hamiltonian.json",
+      "problem_sha256": "09079b4eb6834f03b9c7e3a7837e6caf523dd545b7f4a80e9c650c9b58725e5c",
+      "sector_dimension": 184756,
+      "terms": 7150,
+      "work": 66585624576
+    },
+    {
+      "archive_sha256": "f50017a93925357cf9b5f2aafb474888c6fa41674a5657132bf9a28466f9b751",
+      "case_id": "hydrogen_data|ES_H10_linear_R1.3_sto-6g_ham.hdf5|/ham_JW",
+      "count_problem_sha256": "43c9270c87d6e52124488fdb1f945d9e21591b39f85de65ad2b97677a2848fe3",
+      "electrons": 10,
+      "expected_counts": {
+        "baseline": 5469996,
+        "elote": 764638
+      },
+      "expected_schedules": {
+        "baseline": "bb2ba52d7f3406758c0fa3593af7360e9630a478dfaa6895a8f366d2ff527ade",
+        "elote": "5e5205830eae0e179b0227bcd3db94edc166bd12ec3deeb09fa43cab66c7d733"
+      },
+      "id": "f35eacf8568cccc5",
+      "n_qubits": 20,
+      "parameters": {
+        "n_steps": 1,
+        "reference_trotter_number_beta": 48.665130127426984,
+        "uniform_epsilon": 1.534533874311496e-11
+      },
+      "problem": "inputs/f35eacf8568cccc5/hamiltonian.json",
+      "problem_sha256": "6086e7cf45afacd327dfaa8d83445fbeb048ac8a5231a0b31593a2e73a52192b",
+      "sector_dimension": 184756,
+      "terms": 7150,
+      "work": 66556264448
+    },
+    {
+      "archive_sha256": "4242b106ec741c189fdd690e7b7ea18de904b68606a110635307db9dd17615d9",
+      "case_id": "hydrogen_data|ES_H10_linear_R0.7_sto-6g_ham.hdf5|/ham_JW",
+      "count_problem_sha256": "1c5ed197eb17c46538baaa25f3f3a0f0ac3ab50b4f793506077fa38953acb8db",
+      "electrons": 10,
+      "expected_counts": {
+        "baseline": 5547000,
+        "elote": 774956
+      },
+      "expected_schedules": {
+        "baseline": "793eee026fccc74acd2738dab16bc94f504d56f917ce812d33a77347d78e07ce",
+        "elote": "46c30237a0d98cb3ae463583f91e8068d100faabeee133874c77942ab3f81924"
+      },
+      "id": "d2458d274904c044",
+      "n_qubits": 20,
+      "parameters": {
+        "n_steps": 1,
+        "reference_trotter_number_beta": 69.02611785129672,
+        "uniform_epsilon": 1.0651443040022075e-11
+      },
+      "problem": "inputs/d2458d274904c044/hamiltonian.json",
+      "problem_sha256": "01f270bc6dd53c2c61b71304e2f148ba1923c174b11fe68cf61d63d36bbcd106",
+      "sector_dimension": 184756,
+      "terms": 7150,
+      "work": 66686287872
+    },
+    {
+      "archive_sha256": "0e3e32fbb9d1016e717524fe6c462fbfe1e019961c1dedab639f8d2d0e243f54",
+      "case_id": "hydrogen_data|ES_H10_linear_R1.6_sto-6g_ham.hdf5|/ham_JW",
+      "count_problem_sha256": "55a726a98bf5b65d8dc4aacc9355f79de34fcc773a6dd1865a7c7596089ddc7a",
+      "electrons": 10,
+      "expected_counts": {
+        "baseline": 5445644,
+        "elote": 761132
+      },
+      "expected_schedules": {
+        "baseline": "70eca53e072ab0f31997e4d9be1659930158a650a187555bc0415498921a502c",
+        "elote": "3e208dd6c47c19da61bdba3e96849bb5a912395a9e5ae7dd77bf7339bd66dc9e"
+      },
+      "id": "cea20d2a79dd661d",
+      "n_qubits": 20,
+      "parameters": {
+        "n_steps": 1,
+        "reference_trotter_number_beta": 45.10713478348024,
+        "uniform_epsilon": 1.663004430190886e-11
+      },
+      "problem": "inputs/cea20d2a79dd661d/hamiltonian.json",
+      "problem_sha256": "03d8057d923994610ecd188da8966dc94ace9d20ed279a99b6a00539bd6854ab",
+      "sector_dimension": 184756,
+      "terms": 7150,
+      "work": 66472378368
+    },
+    {
+      "archive_sha256": "7497e23e809e0e193217439628380589ad20d5791b1be21cefb9eb57f7cb969a",
+      "case_id": "hydrogen_data|ES_H10_linear_R1.0_sto-6g_ham.hdf5|/ham_JW",
+      "count_problem_sha256": "7a16b751b2eebc56f40d84ffdb629b1a9000b39bc78892ea8d7a35ba47f797a7",
+      "electrons": 10,
+      "expected_counts": {
+        "baseline": 5492088,
+        "elote": 768406
+      },
+      "expected_schedules": {
+        "baseline": "5c5feab24fa43ce09ccec96dc4d73d78f5ff14ac52edd4049ce76b1671a97da0",
+        "elote": "feddf36705fd53bca5c94c3e21e6ba25079750240fc7d3ca8a40e084fa430f89"
+      },
+      "id": "42d49f8d69270567",
+      "n_qubits": 20,
+      "parameters": {
+        "n_steps": 1,
+        "reference_trotter_number_beta": 55.18166089483019,
+        "uniform_epsilon": 1.3427802174084107e-11
+      },
+      "problem": "inputs/42d49f8d69270567/hamiltonian.json",
+      "problem_sha256": "1f427a96237a6d97462096db1efd19685e9c337a9ac78bc3523e053bb859c407",
+      "sector_dimension": 184756,
+      "terms": 7150,
+      "work": 66717745152
+    },
+    {
+      "archive_sha256": "4252a4a57a27f1b219d9bf3e3a910ee7466f6633e70ec737b02244f18278bb56",
+      "case_id": "hydrogen_data|ES_H10_pyramid_R1.3_sto-6g_ham.hdf5|/ham_JW",
+      "count_problem_sha256": "e7bbac751ac3dff7e159b4fd15321ffdb276522870a524e0a6711274cafe9dde",
+      "electrons": 10,
+      "expected_counts": {
+        "baseline": 3923432,
+        "elote": 540674
+      },
+      "expected_schedules": {
+        "baseline": "4d05ef331876b59ee0ade1eb24004849461442861c61546abe21a0ee14bb18f5",
+        "elote": "9dcf0c48c4c8723f608b3203aa847d18e4602a301f372c9ec32c58228d06db48"
+      },
+      "id": "10eee66ad43c86c1",
+      "n_qubits": 20,
+      "parameters": {
+        "n_steps": 1,
+        "reference_trotter_number_beta": 41.80042988922504,
+        "uniform_epsilon": 2.495825054478321e-11
+      },
+      "problem": "inputs/10eee66ad43c86c1/hamiltonian.json",
+      "problem_sha256": "e022f57942af875011fe67a99b48968e822a2a06081c23ca58d9b0565d68755d",
+      "sector_dimension": 184756,
+      "terms": 5158,
+      "work": 48650780672
+    },
+    {
+      "archive_sha256": "50109bcf5b8379b8aec2b9cc282b9635a49b104eb21142805e6aabd65f752d1c",
+      "case_id": "hydrogen_data|ES_H10_pyramid_R0.5_sto-6g_ham.hdf5|/ham_JW",
+      "count_problem_sha256": "f7763835a007922c0c77aeb02822634b8d2eb21e3bd5f9cae75e54673b50b046",
+      "electrons": 10,
+      "expected_counts": {
+        "baseline": 3975564,
+        "elote": 548860
+      },
+      "expected_schedules": {
+        "baseline": "a8d4532361ca994b03deacefcafcb90e02fb3464512d32d6d5ecb23dd6541568",
+        "elote": "217f8827ab6366bb7afeedbf759ae660d650dd0a5375ebc775701f4e72342245"
+      },
+      "id": "2bffec9782a71e98",
+      "n_qubits": 20,
+      "parameters": {
+        "n_steps": 1,
+        "reference_trotter_number_beta": 57.16509545962457,
+        "uniform_epsilon": 1.7923405598270397e-11
+      },
+      "problem": "inputs/2bffec9782a71e98/hamiltonian.json",
+      "problem_sha256": "71db6345799c9f6070d17e3202a7c342d2c8dba48a5e3470e6bac0c53060970c",
+      "sector_dimension": 184756,
+      "terms": 5158,
+      "work": 48883564544
+    },
+    {
+      "archive_sha256": "6ca5b59d9198890676e45271b9875fe8d461be0151a0762258286f7f88ad4d31",
+      "case_id": "hydrogen_data|ES_H10_pyramid_R1.2_sto-6g_ham.hdf5|/ham_JW",
+      "count_problem_sha256": "736c46ef906e250f436ab32215fa9c693052fbde1596171bebbd2f16280c6da4",
+      "electrons": 10,
+      "expected_counts": {
+        "baseline": 3932012,
+        "elote": 541488
+      },
+      "expected_schedules": {
+        "baseline": "86f2002f7f69f746f9f5754402416f598c4b6ede1145edeff20fe7f93ac7b9aa",
+        "elote": "cbf9d74b7c78613fad6da878c516284d52b6a4245332d60c61433b47d117f9d0"
+      },
+      "id": "29d86da9df1afb62",
+      "n_qubits": 20,
+      "parameters": {
+        "n_steps": 1,
+        "reference_trotter_number_beta": 45.162235446449394,
+        "uniform_epsilon": 2.2930875826266487e-11
+      },
+      "problem": "inputs/29d86da9df1afb62/hamiltonian.json",
+      "problem_sha256": "08a63ab515ce09b7ddaea0bfb7271c7f0d8c8755c306d092382c559eae9de8af",
+      "sector_dimension": 184756,
+      "terms": 5158,
+      "work": 48818552832
+    },
+    {
+      "archive_sha256": "06c01f25bf42891a6a8902ae41205faee238c827b49396ac2c56b96250a9f5c8",
+      "case_id": "hydrogen_data|ES_H10_pyramid_R2.0_sto-6g_ham.hdf5|/ham_JW",
+      "count_problem_sha256": "b21b71d6962e103401b35e9a6e49a4fe65ad503da30ad9ad2d16f9aa1ce5e231",
+      "electrons": 10,
+      "expected_counts": {
+        "baseline": 3898260,
+        "elote": 537216
+      },
+      "expected_schedules": {
+        "baseline": "df4fc558b9b332cb1996f20790480684c0b44c72809461085a6200bdfa79149d",
+        "elote": "327869c8678dcd91c53780265271e9af9554147566708f2e89fc0d719086a135"
+      },
+      "id": "e9e755e14acc5b30",
+      "n_qubits": 20,
+      "parameters": {
+        "n_steps": 1,
+        "reference_trotter_number_beta": 35.84049834467632,
+        "uniform_epsilon": 2.92690318132367e-11
+      },
+      "problem": "inputs/e9e755e14acc5b30/hamiltonian.json",
+      "problem_sha256": "758005459dfc04e16edc10c68c9f7aabac93d0bcc4dc313d9df97fbe6b5a44a7",
+      "sector_dimension": 184756,
+      "terms": 5158,
+      "work": 48667557888
+    },
+    {
+      "archive_sha256": "8efcfe03793c780cdf457492dfabf861a9799e8a2efeca925db37044ddd83525",
+      "case_id": "hydrogen_data|ES_H10_pyramid_R0.8_sto-6g_ham.hdf5|/ham_JW",
+      "count_problem_sha256": "6fc03a6510cacf66435793eee93d2ad7e9dc0837c1fc470ad711f1fa97397eb3",
+      "electrons": 10,
+      "expected_counts": {
+        "baseline": 3951464,
+        "elote": 544578
+      },
+      "expected_schedules": {
+        "baseline": "98b0cc1ee1cfd2cd2c550950076b5d9335c1471a6c8d1039c759101bf6bc6a90",
+        "elote": "6b2fc709c41c5fa696cc04ff9876fca1350c38da9a96c288f043465a257583ee"
+      },
+      "id": "a8a392cf5738d90e",
+      "n_qubits": 20,
+      "parameters": {
+        "n_steps": 1,
+        "reference_trotter_number_beta": 51.20962418132502,
+        "uniform_epsilon": 2.011713101528788e-11
+      },
+      "problem": "inputs/a8a392cf5738d90e/hamiltonian.json",
+      "problem_sha256": "75a744b759f0fde64716171a6bca7f740d586998d67987dd72a42c42b6d9ea4a",
+      "sector_dimension": 184756,
+      "terms": 5158,
+      "work": 48835330048
+    },
+    {
+      "archive_sha256": "4864dfa9994fd5da92c21a15c469b788a081e36d9427036d6285c8da255b88e7",
+      "case_id": "hydrogen_data|ES_H10_pyramid_R1.4_sto-6g_ham.hdf5|/ham_JW",
+      "count_problem_sha256": "e03cde624095d6e2587c4a3e717219b480c4279a8404a171d7e0d88f3fe99626",
+      "electrons": 10,
+      "expected_counts": {
+        "baseline": 3921512,
+        "elote": 539400
+      },
+      "expected_schedules": {
+        "baseline": "4e7a4921dea294187d9f6bb1b2907d70477159d1d729d7b72f91225587d05f57",
+        "elote": "4f49bce3888b67777b3560bd40009c084ba7fcb8419cea755e0010b781a296f3"
+      },
+      "id": "f1b84e2032e7c97a",
+      "n_qubits": 20,
+      "parameters": {
+        "n_steps": 1,
+        "reference_trotter_number_beta": 39.44110350628449,
+        "uniform_epsilon": 2.637113157728669e-11
+      },
+      "problem": "inputs/f1b84e2032e7c97a/hamiltonian.json",
+      "problem_sha256": "635dfa9b67bb760606a8f584913e3d31cbe9ac3dcf2b0eeaec40f2024f513107",
+      "sector_dimension": 184756,
+      "terms": 5158,
+      "work": 48852107264
+    },
+    {
+      "archive_sha256": "764fac47af3a50674e27175b811126abc724a3b750e556888f9837e2b27ab42b",
+      "case_id": "hydrogen_data|ES_H10_pyramid_R1.7_sto-6g_ham.hdf5|/ham_JW",
+      "count_problem_sha256": "166cd0b4833098437587cafffdfe6b9ccfafe4bc39aaec621fd4a8521e1c6af8",
+      "electrons": 10,
+      "expected_counts": {
+        "baseline": 3913856,
+        "elote": 537430
+      },
+      "expected_schedules": {
+        "baseline": "f1d7cba6ef75d193d48c76067114a4548ed3e88e39b5432abdf9b312374c04eb",
+        "elote": "dcc03c7f7ed4b5b06e618f0692fc67c63512dbd3d89d10330505f31ca28dee53"
+      },
+      "id": "232bab59298bd7ef",
+      "n_qubits": 20,
+      "parameters": {
+        "n_steps": 1,
+        "reference_trotter_number_beta": 36.750414238779896,
+        "uniform_epsilon": 2.8416585552522127e-11
+      },
+      "problem": "inputs/232bab59298bd7ef/hamiltonian.json",
+      "problem_sha256": "27b712a737726a14c2aceff00add7f1498c6764d3b1e0b5fdd62a7b511c525b8",
+      "sector_dimension": 184756,
+      "terms": 5158,
+      "work": 48801775616
+    },
+    {
+      "archive_sha256": "866dcbe48e50386940e680f555acd17a7642dc00cf7f461833092ba8d6b8af9d",
+      "case_id": "hydrogen_data|ES_H10_pyramid_R1.8_sto-6g_ham.hdf5|/ham_JW",
+      "count_problem_sha256": "60d73dd0892012f003927e464e85355a01ab2043eea7a4f251fb913ba45ae5f6",
+      "electrons": 10,
+      "expected_counts": {
+        "baseline": 3914440,
+        "elote": 538214
+      },
+      "expected_schedules": {
+        "baseline": "84059fee9892a8ac0249c8b84b523f0e6b68e3c2c08fd76adc55675422a8433b",
+        "elote": "789a3024857d83daa84ce4f3aca91ae084ffbd145d232340f15c69f0f47a3f53"
+      },
+      "id": "29eda445e4079149",
+      "n_qubits": 20,
+      "parameters": {
+        "n_steps": 1,
+        "reference_trotter_number_beta": 39.24089334932327,
+        "uniform_epsilon": 2.6487671324850655e-11
+      },
+      "problem": "inputs/29eda445e4079149/hamiltonian.json",
+      "problem_sha256": "0327e8ed7167ead131a57d5ddde13b905cd5b8d72e322cb97c39fb5482ab9d7e",
+      "sector_dimension": 184756,
+      "terms": 5158,
+      "work": 48885661696
+    },
+    {
+      "archive_sha256": "a18e4bca45ba77c4d568ffa8e8ec98e8de6feb15aafd090820a61a4f6fe056b0",
+      "case_id": "hydrogen_data|ES_H10_pyramid_R0.9_sto-6g_ham.hdf5|/ham_JW",
+      "count_problem_sha256": "721a9495655f8e084ab9f31c2a5666d11d83a4a00adc7762056fb9e38293ebbd",
+      "electrons": 10,
+      "expected_counts": {
+        "baseline": 3952764,
+        "elote": 544168
+      },
+      "expected_schedules": {
+        "baseline": "3b6f3ec8643c2fcf65bb983467a1c14429b6a38219d08393f39e07b3b37924af",
+        "elote": "1cb8ebc20f9b9460587cb3af6ba0daa30f354ad2c8e7e39ab5f64602e465883b"
+      },
+      "id": "c96117c6826c58ef",
+      "n_qubits": 20,
+      "parameters": {
+        "n_steps": 1,
+        "reference_trotter_number_beta": 48.816218877859846,
+        "uniform_epsilon": 2.1229276075728637e-11
+      },
+      "problem": "inputs/c96117c6826c58ef/hamiltonian.json",
+      "problem_sha256": "70f674406ccebea485801aaa573f6a23f16bc987cdd45d4f67e20768173c5183",
+      "sector_dimension": 184756,
+      "terms": 5158,
+      "work": 48678043648
+    },
+    {
+      "archive_sha256": "d644914037aafd86f2175a514331cc6dc4e0e5584672ef84f0e64958ab1e47f6",
+      "case_id": "hydrogen_data|ES_H10_pyramid_R1.6_sto-6g_ham.hdf5|/ham_JW",
+      "count_problem_sha256": "c33f26fda0fce4a90ae6ed5497dbf0782934df22604396a0fce1c1cce8160b84",
+      "electrons": 10,
+      "expected_counts": {
+        "baseline": 3918448,
+        "elote": 539050
+      },
+      "expected_schedules": {
+        "baseline": "4e7f960eb46946a26989b74e20ba3dfe4b8a3b252a92d3dd8db58da516698e6d",
+        "elote": "3fb55c9b55eea1e9e5eaeae66981a61b398cf8db307ba8f90885f3a64f202ad2"
+      },
+      "id": "43e4eff4a9937f3f",
+      "n_qubits": 20,
+      "parameters": {
+        "n_steps": 1,
+        "reference_trotter_number_beta": 39.005164392406556,
+        "uniform_epsilon": 2.6688994639661225e-11
+      },
+      "problem": "inputs/43e4eff4a9937f3f/hamiltonian.json",
+      "problem_sha256": "84cabea9136bd3a6044ae1e74956b9c3085c742021b9d4ecfe3c09ca90a050f6",
+      "sector_dimension": 184756,
+      "terms": 5158,
+      "work": 48835330048
+    },
+    {
+      "archive_sha256": "ee76c86534b9273382ecdbb129bf942eb4714298bd56de19a0ac13a8cfc5b8b2",
+      "case_id": "hydrogen_data|ES_H10_pyramid_R1.9_sto-6g_ham.hdf5|/ham_JW",
+      "count_problem_sha256": "b1ae3811fac0ed14cc79ccc42a4dcd89aa2f4bb76b880680c3fab33cef06b650",
+      "electrons": 10,
+      "expected_counts": {
+        "baseline": 3903764,
+        "elote": 537200
+      },
+      "expected_schedules": {
+        "baseline": "0950620407de36e3a6cade06eca259d97e1f7f11a5541798410cba521b086db4",
+        "elote": "28b120a581085b7317c2e08586eb94edf9722f5e67c03f9363bdbf6fbf8b9707"
+      },
+      "id": "42f19cfae26b0c26",
+      "n_qubits": 20,
+      "parameters": {
+        "n_steps": 1,
+        "reference_trotter_number_beta": 35.7410014949724,
+        "uniform_epsilon": 2.919620229273504e-11
+      },
+      "problem": "inputs/42f19cfae26b0c26/hamiltonian.json",
+      "problem_sha256": "9efa11ab899d8cbb74b34055e0a3682d223e289da96117885600893cd8aff32c",
+      "sector_dimension": 184756,
+      "terms": 5158,
+      "work": 48873078784
+    },
+    {
+      "archive_sha256": "29e561ccca81f65cd4de7738e98fa3bb67f47adad4762f952753da49af08c63e",
+      "case_id": "hydrogen_data|ES_H10_pyramid_R1.1_sto-6g_ham.hdf5|/ham_JW",
+      "count_problem_sha256": "ad9cd143f594fccfb958e4a2efc62542816a1b32e94cbdf2083bd9b953258982",
+      "electrons": 10,
+      "expected_counts": {
+        "baseline": 3936448,
+        "elote": 542398
+      },
+      "expected_schedules": {
+        "baseline": "98eb609c629ce5a0327fd599b58d8c3316ae1f34696cb39ba9a55f408b1debcf",
+        "elote": "08c35d95d6215686aa41b3906ba5613f70ca82b3496a7f441c4101e133f89197"
+      },
+      "id": "ef8493a93553617d",
+      "n_qubits": 20,
+      "parameters": {
+        "n_steps": 1,
+        "reference_trotter_number_beta": 46.09714844776737,
+        "uniform_epsilon": 2.2455547707139552e-11
+      },
+      "problem": "inputs/ef8493a93553617d/hamiltonian.json",
+      "problem_sha256": "7148b519b84becf0283dc838dd0009a0a473d133827cab16d685d8c81d45c112",
+      "sector_dimension": 184756,
+      "terms": 5158,
+      "work": 48805969920
+    },
+    {
+      "archive_sha256": "2faf540dfd21767e7414bc8a9b72040ca8e58984cbbfdaca1970270b35232a85",
+      "case_id": "hydrogen_data|ES_H10_pyramid_R1.0_sto-6g_ham.hdf5|/ham_JW",
+      "count_problem_sha256": "785e40154a59f082aad498b0afcf5c297bcc2a16fb2669d98cc8fb41416bd947",
+      "electrons": 10,
+      "expected_counts": {
+        "baseline": 3938728,
+        "elote": 543990
+      },
+      "expected_schedules": {
+        "baseline": "71aea16c6b38561a0b28d0ee31e484be56f796b8f0493e7387b1637def8285a0",
+        "elote": "b97bd81960507d5c03de0fda490460f68d849c407cac6d73a5bf321dbf7083ff"
+      },
+      "id": "a07be4214670478a",
+      "n_qubits": 20,
+      "parameters": {
+        "n_steps": 1,
+        "reference_trotter_number_beta": 47.93919600453031,
+        "uniform_epsilon": 2.160295292103528e-11
+      },
+      "problem": "inputs/a07be4214670478a/hamiltonian.json",
+      "problem_sha256": "2783f46b936b9530fa5228107e62a7163b0f5927b83c574e3d3db6a10ad633f8",
+      "sector_dimension": 184756,
+      "terms": 5158,
+      "work": 48730472448
+    },
+    {
+      "archive_sha256": "c69e48894bd1661385103a45b87469135668f092ecd4966b5e11d638428978e2",
+      "case_id": "hydrogen_data|ES_H10_pyramid_R0.7_sto-6g_ham.hdf5|/ham_JW",
+      "count_problem_sha256": "03c54b203eb9d241d26480f87db8d3e19d104e1ad8028abdefcbe7be74612840",
+      "electrons": 10,
+      "expected_counts": {
+        "baseline": 3959460,
+        "elote": 545848
+      },
+      "expected_schedules": {
+        "baseline": "1e22d5579d990701ec3d9d229ac69014376d9e31514bb3ca03451e4e83bc68d1",
+        "elote": "ef1e94f9295e8f5249aa55085230c29e344332a57490c0692368c12ec3a7b01c"
+      },
+      "id": "9fa1338172bc3639",
+      "n_qubits": 20,
+      "parameters": {
+        "n_steps": 1,
+        "reference_trotter_number_beta": 52.726424703897955,
+        "uniform_epsilon": 1.9604707324475255e-11
+      },
+      "problem": "inputs/9fa1338172bc3639/hamiltonian.json",
+      "problem_sha256": "9779956f5f2c04354a1703c936a6ca4c23f36d71754774270fd360e5f10452cd",
+      "sector_dimension": 184756,
+      "terms": 5158,
+      "work": 48663363584
+    },
+    {
+      "archive_sha256": "d8e57cec99b6aa0a78e3d8be1fbc2bfeabd50a7eb434854d8ee1bd501f3a6578",
+      "case_id": "hydrogen_data|ES_H10_pyramid_R1.5_sto-6g_ham.hdf5|/ham_JW",
+      "count_problem_sha256": "356fe66088fb48e6f7e680e1728b176dc46ab72e032d54b8e9423b91a0f170e6",
+      "electrons": 10,
+      "expected_counts": {
+        "baseline": 8496604,
+        "elote": 1179452
+      },
+      "expected_schedules": {
+        "baseline": "dcf15e82f68f7be80e47adefc8650a6f76eca406dd5d653cb5159bb8c8034671",
+        "elote": "d561f0c8b25a638e2ae670e7886f2b6c43ce003a289c92aaa63688e15aa8f3b8"
+      },
+      "id": "30d24f0335bfe2b7",
+      "n_qubits": 20,
+      "parameters": {
+        "n_steps": 1,
+        "reference_trotter_number_beta": 50.015574915786466,
+        "uniform_epsilon": 9.687768466249438e-12
+      },
+      "problem": "inputs/30d24f0335bfe2b7/hamiltonian.json",
+      "problem_sha256": "542925cd42f44208985a1f243c2dd638c5afdf303f29a1bdabc861b9c7bcda70",
+      "sector_dimension": 184756,
+      "terms": 10830,
+      "work": 101792612352
+    },
+    {
+      "archive_sha256": "ca254b2234909f1633a9c296627728809dce88c907c3cceb263c55d57eaaf662",
+      "case_id": "hydrogen_data|ES_H10_pyramid_R0.6_sto-6g_ham.hdf5|/ham_JW",
+      "count_problem_sha256": "5a3227e58d94538ea1433ea23380ea34bad4f01d06f1e95703d3519a0b7ed016",
+      "electrons": 10,
+      "expected_counts": {
+        "baseline": 3970864,
+        "elote": 547036
+      },
+      "expected_schedules": {
+        "baseline": "5bba38c8c4017b026b3ad3ff69c8273d06a8ee806c67d99060fbc81e447b9834",
+        "elote": "c351c6cca4ab9b09d61f45203814f5608a37c335da7dc95a27eb537a394de904"
+      },
+      "id": "0f8022849a5e4908",
+      "n_qubits": 20,
+      "parameters": {
+        "n_steps": 1,
+        "reference_trotter_number_beta": 55.142241406572516,
+        "uniform_epsilon": 1.8581991451321947e-11
+      },
+      "problem": "inputs/0f8022849a5e4908/hamiltonian.json",
+      "problem_sha256": "7a2a3172f41a42e5d7cb5867b1b52ea4a146e1942556b33a5c6f4fd8f5b688a6",
+      "sector_dimension": 184756,
+      "terms": 5158,
+      "work": 48933896192
+    },
+    {
+      "archive_sha256": "ff091847cc2c67449be49bb1ae0d2d66ab989d3bb8c81565c176b1c07b1dd313",
+      "case_id": "hydrogen_data|ES_H10_ring_R0.5_sto-6g_ham.hdf5|/ham_JW",
+      "count_problem_sha256": "a058b2fd08059930813d66215e43dbff319e46ec2a339b43758631db9bc97c02",
+      "electrons": 10,
+      "expected_counts": {
+        "baseline": 4017388,
+        "elote": 540360
+      },
+      "expected_schedules": {
+        "baseline": "8abfc30c40a38232d5733e60419b226c0b6f20086547af600c7711ff61203f00",
+        "elote": "72d7a0935d2dfbc57c29ccc6cb5adb2fa90a99b8123efd96b06135e405ec6763"
+      },
+      "id": "1d90e8f09b253920",
+      "n_qubits": 20,
+      "parameters": {
+        "n_steps": 1,
+        "reference_trotter_number_beta": 86.04634364812334,
+        "uniform_epsilon": 1.290706477239492e-11
+      },
+      "problem": "inputs/1d90e8f09b253920/hamiltonian.json",
+      "problem_sha256": "f40f83931b2b7ee5f9ad1f795470d5f3580128e747f76a60ebaec3e814b6fed1",
+      "sector_dimension": 184756,
+      "terms": 5022,
+      "work": 48707403776
+    },
+    {
+      "archive_sha256": "683ffd680873428764ef361293be43838656ab541bfc4c29f50ce7b57e8577c4",
+      "case_id": "hydrogen_data|ES_H10_ring_R1.3_sto-6g_ham.hdf5|/ham_JW",
+      "count_problem_sha256": "0438429d6a9d00adb1a62873ac9ab598888db92f8453550af8e233e27043a9ab",
+      "electrons": 10,
+      "expected_counts": {
+        "baseline": 3918296,
+        "elote": 527240
+      },
+      "expected_schedules": {
+        "baseline": "81e35b5bacec15b3c0f6035380b182f973f315f9db64f87f40b45a259907105c",
+        "elote": "d117a51c50978a56ce865e9935f656f127c9876843453e46e2a980e62af18be5"
+      },
+      "id": "09763ec2b93d7900",
+      "n_qubits": 20,
+      "parameters": {
+        "n_steps": 1,
+        "reference_trotter_number_beta": 44.710452108330735,
+        "uniform_epsilon": 2.316898051608811e-11
+      },
+      "problem": "inputs/09763ec2b93d7900/hamiltonian.json",
+      "problem_sha256": "246d21ead78be9ed0b602bc92b7a0ce5f59f3e21891f13f6d37fbfb69eb1b9f3",
+      "sector_dimension": 184756,
+      "terms": 5022,
+      "work": 48877273088
+    },
+    {
+      "archive_sha256": "2c40e5952a57745fd18c0d9ab260bcddf3cb6108e2979d03082f779680310ee3",
+      "case_id": "hydrogen_data|ES_H10_ring_R0.9_sto-6g_ham.hdf5|/ham_JW",
+      "count_problem_sha256": "e48d34ad2585ce308d15183cab28f79ff0e0d89bea9f9fab0ae4dc8ffdad0673",
+      "electrons": 10,
+      "expected_counts": {
+        "baseline": 3961056,
+        "elote": 531494
+      },
+      "expected_schedules": {
+        "baseline": "5a128ea9fc3b6202b2c2a67d86d2f9fc215efd88a906e5d95e2f43577a9080a6",
+        "elote": "912276ab753d88b9f410498bf24bfea33b4e497fe1526e78cfbfd447586b8c1b"
+      },
+      "id": "e15aed65d4b96ea2",
+      "n_qubits": 20,
+      "parameters": {
+        "n_steps": 1,
+        "reference_trotter_number_beta": 54.451940151724216,
+        "uniform_epsilon": 1.887814556649339e-11
+      },
+      "problem": "inputs/e15aed65d4b96ea2/hamiltonian.json",
+      "problem_sha256": "ec381fcdcd188b6db63075dd7be3e8411f669bf858da443f62a464f9b51b95bd",
+      "sector_dimension": 184756,
+      "terms": 5022,
+      "work": 48883564544
+    },
+    {
+      "archive_sha256": "6ece6a44ee629648ed20487a2e6d647fe9c53005af3ac658cb3e69773acccc7f",
+      "case_id": "hydrogen_data|ES_H10_ring_R1.1_sto-6g_ham.hdf5|/ham_JW",
+      "count_problem_sha256": "6849818170e830df06a768114f977d4721f095f7965fc05737673dcd8bf58acf",
+      "electrons": 10,
+      "expected_counts": {
+        "baseline": 3940988,
+        "elote": 527954
+      },
+      "expected_schedules": {
+        "baseline": "b762115fee736fe486ef72c4c716a907b303eaad4098534a9535ab5978e4c83c",
+        "elote": "e56546a6be87f830ed530ea09fc337b5a562a43c222dcdee65f879ba48072b36"
+      },
+      "id": "5bd8198403ad8908",
+      "n_qubits": 20,
+      "parameters": {
+        "n_steps": 1,
+        "reference_trotter_number_beta": 47.98163365766262,
+        "uniform_epsilon": 2.1583115209912616e-11
+      },
+      "problem": "inputs/5bd8198403ad8908/hamiltonian.json",
+      "problem_sha256": "1b773eb2ad0e9c9836f78c58f60d6baa32d6ed8a664d3d3544afb5dba7d254e5",
+      "sector_dimension": 184756,
+      "terms": 5022,
+      "work": 48784998400
+    },
+    {
+      "archive_sha256": "4e5a8c9e98488535f5945cf570884b8da9c849fc1564143d598ba54a5b78bb93",
+      "case_id": "hydrogen_data|ES_H10_ring_R0.7_sto-6g_ham.hdf5|/ham_JW",
+      "count_problem_sha256": "194ccc6bd5b0700253bc0709e8d057b7addb63ec62dc12bef1599b7c126498f5",
+      "electrons": 10,
+      "expected_counts": {
+        "baseline": 3981224,
+        "elote": 534576
+      },
+      "expected_schedules": {
+        "baseline": "bc7d8b4696a4b21c480b3c3a11011209c49e8d57433a31dfe86f2f8fc83028f2",
+        "elote": "efafd4f30f84435fa2f022aaa1440b510e5ce2c0a0b24291797fff8ff821b104"
+      },
+      "id": "ed78404fe761693d",
+      "n_qubits": 20,
+      "parameters": {
+        "n_steps": 1,
+        "reference_trotter_number_beta": 63.543160793455286,
+        "uniform_epsilon": 1.6308864347462128e-11
+      },
+      "problem": "inputs/ed78404fe761693d/hamiltonian.json",
+      "problem_sha256": "73b225007ce6565c3ae0e1083a4ecdcbc63ce7f9c3407606857919bf47127d0b",
+      "sector_dimension": 184756,
+      "terms": 5022,
+      "work": 48747249664
+    },
+    {
+      "archive_sha256": "8cc1cf7d660e89d902cbfcaef519500480b0613e674db03da3f436c09ec458c1",
+      "case_id": "hydrogen_data|ES_H10_ring_R0.8_sto-6g_ham.hdf5|/ham_JW",
+      "count_problem_sha256": "a484739a3b12bb58eee0e549d2c70188799056cca9ef68145edebe51fbda9f4b",
+      "electrons": 10,
+      "expected_counts": {
+        "baseline": 3968920,
+        "elote": 533702
+      },
+      "expected_schedules": {
+        "baseline": "1b6c63ac1535a17e3ff62433c65cd366fcc348a91fb532a3fa80b7adc6cf8c1f",
+        "elote": "f1fbcdd5c167c9e9d41405cc09c47af8544763ad298693f0ec026c847c47e9df"
+      },
+      "id": "9f546b83c72b0b05",
+      "n_qubits": 20,
+      "parameters": {
+        "n_steps": 1,
+        "reference_trotter_number_beta": 57.440465682349924,
+        "uniform_epsilon": 1.788606824327463e-11
+      },
+      "problem": "inputs/9f546b83c72b0b05/hamiltonian.json",
+      "problem_sha256": "4431a2ca53de6c9a4984b9e9fffbce91c12a4e8d4269f321f578d409b904e9f4",
+      "sector_dimension": 184756,
+      "terms": 5022,
+      "work": 48826941440
+    },
+    {
+      "archive_sha256": "0d4bb0333f97e7bfa3066daa2c5b12fa731e888a1071a7842349bda319ae4f0a",
+      "case_id": "hydrogen_data|ES_H10_ring_R0.6_sto-6g_ham.hdf5|/ham_JW",
+      "count_problem_sha256": "8f670a130edd6fbb22f80adbe8b44c7216fe6cda5c701569c5328de154f38c5b",
+      "electrons": 10,
+      "expected_counts": {
+        "baseline": 3989624,
+        "elote": 537760
+      },
+      "expected_schedules": {
+        "baseline": "2b97d2f5176b08ccc359a8e7ecef817d43668a1050858329de582554693e03c6",
+        "elote": "f5995ddd87d7abfacc20060fc3f8f385a1f10b5f139a6a9deb34acca363d7bbf"
+      },
+      "id": "3c6b9e0d015b4e38",
+      "n_qubits": 20,
+      "parameters": {
+        "n_steps": 1,
+        "reference_trotter_number_beta": 72.17790768457552,
+        "uniform_epsilon": 1.470952758129575e-11
+      },
+      "problem": "inputs/3c6b9e0d015b4e38/hamiltonian.json",
+      "problem_sha256": "7fcc23273a615bae2a0c4da48e7254b028dd8573f7f09fffdcfbb11d2ef1b2d2",
+      "sector_dimension": 184756,
+      "terms": 5022,
+      "work": 48917118976
+    },
+    {
+      "archive_sha256": "08ef73a3cb49ff81a730ee307da7f2fe74fe21bdbb147ce6bdf6fc15ca62f71c",
+      "case_id": "hydrogen_data|ES_H10_ring_R2.0_sto-6g_ham.hdf5|/ham_JW",
+      "count_problem_sha256": "e05e2d800e30b1924c3651d73c488d29dbd2ceb6f0409d485dc3536550d92026",
+      "electrons": 10,
+      "expected_counts": {
+        "baseline": 3912640,
+        "elote": 522420
+      },
+      "expected_schedules": {
+        "baseline": "8be5b8124b6e39782f2a589d2bce7092fcb75baa0428ac5ce806946ac337e61f",
+        "elote": "d08e5d54685fe11b2754e8d600a18baa635cdd581970c8e8caa33b5f8cfbc272"
+      },
+      "id": "24fec1182a4a7cea",
+      "n_qubits": 20,
+      "parameters": {
+        "n_steps": 1,
+        "reference_trotter_number_beta": 38.531502354992625,
+        "uniform_epsilon": 2.7145824904991122e-11
+      },
+      "problem": "inputs/24fec1182a4a7cea/hamiltonian.json",
+      "problem_sha256": "693d52c352b63ec31b59f1889596e02c6436375a625a229063d6bfa98d7beeee",
+      "sector_dimension": 184756,
+      "terms": 5022,
+      "work": 48726278144
+    },
+    {
+      "archive_sha256": "d5dcf5f877600a9e7e977603627d36d1dfd322204ec048d6f8c4d3ed81554099",
+      "case_id": "hydrogen_data|ES_H10_ring_R1.4_sto-6g_ham.hdf5|/ham_JW",
+      "count_problem_sha256": "4eb6c999add9b942a029420808e31fe3eb469c493b72e4c8eb93465d19a2bbf7",
+      "electrons": 10,
+      "expected_counts": {
+        "baseline": 3923968,
+        "elote": 526312
+      },
+      "expected_schedules": {
+        "baseline": "2da87158c61b94a77a1381d32b336c18893e5d98a94ee7b89b71af6facd828a8",
+        "elote": "3a72539eb96169980c2b8b75514ce05927e12a7f915b4fe94f4e7828bf6265f8"
+      },
+      "id": "fa2deb6ddd83b9ce",
+      "n_qubits": 20,
+      "parameters": {
+        "n_steps": 1,
+        "reference_trotter_number_beta": 43.89757534214408,
+        "uniform_epsilon": 2.3704261540316803e-11
+      },
+      "problem": "inputs/fa2deb6ddd83b9ce/hamiltonian.json",
+      "problem_sha256": "220cbbab62c0752120c6f4b4b21e31906328857e9a4e122c30a34cb99ab34601",
+      "sector_dimension": 184756,
+      "terms": 5022,
+      "work": 48732569600
+    },
+    {
+      "archive_sha256": "6d53cbdbb19afbdbdc559360057949c799fa2163d5a86086a647764d9704f313",
+      "case_id": "hydrogen_data|ES_H10_ring_R1.0_sto-6g_ham.hdf5|/ham_JW",
+      "count_problem_sha256": "0f386dedfc1da5ede78901374362ab013e6cff59ae84d05d4f3aca2df3f2bd39",
+      "electrons": 10,
+      "expected_counts": {
+        "baseline": 3951500,
+        "elote": 530258
+      },
+      "expected_schedules": {
+        "baseline": "fb6eceeac911745885276087b90a1069c7ba9ab7fc9f802afc8a9b39ed02f10c",
+        "elote": "576079becdab9966a943864ee48949eb7d9eb730ad97a0aa83a329ab6d6812b8"
+      },
+      "id": "a291d47ac4c3c842",
+      "n_qubits": 20,
+      "parameters": {
+        "n_steps": 1,
+        "reference_trotter_number_beta": 51.15840865832315,
+        "uniform_epsilon": 2.0222206535045642e-11
+      },
+      "problem": "inputs/a291d47ac4c3c842/hamiltonian.json",
+      "problem_sha256": "bdcd5661d0bf992b4e982d697bdc6e52e9fa3f62871d727ccde115ca52800f26",
+      "sector_dimension": 184756,
+      "terms": 5022,
+      "work": 48730472448
+    },
+    {
+      "archive_sha256": "de3f352f7cd87fa05ed08f56684ef791f774318e1da357fe143b6dafe94c5bf1",
+      "case_id": "hydrogen_data|ES_H10_ring_R1.7_sto-6g_ham.hdf5|/ham_JW",
+      "count_problem_sha256": "6bab3435571206a9c4b2b0c9f922de5328fe85385b2303c9c6588d30091af8bf",
+      "electrons": 10,
+      "expected_counts": {
+        "baseline": 3903096,
+        "elote": 524124
+      },
+      "expected_schedules": {
+        "baseline": "6b510e0f0ad0b6c9153ad45dd116d9a57de3db5e81dcd327ab39936312e44722",
+        "elote": "f29b20c52c6f996429d2b9a636916c7365f8913d411f641f05f1a9da57228df3"
+      },
+      "id": "df03446b885392ce",
+      "n_qubits": 20,
+      "parameters": {
+        "n_steps": 1,
+        "reference_trotter_number_beta": 40.6230384095557,
+        "uniform_epsilon": 2.5687268829107152e-11
+      },
+      "problem": "inputs/df03446b885392ce/hamiltonian.json",
+      "problem_sha256": "c79407e0264986b143d1cf44aead199cb55db171f91434d8ead4cb0b8de00f92",
+      "sector_dimension": 184756,
+      "terms": 5022,
+      "work": 48738861056
+    },
+    {
+      "archive_sha256": "63f97f15d7fd14e9e1bbeeb8c526e4630c31bd2c1200aedd7e1f11ab4f155e16",
+      "case_id": "hydrogen_data|ES_H10_ring_R1.6_sto-6g_ham.hdf5|/ham_JW",
+      "count_problem_sha256": "f546e861b5f8a9b7fadc12ee1df539961756702d1c05ae284814dea7326d756a",
+      "electrons": 10,
+      "expected_counts": {
+        "baseline": 3903004,
+        "elote": 523582
+      },
+      "expected_schedules": {
+        "baseline": "fe0e61097f79312de4478424afce283e016e683f5863d125dc1efb4ed13a8ae7",
+        "elote": "41143030dd22b1a0f9cb89224e3d97be14bce7c2d47a529b3ae3a18060839089"
+      },
+      "id": "5c72a71cd7a801ee",
+      "n_qubits": 20,
+      "parameters": {
+        "n_steps": 1,
+        "reference_trotter_number_beta": 41.403726383386044,
+        "uniform_epsilon": 2.5238583958669825e-11
+      },
+      "problem": "inputs/5c72a71cd7a801ee/hamiltonian.json",
+      "problem_sha256": "6367b394baed8caa91345a9fa0ada865e6f0eb07a6f63f3c2370f600062afa9f",
+      "sector_dimension": 184756,
+      "terms": 5022,
+      "work": 48657072128
+    },
+    {
+      "archive_sha256": "b61211837dcb5d0ebbcc2b13c198f9807837d877aeb7310fc0606f539611a60d",
+      "case_id": "hydrogen_data|ES_H10_ring_R1.9_sto-6g_ham.hdf5|/ham_JW",
+      "count_problem_sha256": "38eb323019707b898e4071a2b4f8b914dfa4833f10f08480dd3a6f10a8748314",
+      "electrons": 10,
+      "expected_counts": {
+        "baseline": 3910164,
+        "elote": 523316
+      },
+      "expected_schedules": {
+        "baseline": "d53141b3f76e732709b636545e1af5057d7f351deecd5eb634a74501243bcf24",
+        "elote": "f92a88c1a820a3f6b0023e678bf1d8fc003ad5589e1158259c0e03eba3dff8eb"
+      },
+      "id": "7a51718285f16b7d",
+      "n_qubits": 20,
+      "parameters": {
+        "n_steps": 1,
+        "reference_trotter_number_beta": 39.16471453141055,
+        "uniform_epsilon": 2.6766710109628336e-11
+      },
+      "problem": "inputs/7a51718285f16b7d/hamiltonian.json",
+      "problem_sha256": "d71bcec6268a58512666f8bc96cc2227766de028174417471b965539b0eb061b",
+      "sector_dimension": 184756,
+      "terms": 5022,
+      "work": 48617226240
+    },
+    {
+      "archive_sha256": "6723051e92c6d1983d919babe0a093c8f3ae64a972a0d4742cf68ab8832a3437",
+      "case_id": "hydrogen_data|ES_H10_ring_R1.2_sto-6g_ham.hdf5|/ham_JW",
+      "count_problem_sha256": "e0e43f70447bbf8f8f7695c5b06b9143b64ce2dea8b40cdc95e1ef596bd617a1",
+      "electrons": 10,
+      "expected_counts": {
+        "baseline": 3933316,
+        "elote": 527450
+      },
+      "expected_schedules": {
+        "baseline": "d402a5219408e6e26c6fb1563ca37d9b9507f4912fe2417e78a9df26c0eb1b88",
+        "elote": "6a4a6390b1b0efd136a4ebf855af82dc3e247fea4642c0e13284a550c8fc9b12"
+      },
+      "id": "f9b2c4b22a844114",
+      "n_qubits": 20,
+      "parameters": {
+        "n_steps": 1,
+        "reference_trotter_number_beta": 46.414616720149915,
+        "uniform_epsilon": 2.2311990507208324e-11
+      },
+      "problem": "inputs/f9b2c4b22a844114/hamiltonian.json",
+      "problem_sha256": "1301681b61aac93f11ff571cebb193aa194d034be6c8e841d5e63ad6a41f5e64",
+      "sector_dimension": 184756,
+      "terms": 5022,
+      "work": 48833232896
+    },
+    {
+      "archive_sha256": "6cb6a2ea45ced5a6516cd100d3ba6c6052d3d0945e110f3d311e70ec809dfe5e",
+      "case_id": "hydrogen_data|ES_H10_ring_R1.8_sto-6g_ham.hdf5|/ham_JW",
+      "count_problem_sha256": "bb04510000072efd55231fdaaf98f25a955ad335fada2b4a556dd57ed52d5bb8",
+      "electrons": 10,
+      "expected_counts": {
+        "baseline": 3899228,
+        "elote": 523314
+      },
+      "expected_schedules": {
+        "baseline": "15286eb2f8224b41d62cecf626ce6d1370fb414fe461956b8ac260c0bf97fd4c",
+        "elote": "167cc605f08ea2dd2e0ec3c0b0242c9fdaf96b18e53ec15451eee767c4499317"
+      },
+      "id": "b172d49a228416b1",
+      "n_qubits": 20,
+      "parameters": {
+        "n_steps": 1,
+        "reference_trotter_number_beta": 39.3383065823259,
+        "uniform_epsilon": 2.6645517320024828e-11
+      },
+      "problem": "inputs/b172d49a228416b1/hamiltonian.json",
+      "problem_sha256": "bb3fd3e4afbdcfd1fe2564c2cf64c1ebd91956a1ec12d6278a08fe6c44d48d57",
+      "sector_dimension": 184756,
+      "terms": 5022,
+      "work": 48615129088
+    },
+    {
+      "archive_sha256": "bb2ea0123e751626a56ffe0c51dfe4e5ab4cf555ba65f9ee1552f2e491376e3a",
+      "case_id": "hydrogen_data|ES_H10_ring_R1.5_sto-6g_ham.hdf5|/ham_JW",
+      "count_problem_sha256": "a00fbf0844eb02ffe9047552eec41090ff346f3137be1bc8e4b829f09d66372d",
+      "electrons": 10,
+      "expected_counts": {
+        "baseline": 3913792,
+        "elote": 526788
+      },
+      "expected_schedules": {
+        "baseline": "e77fb44e022d1604fdb845eef71f8f17448da485c18ae6315625e15f07961fb6",
+        "elote": "f9d8d361e0fe15aada024b53f1d9c36ef10085c8f0cf5f34e6646d54cf0d3039"
+      },
+      "id": "4c97c5272e695147",
+      "n_qubits": 20,
+      "parameters": {
+        "n_steps": 1,
+        "reference_trotter_number_beta": 42.074729108197836,
+        "uniform_epsilon": 2.4728050777923707e-11
+      },
+      "problem": "inputs/4c97c5272e695147/hamiltonian.json",
+      "problem_sha256": "72f9ec91a7253ffcac675c245f5f07398a2defe7dc93810b0a450fc213fc62ff",
+      "sector_dimension": 184756,
+      "terms": 5022,
+      "work": 48799678464
+    },
+    {
+      "archive_sha256": "ea17e7f4723bab87baac09c132ece734287c4033f3d02f066746ced37fd0565b",
+      "case_id": "hydrogen_data|ES_H10_sheet_R1.0_sto-6g_ham.hdf5|/ham_JW",
+      "count_problem_sha256": "196ea9c55c042f00092ab5442030f6c2a5b9ae143ce172f8d9797a93045b089a",
+      "electrons": 10,
+      "expected_counts": {
+        "baseline": 2703592,
+        "elote": 379264
+      },
+      "expected_schedules": {
+        "baseline": "95e23264adc54e69bc4878a19758be31b9fc82f69c1062d5f93f3cf4da0b6eba",
+        "elote": "f6e159fb262ab2465412fd935cc673b01b24c387f2c731e2946946ca1f994917"
+      },
+      "id": "9b87af6538bb3302",
+      "n_qubits": 20,
+      "parameters": {
+        "n_steps": 1,
+        "reference_trotter_number_beta": 49.44339447880162,
+        "uniform_epsilon": 3.04781653502155e-11
+      },
+      "problem": "inputs/9b87af6538bb3302/hamiltonian.json",
+      "problem_sha256": "3e0f0ddad9fc57aaf3dbed2c4eb4a408393f4aeac8cd0e71273a2fe18c5a4ca0",
+      "sector_dimension": 184756,
+      "terms": 3662,
+      "work": 33823916032
+    },
+    {
+      "archive_sha256": "9e45e6627da368c81f3c1fa7cac153b7efa1c04108ed4a44255bb9b819853d63",
+      "case_id": "hydrogen_data|ES_H10_sheet_R2.0_sto-6g_ham.hdf5|/ham_JW",
+      "count_problem_sha256": "4489abc4e0661afcac086047d8b98af8c56b64a88d0e929d9780033f11f6014f",
+      "electrons": 10,
+      "expected_counts": {
+        "baseline": 2661784,
+        "elote": 373960
+      },
+      "expected_schedules": {
+        "baseline": "279e40b615a39217d788f6b7f27780f78520843e22f51c9254b0c37c6b3e34be",
+        "elote": "a55c5966750e3f2316aaab7bebd5e5afb3df8cfdf0321b79f7b06d4fc2abd2cd"
+      },
+      "id": "66ca740e8d19680d",
+      "n_qubits": 20,
+      "parameters": {
+        "n_steps": 1,
+        "reference_trotter_number_beta": 34.40063609161303,
+        "uniform_epsilon": 4.4082678072389535e-11
+      },
+      "problem": "inputs/66ca740e8d19680d/hamiltonian.json",
+      "problem_sha256": "66adec6d1589279c5ef1843493e91ff5c5f3a7c8b6e9344a2de0a4aea66973a8",
+      "sector_dimension": 184756,
+      "terms": 3662,
+      "work": 34033631232
+    },
+    {
+      "archive_sha256": "7e746dd1746b01e7cef12cdd61c1b36726b5805b1182c236b9b05a9d93425eef",
+      "case_id": "hydrogen_data|ES_H10_sheet_R1.6_sto-6g_ham.hdf5|/ham_JW",
+      "count_problem_sha256": "8d780a9c66247791fda1cccb37358a0de9f723d08e57928ffeac2e2e1f446d97",
+      "electrons": 10,
+      "expected_counts": {
+        "baseline": 2673160,
+        "elote": 375674
+      },
+      "expected_schedules": {
+        "baseline": "5da4462467b6114a2faef34b63677f5f26f3f7722ff31733cc0d973a02cda582",
+        "elote": "bf56422eb859260df2df3292506adde34c6da5641227d4b51d0efb0a8225e058"
+      },
+      "id": "0967d01db414174a",
+      "n_qubits": 20,
+      "parameters": {
+        "n_steps": 1,
+        "reference_trotter_number_beta": 38.25206614722325,
+        "uniform_epsilon": 3.992042095737916e-11
+      },
+      "problem": "inputs/0967d01db414174a/hamiltonian.json",
+      "problem_sha256": "ef98b9a4b32536bc8096a0b27b44202ef90ff4b77fe78058f569ef5e9a5c0da6",
+      "sector_dimension": 184756,
+      "terms": 3662,
+      "work": 33737932800
+    },
+    {
+      "archive_sha256": "000313adfb0c375700f974bfda62cb02d6b66f42404aa44597fe7807f33164a1",
+      "case_id": "hydrogen_data|ES_H10_sheet_R1.4_sto-6g_ham.hdf5|/ham_JW",
+      "count_problem_sha256": "40774571f708a9e373892135b8513eab76c1fa8d954630a8834feb830f66e0c5",
+      "electrons": 10,
+      "expected_counts": {
+        "baseline": 2682864,
+        "elote": 376818
+      },
+      "expected_schedules": {
+        "baseline": "b003a84cb9cbdac162bc48da4ff87029d615ae0e8fe1b106a73e541ef0b583a6",
+        "elote": "316b98a95d5892e128cfd36e5da54137d2938e17cd3a6ae16daa5673ab716c9b"
+      },
+      "id": "2e930ed7e673413b",
+      "n_qubits": 20,
+      "parameters": {
+        "n_steps": 1,
+        "reference_trotter_number_beta": 40.93207679713941,
+        "uniform_epsilon": 3.681995582741155e-11
+      },
+      "problem": "inputs/2e930ed7e673413b/hamiltonian.json",
+      "problem_sha256": "7ce626398bfb7d6d36bbbb7be244315a3823e6f23b81af40245ec5ed898266d7",
+      "sector_dimension": 184756,
+      "terms": 3662,
+      "work": 34016854016
+    },
+    {
+      "archive_sha256": "8c8b5964b4f5d601e24e0f90cf193aea0251acdfd4118aeb4920a096b64e6c6d",
+      "case_id": "hydrogen_data|ES_H10_sheet_R0.6_sto-6g_ham.hdf5|/ham_JW",
+      "count_problem_sha256": "050c6065652c12bde97e9300bfdf0be241787aa58e14021e84ef71e02087fcc3",
+      "electrons": 10,
+      "expected_counts": {
+        "baseline": 2745208,
+        "elote": 385600
+      },
+      "expected_schedules": {
+        "baseline": "82a6a2e1128764c0a9b94498aa507d684e7d7a465f094402529e644d747ad3e3",
+        "elote": "74c8bc8c62188a7203fab131908768ff5a53b83c450aa4088b1ac82f95632efb"
+      },
+      "id": "76f25f70ea617733",
+      "n_qubits": 20,
+      "parameters": {
+        "n_steps": 1,
+        "reference_trotter_number_beta": 76.50084467628245,
+        "uniform_epsilon": 2.1542365435982518e-11
+      },
+      "problem": "inputs/76f25f70ea617733/hamiltonian.json",
+      "problem_sha256": "1c963e8b1811915bcad3329c9fe021e9834f6914632f9ca7621c63b6d144cdc8",
+      "sector_dimension": 184756,
+      "terms": 3662,
+      "work": 33758904320
+    },
+    {
+      "archive_sha256": "b10297d4bd2096285c07750a60ffe4b3ef043370f3ecb3ce8cf1af8a091334b2",
+      "case_id": "hydrogen_data|ES_H10_sheet_R0.5_sto-6g_ham.hdf5|/ham_JW",
+      "count_problem_sha256": "b8718baa9ae1c29c8e369c8710b22226227386209dea0bb39374d86f8cdf559e",
+      "electrons": 10,
+      "expected_counts": {
+        "baseline": 2759228,
+        "elote": 387608
+      },
+      "expected_schedules": {
+        "baseline": "1671c0a68659b55133051d99718b1adf7b8debdc22c24cda2d26ce693f0ea127",
+        "elote": "189f681126a848fecdfc3e1d5f785ad43cef4c3f05abdb93e9fe8163281013ba"
+      },
+      "id": "115d78b2203e1694",
+      "n_qubits": 20,
+      "parameters": {
+        "n_steps": 1,
+        "reference_trotter_number_beta": 91.46220975367795,
+        "uniform_epsilon": 1.866297657979738e-11
+      },
+      "problem": "inputs/115d78b2203e1694/hamiltonian.json",
+      "problem_sha256": "ad4e13115bc4d487eded99fad61133e14e0060b9f9b42d46d4f79860331dc5e0",
+      "sector_dimension": 184756,
+      "terms": 3662,
+      "work": 33891024896
+    },
+    {
+      "archive_sha256": "b95722f6ba1a71cb0b3fc561aa193a526ddc5d09857990b7970d219cdb96f80e",
+      "case_id": "hydrogen_data|ES_H10_sheet_R1.1_sto-6g_ham.hdf5|/ham_JW",
+      "count_problem_sha256": "a1e40972fa837dcccf97997acedfbbcbc92875f4e1269a0669525916e203a587",
+      "electrons": 10,
+      "expected_counts": {
+        "baseline": 2693848,
+        "elote": 378824
+      },
+      "expected_schedules": {
+        "baseline": "a8f1869f6c64a60a3bec30ddbd5b80ebf7a2453328c801a6c2881395322d0bce",
+        "elote": "98d5640be4a8918676f2e965e452f21860e22c318dd696402da5621f21a88852"
+      },
+      "id": "f35be2e8dc7b5bf5",
+      "n_qubits": 20,
+      "parameters": {
+        "n_steps": 1,
+        "reference_trotter_number_beta": 46.75224756248992,
+        "uniform_epsilon": 3.2223792403397255e-11
+      },
+      "problem": "inputs/f35be2e8dc7b5bf5/hamiltonian.json",
+      "problem_sha256": "9998cd77ca32639a600bb37dc3f25a6e239e72847709550f5ad2fcf4cd47b194",
+      "sector_dimension": 184756,
+      "terms": 3662,
+      "work": 33888927744
+    },
+    {
+      "archive_sha256": "be63ae127c5f0499b7c9a10b55bca02cb75ce12aebb3530982adc8771675b82a",
+      "case_id": "hydrogen_data|ES_H10_sheet_R1.5_sto-6g_ham.hdf5|/ham_JW",
+      "count_problem_sha256": "67f4dc865219565c507c18c6f3ce9093e5a34876399742f591edeea0c3c6b8b8",
+      "electrons": 10,
+      "expected_counts": {
+        "baseline": 2675808,
+        "elote": 376650
+      },
+      "expected_schedules": {
+        "baseline": "6d034ddcab1d571a69b57f86a3550c1d0f9e3befc6d3ffaa1a30d5587ee160da",
+        "elote": "aba914f9114da812355f6258a37d5edc3509ae62ea72392c1587c074291f856a"
+      },
+      "id": "b85d3512f30bc3c0",
+      "n_qubits": 20,
+      "parameters": {
+        "n_steps": 1,
+        "reference_trotter_number_beta": 39.50957285217632,
+        "uniform_epsilon": 3.8132620568968884e-11
+      },
+      "problem": "inputs/b85d3512f30bc3c0/hamiltonian.json",
+      "problem_sha256": "7e721b8e87a204aef3f54dd74e03f0e90f352def117faa9a09778971bb1d4dfe",
+      "sector_dimension": 184756,
+      "terms": 3662,
+      "work": 34062991360
+    },
+    {
+      "archive_sha256": "74a23d2d7307237c384803f68cfeff810b1ef219bc92c90067d3bd8881b75f31",
+      "case_id": "hydrogen_data|ES_H10_sheet_R1.8_sto-6g_ham.hdf5|/ham_JW",
+      "count_problem_sha256": "b824bbcc35f45e5a3bd95dd142c8f8014d72e62c484f70ab2fa5efc985cc3c14",
+      "electrons": 10,
+      "expected_counts": {
+        "baseline": 2664412,
+        "elote": 374336
+      },
+      "expected_schedules": {
+        "baseline": "5db5fa9aae148fa28ff8a6c20156c805dd00279c9e38d82e1c63d7b3fbc1554b",
+        "elote": "8da2a93f7220b732bad73ae2022e395ef3e15029142bd7e061cfa6c51bb21be1"
+      },
+      "id": "cce2faec6a0b33d1",
+      "n_qubits": 20,
+      "parameters": {
+        "n_steps": 1,
+        "reference_trotter_number_beta": 36.10533107388403,
+        "uniform_epsilon": 4.2319536798044254e-11
+      },
+      "problem": "inputs/cce2faec6a0b33d1/hamiltonian.json",
+      "problem_sha256": "1c1e2f36a136a5ff2d2938eacc27443bf4893db8b4857ac07543113752b58ffe",
+      "sector_dimension": 184756,
+      "terms": 3662,
+      "work": 33781972992
+    },
+    {
+      "archive_sha256": "cf7aceb5700d943068d8e3af6b94e3e5a0ae7b217ef8f7ae1faed724572a852a",
+      "case_id": "hydrogen_data|ES_H10_sheet_R0.8_sto-6g_ham.hdf5|/ham_JW",
+      "count_problem_sha256": "0e8d304dd404b73d89dbee3a3ed2bcd459e864d8efef79e4148c331916e5d8b2",
+      "electrons": 10,
+      "expected_counts": {
+        "baseline": 2720000,
+        "elote": 382112
+      },
+      "expected_schedules": {
+        "baseline": "4d7586081c2082a4460a1113a821eeecb263d99111ef0273f3743d3862522218",
+        "elote": "9c2f2deb9bfae75559c8e29cec90f4b726e9e4213bd8fc9dc7ba010f9c812bde"
+      },
+      "id": "c32ecc6868044243",
+      "n_qubits": 20,
+      "parameters": {
+        "n_steps": 1,
+        "reference_trotter_number_beta": 58.843627174269926,
+        "uniform_epsilon": 2.630626738116499e-11
+      },
+      "problem": "inputs/c32ecc6868044243/hamiltonian.json",
+      "problem_sha256": "ebd86e76be8c35a961911adf039381f4d1e2ecd8773c1b0ac2b132ae659b3ae5",
+      "sector_dimension": 184756,
+      "terms": 3662,
+      "work": 33859567616
+    },
+    {
+      "archive_sha256": "f36be72058ea7080fb9108ac33f1bf866b218d870cc6b2208b9e0c29e1b95702",
+      "case_id": "hydrogen_data|ES_H10_sheet_R1.7_sto-6g_ham.hdf5|/ham_JW",
+      "count_problem_sha256": "e6e5a6a0db822689b30e00d75473f4e55face00c617377a796d4750897b7d873",
+      "electrons": 10,
+      "expected_counts": {
+        "baseline": 2668932,
+        "elote": 375436
+      },
+      "expected_schedules": {
+        "baseline": "232d180ec59550800621a5dabd392ef902917c3c5937e851e017041da98c174e",
+        "elote": "60885b02281a56ce4256cdec9e68c6d14223d749278b71043741e93f033f714b"
+      },
+      "id": "ba6ba407701c7ad7",
+      "n_qubits": 20,
+      "parameters": {
+        "n_steps": 1,
+        "reference_trotter_number_beta": 37.11407372964409,
+        "uniform_epsilon": 4.078283428779993e-11
+      },
+      "problem": "inputs/ba6ba407701c7ad7/hamiltonian.json",
+      "problem_sha256": "114044ec18b78f7558b8aac2bafabac69fe646a420ecb0d1f26c54752e51a8fa",
+      "sector_dimension": 184756,
+      "terms": 3662,
+      "work": 34004271104
+    },
+    {
+      "archive_sha256": "0757b9bc8ad1c6beb12f11967cf149773fa052cee2bffe0b8f62ab80f40ee76b",
+      "case_id": "hydrogen_data|ES_H10_sheet_R1.2_sto-6g_ham.hdf5|/ham_JW",
+      "count_problem_sha256": "f63fff7fd8d9726b529ad45946a45ea8b7aa806c84c1385d40be56171e750d8c",
+      "electrons": 10,
+      "expected_counts": {
+        "baseline": 2691728,
+        "elote": 378470
+      },
+      "expected_schedules": {
+        "baseline": "d06601bf17577e28c1184bf691fe6a7f102db7d2f6cbde82dddbe9c1816a8456",
+        "elote": "cf062389d646a72967a13f528d68d5e6c7df603807cae110c4b10555d9334973"
+      },
+      "id": "0afc3193cf27129a",
+      "n_qubits": 20,
+      "parameters": {
+        "n_steps": 1,
+        "reference_trotter_number_beta": 44.48128484334845,
+        "uniform_epsilon": 3.3977446500434656e-11
+      },
+      "problem": "inputs/0afc3193cf27129a/hamiltonian.json",
+      "problem_sha256": "17fa9b5ac098a64327e54b0d7c9b02d3dad8e11ece3763d598afb5f75fd194e1",
+      "sector_dimension": 184756,
+      "terms": 3662,
+      "work": 33855373312
+    },
+    {
+      "archive_sha256": "b8bdb963bc5027cfb407482ed334bc97bdd42ce52e402afb9b0c24c6c2929bd1",
+      "case_id": "hydrogen_data|ES_H10_sheet_R0.7_sto-6g_ham.hdf5|/ham_JW",
+      "count_problem_sha256": "458a52b830cd5615c4ca397885eb1b05388a5607ca1e0b279e5c4ce53c9087c3",
+      "electrons": 10,
+      "expected_counts": {
+        "baseline": 2730104,
+        "elote": 383362
+      },
+      "expected_schedules": {
+        "baseline": "2c4791a09adaad4c8dad418ee7284e6df1d2afbccccca3f6b61a5e95d1c0e72c",
+        "elote": "8bf5bcc446ceb5bc23ce7c389393d670da609990ab11268046897c77d5995e1a"
+      },
+      "id": "52fd8aa0c427109e",
+      "n_qubits": 20,
+      "parameters": {
+        "n_steps": 1,
+        "reference_trotter_number_beta": 66.30074313245203,
+        "uniform_epsilon": 2.3999197290604653e-11
+      },
+      "problem": "inputs/52fd8aa0c427109e/hamiltonian.json",
+      "problem_sha256": "292c4970a4ec2f5f4fa67db1e54b5a2cd1332c5b4a7efba0e95050c56bd24db9",
+      "sector_dimension": 184756,
+      "terms": 3662,
+      "work": 33838596096
+    },
+    {
+      "archive_sha256": "4ecefcf5d35a901ed4407fa109bb86e9a699b4a7a65c0ec47d326019238f72f8",
+      "case_id": "hydrogen_data|ES_H10_sheet_R1.9_sto-6g_ham.hdf5|/ham_JW",
+      "count_problem_sha256": "d62367680c6e7c690162bf2c163a8c929f29414e1ca955511f1bdea9e460e2fa",
+      "electrons": 10,
+      "expected_counts": {
+        "baseline": 2659916,
+        "elote": 374314
+      },
+      "expected_schedules": {
+        "baseline": "fb526d4bd7abe1a07300e634f7d51ec2500ceb7f566f93f3b85a8aa9564ec2f5",
+        "elote": "e1b46135f062e7a7b2e917e1e9db0bd19871052c61f84defbdbab2a87dae95fc"
+      },
+      "id": "d71201962e6b8722",
+      "n_qubits": 20,
+      "parameters": {
+        "n_steps": 1,
+        "reference_trotter_number_beta": 35.2167307835018,
+        "uniform_epsilon": 4.325536156576342e-11
+      },
+      "problem": "inputs/d71201962e6b8722/hamiltonian.json",
+      "problem_sha256": "539d5962bc8ba77e95c1042b3bd4edfbd7dda0a7c10ef656da1cd8b255bfe50b",
+      "sector_dimension": 184756,
+      "terms": 3662,
+      "work": 33888927744
+    },
+    {
+      "archive_sha256": "f14f485916de2c7e580e065d987e86ddaae6efdfdf4b2b87a0fd97b09b82d18f",
+      "case_id": "hydrogen_data|ES_H10_sheet_R1.3_sto-6g_ham.hdf5|/ham_JW",
+      "count_problem_sha256": "81eb4ae98ac4163759dc42bcee03ee494c443d85ac4ca181361d90e598c8f374",
+      "electrons": 10,
+      "expected_counts": {
+        "baseline": 2679600,
+        "elote": 377118
+      },
+      "expected_schedules": {
+        "baseline": "548dcb72bc2d7b5dddb81b9b7cdedea0b9355d6be7a173dcd252c5fd5cc1fcf3",
+        "elote": "ee142e3cfa4eb4f4783f7b4a93ac2148fc0806397a08cd2a946d4f893cd40d3a"
+      },
+      "id": "50e4aa139ec552ef",
+      "n_qubits": 20,
+      "parameters": {
+        "n_steps": 1,
+        "reference_trotter_number_beta": 42.56080910424015,
+        "uniform_epsilon": 3.559983125056653e-11
+      },
+      "problem": "inputs/50e4aa139ec552ef/hamiltonian.json",
+      "problem_sha256": "3570ffb81aa18d50e5a02e6a3883d04c8a86f0f20b4e8929c90043e46e15088f",
+      "sector_dimension": 184756,
+      "terms": 3662,
+      "work": 33834401792
+    },
+    {
+      "archive_sha256": "c9af30258e0953c57bff03093717b39da098272a5e81b75293a11f9d3f928534",
+      "case_id": "hydrogen_data|ES_H10_sheet_R0.9_sto-6g_ham.hdf5|/ham_JW",
+      "count_problem_sha256": "876d7abe0ac7e146cd870d8ac4c5837c8b0ddac976d9cceca0259e863573f07a",
+      "electrons": 10,
+      "expected_counts": {
+        "baseline": 2713796,
+        "elote": 381050
+      },
+      "expected_schedules": {
+        "baseline": "c481f1c2eadd595dc6643847bfe4ecc2fb4a326931ae3f6d60e7c2e0015e6735",
+        "elote": "6eaaba7664da4ac819eb758e1818bff2e7458e276a736f224ab364267b7ca307"
+      },
+      "id": "6786497035f86302",
+      "n_qubits": 20,
+      "parameters": {
+        "n_steps": 1,
+        "reference_trotter_number_beta": 53.15099032103453,
+        "uniform_epsilon": 2.8420563707222382e-11
+      },
+      "problem": "inputs/6786497035f86302/hamiltonian.json",
+      "problem_sha256": "9a9862d0337bd0e35de25273a41d18967c6f42b166f66f14bdb0a3b6f3993bdd",
+      "sector_dimension": 184756,
+      "terms": 3662,
+      "work": 33903607808
+    },
+    {
+      "archive_sha256": "07b7333b85f1f2180414a8c434b5348b65516be9b798d2ac7830d7dd931ba664",
+      "case_id": "standard|H2.hdf5|/ham_JW-20",
+      "count_problem_sha256": "f12f30de8c6481cb8f2df9875cca9908c424b5c3dffb80f8a2dcaae899c14fa9",
+      "electrons": 2,
+      "expected_counts": {
+        "baseline": 2274752,
+        "elote": 313286
+      },
+      "expected_schedules": {
+        "baseline": "1329eb78042b191ca840ab2b88c0f615b3b4bdafe90281f92c270af347713e15",
+        "elote": "3272e1d03bb9d908b17f7d56e8b8ea64649195ac8821d80e886ca84849868dd6"
+      },
+      "id": "32ffa7935585008e",
+      "n_qubits": 20,
+      "parameters": {
+        "n_steps": 1,
+        "reference_trotter_number_beta": 135.62583253170928,
+        "uniform_epsilon": 1.72187347638225e-11
+      },
+      "problem": "inputs/32ffa7935585008e/hamiltonian.json",
+      "problem_sha256": "8afcd9e325e4c6914ea28c1dc4ac1cedd68a18d5afa20e6338ad824cd84fa9de",
+      "sector_dimension": 190,
+      "terms": 2950,
+      "work": 28018999296
+    },
+    {
+      "archive_sha256": "4b980b6b85a72a136a6f14f0bbac23def7c0590f60725c5f483f2be5aa3bccf2",
+      "case_id": "standard|O2.hdf5|/ham_JW20",
+      "count_problem_sha256": "822ab5a4a04073f9fd5f5b46ad794db60e69666043e84e7e8dad850b551d38e9",
+      "electrons": 12,
+      "expected_counts": {
+        "baseline": 2387492,
+        "elote": 328524
+      },
+      "expected_schedules": {
+        "baseline": "9155fa3a7d4fbbe5172dbb265582b8a4bfa1dba0893d41bff7b8141396b30240",
+        "elote": "1f6a7b7fa756f8542f72a19d73671097fecfb6370ed6961cdf4c667a7dba205e"
+      },
+      "id": "ccb272348e533afe",
+      "n_qubits": 20,
+      "parameters": {
+        "n_steps": 1,
+        "reference_trotter_number_beta": 77.24139271461122,
+        "uniform_epsilon": 2.4482066904640877e-11
+      },
+      "problem": "inputs/ccb272348e533afe/hamiltonian.json",
+      "problem_sha256": "b5e2891f111625422421b0056211048971669ec119207ea0508447c3dd7469c4",
+      "sector_dimension": 125970,
+      "terms": 3134,
+      "work": 30080499712
+    },
+    {
+      "archive_sha256": "4b980b6b85a72a136a6f14f0bbac23def7c0590f60725c5f483f2be5aa3bccf2",
+      "case_id": "standard|O2.hdf5|/ham_JW22",
+      "count_problem_sha256": "538caecb8c6279349cd90c1a2114ffda2a5126c52632990f1219c04af9ce20d4",
+      "electrons": 12,
+      "expected_counts": {
+        "baseline": 3570124,
+        "elote": 490796
+      },
+      "expected_schedules": {
+        "baseline": "1f67f80bd10a472eeb99c1160880a56b495ef892116e1ddfb94008f2c0ae0a16",
+        "elote": "9812a7e8e7f71f28f9f2774d6540a7eb2fa97e57ee5f2d7e1cae85fe40fc0081"
+      },
+      "id": "69fbd9e16ee9efc4",
+      "n_qubits": 22,
+      "parameters": {
+        "n_steps": 1,
+        "reference_trotter_number_beta": 80.37632179834773,
+        "uniform_epsilon": 1.4342675585197466e-11
+      },
+      "problem": "inputs/69fbd9e16ee9efc4/hamiltonian.json",
+      "problem_sha256": "e95a9bada0db38d9d4696c58bc8800a99334b57c1ef3f78b7ba0aa49756ea30d",
+      "sector_dimension": 646646,
+      "terms": 4577,
+      "work": 175942664192
+    },
+    {
+      "archive_sha256": "e04105e20ceb71cfc881ca4f07970c9712b17dced069dde20c7ab4f46f98c716",
+      "case_id": "standard|Na2.hdf5|/ham_JW20",
+      "count_problem_sha256": "fb8931edb931db0662874e696aceae2d660c555d378e6d80c9d19c25e21b3402",
+      "electrons": 18,
+      "expected_counts": {
+        "baseline": 2300456,
+        "elote": 316564
+      },
+      "expected_schedules": {
+        "baseline": "ea601fb66b2d40ac1b6eb54f332652c78eee7c700dc0bbb8b9db7c70431cc135",
+        "elote": "5d6d31c0d928c772337b39f63c8418800b2faf06c50097117bce48f88d65d252"
+      },
+      "id": "01f1df795459455b",
+      "n_qubits": 20,
+      "parameters": {
+        "n_steps": 1,
+        "reference_trotter_number_beta": 127.8145318685517,
+        "uniform_epsilon": 1.794204011051925e-11
+      },
+      "problem": "inputs/01f1df795459455b/hamiltonian.json",
+      "problem_sha256": "f49cb64285ff92e520e42ef677db1e21b5a76859239e0150ebb4635b5e692c26",
+      "sector_dimension": 190,
+      "terms": 2950,
+      "work": 28125954048
+    },
+    {
+      "archive_sha256": "7fe37095ae56b6214d3eb975eb3cd6466c1b0737242ec019d5ff55f8601eb9ee",
+      "case_id": "standard|HF.hdf5|/ham_JW18",
+      "count_problem_sha256": "1748d2e76d1f4cd96515957cbc23672f5d1bd2e1c7df9b1ff6c2443b34280eb9",
+      "electrons": 8,
+      "expected_counts": {
+        "baseline": 2728116,
+        "elote": 394612
+      },
+      "expected_schedules": {
+        "baseline": "39d3cd125b2d369a0ba46c5669180678aca521e6a918cf6855aa0fc1cf945072",
+        "elote": "79cf3cf5529ea6edde550025fe167934457f77f2801ea79832fb322a70944348"
+      },
+      "id": "0e8e8d7186d60ed5",
+      "n_qubits": 18,
+      "parameters": {
+        "n_steps": 1,
+        "reference_trotter_number_beta": 68.98838754411315,
+        "uniform_epsilon": 2.438677394156285e-11
+      },
+      "problem": "inputs/0e8e8d7186d60ed5/hamiltonian.json",
+      "problem_sha256": "6e2358472fa5ff7961d8ed4474e47200ee92a980bc3bb7d93482f9d82a400283",
+      "sector_dimension": 43758,
+      "terms": 3771,
+      "work": 8561098752
+    },
+    {
+      "archive_sha256": "1f4a468b7953270d0ec051894136f0f652be8f8f7c8c326843302317eb2833d8",
+      "case_id": "standard|C2.hdf5|/ham_JW-18",
+      "count_problem_sha256": "aa79103a030b050071dcab888b8dae42531876bfceb381ecaa2f320e47256daf",
+      "electrons": 8,
+      "expected_counts": {
+        "baseline": 1340280,
+        "elote": 184720
+      },
+      "expected_schedules": {
+        "baseline": "5e3db09780e6d0e6e25ef9e46815a68428c3e59db25b7b847b35c419022f85c2",
+        "elote": "8a85668bd73caa7710e604304052ac96bf93a7b0c2695dff1a660e2aae063957"
+      },
+      "id": "c66381a601bfd9f5",
+      "n_qubits": 18,
+      "parameters": {
+        "n_steps": 1,
+        "reference_trotter_number_beta": 27.182819564933606,
+        "uniform_epsilon": 1.0969391296834921e-10
+      },
+      "problem": "inputs/c66381a601bfd9f5/hamiltonian.json",
+      "problem_sha256": "6e1542afc387cf35dd1aff3e93edcc252ecca3fd223c95bbc9761f5607c39399",
+      "sector_dimension": 43758,
+      "terms": 1883,
+      "work": 4467982336
+    },
+    {
+      "archive_sha256": "1ff94bc722ffe059f7694f7301c7621e3154aef68e0d628a5be8bcccdae08d70",
+      "case_id": "standard|O3.hdf5|/ham_JW20",
+      "count_problem_sha256": "55314288fc2b046ce84b9d6f226894c52d55e1ff0ec954653988461b1e531e07",
+      "electrons": 18,
+      "expected_counts": {
+        "baseline": 2782404,
+        "elote": 391148
+      },
+      "expected_schedules": {
+        "baseline": "ac274cfdb57ffb68d93db56e83cd41c12f693530fbed99fe3ef5ca735fd99284",
+        "elote": "527c067d9fd3880da3e3b3facb5a43f669174fc2e756ed7cf8475c7e66ebb937"
+      },
+      "id": "c1b05b885eed6d3f",
+      "n_qubits": 20,
+      "parameters": {
+        "n_steps": 1,
+        "reference_trotter_number_beta": 115.92053946667157,
+        "uniform_epsilon": 1.533224641456692e-11
+      },
+      "problem": "inputs/c1b05b885eed6d3f/hamiltonian.json",
+      "problem_sha256": "1c8464509dd8b0c1260a02683e2ed78df0b73f672a80931d0eb3a8970eeeb7e5",
+      "sector_dimension": 190,
+      "terms": 3662,
+      "work": 34237054976
+    },
+    {
+      "archive_sha256": "1ff94bc722ffe059f7694f7301c7621e3154aef68e0d628a5be8bcccdae08d70",
+      "case_id": "standard|O3.hdf5|/ham_JW22",
+      "count_problem_sha256": "5daf1a6307defc098b17deaf07febbd9a9285ee44ad7161664175a6af8968759",
+      "electrons": 18,
+      "expected_counts": {
+        "baseline": 4245896,
+        "elote": 597158
+      },
+      "expected_schedules": {
+        "baseline": "39f074144e4f6f188b83e5b897c0d5313b42ec429483a13de6e7666b3f89c123",
+        "elote": "8ad32768cc664c8b5c6f69f24dd3ed13c53239956254c80ecab47be405717c89"
+      },
+      "id": "18a75ded4cd3b86d",
+      "n_qubits": 22,
+      "parameters": {
+        "n_steps": 1,
+        "reference_trotter_number_beta": 121.43311834669476,
+        "uniform_epsilon": 8.72847875323866e-12
+      },
+      "problem": "inputs/18a75ded4cd3b86d/hamiltonian.json",
+      "problem_sha256": "119f56c469f4da67146a0b11658f497f292009d10b33516433b42ee021930b75",
+      "sector_dimension": 7315,
+      "terms": 5465,
+      "work": 204245827584
+    },
+    {
+      "archive_sha256": "50bdd08b0ff323b23369ca68b9270e2c270cb2e794cdf99fac85d231ee97cfde",
+      "case_id": "standard|F2.hdf5|/ham_JW-20",
+      "count_problem_sha256": "3f43e69a5905c789384c42296352f7d8c05c25cd4c7f8d6470bbf85f39a92ec5",
+      "electrons": 14,
+      "expected_counts": {
+        "baseline": 2409588,
+        "elote": 332734
+      },
+      "expected_schedules": {
+        "baseline": "abc56fedab267fa130c059f69ee38e2325cf776a6512a03db7ff1f47c4b57eef",
+        "elote": "25e1347d8eafcd0dcace7483a1a76a1c40622c5738767577c0db3b341049ec5b"
+      },
+      "id": "6df82f5425cf9ba4",
+      "n_qubits": 20,
+      "parameters": {
+        "n_steps": 1,
+        "reference_trotter_number_beta": 98.58980342230969,
+        "uniform_epsilon": 2.035021481704615e-11
+      },
+      "problem": "inputs/6df82f5425cf9ba4/hamiltonian.json",
+      "problem_sha256": "4f8cdae1f3930a47e9ad49b4c6098f09f2d3bd3e57f859f1121173f72de1e7ce",
+      "sector_dimension": 38760,
+      "terms": 3150,
+      "work": 29979836416
+    },
+    {
+      "archive_sha256": "50bdd08b0ff323b23369ca68b9270e2c270cb2e794cdf99fac85d231ee97cfde",
+      "case_id": "standard|F2.hdf5|/ham_JW-22",
+      "count_problem_sha256": "ccf1092136b7cedac91e31558e34cf10f0fc9f5f44ff8305e3548e79702d7704",
+      "electrons": 14,
+      "expected_counts": {
+        "baseline": 3603380,
+        "elote": 494594
+      },
+      "expected_schedules": {
+        "baseline": "d6874e0ea87ccbcb95cbcc3bd6e80ea2b6b9c7893bc0e0e11b134c0ec7f17b6d",
+        "elote": "026081de9a141bcdaa0df526555f82cf067acc51019337031432250e73f811c1"
+      },
+      "id": "84af3c5f42bb658b",
+      "n_qubits": 22,
+      "parameters": {
+        "n_steps": 1,
+        "reference_trotter_number_beta": 99.72047958345188,
+        "uniform_epsilon": 1.2128773629063445e-11
+      },
+      "problem": "inputs/84af3c5f42bb658b/hamiltonian.json",
+      "problem_sha256": "247c6d9726244dbe6fdd9b4097c51b0c976136111c512439c1acea89283d3be0",
+      "sector_dimension": 319770,
+      "terms": 4577,
+      "work": 176018161664
+    },
+    {
+      "archive_sha256": "6a5adc5d118085b490739cca3a7ab368dee57021940be7f109edc3b95ae4dc9f",
+      "case_id": "standard|N2.hdf5|/ham_JW-18",
+      "count_problem_sha256": "773f8b6d8a1dd68d680393aaae9e86429bf5041ac27a3d02e9d2f6d12fa4059f",
+      "electrons": 10,
+      "expected_counts": {
+        "baseline": 1356620,
+        "elote": 187932
+      },
+      "expected_schedules": {
+        "baseline": "4c16674e4d0d760d6510f5cf635360e27b3154a957b9c17d1e508333870106ca",
+        "elote": "f4de66e4948bbe367b03c1954623d0246da5bb44c1312677f0831644f46541b1"
+      },
+      "id": "b1c4d78c8c4b4bf3",
+      "n_qubits": 18,
+      "parameters": {
+        "n_steps": 1,
+        "reference_trotter_number_beta": 44.24322868104047,
+        "uniform_epsilon": 7.497667396225447e-11
+      },
+      "problem": "inputs/b1c4d78c8c4b4bf3/hamiltonian.json",
+      "problem_sha256": "e6eb0008f8c87905e3b16e0def6b8cf7af10c54f9a446637d8dfb06bb3953790",
+      "sector_dimension": 43758,
+      "terms": 1883,
+      "work": 4434952192
+    },
+    {
+      "archive_sha256": "6a5adc5d118085b490739cca3a7ab368dee57021940be7f109edc3b95ae4dc9f",
+      "case_id": "standard|N2.hdf5|/ham_JW-22",
+      "count_problem_sha256": "b812506cb9e64326c6f843b46e178bbd540c2a08eddfbc1921caaa62010c3694",
+      "electrons": 10,
+      "expected_counts": {
+        "baseline": 3514888,
+        "elote": 483060
+      },
+      "expected_schedules": {
+        "baseline": "3bf765f9b06a0e2e773e5fcab699977a5df36267bd001e69122909def51d4244",
+        "elote": "beeff230e0c0a457e6bf2e60920e23d6bf15ef722d734e529fad754f0b99a7ef"
+      },
+      "id": "91cba26d423e33ad",
+      "n_qubits": 22,
+      "parameters": {
+        "n_steps": 1,
+        "reference_trotter_number_beta": 55.73174255972236,
+        "uniform_epsilon": 2.05255281901503e-11
+      },
+      "problem": "inputs/91cba26d423e33ad/hamiltonian.json",
+      "problem_sha256": "0ff60b8b4e933f9b6b0ea1604edaecb98952022af059cad2f90c623c22b2d14d",
+      "sector_dimension": 646646,
+      "terms": 4577,
+      "work": 174986362880
+    }
+  ],
+  "count_source_sha256": "5430c7472c4d7273677ae81f43af5f6807bdbb1b211d2bef1362255153b18363",
+  "energy_target": "ground_branch",
+  "excluded": [
+    {
+      "case_id": "standard|NaLi.hdf5|/ham_JW-18",
+      "reason": "ValueError: nesting requires a number-conserving one-/two-body JW Hamiltonian"
+    },
+    {
+      "case_id": "standard|NaLi.hdf5|/ham_JW-20",
+      "reason": "ValueError: nesting requires a number-conserving one-/two-body JW Hamiltonian"
+    }
+  ],
+  "old_policy_sha256": "966d815a5dcbace3b9b5538ea450393a5207ebfaf228f99c2decbd4bae6e46d5",
+  "policy_sha256": "d199f6a4efef965aa015dbd73f69d14f628fd1b9eaa3653391dad8e3a75e472e",
+  "reuse_root": "/lustre/fs12/portfolios/nvr/projects/nvr_qualg_lmbm/users/lmantilla/autoresearch/hsopt_workdir/runtime/operations/elote-heldout-paper-20261027/full-energy",
+  "schema": "elote-final-selected-testing-v1",
+  "selection_sha256": "538732b55dc4b3a0ac7a3542301e9483252270dcdb7ea9d8c324ff62ce7049e9"
+}

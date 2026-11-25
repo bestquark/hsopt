@@ -1,0 +1,2858 @@
+{
+  "active_space_counts_by_nqubits": {
+    "10": 11,
+    "100": 1,
+    "12": 25,
+    "120": 2,
+    "14": 9,
+    "16": 24,
+    "18": 4,
+    "20": 70,
+    "22": 4,
+    "24": 68,
+    "26": 4,
+    "28": 65,
+    "30": 4,
+    "32": 67,
+    "34": 5,
+    "36": 29,
+    "38": 7,
+    "4": 20,
+    "40": 23,
+    "42": 3,
+    "44": 3,
+    "46": 1,
+    "48": 16,
+    "52": 106,
+    "56": 16,
+    "6": 2,
+    "62": 1,
+    "64": 16,
+    "68": 1,
+    "70": 3,
+    "72": 16,
+    "78": 1,
+    "8": 24,
+    "80": 2,
+    "84": 1,
+    "86": 1,
+    "88": 7,
+    "90": 1
+  },
+  "campaign_lanes": [
+    {
+      "estimated_sector_workspace_gib": 2034.5914087295532,
+      "estimated_state_workspace_gib": 0.0625,
+      "lane_id": "0000_hydrogen_data_H10_ES_H10_linear_R0.5_sto-6g_ham_JW",
+      "molecule": "H10",
+      "nqubits": 20
+    },
+    {
+      "estimated_sector_workspace_gib": 2034.5914087295532,
+      "estimated_state_workspace_gib": 0.0625,
+      "lane_id": "0001_hydrogen_data_H10_ES_H10_linear_R0.6_sto-6g_ham_JW",
+      "molecule": "H10",
+      "nqubits": 20
+    },
+    {
+      "estimated_sector_workspace_gib": 2034.5914087295532,
+      "estimated_state_workspace_gib": 0.0625,
+      "lane_id": "0002_hydrogen_data_H10_ES_H10_linear_R0.7_sto-6g_ham_JW",
+      "molecule": "H10",
+      "nqubits": 20
+    },
+    {
+      "estimated_sector_workspace_gib": 2034.5914087295532,
+      "estimated_state_workspace_gib": 0.0625,
+      "lane_id": "0003_hydrogen_data_H10_ES_H10_linear_R0.8_sto-6g_ham_JW",
+      "molecule": "H10",
+      "nqubits": 20
+    },
+    {
+      "estimated_sector_workspace_gib": 2034.5914087295532,
+      "estimated_state_workspace_gib": 0.0625,
+      "lane_id": "0004_hydrogen_data_H10_ES_H10_linear_R0.9_sto-6g_ham_JW",
+      "molecule": "H10",
+      "nqubits": 20
+    },
+    {
+      "estimated_sector_workspace_gib": 2034.5914087295532,
+      "estimated_state_workspace_gib": 0.0625,
+      "lane_id": "0005_hydrogen_data_H10_ES_H10_linear_R1.0_sto-6g_ham_JW",
+      "molecule": "H10",
+      "nqubits": 20
+    },
+    {
+      "estimated_sector_workspace_gib": 2034.5914087295532,
+      "estimated_state_workspace_gib": 0.0625,
+      "lane_id": "0006_hydrogen_data_H10_ES_H10_linear_R1.1_sto-6g_ham_JW",
+      "molecule": "H10",
+      "nqubits": 20
+    },
+    {
+      "estimated_sector_workspace_gib": 2034.5914087295532,
+      "estimated_state_workspace_gib": 0.0625,
+      "lane_id": "0007_hydrogen_data_H10_ES_H10_linear_R1.2_sto-6g_ham_JW",
+      "molecule": "H10",
+      "nqubits": 20
+    },
+    {
+      "estimated_sector_workspace_gib": 2034.5914087295532,
+      "estimated_state_workspace_gib": 0.0625,
+      "lane_id": "0008_hydrogen_data_H10_ES_H10_linear_R1.3_sto-6g_ham_JW",
+      "molecule": "H10",
+      "nqubits": 20
+    },
+    {
+      "estimated_sector_workspace_gib": 2034.5914087295532,
+      "estimated_state_workspace_gib": 0.0625,
+      "lane_id": "0009_hydrogen_data_H10_ES_H10_linear_R1.4_sto-6g_ham_JW",
+      "molecule": "H10",
+      "nqubits": 20
+    },
+    {
+      "estimated_sector_workspace_gib": 2034.5914087295532,
+      "estimated_state_workspace_gib": 0.0625,
+      "lane_id": "0010_hydrogen_data_H10_ES_H10_linear_R1.5_sto-6g_ham_JW",
+      "molecule": "H10",
+      "nqubits": 20
+    },
+    {
+      "estimated_sector_workspace_gib": 2034.5914087295532,
+      "estimated_state_workspace_gib": 0.0625,
+      "lane_id": "0011_hydrogen_data_H10_ES_H10_linear_R1.6_sto-6g_ham_JW",
+      "molecule": "H10",
+      "nqubits": 20
+    },
+    {
+      "estimated_sector_workspace_gib": 2034.5914087295532,
+      "estimated_state_workspace_gib": 0.0625,
+      "lane_id": "0012_hydrogen_data_H10_ES_H10_linear_R1.7_sto-6g_ham_JW",
+      "molecule": "H10",
+      "nqubits": 20
+    },
+    {
+      "estimated_sector_workspace_gib": 2034.5914087295532,
+      "estimated_state_workspace_gib": 0.0625,
+      "lane_id": "0013_hydrogen_data_H10_ES_H10_linear_R1.8_sto-6g_ham_JW",
+      "molecule": "H10",
+      "nqubits": 20
+    },
+    {
+      "estimated_sector_workspace_gib": 2034.5914087295532,
+      "estimated_state_workspace_gib": 0.0625,
+      "lane_id": "0014_hydrogen_data_H10_ES_H10_linear_R1.9_sto-6g_ham_JW",
+      "molecule": "H10",
+      "nqubits": 20
+    },
+    {
+      "estimated_sector_workspace_gib": 2034.5914087295532,
+      "estimated_state_workspace_gib": 0.0625,
+      "lane_id": "0015_hydrogen_data_H10_ES_H10_linear_R2.0_sto-6g_ham_JW",
+      "molecule": "H10",
+      "nqubits": 20
+    },
+    {
+      "estimated_sector_workspace_gib": 2034.5914087295532,
+      "estimated_state_workspace_gib": 0.0625,
+      "lane_id": "0016_hydrogen_data_H10_ES_H10_pyramid_R0.5_sto-6g_ham_JW",
+      "molecule": "H10",
+      "nqubits": 20
+    },
+    {
+      "estimated_sector_workspace_gib": 2034.5914087295532,
+      "estimated_state_workspace_gib": 0.0625,
+      "lane_id": "0017_hydrogen_data_H10_ES_H10_pyramid_R0.6_sto-6g_ham_JW",
+      "molecule": "H10",
+      "nqubits": 20
+    },
+    {
+      "estimated_sector_workspace_gib": 2034.5914087295532,
+      "estimated_state_workspace_gib": 0.0625,
+      "lane_id": "0018_hydrogen_data_H10_ES_H10_pyramid_R0.7_sto-6g_ham_JW",
+      "molecule": "H10",
+      "nqubits": 20
+    },
+    {
+      "estimated_sector_workspace_gib": 2034.5914087295532,
+      "estimated_state_workspace_gib": 0.0625,
+      "lane_id": "0019_hydrogen_data_H10_ES_H10_pyramid_R0.8_sto-6g_ham_JW",
+      "molecule": "H10",
+      "nqubits": 20
+    },
+    {
+      "estimated_sector_workspace_gib": 2034.5914087295532,
+      "estimated_state_workspace_gib": 0.0625,
+      "lane_id": "0020_hydrogen_data_H10_ES_H10_pyramid_R0.9_sto-6g_ham_JW",
+      "molecule": "H10",
+      "nqubits": 20
+    },
+    {
+      "estimated_sector_workspace_gib": 2034.5914087295532,
+      "estimated_state_workspace_gib": 0.0625,
+      "lane_id": "0021_hydrogen_data_H10_ES_H10_pyramid_R1.0_sto-6g_ham_JW",
+      "molecule": "H10",
+      "nqubits": 20
+    },
+    {
+      "estimated_sector_workspace_gib": 2034.5914087295532,
+      "estimated_state_workspace_gib": 0.0625,
+      "lane_id": "0022_hydrogen_data_H10_ES_H10_pyramid_R1.1_sto-6g_ham_JW",
+      "molecule": "H10",
+      "nqubits": 20
+    },
+    {
+      "estimated_sector_workspace_gib": 2034.5914087295532,
+      "estimated_state_workspace_gib": 0.0625,
+      "lane_id": "0023_hydrogen_data_H10_ES_H10_pyramid_R1.2_sto-6g_ham_JW",
+      "molecule": "H10",
+      "nqubits": 20
+    },
+    {
+      "estimated_sector_workspace_gib": 2034.5914087295532,
+      "estimated_state_workspace_gib": 0.0625,
+      "lane_id": "0024_hydrogen_data_H10_ES_H10_pyramid_R1.3_sto-6g_ham_JW",
+      "molecule": "H10",
+      "nqubits": 20
+    },
+    {
+      "estimated_sector_workspace_gib": 2034.5914087295532,
+      "estimated_state_workspace_gib": 0.0625,
+      "lane_id": "0025_hydrogen_data_H10_ES_H10_pyramid_R1.4_sto-6g_ham_JW",
+      "molecule": "H10",
+      "nqubits": 20
+    },
+    {
+      "estimated_sector_workspace_gib": 2034.5914087295532,
+      "estimated_state_workspace_gib": 0.0625,
+      "lane_id": "0026_hydrogen_data_H10_ES_H10_pyramid_R1.5_sto-6g_ham_JW",
+      "molecule": "H10",
+      "nqubits": 20
+    },
+    {
+      "estimated_sector_workspace_gib": 2034.5914087295532,
+      "estimated_state_workspace_gib": 0.0625,
+      "lane_id": "0027_hydrogen_data_H10_ES_H10_pyramid_R1.6_sto-6g_ham_JW",
+      "molecule": "H10",
+      "nqubits": 20
+    },
+    {
+      "estimated_sector_workspace_gib": 2034.5914087295532,
+      "estimated_state_workspace_gib": 0.0625,
+      "lane_id": "0028_hydrogen_data_H10_ES_H10_pyramid_R1.7_sto-6g_ham_JW",
+      "molecule": "H10",
+      "nqubits": 20
+    },
+    {
+      "estimated_sector_workspace_gib": 2034.5914087295532,
+      "estimated_state_workspace_gib": 0.0625,
+      "lane_id": "0029_hydrogen_data_H10_ES_H10_pyramid_R1.8_sto-6g_ham_JW",
+      "molecule": "H10",
+      "nqubits": 20
+    },
+    {
+      "estimated_sector_workspace_gib": 2034.5914087295532,
+      "estimated_state_workspace_gib": 0.0625,
+      "lane_id": "0030_hydrogen_data_H10_ES_H10_pyramid_R1.9_sto-6g_ham_JW",
+      "molecule": "H10",
+      "nqubits": 20
+    },
+    {
+      "estimated_sector_workspace_gib": 2034.5914087295532,
+      "estimated_state_workspace_gib": 0.0625,
+      "lane_id": "0031_hydrogen_data_H10_ES_H10_pyramid_R2.0_sto-6g_ham_JW",
+      "molecule": "H10",
+      "nqubits": 20
+    },
+    {
+      "estimated_sector_workspace_gib": 2034.5914087295532,
+      "estimated_state_workspace_gib": 0.0625,
+      "lane_id": "0032_hydrogen_data_H10_ES_H10_ring_R0.5_sto-6g_ham_JW",
+      "molecule": "H10",
+      "nqubits": 20
+    },
+    {
+      "estimated_sector_workspace_gib": 2034.5914087295532,
+      "estimated_state_workspace_gib": 0.0625,
+      "lane_id": "0033_hydrogen_data_H10_ES_H10_ring_R0.6_sto-6g_ham_JW",
+      "molecule": "H10",
+      "nqubits": 20
+    },
+    {
+      "estimated_sector_workspace_gib": 2034.5914087295532,
+      "estimated_state_workspace_gib": 0.0625,
+      "lane_id": "0034_hydrogen_data_H10_ES_H10_ring_R0.7_sto-6g_ham_JW",
+      "molecule": "H10",
+      "nqubits": 20
+    },
+    {
+      "estimated_sector_workspace_gib": 2034.5914087295532,
+      "estimated_state_workspace_gib": 0.0625,
+      "lane_id": "0035_hydrogen_data_H10_ES_H10_ring_R0.8_sto-6g_ham_JW",
+      "molecule": "H10",
+      "nqubits": 20
+    },
+    {
+      "estimated_sector_workspace_gib": 2034.5914087295532,
+      "estimated_state_workspace_gib": 0.0625,
+      "lane_id": "0036_hydrogen_data_H10_ES_H10_ring_R0.9_sto-6g_ham_JW",
+      "molecule": "H10",
+      "nqubits": 20
+    },
+    {
+      "estimated_sector_workspace_gib": 2034.5914087295532,
+      "estimated_state_workspace_gib": 0.0625,
+      "lane_id": "0037_hydrogen_data_H10_ES_H10_ring_R1.0_sto-6g_ham_JW",
+      "molecule": "H10",
+      "nqubits": 20
+    },
+    {
+      "estimated_sector_workspace_gib": 2034.5914087295532,
+      "estimated_state_workspace_gib": 0.0625,
+      "lane_id": "0038_hydrogen_data_H10_ES_H10_ring_R1.1_sto-6g_ham_JW",
+      "molecule": "H10",
+      "nqubits": 20
+    },
+    {
+      "estimated_sector_workspace_gib": 2034.5914087295532,
+      "estimated_state_workspace_gib": 0.0625,
+      "lane_id": "0039_hydrogen_data_H10_ES_H10_ring_R1.2_sto-6g_ham_JW",
+      "molecule": "H10",
+      "nqubits": 20
+    },
+    {
+      "estimated_sector_workspace_gib": 2034.5914087295532,
+      "estimated_state_workspace_gib": 0.0625,
+      "lane_id": "0040_hydrogen_data_H10_ES_H10_ring_R1.3_sto-6g_ham_JW",
+      "molecule": "H10",
+      "nqubits": 20
+    },
+    {
+      "estimated_sector_workspace_gib": 2034.5914087295532,
+      "estimated_state_workspace_gib": 0.0625,
+      "lane_id": "0041_hydrogen_data_H10_ES_H10_ring_R1.4_sto-6g_ham_JW",
+      "molecule": "H10",
+      "nqubits": 20
+    },
+    {
+      "estimated_sector_workspace_gib": 2034.5914087295532,
+      "estimated_state_workspace_gib": 0.0625,
+      "lane_id": "0042_hydrogen_data_H10_ES_H10_ring_R1.5_sto-6g_ham_JW",
+      "molecule": "H10",
+      "nqubits": 20
+    },
+    {
+      "estimated_sector_workspace_gib": 2034.5914087295532,
+      "estimated_state_workspace_gib": 0.0625,
+      "lane_id": "0043_hydrogen_data_H10_ES_H10_ring_R1.6_sto-6g_ham_JW",
+      "molecule": "H10",
+      "nqubits": 20
+    },
+    {
+      "estimated_sector_workspace_gib": 2034.5914087295532,
+      "estimated_state_workspace_gib": 0.0625,
+      "lane_id": "0044_hydrogen_data_H10_ES_H10_ring_R1.7_sto-6g_ham_JW",
+      "molecule": "H10",
+      "nqubits": 20
+    },
+    {
+      "estimated_sector_workspace_gib": 2034.5914087295532,
+      "estimated_state_workspace_gib": 0.0625,
+      "lane_id": "0045_hydrogen_data_H10_ES_H10_ring_R1.8_sto-6g_ham_JW",
+      "molecule": "H10",
+      "nqubits": 20
+    },
+    {
+      "estimated_sector_workspace_gib": 2034.5914087295532,
+      "estimated_state_workspace_gib": 0.0625,
+      "lane_id": "0046_hydrogen_data_H10_ES_H10_ring_R1.9_sto-6g_ham_JW",
+      "molecule": "H10",
+      "nqubits": 20
+    },
+    {
+      "estimated_sector_workspace_gib": 2034.5914087295532,
+      "estimated_state_workspace_gib": 0.0625,
+      "lane_id": "0047_hydrogen_data_H10_ES_H10_ring_R2.0_sto-6g_ham_JW",
+      "molecule": "H10",
+      "nqubits": 20
+    },
+    {
+      "estimated_sector_workspace_gib": 2034.5914087295532,
+      "estimated_state_workspace_gib": 0.0625,
+      "lane_id": "0048_hydrogen_data_H10_ES_H10_sheet_R0.5_sto-6g_ham_JW",
+      "molecule": "H10",
+      "nqubits": 20
+    },
+    {
+      "estimated_sector_workspace_gib": 2034.5914087295532,
+      "estimated_state_workspace_gib": 0.0625,
+      "lane_id": "0049_hydrogen_data_H10_ES_H10_sheet_R0.6_sto-6g_ham_JW",
+      "molecule": "H10",
+      "nqubits": 20
+    },
+    {
+      "estimated_sector_workspace_gib": 2034.5914087295532,
+      "estimated_state_workspace_gib": 0.0625,
+      "lane_id": "0050_hydrogen_data_H10_ES_H10_sheet_R0.7_sto-6g_ham_JW",
+      "molecule": "H10",
+      "nqubits": 20
+    },
+    {
+      "estimated_sector_workspace_gib": 2034.5914087295532,
+      "estimated_state_workspace_gib": 0.0625,
+      "lane_id": "0051_hydrogen_data_H10_ES_H10_sheet_R0.8_sto-6g_ham_JW",
+      "molecule": "H10",
+      "nqubits": 20
+    },
+    {
+      "estimated_sector_workspace_gib": 2034.5914087295532,
+      "estimated_state_workspace_gib": 0.0625,
+      "lane_id": "0052_hydrogen_data_H10_ES_H10_sheet_R0.9_sto-6g_ham_JW",
+      "molecule": "H10",
+      "nqubits": 20
+    },
+    {
+      "estimated_sector_workspace_gib": 2034.5914087295532,
+      "estimated_state_workspace_gib": 0.0625,
+      "lane_id": "0053_hydrogen_data_H10_ES_H10_sheet_R1.0_sto-6g_ham_JW",
+      "molecule": "H10",
+      "nqubits": 20
+    },
+    {
+      "estimated_sector_workspace_gib": 2034.5914087295532,
+      "estimated_state_workspace_gib": 0.0625,
+      "lane_id": "0054_hydrogen_data_H10_ES_H10_sheet_R1.1_sto-6g_ham_JW",
+      "molecule": "H10",
+      "nqubits": 20
+    },
+    {
+      "estimated_sector_workspace_gib": 2034.5914087295532,
+      "estimated_state_workspace_gib": 0.0625,
+      "lane_id": "0055_hydrogen_data_H10_ES_H10_sheet_R1.2_sto-6g_ham_JW",
+      "molecule": "H10",
+      "nqubits": 20
+    },
+    {
+      "estimated_sector_workspace_gib": 2034.5914087295532,
+      "estimated_state_workspace_gib": 0.0625,
+      "lane_id": "0056_hydrogen_data_H10_ES_H10_sheet_R1.3_sto-6g_ham_JW",
+      "molecule": "H10",
+      "nqubits": 20
+    },
+    {
+      "estimated_sector_workspace_gib": 2034.5914087295532,
+      "estimated_state_workspace_gib": 0.0625,
+      "lane_id": "0057_hydrogen_data_H10_ES_H10_sheet_R1.4_sto-6g_ham_JW",
+      "molecule": "H10",
+      "nqubits": 20
+    },
+    {
+      "estimated_sector_workspace_gib": 2034.5914087295532,
+      "estimated_state_workspace_gib": 0.0625,
+      "lane_id": "0058_hydrogen_data_H10_ES_H10_sheet_R1.5_sto-6g_ham_JW",
+      "molecule": "H10",
+      "nqubits": 20
+    },
+    {
+      "estimated_sector_workspace_gib": 2034.5914087295532,
+      "estimated_state_workspace_gib": 0.0625,
+      "lane_id": "0059_hydrogen_data_H10_ES_H10_sheet_R1.6_sto-6g_ham_JW",
+      "molecule": "H10",
+      "nqubits": 20
+    },
+    {
+      "estimated_sector_workspace_gib": 2034.5914087295532,
+      "estimated_state_workspace_gib": 0.0625,
+      "lane_id": "0060_hydrogen_data_H10_ES_H10_sheet_R1.7_sto-6g_ham_JW",
+      "molecule": "H10",
+      "nqubits": 20
+    },
+    {
+      "estimated_sector_workspace_gib": 2034.5914087295532,
+      "estimated_state_workspace_gib": 0.0625,
+      "lane_id": "0061_hydrogen_data_H10_ES_H10_sheet_R1.8_sto-6g_ham_JW",
+      "molecule": "H10",
+      "nqubits": 20
+    },
+    {
+      "estimated_sector_workspace_gib": 2034.5914087295532,
+      "estimated_state_workspace_gib": 0.0625,
+      "lane_id": "0062_hydrogen_data_H10_ES_H10_sheet_R1.9_sto-6g_ham_JW",
+      "molecule": "H10",
+      "nqubits": 20
+    },
+    {
+      "estimated_sector_workspace_gib": 2034.5914087295532,
+      "estimated_state_workspace_gib": 0.0625,
+      "lane_id": "0063_hydrogen_data_H10_ES_H10_sheet_R2.0_sto-6g_ham_JW",
+      "molecule": "H10",
+      "nqubits": 20
+    },
+    {
+      "estimated_sector_workspace_gib": 435856.5612039566,
+      "estimated_state_workspace_gib": 1.0,
+      "lane_id": "0064_hydrogen_data_H12_ES_H12_linear_R0.5_sto-6g_ham_JW",
+      "molecule": "H12",
+      "nqubits": 24
+    },
+    {
+      "estimated_sector_workspace_gib": 435856.5612039566,
+      "estimated_state_workspace_gib": 1.0,
+      "lane_id": "0065_hydrogen_data_H12_ES_H12_linear_R0.6_sto-6g_ham_JW",
+      "molecule": "H12",
+      "nqubits": 24
+    },
+    {
+      "estimated_sector_workspace_gib": 435856.5612039566,
+      "estimated_state_workspace_gib": 1.0,
+      "lane_id": "0066_hydrogen_data_H12_ES_H12_linear_R0.7_sto-6g_ham_JW",
+      "molecule": "H12",
+      "nqubits": 24
+    },
+    {
+      "estimated_sector_workspace_gib": 435856.5612039566,
+      "estimated_state_workspace_gib": 1.0,
+      "lane_id": "0067_hydrogen_data_H12_ES_H12_linear_R0.8_sto-6g_ham_JW",
+      "molecule": "H12",
+      "nqubits": 24
+    },
+    {
+      "estimated_sector_workspace_gib": 435856.5612039566,
+      "estimated_state_workspace_gib": 1.0,
+      "lane_id": "0068_hydrogen_data_H12_ES_H12_linear_R0.9_sto-6g_ham_JW",
+      "molecule": "H12",
+      "nqubits": 24
+    },
+    {
+      "estimated_sector_workspace_gib": 435856.5612039566,
+      "estimated_state_workspace_gib": 1.0,
+      "lane_id": "0069_hydrogen_data_H12_ES_H12_linear_R1.0_sto-6g_ham_JW",
+      "molecule": "H12",
+      "nqubits": 24
+    },
+    {
+      "estimated_sector_workspace_gib": 435856.5612039566,
+      "estimated_state_workspace_gib": 1.0,
+      "lane_id": "0070_hydrogen_data_H12_ES_H12_linear_R1.1_sto-6g_ham_JW",
+      "molecule": "H12",
+      "nqubits": 24
+    },
+    {
+      "estimated_sector_workspace_gib": 435856.5612039566,
+      "estimated_state_workspace_gib": 1.0,
+      "lane_id": "0071_hydrogen_data_H12_ES_H12_linear_R1.2_sto-6g_ham_JW",
+      "molecule": "H12",
+      "nqubits": 24
+    },
+    {
+      "estimated_sector_workspace_gib": 435856.5612039566,
+      "estimated_state_workspace_gib": 1.0,
+      "lane_id": "0072_hydrogen_data_H12_ES_H12_linear_R1.3_sto-6g_ham_JW",
+      "molecule": "H12",
+      "nqubits": 24
+    },
+    {
+      "estimated_sector_workspace_gib": 435856.5612039566,
+      "estimated_state_workspace_gib": 1.0,
+      "lane_id": "0073_hydrogen_data_H12_ES_H12_linear_R1.4_sto-6g_ham_JW",
+      "molecule": "H12",
+      "nqubits": 24
+    },
+    {
+      "estimated_sector_workspace_gib": 435856.5612039566,
+      "estimated_state_workspace_gib": 1.0,
+      "lane_id": "0074_hydrogen_data_H12_ES_H12_linear_R1.5_sto-6g_ham_JW",
+      "molecule": "H12",
+      "nqubits": 24
+    },
+    {
+      "estimated_sector_workspace_gib": 435856.5612039566,
+      "estimated_state_workspace_gib": 1.0,
+      "lane_id": "0075_hydrogen_data_H12_ES_H12_linear_R1.6_sto-6g_ham_JW",
+      "molecule": "H12",
+      "nqubits": 24
+    },
+    {
+      "estimated_sector_workspace_gib": 435856.5612039566,
+      "estimated_state_workspace_gib": 1.0,
+      "lane_id": "0076_hydrogen_data_H12_ES_H12_linear_R1.7_sto-6g_ham_JW",
+      "molecule": "H12",
+      "nqubits": 24
+    },
+    {
+      "estimated_sector_workspace_gib": 435856.5612039566,
+      "estimated_state_workspace_gib": 1.0,
+      "lane_id": "0077_hydrogen_data_H12_ES_H12_linear_R1.8_sto-6g_ham_JW",
+      "molecule": "H12",
+      "nqubits": 24
+    },
+    {
+      "estimated_sector_workspace_gib": 435856.5612039566,
+      "estimated_state_workspace_gib": 1.0,
+      "lane_id": "0078_hydrogen_data_H12_ES_H12_linear_R1.9_sto-6g_ham_JW",
+      "molecule": "H12",
+      "nqubits": 24
+    },
+    {
+      "estimated_sector_workspace_gib": 435856.5612039566,
+      "estimated_state_workspace_gib": 1.0,
+      "lane_id": "0079_hydrogen_data_H12_ES_H12_linear_R2.0_sto-6g_ham_JW",
+      "molecule": "H12",
+      "nqubits": 24
+    },
+    {
+      "estimated_sector_workspace_gib": 435856.5612039566,
+      "estimated_state_workspace_gib": 1.0,
+      "lane_id": "0080_hydrogen_data_H12_ES_H12_pyramid_R0.5_sto-6g_ham_JW",
+      "molecule": "H12",
+      "nqubits": 24
+    },
+    {
+      "estimated_sector_workspace_gib": 435856.5612039566,
+      "estimated_state_workspace_gib": 1.0,
+      "lane_id": "0081_hydrogen_data_H12_ES_H12_pyramid_R0.6_sto-6g_ham_JW",
+      "molecule": "H12",
+      "nqubits": 24
+    },
+    {
+      "estimated_sector_workspace_gib": 435856.5612039566,
+      "estimated_state_workspace_gib": 1.0,
+      "lane_id": "0082_hydrogen_data_H12_ES_H12_pyramid_R0.7_sto-6g_ham_JW",
+      "molecule": "H12",
+      "nqubits": 24
+    },
+    {
+      "estimated_sector_workspace_gib": 435856.5612039566,
+      "estimated_state_workspace_gib": 1.0,
+      "lane_id": "0083_hydrogen_data_H12_ES_H12_pyramid_R0.8_sto-6g_ham_JW",
+      "molecule": "H12",
+      "nqubits": 24
+    },
+    {
+      "estimated_sector_workspace_gib": 435856.5612039566,
+      "estimated_state_workspace_gib": 1.0,
+      "lane_id": "0084_hydrogen_data_H12_ES_H12_pyramid_R0.9_sto-6g_ham_JW",
+      "molecule": "H12",
+      "nqubits": 24
+    },
+    {
+      "estimated_sector_workspace_gib": 435856.5612039566,
+      "estimated_state_workspace_gib": 1.0,
+      "lane_id": "0085_hydrogen_data_H12_ES_H12_pyramid_R1.0_sto-6g_ham_JW",
+      "molecule": "H12",
+      "nqubits": 24
+    },
+    {
+      "estimated_sector_workspace_gib": 435856.5612039566,
+      "estimated_state_workspace_gib": 1.0,
+      "lane_id": "0086_hydrogen_data_H12_ES_H12_pyramid_R1.1_sto-6g_ham_JW",
+      "molecule": "H12",
+      "nqubits": 24
+    },
+    {
+      "estimated_sector_workspace_gib": 435856.5612039566,
+      "estimated_state_workspace_gib": 1.0,
+      "lane_id": "0087_hydrogen_data_H12_ES_H12_pyramid_R1.2_sto-6g_ham_JW",
+      "molecule": "H12",
+      "nqubits": 24
+    },
+    {
+      "estimated_sector_workspace_gib": 435856.5612039566,
+      "estimated_state_workspace_gib": 1.0,
+      "lane_id": "0088_hydrogen_data_H12_ES_H12_pyramid_R1.3_sto-6g_ham_JW",
+      "molecule": "H12",
+      "nqubits": 24
+    },
+    {
+      "estimated_sector_workspace_gib": 435856.5612039566,
+      "estimated_state_workspace_gib": 1.0,
+      "lane_id": "0089_hydrogen_data_H12_ES_H12_pyramid_R1.4_sto-6g_ham_JW",
+      "molecule": "H12",
+      "nqubits": 24
+    },
+    {
+      "estimated_sector_workspace_gib": 435856.5612039566,
+      "estimated_state_workspace_gib": 1.0,
+      "lane_id": "0090_hydrogen_data_H12_ES_H12_pyramid_R1.5_sto-6g_ham_JW",
+      "molecule": "H12",
+      "nqubits": 24
+    },
+    {
+      "estimated_sector_workspace_gib": 435856.5612039566,
+      "estimated_state_workspace_gib": 1.0,
+      "lane_id": "0091_hydrogen_data_H12_ES_H12_pyramid_R1.6_sto-6g_ham_JW",
+      "molecule": "H12",
+      "nqubits": 24
+    },
+    {
+      "estimated_sector_workspace_gib": 435856.5612039566,
+      "estimated_state_workspace_gib": 1.0,
+      "lane_id": "0092_hydrogen_data_H12_ES_H12_pyramid_R1.7_sto-6g_ham_JW",
+      "molecule": "H12",
+      "nqubits": 24
+    },
+    {
+      "estimated_sector_workspace_gib": 435856.5612039566,
+      "estimated_state_workspace_gib": 1.0,
+      "lane_id": "0093_hydrogen_data_H12_ES_H12_pyramid_R1.8_sto-6g_ham_JW",
+      "molecule": "H12",
+      "nqubits": 24
+    },
+    {
+      "estimated_sector_workspace_gib": 435856.5612039566,
+      "estimated_state_workspace_gib": 1.0,
+      "lane_id": "0094_hydrogen_data_H12_ES_H12_pyramid_R1.9_sto-6g_ham_JW",
+      "molecule": "H12",
+      "nqubits": 24
+    },
+    {
+      "estimated_sector_workspace_gib": 435856.5612039566,
+      "estimated_state_workspace_gib": 1.0,
+      "lane_id": "0095_hydrogen_data_H12_ES_H12_pyramid_R2.0_sto-6g_ham_JW",
+      "molecule": "H12",
+      "nqubits": 24
+    },
+    {
+      "estimated_sector_workspace_gib": 435856.5612039566,
+      "estimated_state_workspace_gib": 1.0,
+      "lane_id": "0096_hydrogen_data_H12_ES_H12_ring_R0.5_sto-6g_ham_JW",
+      "molecule": "H12",
+      "nqubits": 24
+    },
+    {
+      "estimated_sector_workspace_gib": 435856.5612039566,
+      "estimated_state_workspace_gib": 1.0,
+      "lane_id": "0097_hydrogen_data_H12_ES_H12_ring_R0.6_sto-6g_ham_JW",
+      "molecule": "H12",
+      "nqubits": 24
+    },
+    {
+      "estimated_sector_workspace_gib": 435856.5612039566,
+      "estimated_state_workspace_gib": 1.0,
+      "lane_id": "0098_hydrogen_data_H12_ES_H12_ring_R0.7_sto-6g_ham_JW",
+      "molecule": "H12",
+      "nqubits": 24
+    },
+    {
+      "estimated_sector_workspace_gib": 435856.5612039566,
+      "estimated_state_workspace_gib": 1.0,
+      "lane_id": "0099_hydrogen_data_H12_ES_H12_ring_R0.8_sto-6g_ham_JW",
+      "molecule": "H12",
+      "nqubits": 24
+    },
+    {
+      "estimated_sector_workspace_gib": 435856.5612039566,
+      "estimated_state_workspace_gib": 1.0,
+      "lane_id": "0100_hydrogen_data_H12_ES_H12_ring_R0.9_sto-6g_ham_JW",
+      "molecule": "H12",
+      "nqubits": 24
+    },
+    {
+      "estimated_sector_workspace_gib": 435856.5612039566,
+      "estimated_state_workspace_gib": 1.0,
+      "lane_id": "0101_hydrogen_data_H12_ES_H12_ring_R1.0_sto-6g_ham_JW",
+      "molecule": "H12",
+      "nqubits": 24
+    },
+    {
+      "estimated_sector_workspace_gib": 435856.5612039566,
+      "estimated_state_workspace_gib": 1.0,
+      "lane_id": "0102_hydrogen_data_H12_ES_H12_ring_R1.1_sto-6g_ham_JW",
+      "molecule": "H12",
+      "nqubits": 24
+    },
+    {
+      "estimated_sector_workspace_gib": 435856.5612039566,
+      "estimated_state_workspace_gib": 1.0,
+      "lane_id": "0103_hydrogen_data_H12_ES_H12_ring_R1.2_sto-6g_ham_JW",
+      "molecule": "H12",
+      "nqubits": 24
+    },
+    {
+      "estimated_sector_workspace_gib": 435856.5612039566,
+      "estimated_state_workspace_gib": 1.0,
+      "lane_id": "0104_hydrogen_data_H12_ES_H12_ring_R1.3_sto-6g_ham_JW",
+      "molecule": "H12",
+      "nqubits": 24
+    },
+    {
+      "estimated_sector_workspace_gib": 435856.5612039566,
+      "estimated_state_workspace_gib": 1.0,
+      "lane_id": "0105_hydrogen_data_H12_ES_H12_ring_R1.4_sto-6g_ham_JW",
+      "molecule": "H12",
+      "nqubits": 24
+    },
+    {
+      "estimated_sector_workspace_gib": 435856.5612039566,
+      "estimated_state_workspace_gib": 1.0,
+      "lane_id": "0106_hydrogen_data_H12_ES_H12_ring_R1.5_sto-6g_ham_JW",
+      "molecule": "H12",
+      "nqubits": 24
+    },
+    {
+      "estimated_sector_workspace_gib": 435856.5612039566,
+      "estimated_state_workspace_gib": 1.0,
+      "lane_id": "0107_hydrogen_data_H12_ES_H12_ring_R1.6_sto-6g_ham_JW",
+      "molecule": "H12",
+      "nqubits": 24
+    },
+    {
+      "estimated_sector_workspace_gib": 435856.5612039566,
+      "estimated_state_workspace_gib": 1.0,
+      "lane_id": "0108_hydrogen_data_H12_ES_H12_ring_R1.7_sto-6g_ham_JW",
+      "molecule": "H12",
+      "nqubits": 24
+    },
+    {
+      "estimated_sector_workspace_gib": 435856.5612039566,
+      "estimated_state_workspace_gib": 1.0,
+      "lane_id": "0109_hydrogen_data_H12_ES_H12_ring_R1.8_sto-6g_ham_JW",
+      "molecule": "H12",
+      "nqubits": 24
+    },
+    {
+      "estimated_sector_workspace_gib": 435856.5612039566,
+      "estimated_state_workspace_gib": 1.0,
+      "lane_id": "0110_hydrogen_data_H12_ES_H12_ring_R1.9_sto-6g_ham_JW",
+      "molecule": "H12",
+      "nqubits": 24
+    },
+    {
+      "estimated_sector_workspace_gib": 435856.5612039566,
+      "estimated_state_workspace_gib": 1.0,
+      "lane_id": "0111_hydrogen_data_H12_ES_H12_ring_R2.0_sto-6g_ham_JW",
+      "molecule": "H12",
+      "nqubits": 24
+    },
+    {
+      "estimated_sector_workspace_gib": 435856.5612039566,
+      "estimated_state_workspace_gib": 1.0,
+      "lane_id": "0112_hydrogen_data_H12_ES_H12_sheet_R0.5_sto-6g_ham_JW",
+      "molecule": "H12",
+      "nqubits": 24
+    },
+    {
+      "estimated_sector_workspace_gib": 435856.5612039566,
+      "estimated_state_workspace_gib": 1.0,
+      "lane_id": "0113_hydrogen_data_H12_ES_H12_sheet_R0.6_sto-6g_ham_JW",
+      "molecule": "H12",
+      "nqubits": 24
+    },
+    {
+      "estimated_sector_workspace_gib": 435856.5612039566,
+      "estimated_state_workspace_gib": 1.0,
+      "lane_id": "0114_hydrogen_data_H12_ES_H12_sheet_R0.7_sto-6g_ham_JW",
+      "molecule": "H12",
+      "nqubits": 24
+    },
+    {
+      "estimated_sector_workspace_gib": 435856.5612039566,
+      "estimated_state_workspace_gib": 1.0,
+      "lane_id": "0115_hydrogen_data_H12_ES_H12_sheet_R0.8_sto-6g_ham_JW",
+      "molecule": "H12",
+      "nqubits": 24
+    },
+    {
+      "estimated_sector_workspace_gib": 435856.5612039566,
+      "estimated_state_workspace_gib": 1.0,
+      "lane_id": "0116_hydrogen_data_H12_ES_H12_sheet_R0.9_sto-6g_ham_JW",
+      "molecule": "H12",
+      "nqubits": 24
+    },
+    {
+      "estimated_sector_workspace_gib": 435856.5612039566,
+      "estimated_state_workspace_gib": 1.0,
+      "lane_id": "0117_hydrogen_data_H12_ES_H12_sheet_R1.0_sto-6g_ham_JW",
+      "molecule": "H12",
+      "nqubits": 24
+    },
+    {
+      "estimated_sector_workspace_gib": 435856.5612039566,
+      "estimated_state_workspace_gib": 1.0,
+      "lane_id": "0118_hydrogen_data_H12_ES_H12_sheet_R1.1_sto-6g_ham_JW",
+      "molecule": "H12",
+      "nqubits": 24
+    },
+    {
+      "estimated_sector_workspace_gib": 435856.5612039566,
+      "estimated_state_workspace_gib": 1.0,
+      "lane_id": "0119_hydrogen_data_H12_ES_H12_sheet_R1.2_sto-6g_ham_JW",
+      "molecule": "H12",
+      "nqubits": 24
+    },
+    {
+      "estimated_sector_workspace_gib": 435856.5612039566,
+      "estimated_state_workspace_gib": 1.0,
+      "lane_id": "0120_hydrogen_data_H12_ES_H12_sheet_R1.3_sto-6g_ham_JW",
+      "molecule": "H12",
+      "nqubits": 24
+    },
+    {
+      "estimated_sector_workspace_gib": 435856.5612039566,
+      "estimated_state_workspace_gib": 1.0,
+      "lane_id": "0121_hydrogen_data_H12_ES_H12_sheet_R1.4_sto-6g_ham_JW",
+      "molecule": "H12",
+      "nqubits": 24
+    },
+    {
+      "estimated_sector_workspace_gib": 435856.5612039566,
+      "estimated_state_workspace_gib": 1.0,
+      "lane_id": "0122_hydrogen_data_H12_ES_H12_sheet_R1.5_sto-6g_ham_JW",
+      "molecule": "H12",
+      "nqubits": 24
+    },
+    {
+      "estimated_sector_workspace_gib": 435856.5612039566,
+      "estimated_state_workspace_gib": 1.0,
+      "lane_id": "0123_hydrogen_data_H12_ES_H12_sheet_R1.6_sto-6g_ham_JW",
+      "molecule": "H12",
+      "nqubits": 24
+    },
+    {
+      "estimated_sector_workspace_gib": 435856.5612039566,
+      "estimated_state_workspace_gib": 1.0,
+      "lane_id": "0124_hydrogen_data_H12_ES_H12_sheet_R1.7_sto-6g_ham_JW",
+      "molecule": "H12",
+      "nqubits": 24
+    },
+    {
+      "estimated_sector_workspace_gib": 435856.5612039566,
+      "estimated_state_workspace_gib": 1.0,
+      "lane_id": "0125_hydrogen_data_H12_ES_H12_sheet_R1.8_sto-6g_ham_JW",
+      "molecule": "H12",
+      "nqubits": 24
+    },
+    {
+      "estimated_sector_workspace_gib": 435856.5612039566,
+      "estimated_state_workspace_gib": 1.0,
+      "lane_id": "0126_hydrogen_data_H12_ES_H12_sheet_R1.9_sto-6g_ham_JW",
+      "molecule": "H12",
+      "nqubits": 24
+    },
+    {
+      "estimated_sector_workspace_gib": 435856.5612039566,
+      "estimated_state_workspace_gib": 1.0,
+      "lane_id": "0127_hydrogen_data_H12_ES_H12_sheet_R2.0_sto-6g_ham_JW",
+      "molecule": "H12",
+      "nqubits": 24
+    },
+    {
+      "estimated_sector_workspace_gib": 95924234.12561417,
+      "estimated_state_workspace_gib": 16.0,
+      "lane_id": "0128_hydrogen_data_H14_ES_H14_linear_R0.5_sto-6g_ham_JW",
+      "molecule": "H14",
+      "nqubits": 28
+    },
+    {
+      "estimated_sector_workspace_gib": 95924234.12561417,
+      "estimated_state_workspace_gib": 16.0,
+      "lane_id": "0129_hydrogen_data_H14_ES_H14_linear_R0.6_sto-6g_ham_JW",
+      "molecule": "H14",
+      "nqubits": 28
+    },
+    {
+      "estimated_sector_workspace_gib": 95924234.12561417,
+      "estimated_state_workspace_gib": 16.0,
+      "lane_id": "0130_hydrogen_data_H14_ES_H14_linear_R0.7_sto-6g_ham_JW",
+      "molecule": "H14",
+      "nqubits": 28
+    },
+    {
+      "estimated_sector_workspace_gib": 95924234.12561417,
+      "estimated_state_workspace_gib": 16.0,
+      "lane_id": "0131_hydrogen_data_H14_ES_H14_linear_R0.8_sto-6g_ham_JW",
+      "molecule": "H14",
+      "nqubits": 28
+    },
+    {
+      "estimated_sector_workspace_gib": 95924234.12561417,
+      "estimated_state_workspace_gib": 16.0,
+      "lane_id": "0132_hydrogen_data_H14_ES_H14_linear_R0.9_sto-6g_ham_JW",
+      "molecule": "H14",
+      "nqubits": 28
+    },
+    {
+      "estimated_sector_workspace_gib": 95924234.12561417,
+      "estimated_state_workspace_gib": 16.0,
+      "lane_id": "0133_hydrogen_data_H14_ES_H14_linear_R1.0_sto-6g_ham_JW",
+      "molecule": "H14",
+      "nqubits": 28
+    },
+    {
+      "estimated_sector_workspace_gib": 95924234.12561417,
+      "estimated_state_workspace_gib": 16.0,
+      "lane_id": "0134_hydrogen_data_H14_ES_H14_linear_R1.1_sto-6g_ham_JW",
+      "molecule": "H14",
+      "nqubits": 28
+    },
+    {
+      "estimated_sector_workspace_gib": 95924234.12561417,
+      "estimated_state_workspace_gib": 16.0,
+      "lane_id": "0135_hydrogen_data_H14_ES_H14_linear_R1.2_sto-6g_ham_JW",
+      "molecule": "H14",
+      "nqubits": 28
+    },
+    {
+      "estimated_sector_workspace_gib": 95924234.12561417,
+      "estimated_state_workspace_gib": 16.0,
+      "lane_id": "0136_hydrogen_data_H14_ES_H14_linear_R1.3_sto-6g_ham_JW",
+      "molecule": "H14",
+      "nqubits": 28
+    },
+    {
+      "estimated_sector_workspace_gib": 95924234.12561417,
+      "estimated_state_workspace_gib": 16.0,
+      "lane_id": "0137_hydrogen_data_H14_ES_H14_linear_R1.4_sto-6g_ham_JW",
+      "molecule": "H14",
+      "nqubits": 28
+    },
+    {
+      "estimated_sector_workspace_gib": 95924234.12561417,
+      "estimated_state_workspace_gib": 16.0,
+      "lane_id": "0138_hydrogen_data_H14_ES_H14_linear_R1.5_sto-6g_ham_JW",
+      "molecule": "H14",
+      "nqubits": 28
+    },
+    {
+      "estimated_sector_workspace_gib": 95924234.12561417,
+      "estimated_state_workspace_gib": 16.0,
+      "lane_id": "0139_hydrogen_data_H14_ES_H14_linear_R1.6_sto-6g_ham_JW",
+      "molecule": "H14",
+      "nqubits": 28
+    },
+    {
+      "estimated_sector_workspace_gib": 95924234.12561417,
+      "estimated_state_workspace_gib": 16.0,
+      "lane_id": "0140_hydrogen_data_H14_ES_H14_linear_R1.7_sto-6g_ham_JW",
+      "molecule": "H14",
+      "nqubits": 28
+    },
+    {
+      "estimated_sector_workspace_gib": 95924234.12561417,
+      "estimated_state_workspace_gib": 16.0,
+      "lane_id": "0141_hydrogen_data_H14_ES_H14_linear_R1.8_sto-6g_ham_JW",
+      "molecule": "H14",
+      "nqubits": 28
+    },
+    {
+      "estimated_sector_workspace_gib": 95924234.12561417,
+      "estimated_state_workspace_gib": 16.0,
+      "lane_id": "0142_hydrogen_data_H14_ES_H14_linear_R1.9_sto-6g_ham_JW",
+      "molecule": "H14",
+      "nqubits": 28
+    },
+    {
+      "estimated_sector_workspace_gib": 95924234.12561417,
+      "estimated_state_workspace_gib": 16.0,
+      "lane_id": "0143_hydrogen_data_H14_ES_H14_linear_R2.0_sto-6g_ham_JW",
+      "molecule": "H14",
+      "nqubits": 28
+    },
+    {
+      "estimated_sector_workspace_gib": 95924234.12561417,
+      "estimated_state_workspace_gib": 16.0,
+      "lane_id": "0144_hydrogen_data_H14_ES_H14_pyramid_R0.5_sto-6g_ham_JW",
+      "molecule": "H14",
+      "nqubits": 28
+    },
+    {
+      "estimated_sector_workspace_gib": 95924234.12561417,
+      "estimated_state_workspace_gib": 16.0,
+      "lane_id": "0145_hydrogen_data_H14_ES_H14_pyramid_R0.6_sto-6g_ham_JW",
+      "molecule": "H14",
+      "nqubits": 28
+    },
+    {
+      "estimated_sector_workspace_gib": 95924234.12561417,
+      "estimated_state_workspace_gib": 16.0,
+      "lane_id": "0146_hydrogen_data_H14_ES_H14_pyramid_R0.7_sto-6g_ham_JW",
+      "molecule": "H14",
+      "nqubits": 28
+    },
+    {
+      "estimated_sector_workspace_gib": 95924234.12561417,
+      "estimated_state_workspace_gib": 16.0,
+      "lane_id": "0147_hydrogen_data_H14_ES_H14_pyramid_R0.8_sto-6g_ham_JW",
+      "molecule": "H14",
+      "nqubits": 28
+    },
+    {
+      "estimated_sector_workspace_gib": 95924234.12561417,
+      "estimated_state_workspace_gib": 16.0,
+      "lane_id": "0148_hydrogen_data_H14_ES_H14_pyramid_R0.9_sto-6g_ham_JW",
+      "molecule": "H14",
+      "nqubits": 28
+    },
+    {
+      "estimated_sector_workspace_gib": 95924234.12561417,
+      "estimated_state_workspace_gib": 16.0,
+      "lane_id": "0149_hydrogen_data_H14_ES_H14_pyramid_R1.0_sto-6g_ham_JW",
+      "molecule": "H14",
+      "nqubits": 28
+    },
+    {
+      "estimated_sector_workspace_gib": 95924234.12561417,
+      "estimated_state_workspace_gib": 16.0,
+      "lane_id": "0150_hydrogen_data_H14_ES_H14_pyramid_R1.1_sto-6g_ham_JW",
+      "molecule": "H14",
+      "nqubits": 28
+    },
+    {
+      "estimated_sector_workspace_gib": 95924234.12561417,
+      "estimated_state_workspace_gib": 16.0,
+      "lane_id": "0151_hydrogen_data_H14_ES_H14_pyramid_R1.2_sto-6g_ham_JW",
+      "molecule": "H14",
+      "nqubits": 28
+    },
+    {
+      "estimated_sector_workspace_gib": 95924234.12561417,
+      "estimated_state_workspace_gib": 16.0,
+      "lane_id": "0152_hydrogen_data_H14_ES_H14_pyramid_R1.3_sto-6g_ham_JW",
+      "molecule": "H14",
+      "nqubits": 28
+    },
+    {
+      "estimated_sector_workspace_gib": 95924234.12561417,
+      "estimated_state_workspace_gib": 16.0,
+      "lane_id": "0153_hydrogen_data_H14_ES_H14_pyramid_R1.4_sto-6g_ham_JW",
+      "molecule": "H14",
+      "nqubits": 28
+    },
+    {
+      "estimated_sector_workspace_gib": 95924234.12561417,
+      "estimated_state_workspace_gib": 16.0,
+      "lane_id": "0154_hydrogen_data_H14_ES_H14_pyramid_R1.5_sto-6g_ham_JW",
+      "molecule": "H14",
+      "nqubits": 28
+    },
+    {
+      "estimated_sector_workspace_gib": 95924234.12561417,
+      "estimated_state_workspace_gib": 16.0,
+      "lane_id": "0155_hydrogen_data_H14_ES_H14_pyramid_R1.6_sto-6g_ham_JW",
+      "molecule": "H14",
+      "nqubits": 28
+    },
+    {
+      "estimated_sector_workspace_gib": 95924234.12561417,
+      "estimated_state_workspace_gib": 16.0,
+      "lane_id": "0156_hydrogen_data_H14_ES_H14_pyramid_R1.7_sto-6g_ham_JW",
+      "molecule": "H14",
+      "nqubits": 28
+    },
+    {
+      "estimated_sector_workspace_gib": 95924234.12561417,
+      "estimated_state_workspace_gib": 16.0,
+      "lane_id": "0157_hydrogen_data_H14_ES_H14_pyramid_R1.8_sto-6g_ham_JW",
+      "molecule": "H14",
+      "nqubits": 28
+    },
+    {
+      "estimated_sector_workspace_gib": 95924234.12561417,
+      "estimated_state_workspace_gib": 16.0,
+      "lane_id": "0158_hydrogen_data_H14_ES_H14_pyramid_R1.9_sto-6g_ham_JW",
+      "molecule": "H14",
+      "nqubits": 28
+    },
+    {
+      "estimated_sector_workspace_gib": 95924234.12561417,
+      "estimated_state_workspace_gib": 16.0,
+      "lane_id": "0159_hydrogen_data_H14_ES_H14_pyramid_R2.0_sto-6g_ham_JW",
+      "molecule": "H14",
+      "nqubits": 28
+    },
+    {
+      "estimated_sector_workspace_gib": 95924234.12561417,
+      "estimated_state_workspace_gib": 16.0,
+      "lane_id": "0160_hydrogen_data_H14_ES_H14_ring_R0.5_sto-6g_ham_JW",
+      "molecule": "H14",
+      "nqubits": 28
+    },
+    {
+      "estimated_sector_workspace_gib": 95924234.12561417,
+      "estimated_state_workspace_gib": 16.0,
+      "lane_id": "0161_hydrogen_data_H14_ES_H14_ring_R0.6_sto-6g_ham_JW",
+      "molecule": "H14",
+      "nqubits": 28
+    },
+    {
+      "estimated_sector_workspace_gib": 95924234.12561417,
+      "estimated_state_workspace_gib": 16.0,
+      "lane_id": "0162_hydrogen_data_H14_ES_H14_ring_R0.7_sto-6g_ham_JW",
+      "molecule": "H14",
+      "nqubits": 28
+    },
+    {
+      "estimated_sector_workspace_gib": 95924234.12561417,
+      "estimated_state_workspace_gib": 16.0,
+      "lane_id": "0163_hydrogen_data_H14_ES_H14_ring_R0.8_sto-6g_ham_JW",
+      "molecule": "H14",
+      "nqubits": 28
+    },
+    {
+      "estimated_sector_workspace_gib": 95924234.12561417,
+      "estimated_state_workspace_gib": 16.0,
+      "lane_id": "0164_hydrogen_data_H14_ES_H14_ring_R0.9_sto-6g_ham_JW",
+      "molecule": "H14",
+      "nqubits": 28
+    },
+    {
+      "estimated_sector_workspace_gib": 95924234.12561417,
+      "estimated_state_workspace_gib": 16.0,
+      "lane_id": "0165_hydrogen_data_H14_ES_H14_ring_R1.0_sto-6g_ham_JW",
+      "molecule": "H14",
+      "nqubits": 28
+    },
+    {
+      "estimated_sector_workspace_gib": 95924234.12561417,
+      "estimated_state_workspace_gib": 16.0,
+      "lane_id": "0166_hydrogen_data_H14_ES_H14_ring_R1.1_sto-6g_ham_JW",
+      "molecule": "H14",
+      "nqubits": 28
+    },
+    {
+      "estimated_sector_workspace_gib": 95924234.12561417,
+      "estimated_state_workspace_gib": 16.0,
+      "lane_id": "0167_hydrogen_data_H14_ES_H14_ring_R1.2_sto-6g_ham_JW",
+      "molecule": "H14",
+      "nqubits": 28
+    },
+    {
+      "estimated_sector_workspace_gib": 95924234.12561417,
+      "estimated_state_workspace_gib": 16.0,
+      "lane_id": "0168_hydrogen_data_H14_ES_H14_ring_R1.3_sto-6g_ham_JW",
+      "molecule": "H14",
+      "nqubits": 28
+    },
+    {
+      "estimated_sector_workspace_gib": 95924234.12561417,
+      "estimated_state_workspace_gib": 16.0,
+      "lane_id": "0169_hydrogen_data_H14_ES_H14_ring_R1.4_sto-6g_ham_JW",
+      "molecule": "H14",
+      "nqubits": 28
+    },
+    {
+      "estimated_sector_workspace_gib": 95924234.12561417,
+      "estimated_state_workspace_gib": 16.0,
+      "lane_id": "0170_hydrogen_data_H14_ES_H14_ring_R1.5_sto-6g_ham_JW",
+      "molecule": "H14",
+      "nqubits": 28
+    },
+    {
+      "estimated_sector_workspace_gib": 95924234.12561417,
+      "estimated_state_workspace_gib": 16.0,
+      "lane_id": "0171_hydrogen_data_H14_ES_H14_ring_R1.6_sto-6g_ham_JW",
+      "molecule": "H14",
+      "nqubits": 28
+    },
+    {
+      "estimated_sector_workspace_gib": 95924234.12561417,
+      "estimated_state_workspace_gib": 16.0,
+      "lane_id": "0172_hydrogen_data_H14_ES_H14_ring_R1.7_sto-6g_ham_JW",
+      "molecule": "H14",
+      "nqubits": 28
+    },
+    {
+      "estimated_sector_workspace_gib": 95924234.12561417,
+      "estimated_state_workspace_gib": 16.0,
+      "lane_id": "0173_hydrogen_data_H14_ES_H14_ring_R1.8_sto-6g_ham_JW",
+      "molecule": "H14",
+      "nqubits": 28
+    },
+    {
+      "estimated_sector_workspace_gib": 95924234.12561417,
+      "estimated_state_workspace_gib": 16.0,
+      "lane_id": "0174_hydrogen_data_H14_ES_H14_ring_R1.9_sto-6g_ham_JW",
+      "molecule": "H14",
+      "nqubits": 28
+    },
+    {
+      "estimated_sector_workspace_gib": 95924234.12561417,
+      "estimated_state_workspace_gib": 16.0,
+      "lane_id": "0175_hydrogen_data_H14_ES_H14_ring_R2.0_sto-6g_ham_JW",
+      "molecule": "H14",
+      "nqubits": 28
+    },
+    {
+      "estimated_sector_workspace_gib": 95924234.12561417,
+      "estimated_state_workspace_gib": 16.0,
+      "lane_id": "0176_hydrogen_data_H14_ES_H14_sheet_R0.5_sto-6g_ham_JW",
+      "molecule": "H14",
+      "nqubits": 28
+    },
+    {
+      "estimated_sector_workspace_gib": 95924234.12561417,
+      "estimated_state_workspace_gib": 16.0,
+      "lane_id": "0177_hydrogen_data_H14_ES_H14_sheet_R0.6_sto-6g_ham_JW",
+      "molecule": "H14",
+      "nqubits": 28
+    },
+    {
+      "estimated_sector_workspace_gib": 95924234.12561417,
+      "estimated_state_workspace_gib": 16.0,
+      "lane_id": "0178_hydrogen_data_H14_ES_H14_sheet_R0.7_sto-6g_ham_JW",
+      "molecule": "H14",
+      "nqubits": 28
+    },
+    {
+      "estimated_sector_workspace_gib": 95924234.12561417,
+      "estimated_state_workspace_gib": 16.0,
+      "lane_id": "0179_hydrogen_data_H14_ES_H14_sheet_R0.8_sto-6g_ham_JW",
+      "molecule": "H14",
+      "nqubits": 28
+    },
+    {
+      "estimated_sector_workspace_gib": 95924234.12561417,
+      "estimated_state_workspace_gib": 16.0,
+      "lane_id": "0180_hydrogen_data_H14_ES_H14_sheet_R0.9_sto-6g_ham_JW",
+      "molecule": "H14",
+      "nqubits": 28
+    },
+    {
+      "estimated_sector_workspace_gib": 95924234.12561417,
+      "estimated_state_workspace_gib": 16.0,
+      "lane_id": "0181_hydrogen_data_H14_ES_H14_sheet_R1.0_sto-6g_ham_JW",
+      "molecule": "H14",
+      "nqubits": 28
+    },
+    {
+      "estimated_sector_workspace_gib": 95924234.12561417,
+      "estimated_state_workspace_gib": 16.0,
+      "lane_id": "0182_hydrogen_data_H14_ES_H14_sheet_R1.1_sto-6g_ham_JW",
+      "molecule": "H14",
+      "nqubits": 28
+    },
+    {
+      "estimated_sector_workspace_gib": 95924234.12561417,
+      "estimated_state_workspace_gib": 16.0,
+      "lane_id": "0183_hydrogen_data_H14_ES_H14_sheet_R1.2_sto-6g_ham_JW",
+      "molecule": "H14",
+      "nqubits": 28
+    },
+    {
+      "estimated_sector_workspace_gib": 95924234.12561417,
+      "estimated_state_workspace_gib": 16.0,
+      "lane_id": "0184_hydrogen_data_H14_ES_H14_sheet_R1.3_sto-6g_ham_JW",
+      "molecule": "H14",
+      "nqubits": 28
+    },
+    {
+      "estimated_sector_workspace_gib": 95924234.12561417,
+      "estimated_state_workspace_gib": 16.0,
+      "lane_id": "0185_hydrogen_data_H14_ES_H14_sheet_R1.4_sto-6g_ham_JW",
+      "molecule": "H14",
+      "nqubits": 28
+    },
+    {
+      "estimated_sector_workspace_gib": 95924234.12561417,
+      "estimated_state_workspace_gib": 16.0,
+      "lane_id": "0186_hydrogen_data_H14_ES_H14_sheet_R1.5_sto-6g_ham_JW",
+      "molecule": "H14",
+      "nqubits": 28
+    },
+    {
+      "estimated_sector_workspace_gib": 95924234.12561417,
+      "estimated_state_workspace_gib": 16.0,
+      "lane_id": "0187_hydrogen_data_H14_ES_H14_sheet_R1.6_sto-6g_ham_JW",
+      "molecule": "H14",
+      "nqubits": 28
+    },
+    {
+      "estimated_sector_workspace_gib": 95924234.12561417,
+      "estimated_state_workspace_gib": 16.0,
+      "lane_id": "0188_hydrogen_data_H14_ES_H14_sheet_R1.7_sto-6g_ham_JW",
+      "molecule": "H14",
+      "nqubits": 28
+    },
+    {
+      "estimated_sector_workspace_gib": 95924234.12561417,
+      "estimated_state_workspace_gib": 16.0,
+      "lane_id": "0189_hydrogen_data_H14_ES_H14_sheet_R1.8_sto-6g_ham_JW",
+      "molecule": "H14",
+      "nqubits": 28
+    },
+    {
+      "estimated_sector_workspace_gib": 95924234.12561417,
+      "estimated_state_workspace_gib": 16.0,
+      "lane_id": "0190_hydrogen_data_H14_ES_H14_sheet_R1.9_sto-6g_ham_JW",
+      "molecule": "H14",
+      "nqubits": 28
+    },
+    {
+      "estimated_sector_workspace_gib": 95924234.12561417,
+      "estimated_state_workspace_gib": 16.0,
+      "lane_id": "0191_hydrogen_data_H14_ES_H14_sheet_R2.0_sto-6g_ham_JW",
+      "molecule": "H14",
+      "nqubits": 28
+    },
+    {
+      "estimated_sector_workspace_gib": 21535017206.820972,
+      "estimated_state_workspace_gib": 256.0,
+      "lane_id": "0192_hydrogen_data_H16_ES_H16_linear_R0.5_sto-6g_ham_JW",
+      "molecule": "H16",
+      "nqubits": 32
+    },
+    {
+      "estimated_sector_workspace_gib": 21535017206.820972,
+      "estimated_state_workspace_gib": 256.0,
+      "lane_id": "0193_hydrogen_data_H16_ES_H16_linear_R0.6_sto-6g_ham_JW",
+      "molecule": "H16",
+      "nqubits": 32
+    },
+    {
+      "estimated_sector_workspace_gib": 21535017206.820972,
+      "estimated_state_workspace_gib": 256.0,
+      "lane_id": "0194_hydrogen_data_H16_ES_H16_linear_R0.7_sto-6g_ham_JW",
+      "molecule": "H16",
+      "nqubits": 32
+    },
+    {
+      "estimated_sector_workspace_gib": 21535017206.820972,
+      "estimated_state_workspace_gib": 256.0,
+      "lane_id": "0195_hydrogen_data_H16_ES_H16_linear_R0.8_sto-6g_ham_JW",
+      "molecule": "H16",
+      "nqubits": 32
+    },
+    {
+      "estimated_sector_workspace_gib": 21535017206.820972,
+      "estimated_state_workspace_gib": 256.0,
+      "lane_id": "0196_hydrogen_data_H16_ES_H16_linear_R0.9_sto-6g_ham_JW",
+      "molecule": "H16",
+      "nqubits": 32
+    },
+    {
+      "estimated_sector_workspace_gib": 21535017206.820972,
+      "estimated_state_workspace_gib": 256.0,
+      "lane_id": "0197_hydrogen_data_H16_ES_H16_linear_R1.0_sto-6g_ham_JW",
+      "molecule": "H16",
+      "nqubits": 32
+    },
+    {
+      "estimated_sector_workspace_gib": 21535017206.820972,
+      "estimated_state_workspace_gib": 256.0,
+      "lane_id": "0198_hydrogen_data_H16_ES_H16_linear_R1.1_sto-6g_ham_JW",
+      "molecule": "H16",
+      "nqubits": 32
+    },
+    {
+      "estimated_sector_workspace_gib": 21535017206.820972,
+      "estimated_state_workspace_gib": 256.0,
+      "lane_id": "0199_hydrogen_data_H16_ES_H16_linear_R1.2_sto-6g_ham_JW",
+      "molecule": "H16",
+      "nqubits": 32
+    },
+    {
+      "estimated_sector_workspace_gib": 21535017206.820972,
+      "estimated_state_workspace_gib": 256.0,
+      "lane_id": "0200_hydrogen_data_H16_ES_H16_linear_R1.3_sto-6g_ham_JW",
+      "molecule": "H16",
+      "nqubits": 32
+    },
+    {
+      "estimated_sector_workspace_gib": 21535017206.820972,
+      "estimated_state_workspace_gib": 256.0,
+      "lane_id": "0201_hydrogen_data_H16_ES_H16_linear_R1.4_sto-6g_ham_JW",
+      "molecule": "H16",
+      "nqubits": 32
+    },
+    {
+      "estimated_sector_workspace_gib": 21535017206.820972,
+      "estimated_state_workspace_gib": 256.0,
+      "lane_id": "0202_hydrogen_data_H16_ES_H16_linear_R1.5_sto-6g_ham_JW",
+      "molecule": "H16",
+      "nqubits": 32
+    },
+    {
+      "estimated_sector_workspace_gib": 21535017206.820972,
+      "estimated_state_workspace_gib": 256.0,
+      "lane_id": "0203_hydrogen_data_H16_ES_H16_linear_R1.6_sto-6g_ham_JW",
+      "molecule": "H16",
+      "nqubits": 32
+    },
+    {
+      "estimated_sector_workspace_gib": 21535017206.820972,
+      "estimated_state_workspace_gib": 256.0,
+      "lane_id": "0204_hydrogen_data_H16_ES_H16_linear_R1.7_sto-6g_ham_JW",
+      "molecule": "H16",
+      "nqubits": 32
+    },
+    {
+      "estimated_sector_workspace_gib": 21535017206.820972,
+      "estimated_state_workspace_gib": 256.0,
+      "lane_id": "0205_hydrogen_data_H16_ES_H16_linear_R1.8_sto-6g_ham_JW",
+      "molecule": "H16",
+      "nqubits": 32
+    },
+    {
+      "estimated_sector_workspace_gib": 21535017206.820972,
+      "estimated_state_workspace_gib": 256.0,
+      "lane_id": "0206_hydrogen_data_H16_ES_H16_linear_R1.9_sto-6g_ham_JW",
+      "molecule": "H16",
+      "nqubits": 32
+    },
+    {
+      "estimated_sector_workspace_gib": 21535017206.820972,
+      "estimated_state_workspace_gib": 256.0,
+      "lane_id": "0207_hydrogen_data_H16_ES_H16_linear_R2.0_sto-6g_ham_JW",
+      "molecule": "H16",
+      "nqubits": 32
+    },
+    {
+      "estimated_sector_workspace_gib": 21535017206.820972,
+      "estimated_state_workspace_gib": 256.0,
+      "lane_id": "0208_hydrogen_data_H16_ES_H16_pyramid_R0.5_sto-6g_ham_JW",
+      "molecule": "H16",
+      "nqubits": 32
+    },
+    {
+      "estimated_sector_workspace_gib": 21535017206.820972,
+      "estimated_state_workspace_gib": 256.0,
+      "lane_id": "0209_hydrogen_data_H16_ES_H16_pyramid_R0.6_sto-6g_ham_JW",
+      "molecule": "H16",
+      "nqubits": 32
+    },
+    {
+      "estimated_sector_workspace_gib": 21535017206.820972,
+      "estimated_state_workspace_gib": 256.0,
+      "lane_id": "0210_hydrogen_data_H16_ES_H16_pyramid_R0.7_sto-6g_ham_JW",
+      "molecule": "H16",
+      "nqubits": 32
+    },
+    {
+      "estimated_sector_workspace_gib": 21535017206.820972,
+      "estimated_state_workspace_gib": 256.0,
+      "lane_id": "0211_hydrogen_data_H16_ES_H16_pyramid_R0.8_sto-6g_ham_JW",
+      "molecule": "H16",
+      "nqubits": 32
+    },
+    {
+      "estimated_sector_workspace_gib": 21535017206.820972,
+      "estimated_state_workspace_gib": 256.0,
+      "lane_id": "0212_hydrogen_data_H16_ES_H16_pyramid_R0.9_sto-6g_ham_JW",
+      "molecule": "H16",
+      "nqubits": 32
+    },
+    {
+      "estimated_sector_workspace_gib": 21535017206.820972,
+      "estimated_state_workspace_gib": 256.0,
+      "lane_id": "0213_hydrogen_data_H16_ES_H16_pyramid_R1.0_sto-6g_ham_JW",
+      "molecule": "H16",
+      "nqubits": 32
+    },
+    {
+      "estimated_sector_workspace_gib": 21535017206.820972,
+      "estimated_state_workspace_gib": 256.0,
+      "lane_id": "0214_hydrogen_data_H16_ES_H16_pyramid_R1.1_sto-6g_ham_JW",
+      "molecule": "H16",
+      "nqubits": 32
+    },
+    {
+      "estimated_sector_workspace_gib": 21535017206.820972,
+      "estimated_state_workspace_gib": 256.0,
+      "lane_id": "0215_hydrogen_data_H16_ES_H16_pyramid_R1.2_sto-6g_ham_JW",
+      "molecule": "H16",
+      "nqubits": 32
+    },
+    {
+      "estimated_sector_workspace_gib": 21535017206.820972,
+      "estimated_state_workspace_gib": 256.0,
+      "lane_id": "0216_hydrogen_data_H16_ES_H16_pyramid_R1.3_sto-6g_ham_JW",
+      "molecule": "H16",
+      "nqubits": 32
+    },
+    {
+      "estimated_sector_workspace_gib": 21535017206.820972,
+      "estimated_state_workspace_gib": 256.0,
+      "lane_id": "0217_hydrogen_data_H16_ES_H16_pyramid_R1.4_sto-6g_ham_JW",
+      "molecule": "H16",
+      "nqubits": 32
+    },
+    {
+      "estimated_sector_workspace_gib": 21535017206.820972,
+      "estimated_state_workspace_gib": 256.0,
+      "lane_id": "0218_hydrogen_data_H16_ES_H16_pyramid_R1.5_sto-6g_ham_JW",
+      "molecule": "H16",
+      "nqubits": 32
+    },
+    {
+      "estimated_sector_workspace_gib": 21535017206.820972,
+      "estimated_state_workspace_gib": 256.0,
+      "lane_id": "0219_hydrogen_data_H16_ES_H16_pyramid_R1.6_sto-6g_ham_JW",
+      "molecule": "H16",
+      "nqubits": 32
+    },
+    {
+      "estimated_sector_workspace_gib": 21535017206.820972,
+      "estimated_state_workspace_gib": 256.0,
+      "lane_id": "0220_hydrogen_data_H16_ES_H16_pyramid_R1.7_sto-6g_ham_JW",
+      "molecule": "H16",
+      "nqubits": 32
+    },
+    {
+      "estimated_sector_workspace_gib": 21535017206.820972,
+      "estimated_state_workspace_gib": 256.0,
+      "lane_id": "0221_hydrogen_data_H16_ES_H16_pyramid_R1.8_sto-6g_ham_JW",
+      "molecule": "H16",
+      "nqubits": 32
+    },
+    {
+      "estimated_sector_workspace_gib": 21535017206.820972,
+      "estimated_state_workspace_gib": 256.0,
+      "lane_id": "0222_hydrogen_data_H16_ES_H16_pyramid_R1.9_sto-6g_ham_JW",
+      "molecule": "H16",
+      "nqubits": 32
+    },
+    {
+      "estimated_sector_workspace_gib": 21535017206.820972,
+      "estimated_state_workspace_gib": 256.0,
+      "lane_id": "0223_hydrogen_data_H16_ES_H16_pyramid_R2.0_sto-6g_ham_JW",
+      "molecule": "H16",
+      "nqubits": 32
+    },
+    {
+      "estimated_sector_workspace_gib": 21535017206.820972,
+      "estimated_state_workspace_gib": 256.0,
+      "lane_id": "0224_hydrogen_data_H16_ES_H16_ring_R0.5_sto-6g_ham_JW",
+      "molecule": "H16",
+      "nqubits": 32
+    },
+    {
+      "estimated_sector_workspace_gib": 21535017206.820972,
+      "estimated_state_workspace_gib": 256.0,
+      "lane_id": "0225_hydrogen_data_H16_ES_H16_ring_R0.6_sto-6g_ham_JW",
+      "molecule": "H16",
+      "nqubits": 32
+    },
+    {
+      "estimated_sector_workspace_gib": 21535017206.820972,
+      "estimated_state_workspace_gib": 256.0,
+      "lane_id": "0226_hydrogen_data_H16_ES_H16_ring_R0.7_sto-6g_ham_JW",
+      "molecule": "H16",
+      "nqubits": 32
+    },
+    {
+      "estimated_sector_workspace_gib": 21535017206.820972,
+      "estimated_state_workspace_gib": 256.0,
+      "lane_id": "0227_hydrogen_data_H16_ES_H16_ring_R0.8_sto-6g_ham_JW",
+      "molecule": "H16",
+      "nqubits": 32
+    },
+    {
+      "estimated_sector_workspace_gib": 21535017206.820972,
+      "estimated_state_workspace_gib": 256.0,
+      "lane_id": "0228_hydrogen_data_H16_ES_H16_ring_R0.9_sto-6g_ham_JW",
+      "molecule": "H16",
+      "nqubits": 32
+    },
+    {
+      "estimated_sector_workspace_gib": 21535017206.820972,
+      "estimated_state_workspace_gib": 256.0,
+      "lane_id": "0229_hydrogen_data_H16_ES_H16_ring_R1.0_sto-6g_ham_JW",
+      "molecule": "H16",
+      "nqubits": 32
+    },
+    {
+      "estimated_sector_workspace_gib": 21535017206.820972,
+      "estimated_state_workspace_gib": 256.0,
+      "lane_id": "0230_hydrogen_data_H16_ES_H16_ring_R1.1_sto-6g_ham_JW",
+      "molecule": "H16",
+      "nqubits": 32
+    },
+    {
+      "estimated_sector_workspace_gib": 21535017206.820972,
+      "estimated_state_workspace_gib": 256.0,
+      "lane_id": "0231_hydrogen_data_H16_ES_H16_ring_R1.2_sto-6g_ham_JW",
+      "molecule": "H16",
+      "nqubits": 32
+    },
+    {
+      "estimated_sector_workspace_gib": 21535017206.820972,
+      "estimated_state_workspace_gib": 256.0,
+      "lane_id": "0232_hydrogen_data_H16_ES_H16_ring_R1.3_sto-6g_ham_JW",
+      "molecule": "H16",
+      "nqubits": 32
+    },
+    {
+      "estimated_sector_workspace_gib": 21535017206.820972,
+      "estimated_state_workspace_gib": 256.0,
+      "lane_id": "0233_hydrogen_data_H16_ES_H16_ring_R1.4_sto-6g_ham_JW",
+      "molecule": "H16",
+      "nqubits": 32
+    },
+    {
+      "estimated_sector_workspace_gib": 21535017206.820972,
+      "estimated_state_workspace_gib": 256.0,
+      "lane_id": "0234_hydrogen_data_H16_ES_H16_ring_R1.5_sto-6g_ham_JW",
+      "molecule": "H16",
+      "nqubits": 32
+    },
+    {
+      "estimated_sector_workspace_gib": 21535017206.820972,
+      "estimated_state_workspace_gib": 256.0,
+      "lane_id": "0235_hydrogen_data_H16_ES_H16_ring_R1.6_sto-6g_ham_JW",
+      "molecule": "H16",
+      "nqubits": 32
+    },
+    {
+      "estimated_sector_workspace_gib": 21535017206.820972,
+      "estimated_state_workspace_gib": 256.0,
+      "lane_id": "0236_hydrogen_data_H16_ES_H16_ring_R1.7_sto-6g_ham_JW",
+      "molecule": "H16",
+      "nqubits": 32
+    },
+    {
+      "estimated_sector_workspace_gib": 21535017206.820972,
+      "estimated_state_workspace_gib": 256.0,
+      "lane_id": "0237_hydrogen_data_H16_ES_H16_ring_R1.8_sto-6g_ham_JW",
+      "molecule": "H16",
+      "nqubits": 32
+    },
+    {
+      "estimated_sector_workspace_gib": 21535017206.820972,
+      "estimated_state_workspace_gib": 256.0,
+      "lane_id": "0238_hydrogen_data_H16_ES_H16_ring_R1.9_sto-6g_ham_JW",
+      "molecule": "H16",
+      "nqubits": 32
+    },
+    {
+      "estimated_sector_workspace_gib": 21535017206.820972,
+      "estimated_state_workspace_gib": 256.0,
+      "lane_id": "0239_hydrogen_data_H16_ES_H16_ring_R2.0_sto-6g_ham_JW",
+      "molecule": "H16",
+      "nqubits": 32
+    },
+    {
+      "estimated_sector_workspace_gib": 21535017206.820972,
+      "estimated_state_workspace_gib": 256.0,
+      "lane_id": "0240_hydrogen_data_H16_ES_H16_sheet_R0.5_sto-6g_ham_JW",
+      "molecule": "H16",
+      "nqubits": 32
+    },
+    {
+      "estimated_sector_workspace_gib": 21535017206.820972,
+      "estimated_state_workspace_gib": 256.0,
+      "lane_id": "0241_hydrogen_data_H16_ES_H16_sheet_R0.6_sto-6g_ham_JW",
+      "molecule": "H16",
+      "nqubits": 32
+    },
+    {
+      "estimated_sector_workspace_gib": 21535017206.820972,
+      "estimated_state_workspace_gib": 256.0,
+      "lane_id": "0242_hydrogen_data_H16_ES_H16_sheet_R0.7_sto-6g_ham_JW",
+      "molecule": "H16",
+      "nqubits": 32
+    },
+    {
+      "estimated_sector_workspace_gib": 21535017206.820972,
+      "estimated_state_workspace_gib": 256.0,
+      "lane_id": "0243_hydrogen_data_H16_ES_H16_sheet_R0.8_sto-6g_ham_JW",
+      "molecule": "H16",
+      "nqubits": 32
+    },
+    {
+      "estimated_sector_workspace_gib": 21535017206.820972,
+      "estimated_state_workspace_gib": 256.0,
+      "lane_id": "0244_hydrogen_data_H16_ES_H16_sheet_R0.9_sto-6g_ham_JW",
+      "molecule": "H16",
+      "nqubits": 32
+    },
+    {
+      "estimated_sector_workspace_gib": 21535017206.820972,
+      "estimated_state_workspace_gib": 256.0,
+      "lane_id": "0245_hydrogen_data_H16_ES_H16_sheet_R1.0_sto-6g_ham_JW",
+      "molecule": "H16",
+      "nqubits": 32
+    },
+    {
+      "estimated_sector_workspace_gib": 21535017206.820972,
+      "estimated_state_workspace_gib": 256.0,
+      "lane_id": "0246_hydrogen_data_H16_ES_H16_sheet_R1.1_sto-6g_ham_JW",
+      "molecule": "H16",
+      "nqubits": 32
+    },
+    {
+      "estimated_sector_workspace_gib": 21535017206.820972,
+      "estimated_state_workspace_gib": 256.0,
+      "lane_id": "0247_hydrogen_data_H16_ES_H16_sheet_R1.2_sto-6g_ham_JW",
+      "molecule": "H16",
+      "nqubits": 32
+    },
+    {
+      "estimated_sector_workspace_gib": 21535017206.820972,
+      "estimated_state_workspace_gib": 256.0,
+      "lane_id": "0248_hydrogen_data_H16_ES_H16_sheet_R1.3_sto-6g_ham_JW",
+      "molecule": "H16",
+      "nqubits": 32
+    },
+    {
+      "estimated_sector_workspace_gib": 21535017206.820972,
+      "estimated_state_workspace_gib": 256.0,
+      "lane_id": "0249_hydrogen_data_H16_ES_H16_sheet_R1.4_sto-6g_ham_JW",
+      "molecule": "H16",
+      "nqubits": 32
+    },
+    {
+      "estimated_sector_workspace_gib": 21535017206.820972,
+      "estimated_state_workspace_gib": 256.0,
+      "lane_id": "0250_hydrogen_data_H16_ES_H16_sheet_R1.5_sto-6g_ham_JW",
+      "molecule": "H16",
+      "nqubits": 32
+    },
+    {
+      "estimated_sector_workspace_gib": 21535017206.820972,
+      "estimated_state_workspace_gib": 256.0,
+      "lane_id": "0251_hydrogen_data_H16_ES_H16_sheet_R1.6_sto-6g_ham_JW",
+      "molecule": "H16",
+      "nqubits": 32
+    },
+    {
+      "estimated_sector_workspace_gib": 21535017206.820972,
+      "estimated_state_workspace_gib": 256.0,
+      "lane_id": "0252_hydrogen_data_H16_ES_H16_sheet_R1.7_sto-6g_ham_JW",
+      "molecule": "H16",
+      "nqubits": 32
+    },
+    {
+      "estimated_sector_workspace_gib": 21535017206.820972,
+      "estimated_state_workspace_gib": 256.0,
+      "lane_id": "0253_hydrogen_data_H16_ES_H16_sheet_R1.8_sto-6g_ham_JW",
+      "molecule": "H16",
+      "nqubits": 32
+    },
+    {
+      "estimated_sector_workspace_gib": 21535017206.820972,
+      "estimated_state_workspace_gib": 256.0,
+      "lane_id": "0254_hydrogen_data_H16_ES_H16_sheet_R1.9_sto-6g_ham_JW",
+      "molecule": "H16",
+      "nqubits": 32
+    },
+    {
+      "estimated_sector_workspace_gib": 21535017206.820972,
+      "estimated_state_workspace_gib": 256.0,
+      "lane_id": "0255_hydrogen_data_H16_ES_H16_sheet_R2.0_sto-6g_ham_JW",
+      "molecule": "H16",
+      "nqubits": 32
+    },
+    {
+      "estimated_sector_workspace_gib": 2.1457672119140625e-06,
+      "estimated_state_workspace_gib": 9.5367431640625e-07,
+      "lane_id": "0256_hydrogen_data_H2_ES_H2_linear_R0.5_sto-6g_ham_JW",
+      "molecule": "H2",
+      "nqubits": 4
+    },
+    {
+      "estimated_sector_workspace_gib": 2.1457672119140625e-06,
+      "estimated_state_workspace_gib": 9.5367431640625e-07,
+      "lane_id": "0257_hydrogen_data_H2_ES_H2_linear_R0.6_sto-6g_ham_JW",
+      "molecule": "H2",
+      "nqubits": 4
+    },
+    {
+      "estimated_sector_workspace_gib": 2.1457672119140625e-06,
+      "estimated_state_workspace_gib": 9.5367431640625e-07,
+      "lane_id": "0258_hydrogen_data_H2_ES_H2_linear_R0.7_sto-6g_ham_JW",
+      "molecule": "H2",
+      "nqubits": 4
+    },
+    {
+      "estimated_sector_workspace_gib": 2.1457672119140625e-06,
+      "estimated_state_workspace_gib": 9.5367431640625e-07,
+      "lane_id": "0259_hydrogen_data_H2_ES_H2_linear_R0.8_sto-6g_ham_JW",
+      "molecule": "H2",
+      "nqubits": 4
+    },
+    {
+      "estimated_sector_workspace_gib": 2.1457672119140625e-06,
+      "estimated_state_workspace_gib": 9.5367431640625e-07,
+      "lane_id": "0260_hydrogen_data_H2_ES_H2_linear_R0.9_sto-6g_ham_JW",
+      "molecule": "H2",
+      "nqubits": 4
+    },
+    {
+      "estimated_sector_workspace_gib": 2.1457672119140625e-06,
+      "estimated_state_workspace_gib": 9.5367431640625e-07,
+      "lane_id": "0261_hydrogen_data_H2_ES_H2_linear_R1.0_sto-6g_ham_JW",
+      "molecule": "H2",
+      "nqubits": 4
+    },
+    {
+      "estimated_sector_workspace_gib": 2.1457672119140625e-06,
+      "estimated_state_workspace_gib": 9.5367431640625e-07,
+      "lane_id": "0262_hydrogen_data_H2_ES_H2_linear_R1.1_sto-6g_ham_JW",
+      "molecule": "H2",
+      "nqubits": 4
+    },
+    {
+      "estimated_sector_workspace_gib": 2.1457672119140625e-06,
+      "estimated_state_workspace_gib": 9.5367431640625e-07,
+      "lane_id": "0263_hydrogen_data_H2_ES_H2_linear_R1.2_sto-6g_ham_JW",
+      "molecule": "H2",
+      "nqubits": 4
+    },
+    {
+      "estimated_sector_workspace_gib": 2.1457672119140625e-06,
+      "estimated_state_workspace_gib": 9.5367431640625e-07,
+      "lane_id": "0264_hydrogen_data_H2_ES_H2_linear_R1.3_sto-6g_ham_JW",
+      "molecule": "H2",
+      "nqubits": 4
+    },
+    {
+      "estimated_sector_workspace_gib": 2.1457672119140625e-06,
+      "estimated_state_workspace_gib": 9.5367431640625e-07,
+      "lane_id": "0265_hydrogen_data_H2_ES_H2_linear_R1.4_sto-6g_ham_JW",
+      "molecule": "H2",
+      "nqubits": 4
+    },
+    {
+      "estimated_sector_workspace_gib": 2.1457672119140625e-06,
+      "estimated_state_workspace_gib": 9.5367431640625e-07,
+      "lane_id": "0266_hydrogen_data_H2_ES_H2_linear_R1.5_sto-6g_ham_JW",
+      "molecule": "H2",
+      "nqubits": 4
+    },
+    {
+      "estimated_sector_workspace_gib": 2.1457672119140625e-06,
+      "estimated_state_workspace_gib": 9.5367431640625e-07,
+      "lane_id": "0267_hydrogen_data_H2_ES_H2_linear_R1.6_sto-6g_ham_JW",
+      "molecule": "H2",
+      "nqubits": 4
+    },
+    {
+      "estimated_sector_workspace_gib": 2.1457672119140625e-06,
+      "estimated_state_workspace_gib": 9.5367431640625e-07,
+      "lane_id": "0268_hydrogen_data_H2_ES_H2_linear_R1.7_sto-6g_ham_JW",
+      "molecule": "H2",
+      "nqubits": 4
+    },
+    {
+      "estimated_sector_workspace_gib": 2.1457672119140625e-06,
+      "estimated_state_workspace_gib": 9.5367431640625e-07,
+      "lane_id": "0269_hydrogen_data_H2_ES_H2_linear_R1.8_sto-6g_ham_JW",
+      "molecule": "H2",
+      "nqubits": 4
+    },
+    {
+      "estimated_sector_workspace_gib": 2.1457672119140625e-06,
+      "estimated_state_workspace_gib": 9.5367431640625e-07,
+      "lane_id": "0270_hydrogen_data_H2_ES_H2_linear_R1.9_sto-6g_ham_JW",
+      "molecule": "H2",
+      "nqubits": 4
+    },
+    {
+      "estimated_sector_workspace_gib": 2.1457672119140625e-06,
+      "estimated_state_workspace_gib": 9.5367431640625e-07,
+      "lane_id": "0271_hydrogen_data_H2_ES_H2_linear_R2.0_sto-6g_ham_JW",
+      "molecule": "H2",
+      "nqubits": 4
+    },
+    {
+      "estimated_sector_workspace_gib": 0.00029206275939941406,
+      "estimated_state_workspace_gib": 1.52587890625e-05,
+      "lane_id": "0272_hydrogen_data_H4_ES_H4_linear_R0.5_sto-6g_ham_JW",
+      "molecule": "H4",
+      "nqubits": 8
+    },
+    {
+      "estimated_sector_workspace_gib": 0.00029206275939941406,
+      "estimated_state_workspace_gib": 1.52587890625e-05,
+      "lane_id": "0273_hydrogen_data_H4_ES_H4_linear_R0.6_sto-6g_ham_JW",
+      "molecule": "H4",
+      "nqubits": 8
+    },
+    {
+      "estimated_sector_workspace_gib": 0.00029206275939941406,
+      "estimated_state_workspace_gib": 1.52587890625e-05,
+      "lane_id": "0274_hydrogen_data_H4_ES_H4_linear_R0.7_sto-6g_ham_JW",
+      "molecule": "H4",
+      "nqubits": 8
+    },
+    {
+      "estimated_sector_workspace_gib": 0.00029206275939941406,
+      "estimated_state_workspace_gib": 1.52587890625e-05,
+      "lane_id": "0275_hydrogen_data_H4_ES_H4_linear_R0.8_sto-6g_ham_JW",
+      "molecule": "H4",
+      "nqubits": 8
+    },
+    {
+      "estimated_sector_workspace_gib": 0.00029206275939941406,
+      "estimated_state_workspace_gib": 1.52587890625e-05,
+      "lane_id": "0276_hydrogen_data_H4_ES_H4_linear_R0.9_sto-6g_ham_JW",
+      "molecule": "H4",
+      "nqubits": 8
+    },
+    {
+      "estimated_sector_workspace_gib": 0.00029206275939941406,
+      "estimated_state_workspace_gib": 1.52587890625e-05,
+      "lane_id": "0277_hydrogen_data_H4_ES_H4_linear_R1.0_sto-6g_ham_JW",
+      "molecule": "H4",
+      "nqubits": 8
+    },
+    {
+      "estimated_sector_workspace_gib": 0.00029206275939941406,
+      "estimated_state_workspace_gib": 1.52587890625e-05,
+      "lane_id": "0278_hydrogen_data_H4_ES_H4_linear_R1.1_sto-6g_ham_JW",
+      "molecule": "H4",
+      "nqubits": 8
+    },
+    {
+      "estimated_sector_workspace_gib": 0.00029206275939941406,
+      "estimated_state_workspace_gib": 1.52587890625e-05,
+      "lane_id": "0279_hydrogen_data_H4_ES_H4_linear_R1.2_sto-6g_ham_JW",
+      "molecule": "H4",
+      "nqubits": 8
+    },
+    {
+      "estimated_sector_workspace_gib": 0.00029206275939941406,
+      "estimated_state_workspace_gib": 1.52587890625e-05,
+      "lane_id": "0280_hydrogen_data_H4_ES_H4_linear_R1.3_sto-6g_ham_JW",
+      "molecule": "H4",
+      "nqubits": 8
+    },
+    {
+      "estimated_sector_workspace_gib": 0.00029206275939941406,
+      "estimated_state_workspace_gib": 1.52587890625e-05,
+      "lane_id": "0281_hydrogen_data_H4_ES_H4_linear_R1.4_sto-6g_ham_JW",
+      "molecule": "H4",
+      "nqubits": 8
+    },
+    {
+      "estimated_sector_workspace_gib": 0.00029206275939941406,
+      "estimated_state_workspace_gib": 1.52587890625e-05,
+      "lane_id": "0282_hydrogen_data_H4_ES_H4_linear_R1.5_sto-6g_ham_JW",
+      "molecule": "H4",
+      "nqubits": 8
+    },
+    {
+      "estimated_sector_workspace_gib": 0.00029206275939941406,
+      "estimated_state_workspace_gib": 1.52587890625e-05,
+      "lane_id": "0283_hydrogen_data_H4_ES_H4_linear_R1.6_sto-6g_ham_JW",
+      "molecule": "H4",
+      "nqubits": 8
+    },
+    {
+      "estimated_sector_workspace_gib": 0.00029206275939941406,
+      "estimated_state_workspace_gib": 1.52587890625e-05,
+      "lane_id": "0284_hydrogen_data_H4_ES_H4_linear_R1.7_sto-6g_ham_JW",
+      "molecule": "H4",
+      "nqubits": 8
+    },
+    {
+      "estimated_sector_workspace_gib": 0.00029206275939941406,
+      "estimated_state_workspace_gib": 1.52587890625e-05,
+      "lane_id": "0285_hydrogen_data_H4_ES_H4_linear_R1.8_sto-6g_ham_JW",
+      "molecule": "H4",
+      "nqubits": 8
+    },
+    {
+      "estimated_sector_workspace_gib": 0.00029206275939941406,
+      "estimated_state_workspace_gib": 1.52587890625e-05,
+      "lane_id": "0286_hydrogen_data_H4_ES_H4_linear_R1.9_sto-6g_ham_JW",
+      "molecule": "H4",
+      "nqubits": 8
+    },
+    {
+      "estimated_sector_workspace_gib": 0.00029206275939941406,
+      "estimated_state_workspace_gib": 1.52587890625e-05,
+      "lane_id": "0287_hydrogen_data_H4_ES_H4_linear_R2.0_sto-6g_ham_JW",
+      "molecule": "H4",
+      "nqubits": 8
+    },
+    {
+      "estimated_sector_workspace_gib": 0.050889015197753906,
+      "estimated_state_workspace_gib": 0.000244140625,
+      "lane_id": "0288_hydrogen_data_H6_ES_H6_linear_R0.5_sto-6g_ham_JW",
+      "molecule": "H6",
+      "nqubits": 12
+    },
+    {
+      "estimated_sector_workspace_gib": 0.050889015197753906,
+      "estimated_state_workspace_gib": 0.000244140625,
+      "lane_id": "0289_hydrogen_data_H6_ES_H6_linear_R0.6_sto-6g_ham_JW",
+      "molecule": "H6",
+      "nqubits": 12
+    },
+    {
+      "estimated_sector_workspace_gib": 0.050889015197753906,
+      "estimated_state_workspace_gib": 0.000244140625,
+      "lane_id": "0290_hydrogen_data_H6_ES_H6_linear_R0.7_sto-6g_ham_JW",
+      "molecule": "H6",
+      "nqubits": 12
+    },
+    {
+      "estimated_sector_workspace_gib": 0.050889015197753906,
+      "estimated_state_workspace_gib": 0.000244140625,
+      "lane_id": "0291_hydrogen_data_H6_ES_H6_linear_R0.8_sto-6g_ham_JW",
+      "molecule": "H6",
+      "nqubits": 12
+    },
+    {
+      "estimated_sector_workspace_gib": 0.050889015197753906,
+      "estimated_state_workspace_gib": 0.000244140625,
+      "lane_id": "0292_hydrogen_data_H6_ES_H6_linear_R0.9_sto-6g_ham_JW",
+      "molecule": "H6",
+      "nqubits": 12
+    },
+    {
+      "estimated_sector_workspace_gib": 0.050889015197753906,
+      "estimated_state_workspace_gib": 0.000244140625,
+      "lane_id": "0293_hydrogen_data_H6_ES_H6_linear_R1.0_sto-6g_ham_JW",
+      "molecule": "H6",
+      "nqubits": 12
+    },
+    {
+      "estimated_sector_workspace_gib": 0.050889015197753906,
+      "estimated_state_workspace_gib": 0.000244140625,
+      "lane_id": "0294_hydrogen_data_H6_ES_H6_linear_R1.1_sto-6g_ham_JW",
+      "molecule": "H6",
+      "nqubits": 12
+    },
+    {
+      "estimated_sector_workspace_gib": 0.050889015197753906,
+      "estimated_state_workspace_gib": 0.000244140625,
+      "lane_id": "0295_hydrogen_data_H6_ES_H6_linear_R1.2_sto-6g_ham_JW",
+      "molecule": "H6",
+      "nqubits": 12
+    },
+    {
+      "estimated_sector_workspace_gib": 0.050889015197753906,
+      "estimated_state_workspace_gib": 0.000244140625,
+      "lane_id": "0296_hydrogen_data_H6_ES_H6_linear_R1.3_sto-6g_ham_JW",
+      "molecule": "H6",
+      "nqubits": 12
+    },
+    {
+      "estimated_sector_workspace_gib": 0.050889015197753906,
+      "estimated_state_workspace_gib": 0.000244140625,
+      "lane_id": "0297_hydrogen_data_H6_ES_H6_linear_R1.4_sto-6g_ham_JW",
+      "molecule": "H6",
+      "nqubits": 12
+    },
+    {
+      "estimated_sector_workspace_gib": 0.050889015197753906,
+      "estimated_state_workspace_gib": 0.000244140625,
+      "lane_id": "0298_hydrogen_data_H6_ES_H6_linear_R1.5_sto-6g_ham_JW",
+      "molecule": "H6",
+      "nqubits": 12
+    },
+    {
+      "estimated_sector_workspace_gib": 0.050889015197753906,
+      "estimated_state_workspace_gib": 0.000244140625,
+      "lane_id": "0299_hydrogen_data_H6_ES_H6_linear_R1.6_sto-6g_ham_JW",
+      "molecule": "H6",
+      "nqubits": 12
+    },
+    {
+      "estimated_sector_workspace_gib": 0.050889015197753906,
+      "estimated_state_workspace_gib": 0.000244140625,
+      "lane_id": "0300_hydrogen_data_H6_ES_H6_linear_R1.7_sto-6g_ham_JW",
+      "molecule": "H6",
+      "nqubits": 12
+    },
+    {
+      "estimated_sector_workspace_gib": 0.050889015197753906,
+      "estimated_state_workspace_gib": 0.000244140625,
+      "lane_id": "0301_hydrogen_data_H6_ES_H6_linear_R1.8_sto-6g_ham_JW",
+      "molecule": "H6",
+      "nqubits": 12
+    },
+    {
+      "estimated_sector_workspace_gib": 0.050889015197753906,
+      "estimated_state_workspace_gib": 0.000244140625,
+      "lane_id": "0302_hydrogen_data_H6_ES_H6_linear_R1.9_sto-6g_ham_JW",
+      "molecule": "H6",
+      "nqubits": 12
+    },
+    {
+      "estimated_sector_workspace_gib": 0.050889015197753906,
+      "estimated_state_workspace_gib": 0.000244140625,
+      "lane_id": "0303_hydrogen_data_H6_ES_H6_linear_R2.0_sto-6g_ham_JW",
+      "molecule": "H6",
+      "nqubits": 12
+    },
+    {
+      "estimated_sector_workspace_gib": 9.8727285861969,
+      "estimated_state_workspace_gib": 0.00390625,
+      "lane_id": "0304_hydrogen_data_H8_ES_H8_linear_R0.5_sto-6g_ham_JW",
+      "molecule": "H8",
+      "nqubits": 16
+    },
+    {
+      "estimated_sector_workspace_gib": 9.8727285861969,
+      "estimated_state_workspace_gib": 0.00390625,
+      "lane_id": "0305_hydrogen_data_H8_ES_H8_linear_R0.6_sto-6g_ham_JW",
+      "molecule": "H8",
+      "nqubits": 16
+    },
+    {
+      "estimated_sector_workspace_gib": 9.8727285861969,
+      "estimated_state_workspace_gib": 0.00390625,
+      "lane_id": "0306_hydrogen_data_H8_ES_H8_linear_R0.7_sto-6g_ham_JW",
+      "molecule": "H8",
+      "nqubits": 16
+    },
+    {
+      "estimated_sector_workspace_gib": 9.8727285861969,
+      "estimated_state_workspace_gib": 0.00390625,
+      "lane_id": "0307_hydrogen_data_H8_ES_H8_linear_R0.8_sto-6g_ham_JW",
+      "molecule": "H8",
+      "nqubits": 16
+    },
+    {
+      "estimated_sector_workspace_gib": 9.8727285861969,
+      "estimated_state_workspace_gib": 0.00390625,
+      "lane_id": "0308_hydrogen_data_H8_ES_H8_linear_R0.9_sto-6g_ham_JW",
+      "molecule": "H8",
+      "nqubits": 16
+    },
+    {
+      "estimated_sector_workspace_gib": 9.8727285861969,
+      "estimated_state_workspace_gib": 0.00390625,
+      "lane_id": "0309_hydrogen_data_H8_ES_H8_linear_R1.0_sto-6g_ham_JW",
+      "molecule": "H8",
+      "nqubits": 16
+    },
+    {
+      "estimated_sector_workspace_gib": 9.8727285861969,
+      "estimated_state_workspace_gib": 0.00390625,
+      "lane_id": "0310_hydrogen_data_H8_ES_H8_linear_R1.1_sto-6g_ham_JW",
+      "molecule": "H8",
+      "nqubits": 16
+    },
+    {
+      "estimated_sector_workspace_gib": 9.8727285861969,
+      "estimated_state_workspace_gib": 0.00390625,
+      "lane_id": "0311_hydrogen_data_H8_ES_H8_linear_R1.2_sto-6g_ham_JW",
+      "molecule": "H8",
+      "nqubits": 16
+    },
+    {
+      "estimated_sector_workspace_gib": 9.8727285861969,
+      "estimated_state_workspace_gib": 0.00390625,
+      "lane_id": "0312_hydrogen_data_H8_ES_H8_linear_R1.3_sto-6g_ham_JW",
+      "molecule": "H8",
+      "nqubits": 16
+    },
+    {
+      "estimated_sector_workspace_gib": 9.8727285861969,
+      "estimated_state_workspace_gib": 0.00390625,
+      "lane_id": "0313_hydrogen_data_H8_ES_H8_linear_R1.4_sto-6g_ham_JW",
+      "molecule": "H8",
+      "nqubits": 16
+    },
+    {
+      "estimated_sector_workspace_gib": 9.8727285861969,
+      "estimated_state_workspace_gib": 0.00390625,
+      "lane_id": "0314_hydrogen_data_H8_ES_H8_linear_R1.5_sto-6g_ham_JW",
+      "molecule": "H8",
+      "nqubits": 16
+    },
+    {
+      "estimated_sector_workspace_gib": 9.8727285861969,
+      "estimated_state_workspace_gib": 0.00390625,
+      "lane_id": "0315_hydrogen_data_H8_ES_H8_linear_R1.6_sto-6g_ham_JW",
+      "molecule": "H8",
+      "nqubits": 16
+    },
+    {
+      "estimated_sector_workspace_gib": 9.8727285861969,
+      "estimated_state_workspace_gib": 0.00390625,
+      "lane_id": "0316_hydrogen_data_H8_ES_H8_linear_R1.7_sto-6g_ham_JW",
+      "molecule": "H8",
+      "nqubits": 16
+    },
+    {
+      "estimated_sector_workspace_gib": 9.8727285861969,
+      "estimated_state_workspace_gib": 0.00390625,
+      "lane_id": "0317_hydrogen_data_H8_ES_H8_linear_R1.8_sto-6g_ham_JW",
+      "molecule": "H8",
+      "nqubits": 16
+    },
+    {
+      "estimated_sector_workspace_gib": 9.8727285861969,
+      "estimated_state_workspace_gib": 0.00390625,
+      "lane_id": "0318_hydrogen_data_H8_ES_H8_linear_R1.9_sto-6g_ham_JW",
+      "molecule": "H8",
+      "nqubits": 16
+    },
+    {
+      "estimated_sector_workspace_gib": 9.8727285861969,
+      "estimated_state_workspace_gib": 0.00390625,
+      "lane_id": "0319_hydrogen_data_H8_ES_H8_linear_R2.0_sto-6g_ham_JW",
+      "molecule": "H8",
+      "nqubits": 16
+    },
+    {
+      "estimated_sector_workspace_gib": 0.0026285648345947266,
+      "estimated_state_workspace_gib": 6.103515625e-05,
+      "lane_id": "0320_standard_B2_B2_ham_JWm10",
+      "molecule": "B2",
+      "nqubits": 10
+    },
+    {
+      "estimated_sector_workspace_gib": 0.050889015197753906,
+      "estimated_state_workspace_gib": 0.000244140625,
+      "lane_id": "0321_standard_B2_B2_ham_JWm12",
+      "molecule": "B2",
+      "nqubits": 12
+    },
+    {
+      "estimated_sector_workspace_gib": 0.5375152230262756,
+      "estimated_state_workspace_gib": 0.0009765625,
+      "lane_id": "0322_standard_B2_B2_ham_JWm14",
+      "molecule": "B2",
+      "nqubits": 14
+    },
+    {
+      "estimated_sector_workspace_gib": 4.673004150390625e-05,
+      "estimated_state_workspace_gib": 1.52587890625e-05,
+      "lane_id": "0323_standard_B2_B2_ham_JWm8",
+      "molecule": "B2",
+      "nqubits": 8
+    },
+    {
+      "estimated_sector_workspace_gib": 0.0026285648345947266,
+      "estimated_state_workspace_gib": 6.103515625e-05,
+      "lane_id": "0324_standard_BH_BH_ham_JWm10",
+      "molecule": "BH",
+      "nqubits": 10
+    },
+    {
+      "estimated_sector_workspace_gib": 0.014604628086090088,
+      "estimated_state_workspace_gib": 0.000244140625,
+      "lane_id": "0325_standard_BH_BH_ham_JWm12",
+      "molecule": "BH",
+      "nqubits": 12
+    },
+    {
+      "estimated_sector_workspace_gib": 0.1974344253540039,
+      "estimated_state_workspace_gib": 0.00390625,
+      "lane_id": "0326_standard_BH_BH_ham_JWm16",
+      "molecule": "BH",
+      "nqubits": 16
+    },
+    {
+      "estimated_sector_workspace_gib": 0.00029206275939941406,
+      "estimated_state_workspace_gib": 1.52587890625e-05,
+      "lane_id": "0327_standard_BH_BH_ham_JWm8",
+      "molecule": "BH",
+      "nqubits": 8
+    },
+    {
+      "estimated_sector_workspace_gib": 0.0026285648345947266,
+      "estimated_state_workspace_gib": 6.103515625e-05,
+      "lane_id": "0328_standard_Be2_Be2_ham_JWm10",
+      "molecule": "Be2",
+      "nqubits": 10
+    },
+    {
+      "estimated_sector_workspace_gib": 0.05972391366958618,
+      "estimated_state_workspace_gib": 0.0009765625,
+      "lane_id": "0329_standard_Be2_Be2_ham_JWm14",
+      "molecule": "Be2",
+      "nqubits": 14
+    },
+    {
+      "estimated_sector_workspace_gib": 0.1974344253540039,
+      "estimated_state_workspace_gib": 0.00390625,
+      "lane_id": "0330_standard_Be2_Be2_ham_JWm16",
+      "molecule": "Be2",
+      "nqubits": 16
+    },
+    {
+      "estimated_sector_workspace_gib": 1.341104507446289e-05,
+      "estimated_state_workspace_gib": 3.814697265625e-06,
+      "lane_id": "0331_standard_Be2_Be2_ham_JWm6",
+      "molecule": "Be2",
+      "nqubits": 6
+    },
+    {
+      "estimated_sector_workspace_gib": 0.000858306884765625,
+      "estimated_state_workspace_gib": 6.103515625e-05,
+      "lane_id": "0332_standard_BeH_BeH_ham_JW10",
+      "molecule": "BeH",
+      "nqubits": 10
+    },
+    {
+      "estimated_sector_workspace_gib": 0.0028848648071289062,
+      "estimated_state_workspace_gib": 0.000244140625,
+      "lane_id": "0333_standard_BeH_BeH_ham_JW12",
+      "molecule": "BeH",
+      "nqubits": 12
+    },
+    {
+      "estimated_sector_workspace_gib": 9.5367431640625e-07,
+      "estimated_state_workspace_gib": 9.5367431640625e-07,
+      "lane_id": "0334_standard_BeH_BeH_ham_JW4",
+      "molecule": "BeH",
+      "nqubits": 4
+    },
+    {
+      "estimated_sector_workspace_gib": 0.000186920166015625,
+      "estimated_state_workspace_gib": 1.52587890625e-05,
+      "lane_id": "0335_standard_BeH_BeH_ham_JW8",
+      "molecule": "BeH",
+      "nqubits": 8
+    },
+    {
+      "estimated_sector_workspace_gib": 0.00012069940567016602,
+      "estimated_state_workspace_gib": 6.103515625e-05,
+      "lane_id": "0336_standard_C2_C2_ham_JWm10",
+      "molecule": "C2",
+      "nqubits": 10
+    },
+    {
+      "estimated_sector_workspace_gib": 0.5375152230262756,
+      "estimated_state_workspace_gib": 0.0009765625,
+      "lane_id": "0337_standard_C2_C2_ham_JWm14",
+      "molecule": "C2",
+      "nqubits": 14
+    },
+    {
+      "estimated_sector_workspace_gib": 9.8727285861969,
+      "estimated_state_workspace_gib": 0.00390625,
+      "lane_id": "0338_standard_C2_C2_ham_JWm16",
+      "molecule": "C2",
+      "nqubits": 16
+    },
+    {
+      "estimated_sector_workspace_gib": 114.12874245643616,
+      "estimated_state_workspace_gib": 0.015625,
+      "lane_id": "0339_standard_C2_C2_ham_JWm18",
+      "molecule": "C2",
+      "nqubits": 18
+    },
+    {
+      "estimated_sector_workspace_gib": 0.0037851333618164062,
+      "estimated_state_workspace_gib": 6.103515625e-05,
+      "lane_id": "0340_standard_CH_CH_ham_JWm10",
+      "molecule": "CH",
+      "nqubits": 10
+    },
+    {
+      "estimated_sector_workspace_gib": 0.037387847900390625,
+      "estimated_state_workspace_gib": 0.000244140625,
+      "lane_id": "0341_standard_CH_CH_ham_JWm12",
+      "molecule": "CH",
+      "nqubits": 12
+    },
+    {
+      "estimated_sector_workspace_gib": 0.23889565467834473,
+      "estimated_state_workspace_gib": 0.0009765625,
+      "lane_id": "0342_standard_CH_CH_ham_JWm14",
+      "molecule": "CH",
+      "nqubits": 14
+    },
+    {
+      "estimated_sector_workspace_gib": 0.000186920166015625,
+      "estimated_state_workspace_gib": 1.52587890625e-05,
+      "lane_id": "0343_standard_CH_CH_ham_JWm8",
+      "molecule": "CH",
+      "nqubits": 8
+    },
+    {
+      "estimated_sector_workspace_gib": 0.000858306884765625,
+      "estimated_state_workspace_gib": 0.00390625,
+      "lane_id": "0344_standard_F2_F2_ham_JWm16",
+      "molecule": "F2",
+      "nqubits": 16
+    },
+    {
+      "estimated_sector_workspace_gib": 89.54629898071289,
+      "estimated_state_workspace_gib": 0.0625,
+      "lane_id": "0345_standard_F2_F2_ham_JWm20",
+      "molecule": "F2",
+      "nqubits": 20
+    },
+    {
+      "estimated_sector_workspace_gib": 6094.744974374771,
+      "estimated_state_workspace_gib": 0.25,
+      "lane_id": "0346_standard_F2_F2_ham_JWm22",
+      "molecule": "F2",
+      "nqubits": 22
+    },
+    {
+      "estimated_sector_workspace_gib": 5559394.913315773,
+      "estimated_state_workspace_gib": 4.0,
+      "lane_id": "0347_standard_F2_F2_ham_JWm26",
+      "molecule": "F2",
+      "nqubits": 26
+    },
+    {
+      "estimated_sector_workspace_gib": 0.00025963783264160156,
+      "estimated_state_workspace_gib": 0.000244140625,
+      "lane_id": "0348_standard_H2_H2_ham_JWm12",
+      "molecule": "H2",
+      "nqubits": 12
+    },
+    {
+      "estimated_sector_workspace_gib": 0.0021517276763916016,
+      "estimated_state_workspace_gib": 0.0625,
+      "lane_id": "0349_standard_H2_H2_ham_JWm20",
+      "molecule": "H2",
+      "nqubits": 20
+    },
+    {
+      "estimated_sector_workspace_gib": 2.1457672119140625e-06,
+      "estimated_state_workspace_gib": 9.5367431640625e-07,
+      "lane_id": "0350_standard_H2_H2_ham_JWm4",
+      "molecule": "H2",
+      "nqubits": 4
+    },
+    {
+      "estimated_sector_workspace_gib": 1.341104507446289e-05,
+      "estimated_state_workspace_gib": 3.814697265625e-06,
+      "lane_id": "0351_standard_H2_H2_ham_JWm6",
+      "molecule": "H2",
+      "nqubits": 6
+    },
+    {
+      "estimated_sector_workspace_gib": 4.673004150390625e-05,
+      "estimated_state_workspace_gib": 1.52587890625e-05,
+      "lane_id": "0352_standard_H2_H2_ham_JWm8",
+      "molecule": "H2",
+      "nqubits": 8
+    },
+    {
+      "estimated_sector_workspace_gib": 0.00012069940567016602,
+      "estimated_state_workspace_gib": 6.103515625e-05,
+      "lane_id": "0353_standard_HF_HF_ham_JW10",
+      "molecule": "HF",
+      "nqubits": 10
+    },
+    {
+      "estimated_sector_workspace_gib": 0.014604628086090088,
+      "estimated_state_workspace_gib": 0.000244140625,
+      "lane_id": "0354_standard_HF_HF_ham_JW12",
+      "molecule": "HF",
+      "nqubits": 12
+    },
+    {
+      "estimated_sector_workspace_gib": 9.8727285861969,
+      "estimated_state_workspace_gib": 0.00390625,
+      "lane_id": "0355_standard_HF_HF_ham_JW16",
+      "molecule": "HF",
+      "nqubits": 16
+    },
+    {
+      "estimated_sector_workspace_gib": 114.12874245643616,
+      "estimated_state_workspace_gib": 0.015625,
+      "lane_id": "0356_standard_HF_HF_ham_JW18",
+      "molecule": "HF",
+      "nqubits": 18
+    },
+    {
+      "estimated_sector_workspace_gib": 0.00012069940567016602,
+      "estimated_state_workspace_gib": 6.103515625e-05,
+      "lane_id": "0357_standard_Li2_Li2_ham_JW10",
+      "molecule": "Li2",
+      "nqubits": 10
+    },
+    {
+      "estimated_sector_workspace_gib": 0.0004935860633850098,
+      "estimated_state_workspace_gib": 0.0009765625,
+      "lane_id": "0358_standard_Li2_Li2_ham_JW14",
+      "molecule": "Li2",
+      "nqubits": 14
+    },
+    {
+      "estimated_sector_workspace_gib": 2.1457672119140625e-06,
+      "estimated_state_workspace_gib": 9.5367431640625e-07,
+      "lane_id": "0359_standard_Li2_Li2_ham_JW4",
+      "molecule": "Li2",
+      "nqubits": 4
+    },
+    {
+      "estimated_sector_workspace_gib": 4.673004150390625e-05,
+      "estimated_state_workspace_gib": 1.52587890625e-05,
+      "lane_id": "0360_standard_Li2_Li2_ham_JW8",
+      "molecule": "Li2",
+      "nqubits": 8
+    },
+    {
+      "estimated_sector_workspace_gib": 0.00012069940567016602,
+      "estimated_state_workspace_gib": 6.103515625e-05,
+      "lane_id": "0361_standard_LiH_LiH_ham_JWm10",
+      "molecule": "LiH",
+      "nqubits": 10
+    },
+    {
+      "estimated_sector_workspace_gib": 0.00025963783264160156,
+      "estimated_state_workspace_gib": 0.000244140625,
+      "lane_id": "0362_standard_LiH_LiH_ham_JWm12",
+      "molecule": "LiH",
+      "nqubits": 12
+    },
+    {
+      "estimated_sector_workspace_gib": 2.1457672119140625e-06,
+      "estimated_state_workspace_gib": 9.5367431640625e-07,
+      "lane_id": "0363_standard_LiH_LiH_ham_JWm4",
+      "molecule": "LiH",
+      "nqubits": 4
+    },
+    {
+      "estimated_sector_workspace_gib": 4.673004150390625e-05,
+      "estimated_state_workspace_gib": 1.52587890625e-05,
+      "lane_id": "0364_standard_LiH_LiH_ham_JWm8",
+      "molecule": "LiH",
+      "nqubits": 8
+    },
+    {
+      "estimated_sector_workspace_gib": 0.05972391366958618,
+      "estimated_state_workspace_gib": 0.0009765625,
+      "lane_id": "0365_standard_N2_N2_ham_JWm14",
+      "molecule": "N2",
+      "nqubits": 14
+    },
+    {
+      "estimated_sector_workspace_gib": 3.8223304748535156,
+      "estimated_state_workspace_gib": 0.00390625,
+      "lane_id": "0366_standard_N2_N2_ham_JWm16",
+      "molecule": "N2",
+      "nqubits": 16
+    },
+    {
+      "estimated_sector_workspace_gib": 114.12874245643616,
+      "estimated_state_workspace_gib": 0.015625,
+      "lane_id": "0367_standard_N2_N2_ham_JWm18",
+      "molecule": "N2",
+      "nqubits": 18
+    },
+    {
+      "estimated_sector_workspace_gib": 24923.744756937027,
+      "estimated_state_workspace_gib": 0.25,
+      "lane_id": "0368_standard_N2_N2_ham_JWm22",
+      "molecule": "N2",
+      "nqubits": 22
+    },
+    {
+      "estimated_sector_workspace_gib": 0.0026285648345947266,
+      "estimated_state_workspace_gib": 6.103515625e-05,
+      "lane_id": "0369_standard_NH_NH_ham_JWm10",
+      "molecule": "NH",
+      "nqubits": 10
+    },
+    {
+      "estimated_sector_workspace_gib": 0.050889015197753906,
+      "estimated_state_workspace_gib": 0.000244140625,
+      "lane_id": "0370_standard_NH_NH_ham_JWm12",
+      "molecule": "NH",
+      "nqubits": 12
+    },
+    {
+      "estimated_sector_workspace_gib": 0.5375152230262756,
+      "estimated_state_workspace_gib": 0.0009765625,
+      "lane_id": "0371_standard_NH_NH_ham_JWm14",
+      "molecule": "NH",
+      "nqubits": 14
+    },
+    {
+      "estimated_sector_workspace_gib": 4.673004150390625e-05,
+      "estimated_state_workspace_gib": 1.52587890625e-05,
+      "lane_id": "0372_standard_NH_NH_ham_JWm8",
+      "molecule": "NH",
+      "nqubits": 8
+    },
+    {
+      "estimated_sector_workspace_gib": 0.0021517276763916016,
+      "estimated_state_workspace_gib": 0.0625,
+      "lane_id": "0373_standard_Na2_Na2_ham_JW20",
+      "molecule": "Na2",
+      "nqubits": 20
+    },
+    {
+      "estimated_sector_workspace_gib": 1079.8027048110962,
+      "estimated_state_workspace_gib": 1.0,
+      "lane_id": "0374_standard_Na2_Na2_ham_JW24",
+      "molecule": "Na2",
+      "nqubits": 24
+    },
+    {
+      "estimated_sector_workspace_gib": 145477.24578529596,
+      "estimated_state_workspace_gib": 4.0,
+      "lane_id": "0375_standard_Na2_Na2_ham_JW26",
+      "molecule": "Na2",
+      "nqubits": 26
+    },
+    {
+      "estimated_sector_workspace_gib": 445906994.99253184,
+      "estimated_state_workspace_gib": 64.0,
+      "lane_id": "0376_standard_Na2_Na2_ham_JW30",
+      "molecule": "Na2",
+      "nqubits": 30
+    },
+    {
+      "estimated_sector_workspace_gib": 0.0004935860633850098,
+      "estimated_state_workspace_gib": 0.0009765625,
+      "lane_id": "0377_standard_NaLi_NaLi_ham_JWm14",
+      "molecule": "NaLi",
+      "nqubits": 14
+    },
+    {
+      "estimated_sector_workspace_gib": 20.541077613830566,
+      "estimated_state_workspace_gib": 0.015625,
+      "lane_id": "0378_standard_NaLi_NaLi_ham_JWm18",
+      "molecule": "NaLi",
+      "nqubits": 18
+    },
+    {
+      "estimated_sector_workspace_gib": 945.8327829837799,
+      "estimated_state_workspace_gib": 0.0625,
+      "lane_id": "0379_standard_NaLi_NaLi_ham_JWm20",
+      "molecule": "NaLi",
+      "nqubits": 20
+    },
+    {
+      "estimated_sector_workspace_gib": 435856.5612039566,
+      "estimated_state_workspace_gib": 1.0,
+      "lane_id": "0380_standard_NaLi_NaLi_ham_JWm24",
+      "molecule": "NaLi",
+      "nqubits": 24
+    },
+    {
+      "estimated_sector_workspace_gib": 0.1974344253540039,
+      "estimated_state_workspace_gib": 0.00390625,
+      "lane_id": "0381_standard_O2_O2_ham_JW16",
+      "molecule": "O2",
+      "nqubits": 16
+    },
+    {
+      "estimated_sector_workspace_gib": 945.8327829837799,
+      "estimated_state_workspace_gib": 0.0625,
+      "lane_id": "0382_standard_O2_O2_ham_JW20",
+      "molecule": "O2",
+      "nqubits": 20
+    },
+    {
+      "estimated_sector_workspace_gib": 24923.744756937027,
+      "estimated_state_workspace_gib": 0.25,
+      "lane_id": "0383_standard_O2_O2_ham_JW22",
+      "molecule": "O2",
+      "nqubits": 22
+    },
+    {
+      "estimated_sector_workspace_gib": 435856.5612039566,
+      "estimated_state_workspace_gib": 1.0,
+      "lane_id": "0384_standard_O2_O2_ham_JW24",
+      "molecule": "O2",
+      "nqubits": 24
+    },
+    {
+      "estimated_sector_workspace_gib": 0.0021517276763916016,
+      "estimated_state_workspace_gib": 0.0625,
+      "lane_id": "0385_standard_O3_O3_ham_JW20",
+      "molecule": "O3",
+      "nqubits": 20
+    },
+    {
+      "estimated_sector_workspace_gib": 3.1893983483314514,
+      "estimated_state_workspace_gib": 0.25,
+      "lane_id": "0386_standard_O3_O3_ham_JW22",
+      "molecule": "O3",
+      "nqubits": 22
+    },
+    {
+      "estimated_sector_workspace_gib": 1079.8027048110962,
+      "estimated_state_workspace_gib": 1.0,
+      "lane_id": "0387_standard_O3_O3_ham_JW24",
+      "molecule": "O3",
+      "nqubits": 24
+    },
+    {
+      "estimated_sector_workspace_gib": 145477.24578529596,
+      "estimated_state_workspace_gib": 4.0,
+      "lane_id": "0388_standard_O3_O3_ham_JW26",
+      "molecule": "O3",
+      "nqubits": 26
+    },
+    {
+      "estimated_sector_workspace_gib": 0.000858306884765625,
+      "estimated_state_workspace_gib": 6.103515625e-05,
+      "lane_id": "0389_standard_OH_OH_ham_JW10",
+      "molecule": "OH",
+      "nqubits": 10
+    },
+    {
+      "estimated_sector_workspace_gib": 0.037387847900390625,
+      "estimated_state_workspace_gib": 0.000244140625,
+      "lane_id": "0390_standard_OH_OH_ham_JW12",
+      "molecule": "OH",
+      "nqubits": 12
+    },
+    {
+      "estimated_sector_workspace_gib": 0.7020606994628906,
+      "estimated_state_workspace_gib": 0.0009765625,
+      "lane_id": "0391_standard_OH_OH_ham_JW14",
+      "molecule": "OH",
+      "nqubits": 14
+    },
+    {
+      "estimated_sector_workspace_gib": 7.8006744384765625,
+      "estimated_state_workspace_gib": 0.00390625,
+      "lane_id": "0392_standard_OH_OH_ham_JW16",
+      "molecule": "OH",
+      "nqubits": 16
+    },
+    {
+      "estimated_sector_workspace_gib": 44.76511627435684,
+      "estimated_state_workspace_gib": 64.0,
+      "lane_id": "0393_transition_metals_CoH_CoH_ham_JW30",
+      "molecule": "CoH",
+      "nqubits": 30
+    },
+    {
+      "estimated_sector_workspace_gib": 48946.3770904541,
+      "estimated_state_workspace_gib": 256.0,
+      "lane_id": "0394_transition_metals_CoH_CoH_ham_JW32",
+      "molecule": "CoH",
+      "nqubits": 32
+    },
+    {
+      "estimated_sector_workspace_gib": 1210.448744058609,
+      "estimated_state_workspace_gib": 64.0,
+      "lane_id": "0395_transition_metals_ScC_ScC_ham_JW30",
+      "molecule": "ScC",
+      "nqubits": 30
+    },
+    {
+      "estimated_sector_workspace_gib": 2417.1050415039062,
+      "estimated_state_workspace_gib": 256.0,
+      "lane_id": "0396_transition_metals_ScO_ScO_ham_JW32",
+      "molecule": "ScO",
+      "nqubits": 32
+    },
+    {
+      "estimated_sector_workspace_gib": 257.90979862213135,
+      "estimated_state_workspace_gib": 4.0,
+      "lane_id": "0397_transition_metals_TiH_TiH_ham_JW26",
+      "molecule": "TiH",
+      "nqubits": 26
+    },
+    {
+      "estimated_sector_workspace_gib": 12200745.411068201,
+      "estimated_state_workspace_gib": 64.0,
+      "lane_id": "0398_transition_metals_TiH_TiH_ham_JW30",
+      "molecule": "TiH",
+      "nqubits": 30
+    },
+    {
+      "estimated_sector_workspace_gib": 8459.867691993713,
+      "estimated_state_workspace_gib": 16.0,
+      "lane_id": "0399_transition_metals_VH_VH_ham_JW28",
+      "molecule": "VH",
+      "nqubits": 28
+    },
+    {
+      "estimated_sector_workspace_gib": 248064345.70655823,
+      "estimated_state_workspace_gib": 256.0,
+      "lane_id": "0400_transition_metals_VH_VH_ham_JW32",
+      "molecule": "VH",
+      "nqubits": 32
+    }
+  ],
+  "schema_version": 1,
+  "source": {
+    "campaign_manifest_lane_count": 401,
+    "campaign_manifest_sha256": "0cbfec9926d6465fea6eb78b832fe1687a40c7edc4a3de98aaf14c284ce72f61",
+    "hamlib_csv_file_count": 32,
+    "hamlib_csv_tree_sha256": "396ddcd1edb04d56bc18e7318d16f4f761f38252b1c991632e8e370212530a69"
+  }
+}

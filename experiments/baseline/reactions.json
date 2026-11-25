@@ -1,0 +1,759 @@
+{
+  "archived_single_instance_commit": "7cf90f6d11b74fef970a162a93f36f7f3bf109ba",
+  "baseline": {
+    "compact_pauli_generator_sha256": "12c37652058cde599b8655578aac72b816a39e5da934fd36f8acfb0b7c7c30cd",
+    "parameters": "Per-species sealed calibration and stoichiometric reaction allocation; generated outside the checkout",
+    "prepare_command": "hsopt-elote prepare",
+    "profile": "fermionic_nested",
+    "template": "baseline/initial_nested_pf.py",
+    "template_sha256": "3428e4f1270fde8442ffcbb22292bb7d8ffc6671f4269d0fc017c09538334732"
+  },
+  "historical_cache_checksums": {
+    "problem_cache/acetylene.json": "bcd2c3cd0ba7f72e372111e035f833c9af7d3ff9751a30600a9588a6c35f1d46",
+    "problem_cache/acetylene.npz": "8b52c42491da2c2808eec0db7064a5e15463bb4791b8290840d573abba421a6a",
+    "problem_cache/ch4.json": "f39bc80337a3d7470d81eeac9cf6be748661727439638beb90305e4cbc3afc5d",
+    "problem_cache/ch4.npz": "00923e4281425349a04af94ce53ee66cdac1aa318237c4a6306348c5cbddf60d",
+    "problem_cache/cl2.json": "470c97819f034d12933db8d4b355d0d95329baf412be1630237d4b50bf234c71",
+    "problem_cache/cl2.npz": "a9cb5cf98f1fe0d996d70cd1ce59e5dcb349af12efaa0ea60e4a1b42ea04b49a",
+    "problem_cache/co.json": "9ae0ee52cca2a0f3c12688b8bd1e21afcaa120e38e2621fc29c666494106a3a2",
+    "problem_cache/co.npz": "4ee8f053764ac071565132eeea036043cc4e4814a22adac11deb77f95513054a",
+    "problem_cache/co2.json": "1f37bcc6a1b80303e3390fc96fe4efe5a1cf23f6feb937c0240e5f00df1e0f0d",
+    "problem_cache/co2.npz": "bdd4a0ffc1709f2917c35f65605ed94f35695b10fdb12526617498698f8de397",
+    "problem_cache/f2.json": "1b681a89fc91e2272e5785cf7f606a50e00214fa88a11f63e4bd6e9253af1629",
+    "problem_cache/f2.npz": "951de64a33d6e8e5bb564ce179fa53743b8988dab617bf7cffa039c9bebcc2fc",
+    "problem_cache/h2.json": "e962e679f03486b5d54f6195cf99ac12748e67b966cb0e96c4d95e404df0c46e",
+    "problem_cache/h2.npz": "c499c303111ae2503433f749f307cc282bd34416f1f3e67a3d300c03ea22b719",
+    "problem_cache/h2co.json": "b63a3bbfcae0c91afe90aeacce1bb7d72d54d737b33f2d9bb643557d12f76d1f",
+    "problem_cache/h2co.npz": "8e6682cf0b2e8033b279e276934306776ed60a6856a6fd52acf27fea501e78db",
+    "problem_cache/h2o.json": "f9df9982cb6105a60a62cbd1cdde31bd67f863597912269a5024a8e81c169646",
+    "problem_cache/h2o.npz": "87ebe1fbf1bb500c01841478da9db88445a429d198aff33b4dfb93be6078af3b",
+    "problem_cache/hcl.json": "c6f1c703702d909c908d39c467b1a155b173265c7d3be9a256a4a4e06b63190d",
+    "problem_cache/hcl.npz": "055a35d4841378aa4e47223420ce5989e2fb0185ad0ed686537000da0d0f3874",
+    "problem_cache/hcn.json": "8979324b7c5633d3e505208ef1744b3f98462d9e11d88a05feadddf519036a77",
+    "problem_cache/hcn.npz": "f87bc26c4271aaf376f2badc32e88ee3ccfa36b25659cb3a550e2311ce4ecaa5",
+    "problem_cache/hco_plus.json": "f46d94306614a93729829a5ec36b2c4f44dfbb1fae914ddb8a64cef579be454b",
+    "problem_cache/hco_plus.npz": "128fd756f9584fcab95201c44c18163cf20f609516b7d42eb2df08ffa592b167",
+    "problem_cache/hcoh.json": "bd229e4d0512e81ce404f5b70660c41e62eac4d3db24f490a1a8e82f6b2b5ef5",
+    "problem_cache/hcoh.npz": "53b9fb130f26fff69718df5b7584e3e9fe9b657b07f3d811e8b504cdb8ba4347",
+    "problem_cache/hf.json": "67c6194f395b37ad031e29c66b3d6513ac3a52b871e4f6f43f760e8c7f011953",
+    "problem_cache/hf.npz": "3bf60826026264644204ba9eb84410ec1778fdcc14bb90bd741bb0172f59aa07",
+    "problem_cache/hnc.json": "d83bd200188ad0eba2908dfb0500f2982e2633b57864825d8477dfd927006fd9",
+    "problem_cache/hnc.npz": "282cdec4bd5586b78b8edcffc832bad063891b071032f6dcaff732e07c8f241d",
+    "problem_cache/hno.json": "1ab35d99a05c3470a3287124723972ef54f67e225b66cbea52f54f8261b2b10b",
+    "problem_cache/hno.npz": "72d6ae6afcd1b7621b7fe77249ccb7747ab4f5702bd6efc03293af9b4d47202b",
+    "problem_cache/hoc_plus.json": "6971abb4b5e095c2c3e8ea271b023526067ce7a38c22690ded645b15b860773f",
+    "problem_cache/hoc_plus.npz": "d7d3c875a51cedd0180ef3f6e41ca0d73749ad3a570a514eb827d598e9a13c08",
+    "problem_cache/n2.json": "38d0cd8306e1441c3cdc0ee9185957e25e19734593ca0853bba61d49542d454e",
+    "problem_cache/n2.npz": "6e9ce8f51a6a0255d48f146841f6b48a1c8f9846cb5ff5ad6bb9d497bb3ea5b5",
+    "problem_cache/nh3.json": "5997d7de564cceca52772a80f4975745f2a3ac891fcadc81ddbefcedb6296660",
+    "problem_cache/nh3.npz": "2876ff1ecad8da5e562c8a05d81039167ae8d236a8c65fbf4a50a2d6462bbe48",
+    "problem_cache/noh.json": "3cd49c200ea4e4604ba3ac0b068b860287ef25935307dcedaca17241ca737666",
+    "problem_cache/noh.npz": "1bd897afbf0eba9c17efa5a51e258142c05e47b98d1ab9c437ded80a91636dbb",
+    "problem_cache/vinylidene.json": "263c1d51c56f2719e591aa910ff3c820ffed6d6d2e46bc6dc8b7d455715b32e5",
+    "problem_cache/vinylidene.npz": "bcba59c26bf467a99e02e61e0bfbda4ccfbcc23de57a6876bf8e0dd30839f0b1"
+  },
+  "historical_metadata": {
+    "phase_encoding": {
+      "dimensionless_evolution_time": 1.0,
+      "energy_recovery": "E_hartree = c0 + lambda * principal_phase",
+      "method": "centered_nonidentity_pauli_one_norm",
+      "physical_evolution_time": "computed after loading coefficients as inverse of the nonidentity Pauli one-norm"
+    },
+    "schema": 2,
+    "source": {
+      "checksum_manifest": "problem_cache.sha256",
+      "description": "Historical reaction-cache inventory using the archived incorrect two-electron conversion. Fresh physical generation computes its own metadata and checksums from species.json.",
+      "hamiltonian_convention": "historical-replay"
+    },
+    "species": {
+      "acetylene": {
+        "active_electrons": 6,
+        "active_orbitals": 5,
+        "basis": "sto-3g",
+        "cas_label": "CAS(6e,5o)",
+        "metadata_sha256": "bcd2c3cd0ba7f72e372111e035f833c9af7d3ff9751a30600a9588a6c35f1d46",
+        "n_qubits": 10,
+        "nonidentity_terms": 195
+      },
+      "ch4": {
+        "active_electrons": 6,
+        "active_orbitals": 5,
+        "basis": "sto-3g",
+        "cas_label": "CAS(6e,5o)",
+        "metadata_sha256": "f39bc80337a3d7470d81eeac9cf6be748661727439638beb90305e4cbc3afc5d",
+        "n_qubits": 10,
+        "nonidentity_terms": 827
+      },
+      "cl2": {
+        "active_electrons": 8,
+        "active_orbitals": 5,
+        "basis": "sto-3g",
+        "cas_label": "CAS(8e,5o)",
+        "metadata_sha256": "470c97819f034d12933db8d4b355d0d95329baf412be1630237d4b50bf234c71",
+        "n_qubits": 10,
+        "nonidentity_terms": 435
+      },
+      "co": {
+        "active_electrons": 6,
+        "active_orbitals": 5,
+        "basis": "sto-3g",
+        "cas_label": "CAS(6e,5o)",
+        "metadata_sha256": "9ae0ee52cca2a0f3c12688b8bd1e21afcaa120e38e2621fc29c666494106a3a2",
+        "n_qubits": 10,
+        "nonidentity_terms": 435
+      },
+      "co2": {
+        "active_electrons": 6,
+        "active_orbitals": 5,
+        "basis": "sto-3g",
+        "cas_label": "CAS(6e,5o)",
+        "metadata_sha256": "1f37bcc6a1b80303e3390fc96fe4efe5a1cf23f6feb937c0240e5f00df1e0f0d",
+        "n_qubits": 10,
+        "nonidentity_terms": 195
+      },
+      "f2": {
+        "active_electrons": 8,
+        "active_orbitals": 5,
+        "basis": "sto-3g",
+        "cas_label": "CAS(8e,5o)",
+        "metadata_sha256": "1b681a89fc91e2272e5785cf7f606a50e00214fa88a11f63e4bd6e9253af1629",
+        "n_qubits": 10,
+        "nonidentity_terms": 367
+      },
+      "h2": {
+        "active_electrons": 2,
+        "active_orbitals": 2,
+        "basis": "sto-3g",
+        "cas_label": "CAS(2e,2o)",
+        "metadata_sha256": "e962e679f03486b5d54f6195cf99ac12748e67b966cb0e96c4d95e404df0c46e",
+        "n_qubits": 4,
+        "nonidentity_terms": 14
+      },
+      "h2co": {
+        "active_electrons": 8,
+        "active_orbitals": 5,
+        "basis": "sto-3g",
+        "cas_label": "CAS(8e,5o)",
+        "metadata_sha256": "b63a3bbfcae0c91afe90aeacce1bb7d72d54d737b33f2d9bb643557d12f76d1f",
+        "n_qubits": 10,
+        "nonidentity_terms": 251
+      },
+      "h2o": {
+        "active_electrons": 6,
+        "active_orbitals": 5,
+        "basis": "sto-3g",
+        "cas_label": "CAS(6e,5o)",
+        "metadata_sha256": "f9df9982cb6105a60a62cbd1cdde31bd67f863597912269a5024a8e81c169646",
+        "n_qubits": 10,
+        "nonidentity_terms": 259
+      },
+      "hcl": {
+        "active_electrons": 8,
+        "active_orbitals": 5,
+        "basis": "sto-3g",
+        "cas_label": "CAS(8e,5o)",
+        "metadata_sha256": "c6f1c703702d909c908d39c467b1a155b173265c7d3be9a256a4a4e06b63190d",
+        "n_qubits": 10,
+        "nonidentity_terms": 275
+      },
+      "hcn": {
+        "active_electrons": 6,
+        "active_orbitals": 5,
+        "basis": "sto-3g",
+        "cas_label": "CAS(6e,5o)",
+        "metadata_sha256": "8979324b7c5633d3e505208ef1744b3f98462d9e11d88a05feadddf519036a77",
+        "n_qubits": 10,
+        "nonidentity_terms": 435
+      },
+      "hco_plus": {
+        "active_electrons": 6,
+        "active_orbitals": 5,
+        "basis": "sto-3g",
+        "cas_label": "CAS(6e,5o)",
+        "metadata_sha256": "f46d94306614a93729829a5ec36b2c4f44dfbb1fae914ddb8a64cef579be454b",
+        "n_qubits": 10,
+        "nonidentity_terms": 435
+      },
+      "hcoh": {
+        "active_electrons": 8,
+        "active_orbitals": 5,
+        "basis": "sto-3g",
+        "cas_label": "CAS(8e,5o)",
+        "metadata_sha256": "bd229e4d0512e81ce404f5b70660c41e62eac4d3db24f490a1a8e82f6b2b5ef5",
+        "n_qubits": 10,
+        "nonidentity_terms": 443
+      },
+      "hf": {
+        "active_electrons": 8,
+        "active_orbitals": 5,
+        "basis": "sto-3g",
+        "cas_label": "CAS(8e,5o)",
+        "metadata_sha256": "67c6194f395b37ad031e29c66b3d6513ac3a52b871e4f6f43f760e8c7f011953",
+        "n_qubits": 10,
+        "nonidentity_terms": 275
+      },
+      "hnc": {
+        "active_electrons": 6,
+        "active_orbitals": 5,
+        "basis": "sto-3g",
+        "cas_label": "CAS(6e,5o)",
+        "metadata_sha256": "d83bd200188ad0eba2908dfb0500f2982e2633b57864825d8477dfd927006fd9",
+        "n_qubits": 10,
+        "nonidentity_terms": 435
+      },
+      "hno": {
+        "active_electrons": 8,
+        "active_orbitals": 5,
+        "basis": "sto-3g",
+        "cas_label": "CAS(8e,5o)",
+        "metadata_sha256": "1ab35d99a05c3470a3287124723972ef54f67e225b66cbea52f54f8261b2b10b",
+        "n_qubits": 10,
+        "nonidentity_terms": 443
+      },
+      "hoc_plus": {
+        "active_electrons": 6,
+        "active_orbitals": 5,
+        "basis": "sto-3g",
+        "cas_label": "CAS(6e,5o)",
+        "metadata_sha256": "6971abb4b5e095c2c3e8ea271b023526067ce7a38c22690ded645b15b860773f",
+        "n_qubits": 10,
+        "nonidentity_terms": 435
+      },
+      "n2": {
+        "active_electrons": 6,
+        "active_orbitals": 5,
+        "basis": "sto-3g",
+        "cas_label": "CAS(6e,5o)",
+        "metadata_sha256": "38d0cd8306e1441c3cdc0ee9185957e25e19734593ca0853bba61d49542d454e",
+        "n_qubits": 10,
+        "nonidentity_terms": 391
+      },
+      "nh3": {
+        "active_electrons": 6,
+        "active_orbitals": 5,
+        "basis": "sto-3g",
+        "cas_label": "CAS(6e,5o)",
+        "metadata_sha256": "5997d7de564cceca52772a80f4975745f2a3ac891fcadc81ddbefcedb6296660",
+        "n_qubits": 10,
+        "nonidentity_terms": 443
+      },
+      "noh": {
+        "active_electrons": 8,
+        "active_orbitals": 5,
+        "basis": "sto-3g",
+        "cas_label": "CAS(8e,5o)",
+        "metadata_sha256": "3cd49c200ea4e4604ba3ac0b068b860287ef25935307dcedaca17241ca737666",
+        "n_qubits": 10,
+        "nonidentity_terms": 443
+      },
+      "vinylidene": {
+        "active_electrons": 6,
+        "active_orbitals": 5,
+        "basis": "sto-3g",
+        "cas_label": "CAS(6e,5o)",
+        "metadata_sha256": "263c1d51c56f2719e591aa910ff3c820ffed6d6d2e46bc6dc8b7d455715b32e5",
+        "n_qubits": 10,
+        "nonidentity_terms": 251
+      }
+    }
+  },
+  "legacy_branch": "single_molecule",
+  "reaction_definitions": {
+    "reaction_keys": [
+      "hcn_hnc",
+      "hco_hoc_cation",
+      "hno_noh",
+      "h2co_hcoh",
+      "acetylene_vinylidene",
+      "h2_cl2_hcl",
+      "n2_h2_nh3",
+      "co_h2o_co2_h2",
+      "h2_f2_hf",
+      "co_h2_ch4_h2o"
+    ],
+    "reaction_target_hartree": 0.0015936014376405157,
+    "reactions": {
+      "acetylene_vinylidene": {
+        "label": "HCCH -> H2CC",
+        "product": "vinylidene",
+        "rationale": "Same-formula valence isomerization; the two Hamiltonians share size and many structural features.",
+        "reactant": "acetylene",
+        "species": [
+          "acetylene",
+          "vinylidene"
+        ],
+        "terms": [
+          {
+            "coefficient": -1.0,
+            "species": "acetylene"
+          },
+          {
+            "coefficient": 1.0,
+            "species": "vinylidene"
+          }
+        ]
+      },
+      "co_h2_ch4_h2o": {
+        "label": "CO + 3 H2 -> CH4 + H2O",
+        "product": "ch4+h2o",
+        "rationale": "Closed-shell CO methanation stoichiometry selected as a second balanced small-molecule reaction.",
+        "reactant": "co+3h2",
+        "species": [
+          "co",
+          "h2",
+          "ch4",
+          "h2o"
+        ],
+        "terms": [
+          {
+            "coefficient": -1.0,
+            "species": "co"
+          },
+          {
+            "coefficient": -3.0,
+            "species": "h2"
+          },
+          {
+            "coefficient": 1.0,
+            "species": "ch4"
+          },
+          {
+            "coefficient": 1.0,
+            "species": "h2o"
+          }
+        ]
+      },
+      "co_h2o_co2_h2": {
+        "label": "CO + H2O -> CO2 + H2",
+        "product": "co2+h2",
+        "rationale": "Closed-shell water-gas-shift stoichiometry requested by the user.",
+        "reactant": "co+h2o",
+        "species": [
+          "co",
+          "h2o",
+          "co2",
+          "h2"
+        ],
+        "terms": [
+          {
+            "coefficient": -1.0,
+            "species": "co"
+          },
+          {
+            "coefficient": -1.0,
+            "species": "h2o"
+          },
+          {
+            "coefficient": 1.0,
+            "species": "co2"
+          },
+          {
+            "coefficient": 1.0,
+            "species": "h2"
+          }
+        ]
+      },
+      "h2_cl2_hcl": {
+        "label": "H2 + Cl2 -> 2 HCl",
+        "product": "hcl",
+        "rationale": "Closed-shell hydrogen-halogen reaction requested by the user; H2 uses its natural two-electron active space.",
+        "reactant": "h2+cl2",
+        "species": [
+          "h2",
+          "cl2",
+          "hcl"
+        ],
+        "terms": [
+          {
+            "coefficient": -1.0,
+            "species": "h2"
+          },
+          {
+            "coefficient": -1.0,
+            "species": "cl2"
+          },
+          {
+            "coefficient": 2.0,
+            "species": "hcl"
+          }
+        ]
+      },
+      "h2_f2_hf": {
+        "label": "H2 + F2 -> 2 HF",
+        "product": "hf",
+        "rationale": "Closed-shell hydrogen-halogen analogue selected to keep the screen small and comparable to H2 + Cl2 -> 2 HCl.",
+        "reactant": "h2+f2",
+        "species": [
+          "h2",
+          "f2",
+          "hf"
+        ],
+        "terms": [
+          {
+            "coefficient": -1.0,
+            "species": "h2"
+          },
+          {
+            "coefficient": -1.0,
+            "species": "f2"
+          },
+          {
+            "coefficient": 2.0,
+            "species": "hf"
+          }
+        ]
+      },
+      "h2co_hcoh": {
+        "label": "H2CO -> HCOH",
+        "product": "hcoh",
+        "rationale": "Same-formula carbonyl/enol-like rearrangement with shared C/O/H active chemistry.",
+        "reactant": "h2co",
+        "species": [
+          "h2co",
+          "hcoh"
+        ],
+        "terms": [
+          {
+            "coefficient": -1.0,
+            "species": "h2co"
+          },
+          {
+            "coefficient": 1.0,
+            "species": "hcoh"
+          }
+        ]
+      },
+      "hcn_hnc": {
+        "label": "HCN -> HNC",
+        "product": "hnc",
+        "rationale": "Existing three-atom isomerization baseline with matched sto-3g/CAS(6e,5o) setup.",
+        "reactant": "hcn",
+        "species": [
+          "hcn",
+          "hnc"
+        ],
+        "terms": [
+          {
+            "coefficient": -1.0,
+            "species": "hcn"
+          },
+          {
+            "coefficient": 1.0,
+            "species": "hnc"
+          }
+        ]
+      },
+      "hco_hoc_cation": {
+        "label": "HCO+ -> HOC+",
+        "product": "hoc_plus",
+        "rationale": "Linear proton-transfer/isomer pair, isoelectronic with HCN/HNC and same active-space size.",
+        "reactant": "hco_plus",
+        "species": [
+          "hco_plus",
+          "hoc_plus"
+        ],
+        "terms": [
+          {
+            "coefficient": -1.0,
+            "species": "hco_plus"
+          },
+          {
+            "coefficient": 1.0,
+            "species": "hoc_plus"
+          }
+        ]
+      },
+      "hno_noh": {
+        "label": "HNO -> NOH",
+        "product": "noh",
+        "rationale": "Small H-shift isomerization with identical atoms and the same closed-shell electron count.",
+        "reactant": "hno",
+        "species": [
+          "hno",
+          "noh"
+        ],
+        "terms": [
+          {
+            "coefficient": -1.0,
+            "species": "hno"
+          },
+          {
+            "coefficient": 1.0,
+            "species": "noh"
+          }
+        ]
+      },
+      "n2_h2_nh3": {
+        "label": "N2 + 3 H2 -> 2 NH3",
+        "product": "nh3",
+        "rationale": "Closed-shell Haber-Bosch stoichiometry requested by the user, evaluated as an active-space reaction-energy screen.",
+        "reactant": "n2+3h2",
+        "species": [
+          "n2",
+          "h2",
+          "nh3"
+        ],
+        "terms": [
+          {
+            "coefficient": -1.0,
+            "species": "n2"
+          },
+          {
+            "coefficient": -3.0,
+            "species": "h2"
+          },
+          {
+            "coefficient": 2.0,
+            "species": "nh3"
+          }
+        ]
+      }
+    },
+    "schema": 1
+  },
+  "schema": 1,
+  "source_sha256": {
+    "problem_cache.sha256": "cf521d0a98c7b9cb3478ef28349200f4ab98b171a79a915edca6459349f9c22f",
+    "problem_metadata.json": "0b38c31d5454311a669e9bc771a55c0c6725cf0830d5d3bf24864af560f4a320",
+    "reactions.json": "037bbf1b6dff9416e552f7b9169ef70a986c3801b6c80a60c2bb03e7d8ec8eca",
+    "species.json": "c3919f2893b187cdc9ba877abc30e53ba38fc658efb0743a08b5134540b0c0bb"
+  },
+  "species_definitions": {
+    "provenance": {
+      "description": "Fixed species recovered from the reactions10_paper_20260722_rightsize source snapshot; every geometry, charge, multiplicity, basis and active space matches its original cached metadata.",
+      "historical_checksums": "problem_cache.sha256",
+      "original_chemistry_sha256": "f03307d41a4bf70fd2aeff0257e4710af750db0da770ab82726ce8bd03c875b6",
+      "original_registry_sha256": "d0418514b85f175751aba5341c633d1d04f25433563dba29ecd7749029ce7fdc"
+    },
+    "recipe": {
+      "active_space_selection": "frontier_rhf_orbitals",
+      "geometry_unit": "Angstrom",
+      "integral_cutoff": 1e-14,
+      "localization": "pipek_mezey_split_occ_vir",
+      "localization_conv_tol": 1e-06,
+      "localization_exponent": 2,
+      "localization_max_cycle": 100,
+      "localization_max_iters": 20,
+      "mean_field": "RHF",
+      "pauli_cutoff": 1e-12,
+      "pauli_label_order": "qubit_0_leftmost",
+      "population_method": "meta_lowdin",
+      "scf_conv_tol": 1e-09,
+      "scf_max_cycle": 50,
+      "spin_orbital_order": "interleaved_alpha_beta"
+    },
+    "schema": 1,
+    "species": {
+      "acetylene": {
+        "active_electrons": 6,
+        "active_orbitals": 5,
+        "basis": "sto-3g",
+        "charge": 0,
+        "display_name": "Acetylene reaction PF",
+        "geometry": "H 0.000000 0.000000 0.000000\nC 0.000000 0.000000 1.060000\nC 0.000000 0.000000 2.263000\nH 0.000000 0.000000 3.323000",
+        "localization": "pipek_mezey_split_occ_vir",
+        "multiplicity": 1
+      },
+      "ch4": {
+        "active_electrons": 6,
+        "active_orbitals": 5,
+        "basis": "sto-3g",
+        "charge": 0,
+        "display_name": "CH4 reaction PF",
+        "geometry": "C 0.000000 0.000000 0.000000\nH 0.629000 0.629000 0.629000\nH -0.629000 -0.629000 0.629000\nH -0.629000 0.629000 -0.629000\nH 0.629000 -0.629000 -0.629000",
+        "localization": "pipek_mezey_split_occ_vir",
+        "multiplicity": 1
+      },
+      "cl2": {
+        "active_electrons": 8,
+        "active_orbitals": 5,
+        "basis": "sto-3g",
+        "charge": 0,
+        "display_name": "Cl2 reaction PF",
+        "geometry": "Cl 0.000000 0.000000 0.000000\nCl 0.000000 0.000000 1.987000",
+        "localization": "pipek_mezey_split_occ_vir",
+        "multiplicity": 1
+      },
+      "co": {
+        "active_electrons": 6,
+        "active_orbitals": 5,
+        "basis": "sto-3g",
+        "charge": 0,
+        "display_name": "CO reaction PF",
+        "geometry": "C 0.000000 0.000000 0.000000\nO 0.000000 0.000000 1.128000",
+        "localization": "pipek_mezey_split_occ_vir",
+        "multiplicity": 1
+      },
+      "co2": {
+        "active_electrons": 6,
+        "active_orbitals": 5,
+        "basis": "sto-3g",
+        "charge": 0,
+        "display_name": "CO2 reaction PF",
+        "geometry": "O 0.000000 0.000000 -1.160000\nC 0.000000 0.000000 0.000000\nO 0.000000 0.000000 1.160000",
+        "localization": "pipek_mezey_split_occ_vir",
+        "multiplicity": 1
+      },
+      "f2": {
+        "active_electrons": 8,
+        "active_orbitals": 5,
+        "basis": "sto-3g",
+        "charge": 0,
+        "display_name": "F2 reaction PF",
+        "geometry": "F 0.000000 0.000000 0.000000\nF 0.000000 0.000000 1.412000",
+        "localization": "pipek_mezey_split_occ_vir",
+        "multiplicity": 1
+      },
+      "h2": {
+        "active_electrons": 2,
+        "active_orbitals": 2,
+        "basis": "sto-3g",
+        "charge": 0,
+        "display_name": "H2 reaction PF",
+        "geometry": "H 0.000000 0.000000 0.000000\nH 0.000000 0.000000 0.740000",
+        "localization": "pipek_mezey_split_occ_vir",
+        "multiplicity": 1
+      },
+      "h2co": {
+        "active_electrons": 8,
+        "active_orbitals": 5,
+        "basis": "sto-3g",
+        "charge": 0,
+        "display_name": "H2CO reaction PF",
+        "geometry": "C 0.000000 0.000000 0.000000\nO 1.210000 0.000000 0.000000\nH -0.583257 0.932969 0.000000\nH -0.583257 -0.932969 0.000000",
+        "localization": "pipek_mezey_split_occ_vir",
+        "multiplicity": 1
+      },
+      "h2o": {
+        "active_electrons": 6,
+        "active_orbitals": 5,
+        "basis": "sto-3g",
+        "charge": 0,
+        "display_name": "H2O reaction PF",
+        "geometry": "O 0.000000 0.000000 0.000000\nH 0.756950 0.000000 0.585882\nH -0.756950 0.000000 0.585882",
+        "localization": "pipek_mezey_split_occ_vir",
+        "multiplicity": 1
+      },
+      "hcl": {
+        "active_electrons": 8,
+        "active_orbitals": 5,
+        "basis": "sto-3g",
+        "charge": 0,
+        "display_name": "HCl reaction PF",
+        "geometry": "H 0.000000 0.000000 0.000000\nCl 0.000000 0.000000 1.275000",
+        "localization": "pipek_mezey_split_occ_vir",
+        "multiplicity": 1
+      },
+      "hcn": {
+        "active_electrons": 6,
+        "active_orbitals": 5,
+        "basis": "sto-3g",
+        "charge": 0,
+        "display_name": "HCN reaction PF",
+        "geometry": "H 0.000000 0.000000 0.000000\nC 0.000000 0.000000 1.064000\nN 0.000000 0.000000 2.220000",
+        "localization": "pipek_mezey_split_occ_vir",
+        "multiplicity": 1
+      },
+      "hco_plus": {
+        "active_electrons": 6,
+        "active_orbitals": 5,
+        "basis": "sto-3g",
+        "charge": 1,
+        "display_name": "HCO+ reaction PF",
+        "geometry": "H 0.000000 0.000000 0.000000\nC 0.000000 0.000000 1.100000\nO 0.000000 0.000000 2.228000",
+        "localization": "pipek_mezey_split_occ_vir",
+        "multiplicity": 1
+      },
+      "hcoh": {
+        "active_electrons": 8,
+        "active_orbitals": 5,
+        "basis": "sto-3g",
+        "charge": 0,
+        "display_name": "HCOH reaction PF",
+        "geometry": "C 0.000000 0.000000 0.000000\nO 1.320000 0.000000 0.000000\nH -0.464880 0.996938 0.000000\nH 1.571038 0.936917 0.000000",
+        "localization": "pipek_mezey_split_occ_vir",
+        "multiplicity": 1
+      },
+      "hf": {
+        "active_electrons": 8,
+        "active_orbitals": 5,
+        "basis": "sto-3g",
+        "charge": 0,
+        "display_name": "HF reaction PF",
+        "geometry": "H 0.000000 0.000000 0.000000\nF 0.000000 0.000000 0.917000",
+        "localization": "pipek_mezey_split_occ_vir",
+        "multiplicity": 1
+      },
+      "hnc": {
+        "active_electrons": 6,
+        "active_orbitals": 5,
+        "basis": "sto-3g",
+        "charge": 0,
+        "display_name": "HNC reaction PF",
+        "geometry": "H 0.000000 0.000000 0.000000\nN 0.000000 0.000000 1.064000\nC 0.000000 0.000000 2.220000",
+        "localization": "pipek_mezey_split_occ_vir",
+        "multiplicity": 1
+      },
+      "hno": {
+        "active_electrons": 8,
+        "active_orbitals": 5,
+        "basis": "sto-3g",
+        "charge": 0,
+        "display_name": "HNO reaction PF",
+        "geometry": "N 0.000000 0.000000 0.000000\nO 1.212000 0.000000 0.000000\nH -0.328480 1.010985 0.000000",
+        "localization": "pipek_mezey_split_occ_vir",
+        "multiplicity": 1
+      },
+      "hoc_plus": {
+        "active_electrons": 6,
+        "active_orbitals": 5,
+        "basis": "sto-3g",
+        "charge": 1,
+        "display_name": "HOC+ reaction PF",
+        "geometry": "H 0.000000 0.000000 0.000000\nO 0.000000 0.000000 0.950000\nC 0.000000 0.000000 2.078000",
+        "localization": "pipek_mezey_split_occ_vir",
+        "multiplicity": 1
+      },
+      "n2": {
+        "active_electrons": 6,
+        "active_orbitals": 5,
+        "basis": "sto-3g",
+        "charge": 0,
+        "display_name": "N2 reaction PF",
+        "geometry": "N 0.000000 0.000000 0.000000\nN 0.000000 0.000000 1.098000",
+        "localization": "pipek_mezey_split_occ_vir",
+        "multiplicity": 1
+      },
+      "nh3": {
+        "active_electrons": 6,
+        "active_orbitals": 5,
+        "basis": "sto-3g",
+        "charge": 0,
+        "display_name": "NH3 reaction PF",
+        "geometry": "N 0.000000 0.000000 0.000000\nH 0.000000 0.937000 0.382000\nH 0.812000 -0.469000 0.382000\nH -0.812000 -0.469000 0.382000",
+        "localization": "pipek_mezey_split_occ_vir",
+        "multiplicity": 1
+      },
+      "noh": {
+        "active_electrons": 8,
+        "active_orbitals": 5,
+        "basis": "sto-3g",
+        "charge": 0,
+        "display_name": "NOH reaction PF",
+        "geometry": "N 0.000000 0.000000 0.000000\nO 1.212000 0.000000 0.000000\nH 0.960942 0.936917 0.000000",
+        "localization": "pipek_mezey_split_occ_vir",
+        "multiplicity": 1
+      },
+      "vinylidene": {
+        "active_electrons": 6,
+        "active_orbitals": 5,
+        "basis": "sto-3g",
+        "charge": 0,
+        "display_name": "Vinylidene reaction PF",
+        "geometry": "C 0.000000 0.000000 0.000000\nC 1.310000 0.000000 0.000000\nH -0.540000 0.935307 0.000000\nH -0.540000 -0.935307 0.000000",
+        "localization": "pipek_mezey_split_occ_vir",
+        "multiplicity": 1
+      }
+    }
+  }
+}

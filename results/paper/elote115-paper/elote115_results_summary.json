@@ -1,0 +1,331 @@
+{
+  "schema": "hsopt-paper-results-claims-v1",
+  "purpose": "Numerical and methodological anchors for the abstract, methods, results, captions, and conclusion. Reported intervals refer to measured data; no unobserved search outcomes are inferred.",
+  "dataset": {
+    "hamiltonian_instances": 115,
+    "distinct_molecular_species": 19,
+    "qubit_range": [
+      4,
+      16
+    ],
+    "effective_electron_range": [
+      2,
+      14
+    ],
+    "catalogued_pauli_term_range_including_identity": [
+      15,
+      2913
+    ],
+    "qubit_counts": {
+      "4": 20,
+      "6": 2,
+      "8": 24,
+      "10": 11,
+      "12": 25,
+      "14": 9,
+      "16": 24
+    },
+    "held_out_cases": 78,
+    "cohort_csv_sha256": "30a4afb1113a09157c9b3d8dee405c44162543b1a771b17f9b0525622bc51006",
+    "membership_matches_figure2": true,
+    "testing_countable_cases": 76,
+    "testing_qubit_range": [
+      18,
+      22
+    ]
+  },
+  "figure2_selected_shared_protocol": {
+    "seed": "seed-05",
+    "mutation": 100,
+    "policy_sha256": "d199f6a4efef965aa015dbd73f69d14f628fd1b9eaa3653391dad8e3a75e472e",
+    "suite_sha256": "abfcb4e5042010f9ebd0d980415092dbf806ba5acc176d91e6a559555b4372c0",
+    "energy_target": "ground_branch",
+    "all_cases_pass_recorded_chemical_accuracy": true,
+    "compiled_full_evolution_t_reduction_percent": {
+      "mean": 84.47333673353911,
+      "median": 84.42892899486235,
+      "min": 78.5827186512118,
+      "max": 86.58513133208255
+    },
+    "qpe_inclusive_t95_relative_geometric_mean": 0.15175594452564578,
+    "qpe_inclusive_t95_geometric_reduction_percent": 84.82440554743542,
+    "mean_absolute_energy_error_mha": 0.09624524815883272,
+    "max_absolute_energy_error_mha": 0.3558855178944498,
+    "figure_pdf_sha256": "ede67bcf81d80faa1a83784b588c7cacebe0116f4795e00b43385fcd4a91e774",
+    "source_manifest_sha256": "cee9a77a4305370db480e79f637a0d67e94734847287e23f945ccb1456da0027",
+    "source_files": {
+      "best_policy.py": "d199f6a4efef965aa015dbd73f69d14f628fd1b9eaa3653391dad8e3a75e472e",
+      "molecules.csv": "315b75d23d4618600b3384699440138e6aef5f4152a161c4b81a345bd47f5e8c",
+      "rotations.csv.gz": "026d75f741d0d2a3a2555a16be2182557dd7f0032c5a838a72836bf5dbdea6a0"
+    },
+    "metric_scope": "Panel a uses measured per-rotation synthesis tolerances and compiled T counts. Panel b uses recorded T95 estimates, including all PF repetitions, QPE precision queries, and independent attempts. All 115 training and 76 testing cases with compiled cost estimates are shown. HF-18 is included despite its baseline accuracy failure, which is disclosed in the text. Accuracy-qualified testing geometric means remain restricted to the 75 both-pass pairs.",
+    "histogram_metric": "Percent reduction in recorded QPE-inclusive T95 cost estimates relative to each Hamiltonian's tight baseline.",
+    "qpe_inclusive_t95_reduction_percent": {
+      "n": 115,
+      "median_reduction_percent": 85.34816309262418,
+      "mean_reduction_percent": 84.72694429611815,
+      "geometric_mean_relative_t95": 0.15175594452564584,
+      "geometric_mean_reduction_percent": 84.82440554743542,
+      "minimum_reduction_percent": 74.43919946830545,
+      "maximum_reduction_percent": 88.23367565989706
+    },
+    "testing_recorded_t95_reduction_percent": {
+      "n": 76,
+      "median_reduction_percent": 86.43749540743494,
+      "mean_reduction_percent": 86.51995434644583,
+      "geometric_mean_relative_t95": 0.13302317949144107,
+      "geometric_mean_reduction_percent": 86.69768205085589,
+      "minimum_reduction_percent": 75.37117080677422,
+      "maximum_reduction_percent": 94.13479024748929
+    },
+    "histogram_population": {
+      "training_cases": 115,
+      "testing_cases": 76,
+      "total_cases": 191,
+      "baseline_accuracy_failures_included": [
+        "standard|HF.hdf5|/ham_JW18"
+      ],
+      "both_pass_testing_pairs": 75
+    },
+    "histogram_data": "data/elote115_figure2_t95.json",
+    "histogram_data_sha256": "c1320c6a29c86a7f54b9cb816f067436a7c38da819c43feda7cd73d4ac1d7938"
+  },
+  "figure3_five_seed_comparison": {
+    "seeds": [
+      "seed-01",
+      "seed-02",
+      "seed-03",
+      "seed-04",
+      "seed-05"
+    ],
+    "case_count": 115,
+    "iteration_interval": [
+      0,
+      100
+    ],
+    "seed_selection": {
+      "seeds": [
+        "seed-01",
+        "seed-02",
+        "seed-03",
+        "seed-04",
+        "seed-05"
+      ],
+      "last_iteration": 100,
+      "rule": "5 declared independent searches with complete retained-policy coverage through round 100; iterations0 through100 inclusive.",
+      "paper_run_label_to_original_seed": {
+        "1": "seed-01",
+        "2": "seed-02",
+        "3": "seed-03",
+        "4": "seed-04",
+        "5": "seed-05"
+      }
+    },
+    "averaging": "Arithmetic mean of each Hamiltonian's own baseline-relative T95 across selected seeds, followed by an equal-weight Hamiltonian mean; this display is distinct from the geometric-mean acceptance objective.",
+    "shading": "Observed minimum-to-maximum of the selected seed-level Hamiltonian means at each round; not a confidence interval or standard deviation.",
+    "source_statistics_sha256": "f2f375394152c252174a69bd5d8d20b39899670709a70a87f9601a4e8ccf22db",
+    "source_snapshot_sha256": "f2f5e1e9c622f15fff91d5e2fa114b5aa5448dc66af79a769707dddba2827139",
+    "figure_pdf_sha256": "e370f8bd53ba6ed46a380a22dc80ed9a6417f814731f6954a39f018065fec0b0",
+    "figure_pdf": "assets/figures/elote115_search_and_energy.pdf",
+    "panel_a": "Five completed independent searches through 100 mutations.",
+    "panel_b": {
+      "metric": "Measured absolute compiled energy error versus qubit count for tight baseline and selected ELOTE; no QPE readout uncertainty.",
+      "seed": "seed-05",
+      "mutation": 100,
+      "policy_sha256": "d199f6a4efef965aa015dbd73f69d14f628fd1b9eaa3653391dad8e3a75e472e",
+      "horizontal_bars": "Medians within each policy and qubit-count group.",
+      "points": "Filled circular markers in both datasets, with matching sizes and policy colors; accuracy failures are red. No seed averaging.",
+      "baseline_iteration": 0,
+      "display": "Gray baseline and green ELOTE box-and-whisker distributions. Baseline parameters are individually calibrated for training and extrapolated for testing.",
+      "boxes": "25th\u201375th percentiles computed in linear mHa; omitted for the two 6-qubit Hamiltonians.",
+      "whiskers": "Full observed range, minimum to maximum.",
+      "training_statistics": {
+        "baseline": {
+          "cases": 115,
+          "passes": 115,
+          "mean_error_mha": 0.12017745871281078,
+          "max_error_mha": 0.3349877203899787
+        },
+        "elote": {
+          "cases": 115,
+          "passes": 115,
+          "mean_error_mha": 0.09624524815883272,
+          "max_error_mha": 0.3558855178944498
+        }
+      },
+      "testing_statistics": {
+        "policy_sha256": "d199f6a4efef965aa015dbd73f69d14f628fd1b9eaa3653391dad8e3a75e472e",
+        "summary_sha256": "0fa748eb580dfd5f6c600e93a0ac761b1e698a88683188f5ddbe3058f7af4a14",
+        "countable_cases": 76,
+        "exclusions": 2,
+        "baseline": {
+          "evaluated_cases": 76,
+          "max_error_mha": 1.833473830828325,
+          "mean_error_mha": 0.11172792453161799,
+          "passes": 75
+        },
+        "elote": {
+          "evaluated_cases": 76,
+          "max_error_mha": 0.6799942180037988,
+          "mean_error_mha": 0.06453670328414829,
+          "passes": 76
+        },
+        "both_pass_pairs": 75,
+        "geometric_mean_relative_t95_of_both_pass_cases": 0.13193512659873843,
+        "median_literal_t_reduction_percent": 86.38069857038592,
+        "energy_statuses": {
+          "accuracy_failed": 1,
+          "both_pass": 75,
+          "not_evaluated": 2
+        },
+        "manifest_sha256": "2e578b945d5af4941bfe64afd41a89f14249b3b8c8f8087f3f4c661352bdde4d",
+        "provenance_audit_sha256": "dc520f34f0bdd3873668e82e934f2fc24531c92334c04be2185615907c197ecc",
+        "parameter_protocol": "training_fit_frozen_before_testing",
+        "parameter_refit_using_testing_energies": false,
+        "fit_training_cases": 115
+      },
+      "training_case_count": 115,
+      "testing_case_count": 76
+    },
+    "figure_data_sha256": "d6b6d5269d204679c54e7e02e9e826af6c654b3a3352ef11e99f90dc6bdc63d4",
+    "seed_completed_rounds_at_snapshot": {
+      "seed-01": 100,
+      "seed-02": 100,
+      "seed-03": 100,
+      "seed-04": 100,
+      "seed-05": 100
+    },
+    "relative_t95_arithmetic_mean_at_100": 0.6730427453043478,
+    "t95_mean_reduction_percent_at_100": 32.69572546956522,
+    "mean_absolute_energy_error_mha_at_100": 0.1187412553705977
+  },
+  "shared_search_software": {
+    "mutation_model": "nvidia/nvidia/nemotron-3.5-lightning",
+    "opencode_version": "2.0.26",
+    "openshell_version": "0.1.3",
+    "verified_primary_rounds": 500,
+    "analyzed_prefixes": {
+      "seed-01": 100,
+      "seed-02": 100,
+      "seed-03": 100,
+      "seed-04": 100,
+      "seed-05": 100
+    },
+    "source_round": "seed-05/iterations/0100",
+    "mutation_protocol_json_sha256": "a85a0d971b71e40327cb3dcfcf0eeef47a877536cb391e0bea7eeccfff990f55",
+    "agent_audit_json_sha256": "87ac054cc494a35bb81f3e4ae63c9c13c1b8b4bf8bd04cbf26bf6b0dac562899",
+    "evaluation": "CUDA-Q synthesis and matrix-free GPU Lanczos",
+    "deployment_routing": {
+      "L4_cases_at_most_10_qubits": 57,
+      "A100_cases_12_to_16_qubits": 58
+    },
+    "deployment_receipt_sha256": "5430ad7c3ffb3b679f3b78594714adc9010488c0c3ecdc6df0233b5d65253cd4"
+  },
+  "figure4_shared_reaction_protocol": {
+    "reaction_count": 10,
+    "geometric_mean_delta_over_elote_t95": 0.4109505980838596,
+    "geometric_mean_delta_over_tight_t95": 0.06627605386521454,
+    "all_reactions_pass_signed_difference_chemical_accuracy": true,
+    "compiler": "CUDA-Q Version 0.16.0 (https://github.com/NVIDIA/cuda-quantum 62fce8b862302158e0119c65e3ce57538f3af048)",
+    "eigensolver": "cupy-lanczos",
+    "source_summary_sha256": "695e716dcd94cdf8ef37a0aa5d0c37cff7b61cb0ba4752ca8300c8ec308ce991",
+    "figure_pdf_sha256": "60b558f684855210da80dca88a33b1ae5f926e937add6cd60987a4707822e672",
+    "selected_policy": "Best accepted CUDA-Q/A100 shared reaction policy",
+    "selected_policy_sha256": "6952b7d2728cbb4c9eb65562dac8ffa613fbc26f2780019817bbb0aeecf1370c",
+    "transferred_molecular_policy_sha256": "966d815a5dcbace3b9b5538ea450393a5207ebfaf228f99c2decbd4bae6e46d5"
+  },
+  "figure6_bound_initialization_diagnostic": {
+    "distinct_hamiltonians": 121,
+    "time_Ha_inverse": 1,
+    "scope": "Separate flat second-order bound-based initialization diagnostic, not the grouped tight baseline of the shared115experiment.",
+    "data_sha256": "e3326a8cdca74765cf779ae3bcc73272cb2564689061da19ce42c3a7e9c81ae1"
+  },
+  "testing_validation": {
+    "policy_sha256": "d199f6a4efef965aa015dbd73f69d14f628fd1b9eaa3653391dad8e3a75e472e",
+    "summary_sha256": "0fa748eb580dfd5f6c600e93a0ac761b1e698a88683188f5ddbe3058f7af4a14",
+    "countable_cases": 76,
+    "exclusions": 2,
+    "baseline": {
+      "evaluated_cases": 76,
+      "max_error_mha": 1.833473830828325,
+      "mean_error_mha": 0.11172792453161799,
+      "passes": 75
+    },
+    "elote": {
+      "evaluated_cases": 76,
+      "max_error_mha": 0.6799942180037988,
+      "mean_error_mha": 0.06453670328414829,
+      "passes": 76
+    },
+    "both_pass_pairs": 75,
+    "geometric_mean_relative_t95_of_both_pass_cases": 0.13193512659873843,
+    "median_literal_t_reduction_percent": 86.38069857038592,
+    "energy_statuses": {
+      "accuracy_failed": 1,
+      "both_pass": 75,
+      "not_evaluated": 2
+    },
+    "manifest_sha256": "2e578b945d5af4941bfe64afd41a89f14249b3b8c8f8087f3f4c661352bdde4d",
+    "provenance_audit_sha256": "dc520f34f0bdd3873668e82e934f2fc24531c92334c04be2185615907c197ecc",
+    "parameter_protocol": "training_fit_frozen_before_testing",
+    "parameter_refit_using_testing_energies": false,
+    "fit_training_cases": 115,
+    "median_recorded_t95_reduction_percent": 86.43749540743494,
+    "recorded_t95_statistics_including_baseline_accuracy_failure": {
+      "n": 76,
+      "median_reduction_percent": 86.43749540743494,
+      "mean_reduction_percent": 86.51995434644583,
+      "geometric_mean_relative_t95": 0.13302317949144107,
+      "geometric_mean_reduction_percent": 86.69768205085589,
+      "minimum_reduction_percent": 75.37117080677422,
+      "maximum_reduction_percent": 94.13479024748929
+    }
+  },
+  "reporting_cohort_final_check": {
+    "reported_original_seeds": [
+      "seed-01",
+      "seed-02",
+      "seed-03",
+      "seed-04",
+      "seed-05"
+    ],
+    "completed_mutations_per_reported_search": 100,
+    "excluded_original_seeds": [],
+    "selection_source_file": "data/elote_understanding/seed_effort.json",
+    "selection_source_sha256": "96ffe10b26c79973ac31dc397256c65cca0947398dd1b5357567570880d63c87",
+    "checked_at_client_utc": "2026-10-29T17:39:24.299653+00:00",
+    "retained_policy_by_original_seed": [
+      {
+        "seed": "seed-01",
+        "round": 99,
+        "score": 0.6164409001524734,
+        "candidate_sha256": "170000a2138ce0a416e1e3e706515e44398008f0071fee313e19ca8fb10e8492"
+      },
+      {
+        "seed": "seed-02",
+        "round": 84,
+        "score": 0.8750309379611392,
+        "candidate_sha256": "1c18fc6407cef14330050e5c4fcee3cf98652193b1f78a038c051328fbdfff78"
+      },
+      {
+        "seed": "seed-03",
+        "round": 99,
+        "score": 0.8567143320433237,
+        "candidate_sha256": "361597979949f9c66aa31957c2167a44ee5c8aa51a47e5cc551ef9bb3daa5279"
+      },
+      {
+        "seed": "seed-04",
+        "round": 98,
+        "score": 0.8553633934256494,
+        "candidate_sha256": "613d3b264a6a189aaddabdbfb4a1569b9dd0868a459808dcd7299806e9f66dfd"
+      },
+      {
+        "seed": "seed-05",
+        "round": 100,
+        "score": 0.15175594452564578,
+        "candidate_sha256": "d199f6a4efef965aa015dbd73f69d14f628fd1b9eaa3653391dad8e3a75e472e"
+      }
+    ],
+    "selected_best_policy_sha256": "d199f6a4efef965aa015dbd73f69d14f628fd1b9eaa3653391dad8e3a75e472e"
+  }
+}

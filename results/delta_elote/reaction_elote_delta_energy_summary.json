@@ -1,0 +1,159 @@
+{
+  "schema": "reaction-elote-delta-cudaq-a100-energy-v1",
+  "backend": "cupy-lanczos",
+  "evaluation_contract_version": "normalized_hamiltonian_ground_input_signed_difference_cudaq_elote_v1",
+  "evaluator_sha256": "d83713fd07e96bda138f2e473563b4ada8467a173679c18b801298567623fcc7",
+  "sources": {
+    "elote": {
+      "path": "/home/lmantilla/projects/autoresearch/hsopt_workdir/runs/elote_delta_ground10_warm_a100_20261023/seed-05/iterations/0000/case_results.json",
+      "sha256": "a73a2a69ae4febe2dfe1c848dc727aed9b7d5ecb73a50b0fc1035299a25a4dbb"
+    },
+    "delta_elote": {
+      "path": "/home/lmantilla/projects/autoresearch/hsopt_workdir/runs/elote_delta_ground10_warm_a100_20261023/seed-05/iterations/0046/case_results.json",
+      "sha256": "ecceb241664386fa7e20bbf2b2235a92a726dab8a39e57cbd83e6234fd1f0c88"
+    }
+  },
+  "chemical_accuracy_mha": 1.5936014376405157,
+  "rows": [
+    {
+      "key": "acetylene_vinylidene",
+      "reaction": "HCCH -> H2CC",
+      "elote": {
+        "signed_error_mha": 0.0010270756547470228,
+        "sumabs_error_mha": 0.006553045182045025,
+        "passes_accuracy": true
+      },
+      "delta_elote": {
+        "signed_error_mha": 0.031406067904526935,
+        "sumabs_error_mha": 0.08641931611919063,
+        "passes_accuracy": true
+      }
+    },
+    {
+      "key": "co_h2_ch4_h2o",
+      "reaction": "CO + 3 H2 -> CH4 + H2O",
+      "elote": {
+        "signed_error_mha": 0.0023821443875249315,
+        "sumabs_error_mha": 0.2722655481308678,
+        "passes_accuracy": true
+      },
+      "delta_elote": {
+        "signed_error_mha": 0.21336133764293663,
+        "sumabs_error_mha": 0.34906934716016913,
+        "passes_accuracy": true
+      }
+    },
+    {
+      "key": "co_h2o_co2_h2",
+      "reaction": "CO + H2O -> CO2 + H2",
+      "elote": {
+        "signed_error_mha": 0.2146354197660738,
+        "sumabs_error_mha": 0.21463541979449552,
+        "passes_accuracy": true
+      },
+      "delta_elote": {
+        "signed_error_mha": 0.26999672489336213,
+        "sumabs_error_mha": 0.43874461898707473,
+        "passes_accuracy": true
+      }
+    },
+    {
+      "key": "h2_cl2_hcl",
+      "reaction": "H2 + Cl2 -> 2 HCl",
+      "elote": {
+        "signed_error_mha": 0.0719288817663255,
+        "sumabs_error_mha": 0.08199995420077322,
+        "passes_accuracy": true
+      },
+      "delta_elote": {
+        "signed_error_mha": 0.2650044241363503,
+        "sumabs_error_mha": 0.32670872798479245,
+        "passes_accuracy": true
+      }
+    },
+    {
+      "key": "h2_f2_hf",
+      "reaction": "H2 + F2 -> 2 HF",
+      "elote": {
+        "signed_error_mha": 0.20895298055734202,
+        "sumabs_error_mha": 0.3861591997311731,
+        "passes_accuracy": true
+      },
+      "delta_elote": {
+        "signed_error_mha": 0.3088223672023105,
+        "sumabs_error_mha": 0.3090154791915989,
+        "passes_accuracy": true
+      }
+    },
+    {
+      "key": "h2co_hcoh",
+      "reaction": "H2CO -> HCOH",
+      "elote": {
+        "signed_error_mha": 0.34533543434633884,
+        "sumabs_error_mha": 0.391760116215778,
+        "passes_accuracy": true
+      },
+      "delta_elote": {
+        "signed_error_mha": 0.0034083518585248385,
+        "sumabs_error_mha": 0.025523152714868047,
+        "passes_accuracy": true
+      }
+    },
+    {
+      "key": "hcn_hnc",
+      "reaction": "HCN -> HNC",
+      "elote": {
+        "signed_error_mha": 0.3504684142399128,
+        "sumabs_error_mha": 0.4390126559030705,
+        "passes_accuracy": true
+      },
+      "delta_elote": {
+        "signed_error_mha": 0.01371527233118286,
+        "sumabs_error_mha": 0.09656243400968378,
+        "passes_accuracy": true
+      }
+    },
+    {
+      "key": "hco_hoc_cation",
+      "reaction": "HCO+ -> HOC+",
+      "elote": {
+        "signed_error_mha": 0.11054748095773448,
+        "sumabs_error_mha": 2.0990172163664056,
+        "passes_accuracy": true
+      },
+      "delta_elote": {
+        "signed_error_mha": 0.009956630208307615,
+        "sumabs_error_mha": 0.08509328213790468,
+        "passes_accuracy": true
+      }
+    },
+    {
+      "key": "hno_noh",
+      "reaction": "HNO -> NOH",
+      "elote": {
+        "signed_error_mha": 0.05132596047019433,
+        "sumabs_error_mha": 0.19353266773691757,
+        "passes_accuracy": true
+      },
+      "delta_elote": {
+        "signed_error_mha": 0.005709593636993304,
+        "sumabs_error_mha": 0.012792605531330992,
+        "passes_accuracy": true
+      }
+    },
+    {
+      "key": "n2_h2_nh3",
+      "reaction": "N2 + 3 H2 -> 2 NH3",
+      "elote": {
+        "signed_error_mha": 0.1191875540627052,
+        "sumabs_error_mha": 0.11918755405559978,
+        "passes_accuracy": true
+      },
+      "delta_elote": {
+        "signed_error_mha": 0.21372622568094357,
+        "sumabs_error_mha": 0.3541879826614025,
+        "passes_accuracy": true
+      }
+    }
+  ]
+}

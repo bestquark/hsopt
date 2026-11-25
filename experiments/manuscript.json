@@ -1,0 +1,317 @@
+{
+  "archive_branch": "manuscript-assets-archive-20261030",
+  "archived_exporters": {
+    "figures/export_reaction_elote_delta_snapshot.py": {
+      "commit": "c92def0822c7ce717c870795caa6d19ab44092db",
+      "sha256": "a1c2fb6ac96e3b54f0df49ae548a362c6c63bb0bf569a1d0e7b8e4a446a4b930",
+      "url": "https://github.com/bestquark/hsopt/blob/c92def0822c7ce717c870795caa6d19ab44092db/figures/export_reaction_elote_delta_snapshot.py"
+    },
+    "figures/export_schematic_coefficients.py": {
+      "commit": "c92def0822c7ce717c870795caa6d19ab44092db",
+      "sha256": "c8b09d55f492498dbb76d24821bad72f7570d318dd65700f14985b44d2caa887",
+      "url": "https://github.com/bestquark/hsopt/blob/c92def0822c7ce717c870795caa6d19ab44092db/figures/export_schematic_coefficients.py"
+    },
+    "figures/export_scientific_trajectories.py": {
+      "commit": "c92def0822c7ce717c870795caa6d19ab44092db",
+      "sha256": "0445e2d51795f0dd1f49ef5e6a534f6184e94e9c63c280aa93a0831e21b08a46",
+      "url": "https://github.com/bestquark/hsopt/blob/c92def0822c7ce717c870795caa6d19ab44092db/figures/export_scientific_trajectories.py"
+    }
+  },
+  "data_files": {
+    "data/baseline_initialization_vs_qubits.csv": {
+      "path": "results/paper/hamlib-diagnostics/baseline_initialization_vs_qubits.csv",
+      "sha256": "e3326a8cdca74765cf779ae3bcc73272cb2564689061da19ce42c3a7e9c81ae1"
+    },
+    "data/baseline_initialization_vs_qubits_metadata.json": {
+      "path": "results/paper/hamlib-diagnostics/baseline_initialization_vs_qubits_metadata.json",
+      "sha256": "105b0d40cecb577e7a5e249ca599b6e500165f923652e72db22bd9c291bc4c7e"
+    },
+    "data/benchmark_implementation_notes.md": {
+      "path": "results/paper/elote115-paper/benchmark_implementation_notes.md",
+      "sha256": "f25aba2dddef8cabdd83d1946696a9be4c76de07e3c4aac2af415c8e18e7000b"
+    },
+    "data/elote115_figure2.npz": {
+      "path": "results/paper/elote115-paper/elote115_figure2.npz",
+      "sha256": "091c2e8fba4f57728208e55490a272cc21ff13e0796f10b3130337f1af2126b1"
+    },
+    "data/elote115_figure2_t95.json": {
+      "path": "results/paper/elote115-paper/elote115_figure2_t95.json",
+      "sha256": "c1320c6a29c86a7f54b9cb816f067436a7c38da819c43feda7cd73d4ac1d7938"
+    },
+    "data/elote115_results_summary.json": {
+      "path": "results/paper/elote115-paper/elote115_results_summary.json",
+      "sha256": "53cb1c3ddf08c28036f05f22fd9d2c9c441a7dc08b88135df544700f701d84ba"
+    },
+    "data/elote115_search_and_energy.json": {
+      "path": "results/paper/elote115-paper/elote115_search_and_energy.json",
+      "sha256": "d6b6d5269d204679c54e7e02e9e826af6c654b3a3352ef11e99f90dc6bdc63d4"
+    },
+    "data/elote_final_artifacts.json": {
+      "path": "results/paper/elote115-paper/elote_final_artifacts.json",
+      "sha256": "90ddfd56f8754d96de29b548832a756df90bef0a11df4e6185428e2196b76f9e"
+    },
+    "data/elote_heldout_summary.json": {
+      "path": "results/paper/elote115-paper/elote_heldout_summary.json",
+      "sha256": "0fa748eb580dfd5f6c600e93a0ac761b1e698a88683188f5ddbe3058f7af4a14"
+    },
+    "data/elote_testing_manifest.json": {
+      "path": "results/paper/elote115-paper/elote_testing_manifest.json",
+      "sha256": "2e578b945d5af4941bfe64afd41a89f14249b3b8c8f8087f3f4c661352bdde4d"
+    },
+    "data/elote_testing_provenance.json": {
+      "path": "results/paper/elote115-paper/elote_testing_provenance.json",
+      "sha256": "dc520f34f0bdd3873668e82e934f2fc24531c92334c04be2185615907c197ecc"
+    },
+    "data/elote_understanding/manifest.json": {
+      "path": "results/paper/elote115-paper/elote_understanding/manifest.json",
+      "sha256": "24164f32174d103ac3535b3a47ef920e8d31691e26f1700ead8fe29800e8e35f"
+    },
+    "data/elote_understanding/policy_diagnostics.json": {
+      "path": "results/paper/elote115-paper/elote_understanding/policy_diagnostics.json",
+      "sha256": "470caaead850bd923e78714e00eaed03420ab194643d5eb340e37beb935673b9"
+    },
+    "data/elote_understanding/seed_effort.json": {
+      "path": "results/paper/elote115-paper/elote_understanding/seed_effort.json",
+      "sha256": "96ffe10b26c79973ac31dc397256c65cca0947398dd1b5357567570880d63c87"
+    },
+    "data/elote_understanding/seed_effort_table_body.tex": {
+      "path": "results/paper/elote115-paper/elote_understanding/seed_effort_table_body.tex",
+      "sha256": "347357b1f27a277405a03b441257fb47a6a7418775b3d116c6a650316b8d6bde"
+    },
+    "data/elote_understanding/selected_delta_policy.py": {
+      "path": "results/delta_elote/best_policy.py",
+      "sha256": "6952b7d2728cbb4c9eb65562dac8ffa613fbc26f2780019817bbb0aeecf1370c"
+    },
+    "data/elote_understanding/selected_policy.py": {
+      "path": "results/elote/best_policy.py",
+      "sha256": "d199f6a4efef965aa015dbd73f69d14f628fd1b9eaa3653391dad8e3a75e472e"
+    },
+    "data/hamlib_molecular_dataset_active_spaces.json": {
+      "path": "results/paper/hamlib-diagnostics/hamlib_molecular_dataset_active_spaces.json",
+      "sha256": "feca0368c30836f73fdf6c976d49306301ed5edb7edf19c1959e9ff6657e7aa1"
+    },
+    "data/reaction_elote_delta_a100_summary.json": {
+      "path": "results/delta_elote/reaction_elote_delta_a100_summary.json",
+      "sha256": "695e716dcd94cdf8ef37a0aa5d0c37cff7b61cb0ba4752ca8300c8ec308ce991"
+    },
+    "data/reaction_elote_delta_energy_summary.json": {
+      "path": "results/delta_elote/reaction_elote_delta_energy_summary.json",
+      "sha256": "4c7c1d52bb41cc0b5af5b2c73e5ba519d7fc234053dd2d58a1e5527d82a307ea"
+    },
+    "data/schematic_coefficients.npz": {
+      "path": "results/paper/hamlib-diagnostics/schematic_coefficients.npz",
+      "sha256": "37901a0f6a7ebcf6c59c776173c58a308c057d63b99d785b76b55e85b324cbbf"
+    }
+  },
+  "detached_generated_tex_hashes": {
+    "data/elote_understanding/seed_effort_table_body.tex": "347357b1f27a277405a03b441257fb47a6a7418775b3d116c6a650316b8d6bde"
+  },
+  "document_hashes": {
+    "assets/nvlogo2.png": "baf008d01823394a5f7c08dc00a5228e5f2a1edc866952c07189cc18022556d2",
+    "hsopt-unsrtnat.bst": "73ecd675b2b878edadb1cefbedc6a8cbec983db63a8d4b966b4b6d336b99afa9",
+    "main.tex": "cbf345b49ac8516f87f07a9ba7414f68d4b5a02af5372e07ca09ee6f5edb5a30",
+    "nvidiatechreport.cls": "acab8089696fbad75278cc90d9788fcd94fa18f54c97671830e328b906a38a04",
+    "references.bib": "739d04e40e9d6604951d7258ae37f0959320a8e1e137dc7d39064084de2aa764",
+    "tex/1_introduction.tex": "2ab544d9d2267bb8f2763b1a6f351a68f97b3f7ba404f3e0e5a47a048b18afdd",
+    "tex/2_method.tex": "5c329d892164225adfc1aacb04d4e231b9407b7a9375060e2f64217e1120f429",
+    "tex/3_experiments.tex": "75692c9339a6fc03a6e3cc400992c45166fcd869e9c86fca646d777dc40381fe",
+    "tex/4_related_work.tex": "17372dcfe5f80ae7d233db259be582ca149c1cd97c02063a765a04228d5dd14c",
+    "tex/5_conclusion.tex": "a3918703580c0e25c1d3e4898bf39465f56c98699e2beee872135d535900863c",
+    "tex/appendix/0_main.tex": "78d67270a471e71838748270d0a756345867d8939480bfae860b2d95fe0e1735",
+    "tex/appendix/standard_pf_baseline.tex": "1d658799e62ad47feec7baa943e4723b98619f6ee9a6b686ec9b26af90ed2f17",
+    "tex/appendix/understanding_elote.tex": "33315976fd680839a0127c931f02b2ba739db67602c911b4773cb33afad6e017",
+    "tex/figure4_reaction_key.tex": "1a5dbb01e9dd9b20ae8c7179969db9a9e0b0c7addcd0c835dfe2f6212239bc06"
+  },
+  "figure2_style_update": {
+    "approved_preview_sha256": "8ac7fdb07a49d99f4d6ce4b1256f57c2148d430b1f6f685009e42c71e8b03b40",
+    "date": "2026-11-06",
+    "description": "Contrasting dotted training/testing median lines and opaque pastel testing hatches that remain visible in PDF rendering.",
+    "paper_commit": "c7ba5bbfe8e3cf55b17d0b1cbce2da8f28b2f160",
+    "scientific_inputs_unchanged": true,
+    "testing_facecolor": "#E6F2D1",
+    "testing_hatch_color": "#BCDC82",
+    "testing_median_color": "#4FB88A",
+    "training_median_color": "#174D2B"
+  },
+  "figure3_proposal_update": {
+    "above_range_proposals_omitted": 6,
+    "base_paper_commit": "4f6c294762562ec2223ff4b016dfd43e5f212347",
+    "best_arithmetic_mean_relative_t95_at_endpoint": 0.15273055703881866,
+    "best_seed_at_endpoint": "seed-05",
+    "complete_proposal_count": 350,
+    "date": "2026-11-06",
+    "description": "Best retained seed mean, five independent seed curves, and proposal means with population SD across Hamiltonians.",
+    "display_statistic": "Arithmetic mean of per-Hamiltonian baseline-relative T95; search acceptance still uses the geometric mean.",
+    "displayed_accuracy_failing": 50,
+    "displayed_accuracy_passing": 294,
+    "displayed_proposals": 344,
+    "displayed_proposals_with_clipped_sd": 11,
+    "failure_marker": "Filled uppercase X in the scatter and legend.",
+    "figure": "3",
+    "incomplete_proposal_reasons": {
+      "all_have_archived_mutated_source": true,
+      "both_numerical_and_execution": 2,
+      "certificate_check": "All 283 archived rejection certificates in those 15 proposals are verified, forbid acceptance, and bound accurate-window probability below 0.5.",
+      "classification": "Recorded final decisions give certified QPE rejection priority over unresolved evaluations on other Hamiltonians.",
+      "early_certified_qpe_constraint_rejection": 15,
+      "null_case_cost_records": 5870,
+      "numerical_certification_only": 107,
+      "policy_execution_only": 26
+    },
+    "incomplete_proposals_omitted": 150,
+    "layout": "Equal panel widths, with separate one-row legends above each panel; Pass/Fail labels retain capped SD-bar symbols.",
+    "legend_fontsize_points": 21.3,
+    "legend_marker_size_points": 6,
+    "limits": [
+      0,
+      1.3
+    ],
+    "marker_area_points_squared": {
+      "fail": 38,
+      "pass": 33
+    },
+    "omissions": "Policy-execution errors, inconclusive numerical certification, or early certified QPE-constraint rejection prevent complete costs for 150 proposals. Six complete proposal means above 1.3 are also omitted. SD bars are clipped at axis limits.",
+    "panel_b_scientific_content_unchanged": true,
+    "paper_commit": "3e8565e23bac8d28a522ae1daad6d59ccd0bff2e",
+    "pass_marker": "Filled upward triangles in the scatter and legend.",
+    "preview_values_verified": true,
+    "proposal_colors": "Green is the seed whose retained policy leads after that iteration; gray is every other seed.",
+    "proposal_count": 500,
+    "proposal_marker_opacity": 0.55,
+    "proposal_sd_bar_opacity": 0.3,
+    "proposal_shapes": "Triangles pass chemical accuracy on all 115 Hamiltonians; filled crosses fail at least one. Accuracy is distinct from acceptance.",
+    "scientific_inputs_unchanged": true,
+    "trajectory_archive_sha256": "e5a202b324ffad7de54e1361c080a786f217c4e36976028d6a8746557ffc98b4"
+  },
+  "figure4_bar_update": {
+    "bar_endpoints_checked": 40,
+    "base_paper_commit": "cacfd02",
+    "date": "2026-11-06",
+    "description": "Touching policy pairs; solid net errors and faint hatched bounds; maximum allowed error annotation.",
+    "figure": "4",
+    "layout": "Increased panel b left margin; all 21 text bounding boxes lie inside its PDF crop.",
+    "panel_a_unchanged": true,
+    "paper_commit": "4f6c294762562ec2223ff4b016dfd43e5f212347",
+    "scientific_inputs_unchanged": true,
+    "typography": "Panel b reaction numbers, value ticks, and axis labels match panel a at equal printed widths."
+  },
+  "figures": {
+    "baseline_initialization_vs_qubits.pdf": {
+      "paper_path": "assets/figures/baseline_initialization_vs_qubits.pdf",
+      "path": "figures/rendered/baseline_initialization_vs_qubits.pdf",
+      "sha256": "4f8a3bc31b817bc902bf99217e220b8a99b261074256be965831e1aab3cd2566"
+    },
+    "elote115_precision_and_compiled_savings.pdf": {
+      "paper_path": "assets/figures/elote115_precision_and_compiled_savings.pdf",
+      "path": "figures/rendered/elote115_precision_and_compiled_savings.pdf",
+      "sha256": "8ac7fdb07a49d99f4d6ce4b1256f57c2148d430b1f6f685009e42c71e8b03b40"
+    },
+    "elote115_search_and_energy.pdf": {
+      "paper_path": "assets/figures/elote115_search_and_energy.pdf",
+      "path": "figures/rendered/elote115_search_and_energy.pdf",
+      "sha256": "c4a701e0528b2437d96e4e63ec8e76620558edef33b35b1af6f31348be1550fd"
+    },
+    "hamlib_molecular_dataset_active_spaces.pdf": {
+      "paper_path": "assets/figures/hamlib_molecular_dataset_active_spaces.pdf",
+      "path": "figures/rendered/hamlib_molecular_dataset_active_spaces.pdf",
+      "sha256": "a5b611944f12b8daa3d680dded4d6fedb26971bf69109edf0dbf14b25838d51e"
+    },
+    "hsopt_autoresearch_loop.pdf": {
+      "paper_path": "assets/figures/hsopt_autoresearch_loop.pdf",
+      "path": "figures/rendered/hsopt_autoresearch_loop.pdf",
+      "sha256": "31882fd4ab0d7d1cb03db69cf4c6d1f2258924049a164d4b23affaeec23f79c7"
+    },
+    "reaction_elote_delta_a100_energy_bars_log.pdf": {
+      "paper_path": "assets/figures/reaction_elote_delta_a100_energy_bars_log.pdf",
+      "path": "figures/rendered/reaction_elote_delta_a100_energy_bars_log.pdf",
+      "sha256": "9b871eaf4d6bdba7923803b5e5059e0283adc5e8c89129bfc0340107f367dd2d"
+    },
+    "reaction_elote_delta_a100_radial_log.pdf": {
+      "paper_path": "assets/figures/reaction_elote_delta_a100_radial_log.pdf",
+      "path": "figures/rendered/reaction_elote_delta_a100_radial_log.pdf",
+      "sha256": "9fbb37fae847a762e9e0bb6c3d24ad7cce95926f7824ac5e5e4d816eb0fa8193"
+    },
+    "reaction_elote_delta_legend.pdf": {
+      "paper_path": "assets/figures/reaction_elote_delta_legend.pdf",
+      "path": "figures/rendered/reaction_elote_delta_legend.pdf",
+      "sha256": "35ee8a27853c100372186d432b6f814aa92a7751aa3e6c1b344f9011255fadb9"
+    }
+  },
+  "historical_source_files": {
+    "a3fb8d46e711ab87ff4f55a8052a014356808b5615bfe4c2f1fcecf4614fe149": {
+      "logical_path": "data/elote115_search_and_energy.json",
+      "paper_source_commit": "8cbd9acbd4d390d63d5a5e078d46adbc4310e1f3",
+      "path": "results/paper/elote115-paper/provenance/a3fb8d46e711ab87ff4f55a8052a014356808b5615bfe4c2f1fcecf4614fe149.json",
+      "scope": "Figure 2 dependency recorded before the five-search Figure 3 update. Same final selected policy and identical per-Hamiltonian molecular results; retained solely to verify the original source hash.",
+      "sha256": "a3fb8d46e711ab87ff4f55a8052a014356808b5615bfe4c2f1fcecf4614fe149"
+    }
+  },
+  "legend_size_update": {
+    "date": "2026-11-06",
+    "figure3_arrangement": "Separate one-row legends within their respective panel widths, with matched font sizes.",
+    "figure3_source_fontsize_points": 21.3,
+    "figure4_legend_linewidth_fraction": 0.613,
+    "paper_commit": "913ed457100d4a08d75dff92eb4969390607580b",
+    "reference": "Figure 2 printed legend size",
+    "scientific_inputs_unchanged": true,
+    "verification": "Figure 3 axes widths agree to within 1e-8 inch. PDF text extraction at zoom 1.5 reports 13-pixel legend font size for Figures 2, 3 and 4."
+  },
+  "migration_validation": {
+    "figure_raster_dpi": 120,
+    "included_graphics_unchanged": 9,
+    "manuscript_pages_pixel_identical": 18,
+    "manuscript_raster_dpi": 96,
+    "no_new_scientific_evaluations": true,
+    "paper_source_commit": "4e62b9c501d03068279bd2c92935d144b61dc1b2",
+    "regenerated_figure_pdfs_pixel_identical": 8,
+    "source_document_files_unchanged": 14,
+    "table_1_rows_unchanged": true
+  },
+  "paper_repository": "https://github.com/bestquark/eqd-paper",
+  "paper_source_commit": "c7ba5bbfe8e3cf55b17d0b1cbce2da8f28b2f160",
+  "processing_scripts": [
+    "figures/assemble_elote_figure2.py",
+    "figures/audit.py",
+    "figures/build.py",
+    "figures/export_elote_seed_effort.py",
+    "figures/plot_autoresearch_histograms.py",
+    "figures/plot_baseline_initialization_vs_qubits.py",
+    "figures/plot_elote_search_and_energy.py",
+    "figures/plot_hamlib_molecular_dataset_active_spaces.py",
+    "figures/plot_reaction_elote_delta_energy_bars.py",
+    "figures/plot_reaction_elote_delta_radial.py"
+  ],
+  "processing_source_files": {
+    "figures/_coefficient_data.py": "904d5faea8f52ca7287fdff13a181871edc6be2b226dcecfada43ed5ef1ba8bb",
+    "figures/_paths.py": "aea17b4f56127ec22c4ad7ab1fe919f37309547c16dca34fa4a9aa193bf7b9e3",
+    "figures/assemble_elote_figure2.py": "e0aeb75504b77bd1ea7305f13c6544b776f478d054633f4e0fb603d497d7999d",
+    "figures/audit.py": "af6b527029dfc4215c83cf6943a582ef06f3a303e56169954c2e741a83732182",
+    "figures/build.py": "63f7d0f3aa48151dbcf215e66ab6aa29626321b29ebabfa2a89d9a46a9c69132",
+    "figures/export_elote_seed_effort.py": "d1c7f26a5d1f20b51f77b82bd21000b1c600878a101b2c7b6803a427ace96b2e",
+    "figures/plot_autoresearch_histograms.py": "e828765a0207205a8f0c5c78365b8e1aa3bfcf7122a27c9168f05a9018340ebc",
+    "figures/plot_baseline_initialization_vs_qubits.py": "fa767bac6b867c2db2e7db3f4f15a532b3b10e0c1449a814fe2328479f133f60",
+    "figures/plot_elote_search_and_energy.py": "bf6666c58e6a16cb3d9842992a890f8497e74b61658cd6b86740f4e6de90c904",
+    "figures/plot_hamlib_molecular_dataset_active_spaces.py": "a32141c9beccb772655d1283931fecd7d836edfc8e2659dc8dfbace15e5b7750",
+    "figures/plot_reaction_elote_delta_energy_bars.py": "6c7f8229a1e6ad98c982b0ac8a67e8e0ac6ec62b29b37e9d6d579043fa315481",
+    "figures/plot_reaction_elote_delta_radial.py": "d0aaed28cb549a83757171a40b985d25c9c02c95e4ad8d969efb1fed881239ff",
+    "figures/sources/hsopt_autoresearch_loop/README.md": "0a5ab0a28b68579767f653ebf5876ce40dbc6b1986997c7a69afc8a02f25022e",
+    "figures/sources/hsopt_autoresearch_loop/banner.tex": "d243007cca21050b2467a9b4a046e3286dcfdd96e7c74487844fe35aaacdffc3",
+    "figures/sources/hsopt_autoresearch_loop/generated-banner.png": "f755048871f44b662287639c1755aadada1e7b409df99ccd0e4ab12f6f55e954",
+    "figures/sources/hsopt_autoresearch_loop/imagegen-prompt.txt": "d7622e9f05f0cbeb2f823a587b972890db3296e2674a40ce09affa605ef518c9",
+    "figures/sources/hsopt_autoresearch_loop/laptop-edit-prompt.txt": "fafba457da04cee4c1ac6d0793320703ebe0c8624b2cbc5004c5e552b394880b",
+    "figures/sources/hsopt_autoresearch_loop/logo-removal-prompt.txt": "b85fc97465095fa033f50acffacd10f7e46fc8f86d475132339ffb7ff3bfc8d6",
+    "figures/sources/hsopt_autoresearch_loop/CoH.png": "0747e23ecc3313f50900b32ddad59f8e48b4a84a3b0201ae8e873fab6054a29b",
+    "figures/sources/hsopt_autoresearch_loop/O3.png": "2010e714f5b6dba0e28efc5e2f1169c06b204633c1be4963c3d0255357e2b11c",
+    "figures/sources/hsopt_autoresearch_loop/Na2.png": "3f4c10e4725839d39222b0b70081db694428064fe2d36e6d764fb6b28a5a96d3",
+    "figures/sources/hsopt_autoresearch_loop/NaLi.png": "5e111bb3899cc93963df2883de83d01cb9a270cae82775856adc0ec53bbb79df",
+    "figures/sources/hsopt_autoresearch_loop/render_molecules.cjs": "444a5274dfb70313c48a460c2a4f13eb98e8ed5132d415d786b4d166ebcc8798",
+    "figures/sources/hsopt_autoresearch_loop/package.json": "d8ff509428f81f4c050308f6dcf4e7738273cb01f51c81573a19c49be1303846",
+    "figures/sources/hsopt_autoresearch_loop/coefficient_histograms_2x2.pgf": "d2b25b196f1ba2e9656a34336788b4b1105a0a91ed563759f81994df164e8cc1"
+  },
+  "schema": "hsopt-current-manuscript-v1",
+  "scientific_trajectories": {
+    "molecular": "results/paper/elote115-paper/trajectories/manifest.json",
+    "reactions": "results/delta_elote/trajectories/manifest.json"
+  },
+  "supplied_pdf_sha256": "8e4e7168d20791bd0449704f3b9cb6807f58f734906d0558261c9a0603fdad07"
+}

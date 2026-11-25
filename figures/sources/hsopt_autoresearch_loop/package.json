@@ -1,0 +1,11 @@
+{
+  "name": "hsopt-figure1-draft",
+  "private": true,
+  "scripts": {
+    "molecules": "node render_molecules.cjs"
+  },
+  "dependencies": {
+    "playwright": "1.65.0",
+    "3dmol": "2.5.5"
+  }
+}

@@ -1,0 +1,84 @@
+[project]
+name = "hsopt"
+version = "0.1.0"
+description = "Agent-driven T-gate optimization for Hamiltonian simulation"
+readme = "README.md"
+requires-python = ">=3.12,<3.13"
+dependencies = [
+  "astpretty~=3.0; sys_platform == 'darwin'",
+  "h5py>=3.11,<4",
+  "numpy>=1.26.4,<2",
+  "cuda-quantum-cu12==0.16.0.post1; sys_platform == 'linux'",
+  "reportlab>=4.4,<5",
+  "requests>=2.32.3; sys_platform == 'darwin'",
+  "scipy>=1.17.1,<1.18",
+]
+
+[project.scripts]
+hsopt = "hsopt.campaign.loop:main"
+hsopt-data = "hsopt.data.acquire:main"
+hsopt-evaluate = "hsopt.evaluation.experiment:main"
+hsopt-elote = "hsopt.campaign.elote:main"
+hsopt-handoff = "hsopt.campaign.interface:main"
+hsopt-baseline-drop = "hsopt.view.baseline_drop:main"
+hsopt-exact-parity = "hsopt.campaign.parity:main"
+hsopt-export-exact = "hsopt.campaign.export:main"
+hsopt-loop = "hsopt.campaign.loop:main"
+hsopt-layout = "hsopt.campaign.layout:main"
+hsopt-openshell = "hsopt.sandbox.openshell:main"
+hsopt-search = "hsopt.search.experiment:main"
+hsopt-paper-baseline = "hsopt.campaign.baseline:calibration_main"
+hsopt-paper-baseline-batch = "hsopt.campaign.baseline_batch:main"
+hsopt-campaign = "hsopt.campaign.setup:main"
+hsopt-reports = "hsopt.view.reporting:main"
+hsopt-view = "hsopt.view.mutation_history:main"
+t-autoresearch = "hsopt.tgate_opt.t_autoresearch_cli:main"
+
+[project.optional-dependencies]
+symbolic-search = ["pysr==2.7.2"]
+plots = ["matplotlib>=3.10,<4"]
+gpu-lanczos = ["cupy-cuda12x>=13,<14; sys_platform == 'linux'"]
+chemistry = [
+  "openfermion>=1.7.1,<2",
+  "pyscf>=2.5,<3",
+]
+cupynumeric = [
+  "legate>=25.10.0; sys_platform == 'linux'",
+  "nvidia-cupynumeric>=25.10.0",
+]
+
+[dependency-groups]
+dev = [
+  "pytest>=9.0.0",
+  "ruff>=0.13.3",
+]
+
+[build-system]
+requires = ["uv_build>=0.9.6,<0.10.0"]
+build-backend = "uv_build"
+
+[tool.uv]
+package = true
+
+[tool.uv.build-backend]
+module-root = "skills"
+source-exclude = ["figures/generated/**"]
+source-include = [
+  "experiments/**",
+  "results/**",
+  "tests/**",
+  "figures/**",
+  "AGENTS.md",
+  "uv.lock",
+]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+
+[tool.ruff]
+line-length = 100
+target-version = "py312"
+
+[tool.ruff.format]
+quote-style = "double"
+indent-style = "space"

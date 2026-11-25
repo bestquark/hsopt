@@ -1,0 +1,41 @@
+{
+  "name": "HamLib H2 linear R=0.7 STO-6G Jordan-Wigner",
+  "source": {
+    "collection": "hydrogen_data",
+    "archive": "ES_H2_linear_R0.7_sto-6g.zip",
+    "archive_sha256": "b68abd283bd8c61370df643e97b339f7de0eabccd55387536a880a0706630392",
+    "dataset": "/ham_JW",
+    "hamlib_one_norm": 1.9999937423313927
+  },
+  "n_qubits": 4,
+  "electrons": 2,
+  "target_time": 0.5127568450530159,
+  "identity_coefficient": -0.049751615584930575,
+  "phase_encoding": {
+    "schema": 1,
+    "method": "centered_nonidentity_pauli_one_norm",
+    "dimensionless_evolution_time": 1.0,
+    "energy_shift_hartree": -0.049751615584930575,
+    "energy_scale_hartree": 1.9502421267464622,
+    "physical_evolution_time_hartree_inverse": 0.5127568450530159,
+    "centered_spectral_bound_hartree": [-1.9502421267464622, 1.9502421267464622],
+    "encoded_phase_bound_radians": [-1.0, 1.0],
+    "energy_recovery": "E_hartree = energy_shift_hartree + energy_scale_hartree * phase"
+  },
+  "terms": [
+    {"label": "IIIZ", "coefficient": -0.2413093490372312},
+    {"label": "IIZI", "coefficient": -0.2413093490372312},
+    {"label": "IIZZ", "coefficient": 0.17671418654641863},
+    {"label": "IZII", "coefficient": 0.17962554760002494},
+    {"label": "IZIZ", "coefficient": 0.12303498572448816},
+    {"label": "IZZI", "coefficient": 0.16785640343478264},
+    {"label": "XXYY", "coefficient": -0.044821417710294506},
+    {"label": "XYYX", "coefficient": 0.044821417710294506},
+    {"label": "YXXY", "coefficient": 0.044821417710294506},
+    {"label": "YYXX", "coefficient": -0.044821417710294506},
+    {"label": "ZIII", "coefficient": 0.1796255476000249},
+    {"label": "ZIIZ", "coefficient": 0.16785640343478264},
+    {"label": "ZIZI", "coefficient": 0.12303498572448816},
+    {"label": "ZZII", "coefficient": 0.17058969776581176}
+  ]
+}

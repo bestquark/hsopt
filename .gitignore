@@ -1,0 +1,46 @@
+# Operating-system metadata
+.DS_Store
+
+# Secrets and local configuration
+.env
+.env.*
+!.env.example
+
+# Python environments, caches, and build products
+__pycache__/
+*.py[codz]
+*$py.class
+.venv/
+venv/
+.python-version
+.pytest_cache/
+.ruff_cache/
+.mypy_cache/
+.coverage
+.coverage.*
+htmlcov/
+build/
+dist/
+*.egg-info/
+
+# Notebook and tool caches
+.cache/
+.ipynb_checkpoints/
+
+# External campaign workspaces and generated run data
+/analysis/
+/analyses/
+/output/
+/outputs/
+/runs/
+/tmp/
+/scratch/
+/hsopt-data/
+/old_experiments/
+/.hsopt-data/
+/.hsopt-runs/
+/experiments/_runs/
+
+# Retired local plotting workbench and regenerated manuscript copies
+/plots/
+/figures/generated/

@@ -1,0 +1,13 @@
+{
+  "schema": "hsopt-scientific-trajectories-export-v1",
+  "campaign_id": "elote_delta_ground10_warm_a100_20261023",
+  "seed_count": 5,
+  "mutation_budget_per_seed": 50,
+  "case_count": 10,
+  "round_records": 255,
+  "suite_sha256": "9d07c550c4fc99bee03fdb81fac5565e08c2e77a76a0044a09abb4bb20ec4516",
+  "files": {
+    "trajectories.jsonl.gz": "236553f5f937d5607fa5923aa356b0014a3a85eeda8ff248f9b6de40c66d3d3f"
+  },
+  "exporter_sha256": "0445e2d51795f0dd1f49ef5e6a534f6184e94e9c63c280aa93a0831e21b08a46"
+}

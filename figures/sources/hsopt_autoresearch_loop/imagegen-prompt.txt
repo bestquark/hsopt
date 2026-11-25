@@ -1,0 +1,19 @@
+Revise reference image 1, the cartoon autoresearch loop banner. The user LIKES this image-model-rendered composition and prefers your own typography and math rendering over separately typeset overlays. YOU must render all headings, equations, icons, arrows and notebook content as a finished coherent illustration.
+
+References:
+1 = EDIT TARGET: full original cartoon loop, preserve its visual style and composition.
+2 = data panel reference: real 2x2 coefficient histograms for the left panel; preserve labels, axes, legends and shape, do not invent data.
+3 = NVIDIA logo reference for a small laptop badge.
+
+Output a beautiful complete 3:1 horizontal banner on pure white, 3072x1024 if possible. Friendly polished cartoon illustrations. Keep the same FIVE high-level headings, and no hint text: "Molecules", "Coding agent", "Circuit", "Witness", "Select". All headings should have an elegant Latin Modern / Computer Modern Roman bold serif appearance, harmonized with the math. Render the equations naturally and beautifully yourself, not a pasted-looking typography layer.
+
+MODIFICATIONS:
+1. LEFT MOLECULES PANEL. Keep the four little molecules and small molecule names along the top: CoH, O3, Na2, NaLi. Keep H = Σ_g c_g P_g underneath them. Below this insert the actual 2x2 histogram panel from image 2, retaining BOTH "Count" y labels, all logarithmic ticks, molecule titles, the four term-count legends and the shared "|c_g| (Ha)" x label. This real panel is the ONLY item we will substitute with its exact source after generation to guarantee data integrity. Reserve a flat rectangular pure-white region at x=1.2% to 24.4% of image width and y=39% to 94.5% of image height for this inset, no perspective or slant. Put the formula above y=36%. No duplicate "|c_g|" below the inset. Thin enclosing pale-blue panel border is fine, outside the inset.
+2. CODING AGENT. Keep the friendly robot and laptop from image 1. Change cyan accents to vibrant leaf green, including the robot's eyes, ear rims and chest details. Put a SMALL, recognizable NVIDIA eye-symbol badge on the laptop lid, using reference 3 for its actual design. Green emblem with a small clean NVIDIA wordmark if legible. Tasteful subtle branding, no giant logo, no other logos. Keep the robot mostly white and charcoal with green accents.
+3. CIRCUIT. Keep the gold cartoon quantum computer and four-wire circuit. Preserve clean readable math gate labels. Depict ordinary CNOT gates correctly: one control dot and one circled-plus target, no unintended extra controls.
+4. WITNESS. Preserve the original cartoon mathematical notebook, matrix motif and mint card. Keep the beautifully rendered formula "⟨W⟩ = Tr(ρW)" on the card, fully legible. No shield or lock.
+5. SELECT. Keep the chosen green circuit with check, grey rejected alternative with X. No explanatory subtitles.
+
+ALIGNMENT: all FOUR forward arrows from Molecules→Coding agent→Circuit→Witness→Select must be at EXACTLY the same vertical height, y=50% of canvas. A single horizontal visual flow line through the white gaps. Allow adequate gaps by making the notebook and selection panels slightly narrower if needed. The Circuit→Witness arrow and Witness→Select arrow must align with the earlier arrows, not shift up to the notebook edge. Make them clean dark navy, uniform stroke and arrowhead style. Preserve the bottom feedback arrow from Select back to Coding agent.
+
+Maintain roomy whitespace, no extra hints, no footer, no new titles, no watermark. Changes should feel like a refinement of reference 1, not a wholly new drawing. All visual elements and text except the real data histogram panel are rendered by you.
