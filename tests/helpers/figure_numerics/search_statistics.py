@@ -10,12 +10,12 @@ from pathlib import Path
 
 import numpy as np
 
-STYLE_VERSION = "relative-t95-energy-rejected-means-five-seeds-train-coverage-latex-v7"
+STYLE_VERSION = "relative-t95-energy-square-red-rejections-latex-v10"
 TRIAL_SEMANTICS = (
     "Rejected scatter shows one mean per iteration: available molecule values are averaged "
-    "within each rejected seed, then observed seed means receive equal weight. Hollow markers "
-    "indicate partial coverage; red outlines indicate any measured accuracy failure, even if "
-    "the mean is below the accuracy limit. Inaccurate cases have no chemically accurate T95. "
+    "within each rejected seed, then observed seed means receive equal weight. Red crosses "
+    "mark all rejections, regardless of reason. Coverage and failure details remain in the "
+    "iteration tables and plot data. Inaccurate cases have no chemically accurate T95. "
     "Missing certified metrics stay null, never zero-filled; no carry-forward. The full "
     "individual measurements remain in proposal_trials, and rejected_trial_means records "
     "coverage. Trial means can extend beyond the matched five-seed incumbent curves."
@@ -151,6 +151,16 @@ def current_plot_statistics(summary: dict) -> dict:
             for metric in ("relative_t95", "energy_error_mha")
         },
     )
+    for metric in ("relative_t95", "energy_error_mha"):
+        seeds = np.asarray(result["seed_mean_" + metric], dtype=float)
+        result["min_" + metric] = seeds.min(axis=0).tolist()
+        result["max_" + metric] = seeds.max(axis=0).tolist()
+    result["uncertainty"] = (
+        "Shading spans the minimum and maximum of the five seed-level molecule means "
+        "at each matched round, not standard deviation or a confidence interval. "
+        "Gray trajectories average each molecule across its observed training seeds. "
+        "Per-molecule bar whiskers retain sample standard deviation."
+    )
     identity = {k: v for k, v in result.items() if k not in ("seed_completed_rounds", "figure_key")}
     result["figure_key"] = hashlib.sha256(
         json.dumps(identity, sort_keys=True).encode()
@@ -273,11 +283,15 @@ def aggregate(snapshot: dict) -> dict:
         "training_cases_per_seed": count,
         "seed_completed_rounds": [s["trajectory"]["iterations"][-1] for s in seeds],
         "molecule_mean_relative_t95": np.nanmean(matrix, axis=0).tolist(),
+        "molecule_min_relative_t95": np.nanmin(matrix, axis=0).tolist(),
+        "molecule_max_relative_t95": np.nanmax(matrix, axis=0).tolist(),
         "molecule_std_relative_t95": molecule_sd(matrix),
         "seed_mean_relative_t95": seed_means.tolist(),
         "mean_relative_t95": seed_means.mean(axis=0).tolist(),
         "std_relative_t95": seed_means.std(axis=0, ddof=1).tolist(),
         "molecule_mean_energy_error_mha": np.nanmean(energy_matrix, axis=0).tolist(),
+        "molecule_min_energy_error_mha": np.nanmin(energy_matrix, axis=0).tolist(),
+        "molecule_max_energy_error_mha": np.nanmax(energy_matrix, axis=0).tolist(),
         "molecule_std_energy_error_mha": molecule_sd(energy_matrix),
         "seed_mean_energy_error_mha": seed_energy_means.tolist(),
         "mean_energy_error_mha": seed_energy_means.mean(axis=0).tolist(),
@@ -300,88 +314,67 @@ def aggregate(snapshot: dict) -> dict:
 
 def trial_scatter(summary: dict, ax, metric: str, *, labels: bool = True) -> list[float]:
     means = rejected_trial_means(summary.get("proposal_trials", []), metric)
-    for failed in (False, True):
-        rows = [
-            row
-            for row in means
-            if row["value"] is not None and bool(row["accuracy_failed_case_evaluations"]) == failed
-        ]
-        if not rows:
-            continue
-        faces = [
-            "white"
-            if row["measured_case_evaluations"] < row["expected_case_evaluations"]
-            else "#B56B00"
-            for row in rows
-        ]
+    rows = [row for row in means if row["value"] is not None]
+    if rows:
         ax.scatter(
             [row["iteration"] for row in rows],
             [row["value"] for row in rows],
-            s=30,
-            facecolors=faces,
-            edgecolors="#B3261E" if failed else "#B56B00",
-            linewidths=1.2,
+            s=32,
+            color="#B3261E",
+            linewidths=1.3,
             alpha=0.9,
-            marker="o",
-            label=((r"means with failures" if failed else r"rejected means") if labels else None),
+            marker="x",
+            label=r"Rejected" if labels else None,
             zorder=3,
         )
+
     return [row["value"] for row in means if row["value"] is not None]
 
 
 def trajectory_axes(plt, summary: dict, metric: str):
-    if summary.get("trial_summary", {}).get("rejected_proposals", 0):
-        fig, (ax, context) = plt.subplots(
-            2,
-            1,
-            figsize=(7.6, 7.2),
-            sharex=True,
-            gridspec_kw={"height_ratios": [2.5, 1]},
-            layout="constrained",
+    fig, ax = plt.subplots(figsize=(8, 8), layout="constrained")
+    trial_scatter(summary, ax, metric)
+    ax.set_xlabel(r"Autoresearch iteration")
+    if summary.get("trial_last_round", 0) > summary["common_round"]:
+        ax.axvline(summary["common_round"] + 0.25, color="0.55", linestyle=":", linewidth=0.9)
+        ax.axvspan(
+            summary["common_round"] + 0.25,
+            summary["trial_last_round"] + 0.35,
+            color="0.92",
+            alpha=0.45,
+            zorder=-1,
         )
-        trial_scatter(summary, ax, metric)
-        values = trial_scatter(summary, context, metric, labels=False)
-        energy = metric == "energy_error_mha"
-        reference = summary["chemical_accuracy_mha"] if energy else 1
-        context.set_yscale("symlog", linthresh=0.01 if energy else 0.1)
-        context.set_ylim(0, 1.25 * max([reference, *values]))
-        context.set_ylabel(
-            r"Mean trial error (mHa)" if energy else r"Mean trial relative $T_{95}$", fontsize=15
-        )
-        context.set_title(r"Rejected means (symmetric-log scale)", loc="left", fontsize=15)
-        context.axhline(reference, color="0.35", linestyle="--", linewidth=0.9, zorder=0)
-        if energy:
-            context.text(
-                0.99,
-                reference,
-                r"$\epsilon_{\rm chem}$",
-                transform=context.get_yaxis_transform(),
-                ha="right",
-                va="bottom",
-                fontsize=12,
-            )
-        context.tick_params(labelsize=14)
-        context.spines[["top", "right"]].set_visible(False)
-        context.set_xlabel(r"Autoresearch iteration")
-        if summary.get("trial_last_round", 0) > summary["common_round"]:
-            for axis in (ax, context):
-                axis.axvline(
-                    summary["common_round"] + 0.25, color="0.55", linestyle=":", linewidth=0.9
-                )
-                axis.axvspan(
-                    summary["common_round"] + 0.25,
-                    summary["trial_last_round"] + 0.35,
-                    color="0.92",
-                    alpha=0.45,
-                    zorder=-1,
-                )
-    else:
-        fig, ax = plt.subplots(figsize=(7.6, 4.6), layout="constrained")
-        context = None
-        ax.set_xlabel(r"Autoresearch iteration")
     end = max(summary["iterations"][-1], summary.get("trial_last_round", 0))
-    ax.set_xlim(0, max(1, end + 0.35 if context is not None else end))
-    return fig, ax, context
+    ax.set_xlim(0, max(1, end + 0.35))
+    return fig, ax, None
+
+
+def energy_display_limit(summary: dict) -> float:
+    """Include every measured rejected-trial mean, even large certified failures."""
+    trials = rejected_trial_means(summary.get("proposal_trials", []), "energy_error_mha")
+    values = [row["value"] for row in trials if row["value"] is not None]
+    values.extend(np.asarray(summary["molecule_mean_energy_error_mha"]).ravel())
+    values.extend(summary["max_energy_error_mha"])
+    return 1.25 * max([summary["chemical_accuracy_mha"], *values])
+
+
+def trajectory_legend(ax):
+    # Keep a single row within the square export; budget lines are labeled in place.
+    handles, labels = ax.get_legend_handles_labels()
+    order = ("Mean", "Seed range", "Trajectories", "Rejected")
+    pairs = [(handles[labels.index(label)], label) for label in order if label in labels]
+    ax.legend(
+        [h for h, _ in pairs],
+        [label for _, label in pairs],
+        loc="lower center",
+        bbox_to_anchor=(0.5, 1.02),
+        ncol=len(pairs),
+        fontsize=13,
+        handlelength=1.15,
+        handletextpad=0.4,
+        borderaxespad=0,
+        columnspacing=0.8,
+    )
 
 
 def plot(summary: dict, output: Path) -> None:
@@ -402,7 +395,7 @@ def plot(summary: dict, output: Path) -> None:
             "axes.titlesize": 22,
             "xtick.labelsize": 18,
             "ytick.labelsize": 18,
-            "legend.fontsize": 13,
+            "legend.fontsize": 16,
             "lines.linewidth": 2.2,
             "axes.linewidth": 1.3,
             "xtick.major.width": 1.2,
@@ -419,7 +412,8 @@ def plot(summary: dict, output: Path) -> None:
     x = np.asarray(summary["iterations"])
     molecule = np.asarray(summary["molecule_mean_relative_t95"])
     molecule_std = np.asarray(summary["molecule_std_relative_t95"], dtype=float)
-    mean, std = np.asarray(summary["mean_relative_t95"]), np.asarray(summary["std_relative_t95"])
+    mean = np.asarray(summary["mean_relative_t95"])
+    low, high = np.asarray(summary["min_relative_t95"]), np.asarray(summary["max_relative_t95"])
     fig, ax, context = trajectory_axes(plt, summary, "relative_t95")
     for index, values in enumerate(molecule):
         ax.step(
@@ -429,40 +423,30 @@ def plot(summary: dict, output: Path) -> None:
             color="0.60",
             alpha=0.36,
             linewidth=0.7,
-            label=r"molecule means" if index == 0 else None,
+            label=r"Trajectories" if index == 0 else None,
             zorder=2,
         )
     ax.fill_between(
         x,
-        mean - std,
-        mean + std,
+        low,
+        high,
         step="post",
         color="#B7E36A",
         alpha=0.38,
         linewidth=0,
-        label=r"$\pm 1\sigma$ (seeds)",
+        label=r"Seed range",
         zorder=1,
     )
-    ax.step(
-        x, mean, where="post", color="#3E7E00", linewidth=2.8, label=r"mean of seed means", zorder=4
-    )
+    ax.step(x, mean, where="post", color="#3E7E00", linewidth=2.8, label=r"Mean", zorder=4)
     ax.axhline(1, color="0.35", linestyle="--", linewidth=0.9, alpha=0.7, zorder=0)
-    if context is not None:
-        ax.set_ylim(
-            max(0, min(0.8, float(molecule.min()) - 0.05, float((mean - std).min()) - 0.05)),
-            max(1.25, float(molecule.max()) + 0.05, float((mean + std).max()) + 0.05),
-        )
+    ax.set_ylim(
+        max(0, min(0.8, float(molecule.min()) - 0.05, float(low.min()) - 0.05)),
+        max(1.25, float(molecule.max()) + 0.05, float(high.max()) + 0.05),
+    )
     ax.xaxis.set_major_locator(MaxNLocator(nbins=6, integer=True))
     ax.set_ylabel(r"Relative $T_{95}/T_{95}^{(0)}$")
     ax.spines[["top", "right"]].set_visible(False)
-    ax.legend(
-        loc="lower left",
-        bbox_to_anchor=(0, 1.02),
-        ncol=2,
-        handlelength=1.7,
-        borderaxespad=0,
-        columnspacing=1.2,
-    )
+    trajectory_legend(ax)
     for ext in ("png", "pdf"):
         fig.savefig(output / f"relative_t95_trajectories.{ext}")
     plt.close(fig)
@@ -496,7 +480,8 @@ def plot(summary: dict, output: Path) -> None:
     if "molecule_mean_energy_error_mha" in summary:
         errors = np.asarray(summary["molecule_mean_energy_error_mha"])
         mean_error = np.asarray(summary["mean_energy_error_mha"])
-        std_error = np.asarray(summary["std_energy_error_mha"])
+        low_error = np.asarray(summary["min_energy_error_mha"])
+        high_error = np.asarray(summary["max_energy_error_mha"])
         calibrated_budget = "mean_baseline_simulation_budget_mha" in summary
         budget = float(
             summary["mean_baseline_simulation_budget_mha"]
@@ -518,28 +503,22 @@ def plot(summary: dict, output: Path) -> None:
                 color="0.60",
                 alpha=0.36,
                 linewidth=0.7,
-                label=r"molecule means" if index == 0 else None,
+                label=r"Trajectories" if index == 0 else None,
                 zorder=2,
             )
         ax.fill_between(
             x,
-            mean_error - std_error,
-            mean_error + std_error,
+            low_error,
+            high_error,
             step="post",
             color="#B7E36A",
             alpha=0.38,
             linewidth=0,
-            label=r"$\pm 1\sigma$ (seeds)",
+            label=r"Seed range",
             zorder=1,
         )
         ax.step(
-            x,
-            mean_error,
-            where="post",
-            color="#3E7E00",
-            linewidth=2.8,
-            label=r"mean of seed means",
-            zorder=4,
+            x, mean_error, where="post", color="#3E7E00", linewidth=2.8, label=r"Mean", zorder=4
         )
         if calibrated_budget:
             ax.axhspan(
@@ -548,39 +527,50 @@ def plot(summary: dict, output: Path) -> None:
                 color="#C00000",
                 alpha=0.10,
                 linewidth=0,
-                label=r"baseline budget range",
+                label=r"Budget range",
                 zorder=0,
             )
         ax.axhline(
             budget,
             color="#C00000",
             linewidth=1.8,
-            label=(
-                r"$\overline{\epsilon_{\rm chem}-\epsilon_{\rm QPE}^{(0)}}$"
-                if calibrated_budget
-                else r"chemical accuracy ($1$ kcal/mol)"
-            ),
+            label=(r"Budget" if calibrated_budget else r"chemical accuracy ($1$ kcal/mol)"),
             zorder=5,
         )
-        ax.set_ylim(
-            0,
-            max(
-                1.15 * budget_max,
-                1.08 * float(errors.max()),
-                1.08 * float((mean_error + std_error).max()),
-            ),
+        # A single axis must retain both near-zero errors and large failed trials.
+        ax.set_yscale("symlog", linthresh=0.01)
+        ax.set_ylim(0, energy_display_limit(summary))
+        ax.axhline(
+            summary["chemical_accuracy_mha"],
+            color="#8C2727",
+            linestyle="--",
+            linewidth=1.2,
+            zorder=0,
+        )
+        ax.text(
+            0.98,
+            summary["chemical_accuracy_mha"],
+            r"Chemical accuracy",
+            transform=ax.get_yaxis_transform(),
+            ha="right",
+            va="bottom",
+            fontsize=13,
+            color="#8C2727",
+        )
+        ax.text(
+            0.98,
+            budget,
+            r"Baseline budget",
+            transform=ax.get_yaxis_transform(),
+            ha="right",
+            va="bottom",
+            fontsize=13,
+            color="#C00000",
         )
         ax.xaxis.set_major_locator(MaxNLocator(nbins=6, integer=True))
         ax.set_ylabel(r"$|E_{\rm compiled}-E_{\rm exact}|$ (mHa)")
         ax.spines[["top", "right"]].set_visible(False)
-        ax.legend(
-            loc="lower left",
-            bbox_to_anchor=(0, 1.02),
-            ncol=2,
-            handlelength=1.7,
-            borderaxespad=0,
-            columnspacing=1.2,
-        )
+        trajectory_legend(ax)
         for ext in ("png", "pdf"):
             fig.savefig(output / f"energy_error_trajectories.{ext}")
         plt.close(fig)

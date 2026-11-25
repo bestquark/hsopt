@@ -5,12 +5,12 @@
     "plots/export_elote_seed_effort.py": "e1027f8cf8a5776ec9fb2517335f0acb9c30ded682fa43c11d45a1d8100a9f72"
   },
   "files": {
-    "seed_effort_table_body.tex": "347357b1f27a277405a03b441257fb47a6a7418775b3d116c6a650316b8d6bde",
+    "seed_effort_table_body.tex": "fa5f20a0717a1be7d4a2af444e1ff0c7d0880338a680270a1229a4e916268fae",
     "policy_diagnostics.json": "470caaead850bd923e78714e00eaed03420ab194643d5eb340e37beb935673b9",
     "README.md": "cca5acbed9f45a6b45db2988063424eaf2dd641c9403e5af7fba446ed24b1660",
     "elote_policy_plot_data.npz": "8c07c40bda9ac4fec7183ceb4993c49912d5827c775f550393487c735fa217c7",
     "selected_policy.py": "d199f6a4efef965aa015dbd73f69d14f628fd1b9eaa3653391dad8e3a75e472e",
-    "seed_effort.json": "96ffe10b26c79973ac31dc397256c65cca0947398dd1b5357567570880d63c87",
+    "seed_effort.json": "7c224149cf1d677ad783454efe1a59ec2d4b00a7d34b41b0e73504f42fdd40ec",
     "selected_delta_policy.py": "6952b7d2728cbb4c9eb65562dac8ffa613fbc26f2780019817bbb0aeecf1370c"
   },
   "generator_commit": "b79bfdc898fff521bdc74d5a8757621470f616a6",
@@ -24,7 +24,7 @@
       "input_mean_per_complete_round",
       "output_mean_per_complete_round"
     ],
-    "token_summary": "Arithmetic means over fully logged rounds, including identified retries. Coverage is stated in the caption.",
+    "token_summary": "Arithmetic mean and sample standard deviation (ddof=1) over fully logged rounds, including identified retries. Coverage counts are preserved in this manifest and the source records.",
     "fully_logged_rounds_by_seed": [
       87,
       90,
@@ -50,7 +50,20 @@
       1,
       100
     ],
-    "source_export_manifest_sha256": "1206a16d61b2a9fe06d75358435188460ed8f54951c42f42cb81d9b61b3cca03"
+    "source_export_manifest_sha256": "1206a16d61b2a9fe06d75358435188460ed8f54951c42f42cb81d9b61b3cca03",
+    "token_standard_deviation_columns": [
+      "input_std_per_complete_round",
+      "output_std_per_complete_round"
+    ],
+    "statistics_generator_sha256": "7fa716c46a9f3915ee53a5909c4b66ab1ac38ca739bc335756442a2a7c93e85d",
+    "decision_columns": [
+      "accepted_percent",
+      "not_retained_percent"
+    ],
+    "decision_labels": [
+      "Accepted (%)",
+      "Rejected (%)"
+    ]
   },
   "delta_policy": {
     "file": "selected_delta_policy.py",

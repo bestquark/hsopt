@@ -1,13 +1,15 @@
 #!/usr/bin/env python3
-"""Plot the Reiher-derived baseline initialization versus qubit count."""
+"""Plot the actual iteration-zero baselines of the 115-Hamiltonian campaign."""
 
 from __future__ import annotations
 
 import argparse
-import csv
+import gzip
+import hashlib
+import json
 import math
 from collections import Counter
-from dataclasses import dataclass
+from dataclasses import asdict, dataclass
 from pathlib import Path
 
 import matplotlib as mpl
@@ -15,13 +17,12 @@ import matplotlib.pyplot as plt
 import numpy as np
 from matplotlib.lines import Line2D
 from matplotlib.mlab import GaussianKDE
-from matplotlib.patches import Patch
 
 
-from _paths import data_path, output_path
+from _paths import output_path
 
 REPO_ROOT = Path(__file__).resolve().parents[1]
-DEFAULT_DATA = data_path("data/baseline_initialization_vs_qubits.csv")
+DEFAULT_DATA = REPO_ROOT / "results/paper/elote115-paper/trajectories/trajectories.jsonl.gz"
 DEFAULT_OUTPUT = output_path("baseline_initialization_vs_qubits.pdf")
 EXPECTED_QUBIT_COUNTS = {
     4: 20,
@@ -31,22 +32,21 @@ EXPECTED_QUBIT_COUNTS = {
     12: 25,
     14: 9,
     16: 24,
-    18: 1,
-    20: 3,
-    22: 1,
-    30: 1,
 }
 
-NVIDIA_GREEN = "#76B900"
-NVIDIA_DARK_GREEN = "#3E7E00"
+BASELINE_GRAY = "#888888"
+BASELINE_DARK_GRAY = "#555555"
 
 
 @dataclass(frozen=True)
 class BaselineRecord:
-    lane: str
+    case_id: str
     n_qubits: int
     n_steps: int
     rotation_tolerance: float
+    target_time: float
+    lambda_hartree: float
+    bound_policy_sha256: str
 
 
 def apply_style() -> None:
@@ -78,40 +78,47 @@ def apply_style() -> None:
 
 
 def load_records(path: Path) -> list[BaselineRecord]:
-    with path.open(encoding="utf-8", newline="") as handle:
-        rows = list(csv.DictReader(handle))
-    records: list[BaselineRecord] = []
-    seen: set[str] = set()
-    for row in rows:
-        lane = str(row["lane_id"])
-        if lane in seen:
-            raise ValueError(f"duplicate lane in {path}: {lane}")
-        seen.add(lane)
-        n_qubits = int(row["n_qubits"])
-        n_steps = int(row["n_steps"])
-        rotation_tolerance = float(row["uniform_epsilon"])
-        if (
-            n_qubits <= 0
-            or n_steps <= 0
-            or not math.isfinite(rotation_tolerance)
-            or rotation_tolerance <= 0.0
-        ):
-            raise ValueError(f"invalid baseline data for {lane}")
-        records.append(
-            BaselineRecord(
-                lane=lane,
-                n_qubits=n_qubits,
-                n_steps=n_steps,
-                rotation_tolerance=rotation_tolerance,
-            )
-        )
-
+    """Read measured starting policies and require agreement across all five seeds."""
+    manifest = json.loads(path.with_name("manifest.json").read_text())
+    assert hashlib.sha256(path.read_bytes()).hexdigest() == manifest["files"][path.name]
+    seeds = {}
+    source_hashes = set()
+    with gzip.open(path, "rt") as handle:
+        for line in handle:
+            row = json.loads(line)
+            if row.get("record_type") != "round" or row["iteration"] != 0:
+                continue
+            assert row["result"]["passes_chemical_accuracy"]
+            source_hashes.add(row["candidate_sha256"])
+            records = []
+            for case, measurement in sorted(row["measurements"].items()):
+                policy = measurement["policy"]
+                phase = measurement["phase_encoding"]
+                assert measurement["status"] == "ok" and measurement["passes_chemical_accuracy"]
+                assert policy["formula_order"] == 2
+                assert policy["formula_name"] == "symmetric_commuting_group_splitting"
+                assert policy["synthesis_policy"] == "uniform"
+                assert policy["n_steps"] == measurement["n_steps"]
+                assert math.isclose(measurement["target_time"] * phase["energy_scale_hartree"], 1, rel_tol=1e-12)
+                epsilon = float(policy["uniform_epsilon"])
+                assert math.isfinite(epsilon) and 0 < epsilon < 1
+                records.append(BaselineRecord(
+                    case_id=case,
+                    n_qubits=int(measurement["n_qubits"]),
+                    n_steps=int(measurement["n_steps"]),
+                    rotation_tolerance=epsilon,
+                    target_time=float(measurement["target_time"]),
+                    lambda_hartree=float(phase["energy_scale_hartree"]),
+                    bound_policy_sha256=row["bound_policy_sha256"][case + ".py"],
+                ))
+            assert row["seed"] not in seeds
+            seeds[row["seed"]] = records
+    assert set(seeds) == {f"seed-{i:02d}" for i in range(1, 6)}
+    assert len(source_hashes) == 1
+    records = seeds["seed-01"]
+    assert all(other == records for other in seeds.values()), "Starting parameters differ by seed"
     counts = Counter(record.n_qubits for record in records)
-    if len(records) != 121 or dict(sorted(counts.items())) != EXPECTED_QUBIT_COUNTS:
-        raise ValueError(
-            f"expected the 121-system HamLib census {EXPECTED_QUBIT_COUNTS}, "
-            f"found {dict(sorted(counts.items()))}"
-        )
+    assert len(records) == 115 and dict(sorted(counts.items())) == EXPECTED_QUBIT_COUNTS
     return records
 
 
@@ -136,122 +143,56 @@ def quartiles_by_qubit(
     return first_quartiles, medians, third_quartiles
 
 
-def draw_log_violin(
-    ax: mpl.axes.Axes,
-    *,
-    position: int,
-    values: np.ndarray,
-    maximum_half_width: float = 0.62,
-) -> None:
-    """Draw a violin whose density estimate is computed in log10 space."""
-
-    log_values = np.log10(values)
-    if values.size < 2 or np.ptp(log_values) <= np.finfo(float).eps:
-        return
-
-    density_estimate = GaussianKDE(log_values, bw_method=0.45)
-    log_grid = np.linspace(float(log_values.min()), float(log_values.max()), 256)
-    density = density_estimate(log_grid)
-    half_width = maximum_half_width * density / float(density.max())
-    ax.fill_betweenx(
-        np.power(10.0, log_grid),
-        position - half_width,
-        position + half_width,
-        facecolor=NVIDIA_GREEN,
-        edgecolor=NVIDIA_DARK_GREEN,
-        linewidth=1.25,
-        alpha=0.34,
-        zorder=2,
-    )
-
-
 def plot(records: list[BaselineRecord], output_path: Path) -> None:
     apply_style()
     qubit_counts = sorted({record.n_qubits for record in records})
-    panels = (
-        (
-            "n_steps",
-            r"Trotter repetitions, $r$",
-        ),
-        (
-            "rotation_tolerance",
-            r"Rotation tolerance, $\eta_{\mathrm{init}}$",
-        ),
-    )
-
-    fig, axes = plt.subplots(
-        nrows=1,
-        ncols=2,
-        figsize=(10.8, 4.4),
-        sharex=True,
-        layout="constrained",
-    )
-    for panel_label, ax, (metric, y_label) in zip(("a", "b"), axes, panels):
-        first_quartiles, medians, third_quartiles = quartiles_by_qubit(
-            records,
-            metric=metric,
-            qubit_counts=qubit_counts,
-        )
-        for n_qubits in qubit_counts:
-            values = np.asarray(
-                [getattr(record, metric) for record in records if record.n_qubits == n_qubits],
-                dtype=float,
-            )
-            draw_log_violin(ax, position=n_qubits, values=values)
-        ax.vlines(
-            qubit_counts,
-            first_quartiles,
-            third_quartiles,
-            color=NVIDIA_DARK_GREEN,
-            linewidth=2.5,
-            zorder=3,
-        )
-        ax.scatter(
-            qubit_counts,
-            medians,
-            marker="D",
-            s=48,
-            facecolor=NVIDIA_GREEN,
-            edgecolor=NVIDIA_DARK_GREEN,
-            linewidth=1.0,
-            zorder=4,
-        )
-        ax.set_yscale("log")
+    panels = (("n_steps", r"Trotter repetitions, $r$"),
+              ("rotation_tolerance", r"Synthesis tolerance, $\epsilon_0$"))
+    fig, axes = plt.subplots(1, 2, figsize=(10.8, 4.4), sharex=True, layout="constrained")
+    for panel_label, ax, (metric, label) in zip(("a", "b"), axes, panels):
+        q1, medians, q3 = quartiles_by_qubit(records, metric=metric, qubit_counts=qubit_counts)
+        for nq in qubit_counts:
+            values = np.asarray([getattr(row, metric) for row in records if row.n_qubits == nq])
+            if metric == "n_steps":
+                # Offset equal integer counts horizontally without altering r.
+                for value in sorted(set(values)):
+                    count = int(np.sum(values == value))
+                    offsets = np.linspace(-0.52, 0.52, count) if count > 1 else np.zeros(1)
+                    ax.scatter(nq + offsets, np.full(count, value), s=23,
+                               color=BASELINE_GRAY, alpha=0.8, linewidths=0, zorder=2)
+            else:
+                transformed = np.log10(values)
+                if len(values) > 1 and np.ptp(transformed) > np.finfo(float).eps:
+                    grid = np.linspace(transformed.min(), transformed.max(), 256)
+                    density = GaussianKDE(transformed, bw_method=0.45)(grid)
+                    half_width = 0.62 * density / density.max()
+                    ax.fill_betweenx(10**grid, nq - half_width, nq + half_width,
+                                     facecolor=BASELINE_GRAY, edgecolor=BASELINE_DARK_GRAY,
+                                     linewidth=1.25, alpha=0.34, zorder=2)
+        ax.vlines(qubit_counts, q1, q3, color=BASELINE_DARK_GRAY, linewidth=2.5, zorder=3)
+        ax.scatter(qubit_counts, medians, marker="D", s=46, facecolor=BASELINE_DARK_GRAY,
+                   edgecolor="white", linewidth=0.7, zorder=4)
+        if metric == "n_steps":
+            ax.set_ylim(0.75, 3.3)
+            ax.set_yticks([1, 2, 3])
+        else:
+            ax.set_yscale("log")
+            ax.margins(y=0.10)
         ax.set_xticks(qubit_counts)
         ax.set_xlabel(r"Qubits, $n_q$")
-        ax.set_ylabel(y_label)
-        ax.set_xlim(min(qubit_counts) - 0.8, max(qubit_counts) + 0.8)
-        ax.grid(True, axis="y", which="major", color="0.87", linewidth=0.7)
-        ax.set_axisbelow(True)
-        ax.spines["top"].set_visible(False)
-        ax.spines["right"].set_visible(False)
+        ax.set_ylabel(label)
+        ax.set_xlim(min(qubit_counts) - 0.85, max(qubit_counts) + 0.85)
+        ax.spines[["top", "right"]].set_visible(False)
         ax.set_title(rf"\textbf{{({panel_label})}}", loc="left", pad=4, fontsize=18)
-
-    axes[0].legend(
-        handles=[
-            Patch(
-                facecolor=NVIDIA_GREEN,
-                edgecolor=NVIDIA_DARK_GREEN,
-                alpha=0.34,
-                label=r"Distribution",
-            ),
-            Line2D(
-                [0],
-                [0],
-                color=NVIDIA_DARK_GREEN,
-                linewidth=2.5,
-                marker="D",
-                markersize=6.8,
-                markerfacecolor=NVIDIA_GREEN,
-                markeredgecolor=NVIDIA_DARK_GREEN,
-                label=r"Median and IQR",
-            ),
-        ],
-        loc="lower right",
-    )
-
+    axes[0].legend(handles=[
+        Line2D([], [], linestyle="none", marker="o", markersize=5.5,
+               color=BASELINE_GRAY, label="Hamiltonians"),
+        Line2D([], [], color=BASELINE_DARK_GRAY, linewidth=2.5, marker="D",
+               markersize=6, label="Median and IQR"),
+    ], loc="upper left")
     output_path.parent.mkdir(parents=True, exist_ok=True)
     fig.savefig(output_path)
+    fig.savefig(output_path.with_suffix(".png"), dpi=220)
     plt.close(fig)
 
 
@@ -262,6 +203,15 @@ def main() -> None:
     args = parser.parse_args()
     records = load_records(args.data)
     plot(records, args.output)
+    provenance = {
+        "source": str(args.data.relative_to(REPO_ROOT)) if args.data.is_relative_to(REPO_ROOT) else str(args.data),
+        "source_sha256": hashlib.sha256(args.data.read_bytes()).hexdigest(),
+        "iteration": 0, "cases": len(records), "seeds_verified_identical": 5,
+        "profile": "nested_second_order_tight",
+        "physical_time": "1 / sum(abs(nonidentity Pauli coefficients))",
+        "records": [asdict(row) for row in records],
+    }
+    args.output.with_suffix(".json").write_text(json.dumps(provenance, indent=2) + "\n")
     print(f"wrote {args.output} from {len(records)} Hamiltonians")
 
 

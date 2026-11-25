@@ -1,0 +1,1046 @@
+{
+  "source": "experiments/abs_protocol/results/elote115-paper/trajectories/trajectories.jsonl.gz",
+  "source_sha256": "e5a202b324ffad7de54e1361c080a786f217c4e36976028d6a8746557ffc98b4",
+  "iteration": 0,
+  "cases": 115,
+  "seeds_verified_identical": 5,
+  "profile": "nested_second_order_tight",
+  "physical_time": "1 / sum(abs(nonidentity Pauli coefficients))",
+  "records": [
+    {
+      "case_id": "0256_hydrogen_data_H2_ES_H2_linear_R0.5_sto-6g_ham_JW",
+      "n_qubits": 4,
+      "n_steps": 2,
+      "rotation_tolerance": 1.522605882487699e-07,
+      "target_time": 0.42970047894065455,
+      "lambda_hartree": 2.3272024328790866,
+      "bound_policy_sha256": "c246a6d6ba003ac208b95a6e21f57add2d291eed26a27a2cd6c48430e1baaf8d"
+    },
+    {
+      "case_id": "0257_hydrogen_data_H2_ES_H2_linear_R0.6_sto-6g_ham_JW",
+      "n_qubits": 4,
+      "n_steps": 2,
+      "rotation_tolerance": 1.678308747856081e-07,
+      "target_time": 0.47121181942214424,
+      "lambda_hartree": 2.122187854341851,
+      "bound_policy_sha256": "a6f5ac91b50e90a2c95274392a4fba836258a43b1a5297a6f65bbf738f6643e1"
+    },
+    {
+      "case_id": "0258_hydrogen_data_H2_ES_H2_linear_R0.7_sto-6g_ham_JW",
+      "n_qubits": 4,
+      "n_steps": 2,
+      "rotation_tolerance": 1.7417440886609903e-07,
+      "target_time": 0.5127568450530159,
+      "lambda_hartree": 1.9502421267464622,
+      "bound_policy_sha256": "c9b4d9b1f071c862a9a793877479f394471535274a3686533abc2bcd49ce2678"
+    },
+    {
+      "case_id": "0259_hydrogen_data_H2_ES_H2_linear_R0.8_sto-6g_ham_JW",
+      "n_qubits": 4,
+      "n_steps": 2,
+      "rotation_tolerance": 1.9398390567025627e-07,
+      "target_time": 0.5541361729306348,
+      "lambda_hartree": 1.8046105792216116,
+      "bound_policy_sha256": "fc86f47dff563180bdea14fd2af329f938a9083056cdc362571fcbe2c027d9ad"
+    },
+    {
+      "case_id": "0260_hydrogen_data_H2_ES_H2_linear_R0.9_sto-6g_ham_JW",
+      "n_qubits": 4,
+      "n_steps": 2,
+      "rotation_tolerance": 2.206657493458414e-07,
+      "target_time": 0.5951251155781608,
+      "lambda_hartree": 1.6803189343277931,
+      "bound_policy_sha256": "5fbb21a7ba5b7fddd0103e81e7e19dffe01510e2e2cebd61528f47d1daec76b9"
+    },
+    {
+      "case_id": "0261_hydrogen_data_H2_ES_H2_linear_R1.0_sto-6g_ham_JW",
+      "n_qubits": 4,
+      "n_steps": 2,
+      "rotation_tolerance": 2.3020243818913434e-07,
+      "target_time": 0.6355113394623079,
+      "lambda_hartree": 1.5735360455504666,
+      "bound_policy_sha256": "2e32e7e18332bc66c9eda68300cb5294b585444e5d982e732a7625bbaf166ffb"
+    },
+    {
+      "case_id": "0262_hydrogen_data_H2_ES_H2_linear_R1.1_sto-6g_ham_JW",
+      "n_qubits": 4,
+      "n_steps": 2,
+      "rotation_tolerance": 2.4538984346755516e-07,
+      "target_time": 0.6751070590128555,
+      "lambda_hartree": 1.4812465469731635,
+      "bound_policy_sha256": "0536aa8740e408bed1afccd1b1aeac1ea8f63e233956b84b0b47553d2a857a17"
+    },
+    {
+      "case_id": "0263_hydrogen_data_H2_ES_H2_linear_R1.2_sto-6g_ham_JW",
+      "n_qubits": 4,
+      "n_steps": 2,
+      "rotation_tolerance": 2.47025313750992e-07,
+      "target_time": 0.7137373071703116,
+      "lambda_hartree": 1.4010757038392847,
+      "bound_policy_sha256": "781315da8ace33250de1c3a737da071b6238cda6c910bb5bb8a9fdc3a7cdfe99"
+    },
+    {
+      "case_id": "0264_hydrogen_data_H2_ES_H2_linear_R1.3_sto-6g_ham_JW",
+      "n_qubits": 4,
+      "n_steps": 2,
+      "rotation_tolerance": 2.6076386128946387e-07,
+      "target_time": 0.7512272225377701,
+      "lambda_hartree": 1.3311551685012615,
+      "bound_policy_sha256": "bea357969786c10d6e5412aeec1b353a95914b8db6b6adc06e8b38a76b8eafc3"
+    },
+    {
+      "case_id": "0265_hydrogen_data_H2_ES_H2_linear_R1.4_sto-6g_ham_JW",
+      "n_qubits": 4,
+      "n_steps": 2,
+      "rotation_tolerance": 2.8121600500276936e-07,
+      "target_time": 0.7874003435168345,
+      "lambda_hartree": 1.270001985944803,
+      "bound_policy_sha256": "f5a935c3ba38e2053e482e36c86310932fa031f3df1ff00db397ed9955d0d7b9"
+    },
+    {
+      "case_id": "0266_hydrogen_data_H2_ES_H2_linear_R1.5_sto-6g_ham_JW",
+      "n_qubits": 4,
+      "n_steps": 2,
+      "rotation_tolerance": 3.0221691767655333e-07,
+      "target_time": 0.8220854772667814,
+      "lambda_hartree": 1.2164185205226319,
+      "bound_policy_sha256": "b4122b6b861ea895ec6ab7d0d48e5e402b5a4477de1d5ac73720e3f2d9a21dc6"
+    },
+    {
+      "case_id": "0267_hydrogen_data_H2_ES_H2_linear_R1.6_sto-6g_ham_JW",
+      "n_qubits": 4,
+      "n_steps": 2,
+      "rotation_tolerance": 3.0686263011040465e-07,
+      "target_time": 0.8551266252457103,
+      "lambda_hartree": 1.1694174528978818,
+      "bound_policy_sha256": "76be7c72918b3c720bbd7f7c719386d65a1f3a4cb69cd1533ccc2aee8f8fe57d"
+    },
+    {
+      "case_id": "0268_hydrogen_data_H2_ES_H2_linear_R1.7_sto-6g_ham_JW",
+      "n_qubits": 4,
+      "n_steps": 2,
+      "rotation_tolerance": 3.1874499755399446e-07,
+      "target_time": 0.8863924133566314,
+      "lambda_hartree": 1.128168500690517,
+      "bound_policy_sha256": "d5e070de46537d16f99cde075520e64c748e9bb00aaec8ef7c32999c91fcdf03"
+    },
+    {
+      "case_id": "0269_hydrogen_data_H2_ES_H2_linear_R1.8_sto-6g_ham_JW",
+      "n_qubits": 4,
+      "n_steps": 2,
+      "rotation_tolerance": 3.270006037493073e-07,
+      "target_time": 0.9157830921742419,
+      "lambda_hartree": 1.0919616321216536,
+      "bound_policy_sha256": "06281eaf3c1b64ba1111e1f87a6ec6eca0f9c18ec4c7e6f0fb35ce2a270ce7ec"
+    },
+    {
+      "case_id": "0270_hydrogen_data_H2_ES_H2_linear_R1.9_sto-6g_ham_JW",
+      "n_qubits": 4,
+      "n_steps": 2,
+      "rotation_tolerance": 3.339391496834439e-07,
+      "target_time": 0.9341193014615068,
+      "lambda_hartree": 1.070527071258904,
+      "bound_policy_sha256": "ff471fcbac177abd58fd6df60c60eb5120e3543cbac78040207a44a77c0800e4"
+    },
+    {
+      "case_id": "0271_hydrogen_data_H2_ES_H2_linear_R2.0_sto-6g_ham_JW",
+      "n_qubits": 4,
+      "n_steps": 2,
+      "rotation_tolerance": 3.5330022323918107e-07,
+      "target_time": 0.9377200822630706,
+      "lambda_hartree": 1.066416320728276,
+      "bound_policy_sha256": "26bb149bda54076285a35bee938b7857d062d99e9072170f795327c423f0e618"
+    },
+    {
+      "case_id": "0272_hydrogen_data_H4_ES_H4_linear_R0.5_sto-6g_ham_JW",
+      "n_qubits": 8,
+      "n_steps": 1,
+      "rotation_tolerance": 3.4144404292567887e-09,
+      "target_time": 0.08405494445574233,
+      "lambda_hartree": 11.896980082195315,
+      "bound_policy_sha256": "b2534bd42d7016a99433fa340816030592342ca62b4a292f181798a99743c867"
+    },
+    {
+      "case_id": "0273_hydrogen_data_H4_ES_H4_linear_R0.6_sto-6g_ham_JW",
+      "n_qubits": 8,
+      "n_steps": 1,
+      "rotation_tolerance": 3.894461289862081e-09,
+      "target_time": 0.09730870618980064,
+      "lambda_hartree": 10.276572766772789,
+      "bound_policy_sha256": "fcdf2cb11e05d288239363d3d9d12962d620ca1ced54e1cf9ddac2575ee4988b"
+    },
+    {
+      "case_id": "0274_hydrogen_data_H4_ES_H4_linear_R0.7_sto-6g_ham_JW",
+      "n_qubits": 8,
+      "n_steps": 1,
+      "rotation_tolerance": 4.541772680257089e-09,
+      "target_time": 0.10944477708457814,
+      "lambda_hartree": 9.137028066923715,
+      "bound_policy_sha256": "6bb659737786e029145998f50e412a64f1ca7bab0677eea62cdf2277570b8ebc"
+    },
+    {
+      "case_id": "0275_hydrogen_data_H4_ES_H4_linear_R0.8_sto-6g_ham_JW",
+      "n_qubits": 8,
+      "n_steps": 1,
+      "rotation_tolerance": 4.856346013477059e-09,
+      "target_time": 0.12036410565027002,
+      "lambda_hartree": 8.308124707091666,
+      "bound_policy_sha256": "1daaa211d51de0ef475f102a820c42c54812cbb8b1e821b939f7332f5122f99f"
+    },
+    {
+      "case_id": "0276_hydrogen_data_H4_ES_H4_linear_R0.9_sto-6g_ham_JW",
+      "n_qubits": 8,
+      "n_steps": 1,
+      "rotation_tolerance": 5.343407358061748e-09,
+      "target_time": 0.13052432547946444,
+      "lambda_hartree": 7.66140714634324,
+      "bound_policy_sha256": "5dfd46a53485ecc3e2ed180d484a1760135dfa94e088c6ec540b0676f2580f29"
+    },
+    {
+      "case_id": "0277_hydrogen_data_H4_ES_H4_linear_R1.0_sto-6g_ham_JW",
+      "n_qubits": 8,
+      "n_steps": 1,
+      "rotation_tolerance": 5.944774232123987e-09,
+      "target_time": 0.14000919397885378,
+      "lambda_hartree": 7.142388093106475,
+      "bound_policy_sha256": "a2aa6ed32f9c99ab7d6b909e967f73d5d0037a26e79510c5e913d7667b644e0b"
+    },
+    {
+      "case_id": "0278_hydrogen_data_H4_ES_H4_linear_R1.1_sto-6g_ham_JW",
+      "n_qubits": 8,
+      "n_steps": 1,
+      "rotation_tolerance": 6.372463232455099e-09,
+      "target_time": 0.14882558117432815,
+      "lambda_hartree": 6.719274953333737,
+      "bound_policy_sha256": "9c36e50a9674ef6fbb8aef55c2c14994859c726a0e0f684f941bdc0658421c3f"
+    },
+    {
+      "case_id": "0279_hydrogen_data_H4_ES_H4_linear_R1.2_sto-6g_ham_JW",
+      "n_qubits": 8,
+      "n_steps": 1,
+      "rotation_tolerance": 6.582799869203577e-09,
+      "target_time": 0.15668915317393567,
+      "lambda_hartree": 6.382062700217236,
+      "bound_policy_sha256": "770ba7bb0a5b3bad6f2027c33e2d01a4c225fb2c714d0614f1689842fd472b7c"
+    },
+    {
+      "case_id": "0280_hydrogen_data_H4_ES_H4_linear_R1.3_sto-6g_ham_JW",
+      "n_qubits": 8,
+      "n_steps": 1,
+      "rotation_tolerance": 6.925846993334118e-09,
+      "target_time": 0.16390651963759595,
+      "lambda_hartree": 6.101038581082931,
+      "bound_policy_sha256": "775e93cb086b875d62bd599ea294d6b2ed597141c81ba2f45c06008a54397038"
+    },
+    {
+      "case_id": "0281_hydrogen_data_H4_ES_H4_linear_R1.4_sto-6g_ham_JW",
+      "n_qubits": 8,
+      "n_steps": 1,
+      "rotation_tolerance": 7.100094915468761e-09,
+      "target_time": 0.17063708027233965,
+      "lambda_hartree": 5.860390944359709,
+      "bound_policy_sha256": "36d11e7e34dcbf589e503d2be9c49c5d10e6c380c7246a77782b97242f0ba030"
+    },
+    {
+      "case_id": "0282_hydrogen_data_H4_ES_H4_linear_R1.5_sto-6g_ham_JW",
+      "n_qubits": 8,
+      "n_steps": 1,
+      "rotation_tolerance": 7.269252555924799e-09,
+      "target_time": 0.17692483451328456,
+      "lambda_hartree": 5.652117763743982,
+      "bound_policy_sha256": "97a1d006254ca61fb5ccd2cf3f972f55a5be7c4f80942bbe42f6e6a21d45af0d"
+    },
+    {
+      "case_id": "0283_hydrogen_data_H4_ES_H4_linear_R1.6_sto-6g_ham_JW",
+      "n_qubits": 8,
+      "n_steps": 1,
+      "rotation_tolerance": 7.617383053161891e-09,
+      "target_time": 0.18248470430292485,
+      "lambda_hartree": 5.47991133733597,
+      "bound_policy_sha256": "4d4542505778b69e21da5bedea382b741610adc653200931676b4a1490ba7e07"
+    },
+    {
+      "case_id": "0284_hydrogen_data_H4_ES_H4_linear_R1.7_sto-6g_ham_JW",
+      "n_qubits": 8,
+      "n_steps": 1,
+      "rotation_tolerance": 7.877420426260167e-09,
+      "target_time": 0.18712522351334085,
+      "lambda_hartree": 5.3440149928729745,
+      "bound_policy_sha256": "6b13050a1fc1753bd16b81f8b129dfd0fc332f9a165be0c2d6250cf35e913509"
+    },
+    {
+      "case_id": "0285_hydrogen_data_H4_ES_H4_linear_R1.8_sto-6g_ham_JW",
+      "n_qubits": 8,
+      "n_steps": 1,
+      "rotation_tolerance": 7.926108758971886e-09,
+      "target_time": 0.19149945778368127,
+      "lambda_hartree": 5.221946900390731,
+      "bound_policy_sha256": "4a808f60f3dfb284d6db52ba04b34f80484604f7753e7fa66c034c345fdf993b"
+    },
+    {
+      "case_id": "0286_hydrogen_data_H4_ES_H4_linear_R1.9_sto-6g_ham_JW",
+      "n_qubits": 8,
+      "n_steps": 1,
+      "rotation_tolerance": 8.268648492391508e-09,
+      "target_time": 0.19564395951383748,
+      "lambda_hartree": 5.11132570862364,
+      "bound_policy_sha256": "039a1063b829490f5e3f0d58ada3b09999108f03beaa35c1ceb6786166613f2d"
+    },
+    {
+      "case_id": "0287_hydrogen_data_H4_ES_H4_linear_R2.0_sto-6g_ham_JW",
+      "n_qubits": 8,
+      "n_steps": 1,
+      "rotation_tolerance": 8.21863416624957e-09,
+      "target_time": 0.19959300675455488,
+      "lambda_hartree": 5.010195578794642,
+      "bound_policy_sha256": "6d22d8767e5bff46e5e4907be957b59c84bc0afeb6ee8fa318d889aa4fdb85ee"
+    },
+    {
+      "case_id": "0288_hydrogen_data_H6_ES_H6_linear_R0.5_sto-6g_ham_JW",
+      "n_qubits": 12,
+      "n_steps": 1,
+      "rotation_tolerance": 2.328960279855204e-10,
+      "target_time": 0.03384421303091051,
+      "lambda_hartree": 29.547148845998652,
+      "bound_policy_sha256": "5979d6e4a6d1d00e138a442e8645521b82d35a0d43ead8c37efb54e080ef38e5"
+    },
+    {
+      "case_id": "0289_hydrogen_data_H6_ES_H6_linear_R0.6_sto-6g_ham_JW",
+      "n_qubits": 12,
+      "n_steps": 1,
+      "rotation_tolerance": 2.7654302959444897e-10,
+      "target_time": 0.0396905255970921,
+      "lambda_hartree": 25.194929645206418,
+      "bound_policy_sha256": "1311908bcd64cd8377635652e8fbc899e35b501e23ba78a19bcc28f8d141b1f4"
+    },
+    {
+      "case_id": "0290_hydrogen_data_H6_ES_H6_linear_R0.7_sto-6g_ham_JW",
+      "n_qubits": 12,
+      "n_steps": 1,
+      "rotation_tolerance": 3.1333337609813415e-10,
+      "target_time": 0.04474231810086138,
+      "lambda_hartree": 22.350205408350266,
+      "bound_policy_sha256": "9b2dcd7c0db8c61e64035a11601bd8700a74034394bd5feb666ae15bdc7279b0"
+    },
+    {
+      "case_id": "0291_hydrogen_data_H6_ES_H6_linear_R0.8_sto-6g_ham_JW",
+      "n_qubits": 12,
+      "n_steps": 1,
+      "rotation_tolerance": 3.467197729196301e-10,
+      "target_time": 0.04922526417770623,
+      "lambda_hartree": 20.314771626007705,
+      "bound_policy_sha256": "9b8229bc2c3314f42cdd2b14db504f9fd62b8935c8c276cfaa7318f367f6e960"
+    },
+    {
+      "case_id": "0292_hydrogen_data_H6_ES_H6_linear_R0.9_sto-6g_ham_JW",
+      "n_qubits": 12,
+      "n_steps": 1,
+      "rotation_tolerance": 3.7679414341027804e-10,
+      "target_time": 0.05314017703025838,
+      "lambda_hartree": 18.818153342443573,
+      "bound_policy_sha256": "3616d1bf63c74335c7aac1a07dc13874b74303c7d6f97ac590d5fc64743e76bc"
+    },
+    {
+      "case_id": "0293_hydrogen_data_H6_ES_H6_linear_R1.0_sto-6g_ham_JW",
+      "n_qubits": 12,
+      "n_steps": 1,
+      "rotation_tolerance": 4.0012799465619515e-10,
+      "target_time": 0.056656067984464493,
+      "lambda_hartree": 17.650360068655086,
+      "bound_policy_sha256": "0fc8db7b9f64f134e648afd8ce72baac30c1de8cd34ebf3302b1909b62822a98"
+    },
+    {
+      "case_id": "0294_hydrogen_data_H6_ES_H6_linear_R1.1_sto-6g_ham_JW",
+      "n_qubits": 12,
+      "n_steps": 1,
+      "rotation_tolerance": 4.2732786215910486e-10,
+      "target_time": 0.059857458365893706,
+      "lambda_hartree": 16.706355854390768,
+      "bound_policy_sha256": "c1312d62e2247b74b90a3297517502db81919ab27f2ca69793b61aa7dab197dc"
+    },
+    {
+      "case_id": "0295_hydrogen_data_H6_ES_H6_linear_R1.2_sto-6g_ham_JW",
+      "n_qubits": 12,
+      "n_steps": 1,
+      "rotation_tolerance": 4.448329454847066e-10,
+      "target_time": 0.06275090554354029,
+      "lambda_hartree": 15.936025007736994,
+      "bound_policy_sha256": "b8fba210986d58c83a4cf4947abcf49a6c178a913ae458a052359ebee47e86c7"
+    },
+    {
+      "case_id": "0296_hydrogen_data_H6_ES_H6_linear_R1.3_sto-6g_ham_JW",
+      "n_qubits": 12,
+      "n_steps": 1,
+      "rotation_tolerance": 4.664352851935532e-10,
+      "target_time": 0.06535195028763163,
+      "lambda_hartree": 15.301762160099726,
+      "bound_policy_sha256": "51feb878ba48c9d2263a96b44e897e2c8fcd6c2728143d03ca4cbfed378c1b6f"
+    },
+    {
+      "case_id": "0297_hydrogen_data_H6_ES_H6_linear_R1.4_sto-6g_ham_JW",
+      "n_qubits": 12,
+      "n_steps": 1,
+      "rotation_tolerance": 4.833830611234241e-10,
+      "target_time": 0.06773532621442244,
+      "lambda_hartree": 14.763345153670738,
+      "bound_policy_sha256": "55655a6f9d4baa467689fd61d3669a5fc07060b5ff04449cbdf3a13741f12056"
+    },
+    {
+      "case_id": "0298_hydrogen_data_H6_ES_H6_linear_R1.5_sto-6g_ham_JW",
+      "n_qubits": 12,
+      "n_steps": 1,
+      "rotation_tolerance": 5.024318266215545e-10,
+      "target_time": 0.06979223219485524,
+      "lambda_hartree": 14.328242105913262,
+      "bound_policy_sha256": "e062749e4fc06281fad36b9a44335cdaa4c7a53050da7cd7b6abda3ac087456f"
+    },
+    {
+      "case_id": "0299_hydrogen_data_H6_ES_H6_linear_R1.6_sto-6g_ham_JW",
+      "n_qubits": 12,
+      "n_steps": 1,
+      "rotation_tolerance": 5.118567704208194e-10,
+      "target_time": 0.07166985928963486,
+      "lambda_hartree": 13.952866796609204,
+      "bound_policy_sha256": "c57274f4edf842f1f8380b4febc574853d49179155e56ea81c0e4790e336c945"
+    },
+    {
+      "case_id": "0300_hydrogen_data_H6_ES_H6_linear_R1.7_sto-6g_ham_JW",
+      "n_qubits": 12,
+      "n_steps": 1,
+      "rotation_tolerance": 5.245995230785324e-10,
+      "target_time": 0.07337872369781646,
+      "lambda_hartree": 13.627928500339358,
+      "bound_policy_sha256": "f1539bf379b15573536c2697db5a5321b6d434854178e679b74ba170d13b7858"
+    },
+    {
+      "case_id": "0301_hydrogen_data_H6_ES_H6_linear_R1.8_sto-6g_ham_JW",
+      "n_qubits": 12,
+      "n_steps": 1,
+      "rotation_tolerance": 5.377526064739408e-10,
+      "target_time": 0.07494702751503073,
+      "lambda_hartree": 13.34275732015454,
+      "bound_policy_sha256": "4128a5712ee71c7cc3f3cf6afd4b2340f663d79f7fd48af0a2e6ea2ab1616687"
+    },
+    {
+      "case_id": "0302_hydrogen_data_H6_ES_H6_linear_R1.9_sto-6g_ham_JW",
+      "n_qubits": 12,
+      "n_steps": 1,
+      "rotation_tolerance": 5.503990154033193e-10,
+      "target_time": 0.07641220225579794,
+      "lambda_hartree": 13.08691505386004,
+      "bound_policy_sha256": "bb3c8ff67cbd1924e30aa3690cf8d6bafc813e21a223b90cded3a9ed8d59dc36"
+    },
+    {
+      "case_id": "0303_hydrogen_data_H6_ES_H6_linear_R2.0_sto-6g_ham_JW",
+      "n_qubits": 12,
+      "n_steps": 1,
+      "rotation_tolerance": 5.549386663841816e-10,
+      "target_time": 0.0777894816876441,
+      "lambda_hartree": 12.85520842027718,
+      "bound_policy_sha256": "3faa27324f31fc4be50546dee95638104cca324dbbcfe33d7cdac472f09cfd1f"
+    },
+    {
+      "case_id": "0320_standard_B2_B2_ham_JWm10",
+      "n_qubits": 10,
+      "n_steps": 1,
+      "rotation_tolerance": 6.5250479455906055e-09,
+      "target_time": 0.1256458676273765,
+      "lambda_hartree": 7.958876952210354,
+      "bound_policy_sha256": "990602e6015caff4a1623b0a9341c3c49d0c8ef0ef8848136c41e7e0983cebe8"
+    },
+    {
+      "case_id": "0321_standard_B2_B2_ham_JWm12",
+      "n_qubits": 12,
+      "n_steps": 1,
+      "rotation_tolerance": 2.7180160939887855e-09,
+      "target_time": 0.11208992908127023,
+      "lambda_hartree": 8.92140808899036,
+      "bound_policy_sha256": "1d5374193eccfb50ddefdad44fd4e488e982b67b065282c7c2670895ca3e56cf"
+    },
+    {
+      "case_id": "0322_standard_B2_B2_ham_JWm14",
+      "n_qubits": 14,
+      "n_steps": 1,
+      "rotation_tolerance": 1.2844134981006593e-09,
+      "target_time": 0.09247425550540835,
+      "lambda_hartree": 10.813820501009767,
+      "bound_policy_sha256": "a98ee77b0fb14d91bb9d1e0b2fabd0bca36764a2902c4f70d7294ce85b50b9ad"
+    },
+    {
+      "case_id": "0323_standard_B2_B2_ham_JWm8",
+      "n_qubits": 8,
+      "n_steps": 1,
+      "rotation_tolerance": 1.0908404060424401e-08,
+      "target_time": 0.13817860173430568,
+      "lambda_hartree": 7.237010560599192,
+      "bound_policy_sha256": "8f0ddd322d88b916b1b0ed6332861a3efb14204dd9c5b07df67f2de6d08ccb40"
+    },
+    {
+      "case_id": "0324_standard_BH_BH_ham_JWm10",
+      "n_qubits": 10,
+      "n_steps": 1,
+      "rotation_tolerance": 5.22434243666648e-09,
+      "target_time": 0.17358894019605267,
+      "lambda_hartree": 5.760735671700008,
+      "bound_policy_sha256": "1bbf53fef918e67fe94d70d52201b65bbdf7474f3b3f6c909ab79654f4320ee0"
+    },
+    {
+      "case_id": "0325_standard_BH_BH_ham_JWm12",
+      "n_qubits": 12,
+      "n_steps": 1,
+      "rotation_tolerance": 1.0957623122337614e-09,
+      "target_time": 0.09393539283862178,
+      "lambda_hartree": 10.645614712209385,
+      "bound_policy_sha256": "4e2e1208d8e7df941bf74b18a935938a98ee2190e81ae604599481ed5efbf54e"
+    },
+    {
+      "case_id": "0327_standard_BH_BH_ham_JWm8",
+      "n_qubits": 8,
+      "n_steps": 1,
+      "rotation_tolerance": 1.9439196798295915e-08,
+      "target_time": 0.24119215523079193,
+      "lambda_hartree": 4.146071828261247,
+      "bound_policy_sha256": "b88f65be3eac3f6c85efbccc14c9df9e5833542fc9d690c88932607fb268c94a"
+    },
+    {
+      "case_id": "0328_standard_Be2_Be2_ham_JWm10",
+      "n_qubits": 10,
+      "n_steps": 1,
+      "rotation_tolerance": 1.5051696382401356e-08,
+      "target_time": 0.28085847845273526,
+      "lambda_hartree": 3.56051206112436,
+      "bound_policy_sha256": "8d9017cadbdbe23f5717ba73102c822b9b24ad7f65affa528057157ccefb7b75"
+    },
+    {
+      "case_id": "0329_standard_Be2_Be2_ham_JWm14",
+      "n_qubits": 14,
+      "n_steps": 1,
+      "rotation_tolerance": 8.541794397684838e-10,
+      "target_time": 0.09287141077676601,
+      "lambda_hartree": 10.767576282476089,
+      "bound_policy_sha256": "72c961bdf016746a032236c7c47186e6b3a91d3f85756b124f78a4d7a9c2f22c"
+    },
+    {
+      "case_id": "0331_standard_Be2_Be2_ham_JWm6",
+      "n_qubits": 6,
+      "n_steps": 1,
+      "rotation_tolerance": 6.078875173686832e-08,
+      "target_time": 0.38543524889313996,
+      "lambda_hartree": 2.594469506542836,
+      "bound_policy_sha256": "4c872a42085474f3b97a3b97e553b2de127c6ee68fb7c813c20cd8658090cf40"
+    },
+    {
+      "case_id": "0332_standard_BeH_BeH_ham_JW10",
+      "n_qubits": 10,
+      "n_steps": 1,
+      "rotation_tolerance": 5.828405730229116e-09,
+      "target_time": 0.19815161258563418,
+      "lambda_hartree": 5.046640736107232,
+      "bound_policy_sha256": "2049bbc479ad918cac0d697f55fa1dae1fe4b9fca4e3f703bcf7f6955764d500"
+    },
+    {
+      "case_id": "0333_standard_BeH_BeH_ham_JW12",
+      "n_qubits": 12,
+      "n_steps": 1,
+      "rotation_tolerance": 1.27345892670003e-09,
+      "target_time": 0.10509466198814225,
+      "lambda_hartree": 9.515231136219166,
+      "bound_policy_sha256": "b5fd4e1221f16d5323676499ee00d7de95ba7cbe766d7dbae12897f10ef54ac2"
+    },
+    {
+      "case_id": "0334_standard_BeH_BeH_ham_JW4",
+      "n_qubits": 4,
+      "n_steps": 1,
+      "rotation_tolerance": 2.7249961081325327e-07,
+      "target_time": 0.5721688970637648,
+      "lambda_hartree": 1.7477356863187827,
+      "bound_policy_sha256": "83c66f75c669950778a47c181d4a807f4c38395f77e915d4f1a1cd354331c3a1"
+    },
+    {
+      "case_id": "0335_standard_BeH_BeH_ham_JW8",
+      "n_qubits": 8,
+      "n_steps": 1,
+      "rotation_tolerance": 2.9371097477367758e-08,
+      "target_time": 0.34635445913977186,
+      "lambda_hartree": 2.887215607050835,
+      "bound_policy_sha256": "aa9da0fba53d0385e0a232ca8a9fe05182932c74c86cbb0304ca173099fe12e3"
+    },
+    {
+      "case_id": "0336_standard_C2_C2_ham_JWm10",
+      "n_qubits": 10,
+      "n_steps": 1,
+      "rotation_tolerance": 3.223683933338217e-09,
+      "target_time": 0.0659884525179462,
+      "lambda_hartree": 15.154166552519781,
+      "bound_policy_sha256": "7817e37fe49c2fa23a3e5e8c0bd77a0f26fcb1ad52fdf39afa80a5fdc2248fc2"
+    },
+    {
+      "case_id": "0337_standard_C2_C2_ham_JWm14",
+      "n_qubits": 14,
+      "n_steps": 1,
+      "rotation_tolerance": 4.568587508079211e-10,
+      "target_time": 0.051287597490418786,
+      "lambda_hartree": 19.497891282328315,
+      "bound_policy_sha256": "7c43e5e8fc9939bcc06d0cbe652d2ded3e237fef8bdd131f47b486d98a2d26d6"
+    },
+    {
+      "case_id": "0340_standard_CH_CH_ham_JWm10",
+      "n_qubits": 10,
+      "n_steps": 2,
+      "rotation_tolerance": 1.6914875014809653e-09,
+      "target_time": 0.11977821329154158,
+      "lambda_hartree": 8.348763706851999,
+      "bound_policy_sha256": "68c4c300cf8b6bde950d28d7e580c6e89b5e2f760fc78210985fcf990a902274"
+    },
+    {
+      "case_id": "0341_standard_CH_CH_ham_JWm12",
+      "n_qubits": 12,
+      "n_steps": 2,
+      "rotation_tolerance": 4.87473198415063e-10,
+      "target_time": 0.08558419009282235,
+      "lambda_hartree": 11.684401043176624,
+      "bound_policy_sha256": "566f46c0a3876059074af5713f1dfd8c8133cefb35e57f0f978b87f901d33f00"
+    },
+    {
+      "case_id": "0342_standard_CH_CH_ham_JWm14",
+      "n_qubits": 14,
+      "n_steps": 2,
+      "rotation_tolerance": 1.5488295940349355e-10,
+      "target_time": 0.052919821378113074,
+      "lambda_hartree": 18.896511249631438,
+      "bound_policy_sha256": "fbf1981e507492ee5e02edabad2c1315f873667f4c4bc72165d60085c1a4aa11"
+    },
+    {
+      "case_id": "0343_standard_CH_CH_ham_JWm8",
+      "n_qubits": 8,
+      "n_steps": 1,
+      "rotation_tolerance": 1.153287654776655e-08,
+      "target_time": 0.14193007248694306,
+      "lambda_hartree": 7.045723168301739,
+      "bound_policy_sha256": "f97303c1cc8cc7b62df7d6275a258ad171b93518ffdb9c2ecbe4f8bd08696bfe"
+    },
+    {
+      "case_id": "0348_standard_H2_H2_ham_JWm12",
+      "n_qubits": 12,
+      "n_steps": 1,
+      "rotation_tolerance": 8.479327378601778e-10,
+      "target_time": 0.038480531661190746,
+      "lambda_hartree": 25.987166934300507,
+      "bound_policy_sha256": "1bd0a1025fd34d083b4c882837d529b653d3dbadd086415b41974d4805521ad6"
+    },
+    {
+      "case_id": "0350_standard_H2_H2_ham_JWm4",
+      "n_qubits": 4,
+      "n_steps": 1,
+      "rotation_tolerance": 6.203929304363179e-07,
+      "target_time": 0.810612563167246,
+      "lambda_hartree": 1.2336349637769919,
+      "bound_policy_sha256": "ac1f93eda398698180e9a5860cbd1eebc19566e36ad11fe01b8cca8c25cc8faa"
+    },
+    {
+      "case_id": "0351_standard_H2_H2_ham_JWm6",
+      "n_qubits": 6,
+      "n_steps": 2,
+      "rotation_tolerance": 2.505484657117482e-08,
+      "target_time": 0.3352463212590771,
+      "lambda_hartree": 2.9828813519692696,
+      "bound_policy_sha256": "a08fbe260f99ac3641a0aec094bc9dc5d590b05fb1c8bec33cbd7c40bdcdc240"
+    },
+    {
+      "case_id": "0352_standard_H2_H2_ham_JWm8",
+      "n_qubits": 8,
+      "n_steps": 1,
+      "rotation_tolerance": 4.857229432372531e-09,
+      "target_time": 0.1152714659605872,
+      "lambda_hartree": 8.675173787951243,
+      "bound_policy_sha256": "85b714d74b85e6f9c7392f69862ada4c37c4f63d322307906a0ad10d86ecefdd"
+    },
+    {
+      "case_id": "0353_standard_HF_HF_ham_JW10",
+      "n_qubits": 10,
+      "n_steps": 2,
+      "rotation_tolerance": 5.364633621309103e-10,
+      "target_time": 0.040391742125486296,
+      "lambda_hartree": 24.757535758008867,
+      "bound_policy_sha256": "5af32788db2e99c208ce4d9c0653e9d0a6b8d25fe256168813b685a15725a61b"
+    },
+    {
+      "case_id": "0354_standard_HF_HF_ham_JW12",
+      "n_qubits": 12,
+      "n_steps": 2,
+      "rotation_tolerance": 1.7750312552711384e-10,
+      "target_time": 0.03216397803700195,
+      "lambda_hartree": 31.09068159571506,
+      "bound_policy_sha256": "b3cca4862cc40f3f3f52d1daa925199c8f197cbd314e334cb8c7879e972813f7"
+    },
+    {
+      "case_id": "0357_standard_Li2_Li2_ham_JW10",
+      "n_qubits": 10,
+      "n_steps": 1,
+      "rotation_tolerance": 1.6398142373703725e-08,
+      "target_time": 0.29901390018172375,
+      "lambda_hartree": 3.3443261313011083,
+      "bound_policy_sha256": "424088f6f91ed62ada41cee146e26d8c44edef21d78bcb6616ae62b97f3382f4"
+    },
+    {
+      "case_id": "0358_standard_Li2_Li2_ham_JW14",
+      "n_qubits": 14,
+      "n_steps": 1,
+      "rotation_tolerance": 1.2295062872094033e-09,
+      "target_time": 0.13203072562869944,
+      "lambda_hartree": 7.57399457768814,
+      "bound_policy_sha256": "cc661ad7b357932c0f4656b44c78dd6c89d715d21a04ce644c12bdb3e9f5752e"
+    },
+    {
+      "case_id": "0359_standard_Li2_Li2_ham_JW4",
+      "n_qubits": 4,
+      "n_steps": 1,
+      "rotation_tolerance": 1.7741407642445426e-06,
+      "target_time": 2.1408738893305492,
+      "lambda_hartree": 0.4670989753220353,
+      "bound_policy_sha256": "d0f2babdd9da87d38246cd2c68f3ec66b0e2b311b99c19e40541eeefe3d44196"
+    },
+    {
+      "case_id": "0360_standard_Li2_Li2_ham_JW8",
+      "n_qubits": 8,
+      "n_steps": 1,
+      "rotation_tolerance": 8.211846081519115e-08,
+      "target_time": 0.5650760243376847,
+      "lambda_hartree": 1.7696733836337895,
+      "bound_policy_sha256": "ca679fadd3cb92ee9743effb44aa0db39fb0d6a13076d6e891286b24c1b0f6c5"
+    },
+    {
+      "case_id": "0361_standard_LiH_LiH_ham_JWm10",
+      "n_qubits": 10,
+      "n_steps": 1,
+      "rotation_tolerance": 7.891087016063838e-09,
+      "target_time": 0.2642950317823024,
+      "lambda_hartree": 3.7836503897042286,
+      "bound_policy_sha256": "dadba1046623327679ff3f3a4fdf10716a2386c566b6d37a2cf0a84bafa4b258"
+    },
+    {
+      "case_id": "0362_standard_LiH_LiH_ham_JWm12",
+      "n_qubits": 12,
+      "n_steps": 1,
+      "rotation_tolerance": 1.724590435244972e-09,
+      "target_time": 0.13978829260440265,
+      "lambda_hartree": 7.153674899156075,
+      "bound_policy_sha256": "0b473a931069fce61137a9f1f734e3e1a0d9310e806fabafcd24b293474d6dbe"
+    },
+    {
+      "case_id": "0363_standard_LiH_LiH_ham_JWm4",
+      "n_qubits": 4,
+      "n_steps": 2,
+      "rotation_tolerance": 2.7051042587958237e-07,
+      "target_time": 1.162471037695961,
+      "lambda_hartree": 0.8602364855317327,
+      "bound_policy_sha256": "1449eb6e53ca7d46d0a0c2664319cdb9c55e6d7af55998bbfb186cf4f37bd7fe"
+    },
+    {
+      "case_id": "0364_standard_LiH_LiH_ham_JWm8",
+      "n_qubits": 8,
+      "n_steps": 1,
+      "rotation_tolerance": 4.200282325717047e-08,
+      "target_time": 0.4864163561617837,
+      "lambda_hartree": 2.055851920545609,
+      "bound_policy_sha256": "224a4246e4089b180554b3c991defebfda0a853e171b06a7d1b62a6a7d4b2efe"
+    },
+    {
+      "case_id": "0365_standard_N2_N2_ham_JWm14",
+      "n_qubits": 14,
+      "n_steps": 1,
+      "rotation_tolerance": 2.7788000283587435e-10,
+      "target_time": 0.03159502463436435,
+      "lambda_hartree": 31.65055294536309,
+      "bound_policy_sha256": "d75a0fc13c960eb4cabac019a157dbbee29db2dd7d6ee2e73d82f1ac4a865c7c"
+    },
+    {
+      "case_id": "0369_standard_NH_NH_ham_JWm10",
+      "n_qubits": 10,
+      "n_steps": 2,
+      "rotation_tolerance": 1.0829851262141137e-09,
+      "target_time": 0.07816411920778858,
+      "lambda_hartree": 12.793593916687493,
+      "bound_policy_sha256": "975b11bf542be0410f2ee86d041d941c21bbf4a4e770655e450938b06ab79e73"
+    },
+    {
+      "case_id": "0370_standard_NH_NH_ham_JWm12",
+      "n_qubits": 12,
+      "n_steps": 1,
+      "rotation_tolerance": 6.732210587642326e-10,
+      "target_time": 0.05895080121123564,
+      "lambda_hartree": 16.963297859459907,
+      "bound_policy_sha256": "1287ceebde54b2bb9d644564ea07bf0696fce90a8d875afb32435e5d43d7ef81"
+    },
+    {
+      "case_id": "0371_standard_NH_NH_ham_JWm14",
+      "n_qubits": 14,
+      "n_steps": 2,
+      "rotation_tolerance": 1.3222276807111934e-10,
+      "target_time": 0.04532882064935426,
+      "lambda_hartree": 22.061019582565418,
+      "bound_policy_sha256": "abb3e600b88da56ddd43857c33e61d04e091e16853909d39cb1b66a52146c3ad"
+    },
+    {
+      "case_id": "0372_standard_NH_NH_ham_JWm8",
+      "n_qubits": 8,
+      "n_steps": 1,
+      "rotation_tolerance": 7.46624741385752e-09,
+      "target_time": 0.09409895680560287,
+      "lambda_hartree": 10.627110373453764,
+      "bound_policy_sha256": "abac95e7411c4ceb8967841d2d0f8cbb661ddf9a93a4fd9b7a542945967a514c"
+    },
+    {
+      "case_id": "0377_standard_NaLi_NaLi_ham_JWm14",
+      "n_qubits": 14,
+      "n_steps": 1,
+      "rotation_tolerance": 1.180568883806607e-10,
+      "target_time": 0.022301246751217658,
+      "lambda_hartree": 44.84054237664536,
+      "bound_policy_sha256": "a770c3b1a4292aa80731f0e161514407a463aa80a61b3ebb4fc784dfbbd50a4d"
+    },
+    {
+      "case_id": "0389_standard_OH_OH_ham_JW10",
+      "n_qubits": 10,
+      "n_steps": 2,
+      "rotation_tolerance": 7.395621728933613e-10,
+      "target_time": 0.054373205505591715,
+      "lambda_hartree": 18.39141155467026,
+      "bound_policy_sha256": "4d414e20accf91e191b0c98a5f9684572168dc5a162bf8cac143c0b5798b552a"
+    },
+    {
+      "case_id": "0390_standard_OH_OH_ham_JW12",
+      "n_qubits": 12,
+      "n_steps": 2,
+      "rotation_tolerance": 2.388105783493313e-10,
+      "target_time": 0.04315236695454036,
+      "lambda_hartree": 23.173699858769464,
+      "bound_policy_sha256": "7444bb78934d7fe92730b202ba3009c2b92ee9431499375558ddf8b1c34c28d7"
+    },
+    {
+      "case_id": "0391_standard_OH_OH_ham_JW14",
+      "n_qubits": 14,
+      "n_steps": 2,
+      "rotation_tolerance": 8.700783433216055e-11,
+      "target_time": 0.03440712721386784,
+      "lambda_hartree": 29.063745827549024,
+      "bound_policy_sha256": "39cbf362b6b9a4dddc6f8d3ae36ebc593f2100f0b1218e6c0d90150828fd95b9"
+    },
+    {
+      "case_id": "hydrogen_H8_linear_R0_5_JW16",
+      "n_qubits": 16,
+      "n_steps": 1,
+      "rotation_tolerance": 3.5086732964702464e-11,
+      "target_time": 0.018009404957506938,
+      "lambda_hartree": 55.52654306788552,
+      "bound_policy_sha256": "9405da0619bad4f73b8c04fb502ce186dd00e5be4307a445b56c7c661b2bfe1f"
+    },
+    {
+      "case_id": "hydrogen_H8_linear_R0_6_JW16",
+      "n_qubits": 16,
+      "n_steps": 1,
+      "rotation_tolerance": 4.109847144020481e-11,
+      "target_time": 0.02105394563589082,
+      "lambda_hartree": 47.49703534406836,
+      "bound_policy_sha256": "a6165e996ab2fda1c41a06a24fe3e865e9219f0ccd9e0b1cd8ea3f3cf7609db8"
+    },
+    {
+      "case_id": "hydrogen_H8_linear_R0_7_JW16",
+      "n_qubits": 16,
+      "n_steps": 1,
+      "rotation_tolerance": 4.64250791598359e-11,
+      "target_time": 0.023737761038580805,
+      "lambda_hartree": 42.1269722268544,
+      "bound_policy_sha256": "0803b5d887e455368e96e3edd73cd9f0d4d9508b542803e72b7f629a0d9d83f7"
+    },
+    {
+      "case_id": "hydrogen_H8_linear_R0_8_JW16",
+      "n_qubits": 16,
+      "n_steps": 1,
+      "rotation_tolerance": 5.1364163545370754e-11,
+      "target_time": 0.026038030285547888,
+      "lambda_hartree": 38.40536281098953,
+      "bound_policy_sha256": "e83301d912ac477a86b2f9b8035b2da69199c0840411fbe22381944f77f3cb3a"
+    },
+    {
+      "case_id": "hydrogen_H8_linear_R0_9_JW16",
+      "n_qubits": 16,
+      "n_steps": 1,
+      "rotation_tolerance": 5.5226396813976574e-11,
+      "target_time": 0.028049342233839217,
+      "lambda_hartree": 35.65145990459564,
+      "bound_policy_sha256": "799d96783dedf36687216017d5859ed24217f3ddf8f11eaae06d80e077343d28"
+    },
+    {
+      "case_id": "hydrogen_H8_linear_R1_0_JW16",
+      "n_qubits": 16,
+      "n_steps": 1,
+      "rotation_tolerance": 5.902261922712339e-11,
+      "target_time": 0.029837483448488328,
+      "lambda_hartree": 33.514890815990164,
+      "bound_policy_sha256": "1a380f183b8556b60097c02c846466b7c09b0cfa5eae01812b5d4ae9f56076dd"
+    },
+    {
+      "case_id": "hydrogen_H8_linear_R1_1_JW16",
+      "n_qubits": 16,
+      "n_steps": 1,
+      "rotation_tolerance": 6.212588065017643e-11,
+      "target_time": 0.031414804418081775,
+      "lambda_hartree": 31.832125602043178,
+      "bound_policy_sha256": "c97d4232edbe5a93ab5f2f53c10e23cd25a3caa85ff54b30e574888a421f360f"
+    },
+    {
+      "case_id": "hydrogen_H8_linear_R1_2_JW16",
+      "n_qubits": 16,
+      "n_steps": 1,
+      "rotation_tolerance": 6.520365379300585e-11,
+      "target_time": 0.03280455697699188,
+      "lambda_hartree": 30.483569727869504,
+      "bound_policy_sha256": "a25c4a4dd16165883fbb1d34d36216eb7feb48228e59627c7ec3752a891de39c"
+    },
+    {
+      "case_id": "hydrogen_H8_linear_R1_3_JW16",
+      "n_qubits": 16,
+      "n_steps": 1,
+      "rotation_tolerance": 6.759180926026256e-11,
+      "target_time": 0.03405165872929415,
+      "lambda_hartree": 29.367145017805385,
+      "bound_policy_sha256": "0dbaf2c86dd8ef2bf4efff993424ed89555742dfa5c2ea5ee4bcb44bf5004b34"
+    },
+    {
+      "case_id": "hydrogen_H8_linear_R1_4_JW16",
+      "n_qubits": 16,
+      "n_steps": 1,
+      "rotation_tolerance": 7.069960876245203e-11,
+      "target_time": 0.03514823875742604,
+      "lambda_hartree": 28.45092770939262,
+      "bound_policy_sha256": "ac640aa1a7f23679610d9bb471f903cc30725748f56923c03a82d131d19b17bc"
+    },
+    {
+      "case_id": "hydrogen_H8_linear_R1_5_JW16",
+      "n_qubits": 16,
+      "n_steps": 1,
+      "rotation_tolerance": 7.228211298359183e-11,
+      "target_time": 0.03612302191929425,
+      "lambda_hartree": 27.683176735163286,
+      "bound_policy_sha256": "5a0cd8a2d483bd48d315dc7fd072c76388c5a5b85d6e113aadee1d73aec718bc"
+    },
+    {
+      "case_id": "hydrogen_H8_linear_R1_6_JW16",
+      "n_qubits": 16,
+      "n_steps": 1,
+      "rotation_tolerance": 7.374309488871933e-11,
+      "target_time": 0.03698651985011653,
+      "lambda_hartree": 27.03687732861543,
+      "bound_policy_sha256": "d40c2b197d8ffaddc3687c1e341d8fdb3682d99fd62dea8dbfb42ffa448703ad"
+    },
+    {
+      "case_id": "hydrogen_H8_linear_R1_7_JW16",
+      "n_qubits": 16,
+      "n_steps": 1,
+      "rotation_tolerance": 7.574372183931585e-11,
+      "target_time": 0.037769897760763255,
+      "lambda_hartree": 26.476110852458714,
+      "bound_policy_sha256": "adb3f2174a7a3a543a92136cd0b91439bcc6e6d03a8545df8a86c72028e75d70"
+    },
+    {
+      "case_id": "hydrogen_H8_linear_R1_8_JW16",
+      "n_qubits": 16,
+      "n_steps": 1,
+      "rotation_tolerance": 7.70148402910883e-11,
+      "target_time": 0.03848402475903166,
+      "lambda_hartree": 25.984808144717608,
+      "bound_policy_sha256": "27e86001d83a99e7861eba18de0dc3d4565e4ff5373e779f888cb1f3ac9628ec"
+    },
+    {
+      "case_id": "hydrogen_H8_linear_R1_9_JW16",
+      "n_qubits": 16,
+      "n_steps": 1,
+      "rotation_tolerance": 7.820280899854231e-11,
+      "target_time": 0.03912680805599434,
+      "lambda_hartree": 25.557924341001723,
+      "bound_policy_sha256": "92a47950b5f82cae83a5a00534ea814dd4470ec0a85eacdaf8c4f9a8d3e460d3"
+    },
+    {
+      "case_id": "hydrogen_H8_linear_R2_0_JW16",
+      "n_qubits": 16,
+      "n_steps": 1,
+      "rotation_tolerance": 7.981540247008057e-11,
+      "target_time": 0.03971196108394916,
+      "lambda_hartree": 25.181330075491577,
+      "bound_policy_sha256": "213917463111d6f169e263133f7680cad638f501c421e4cc1b554a98cbd9a6be"
+    },
+    {
+      "case_id": "standard_BH_JW16",
+      "n_qubits": 16,
+      "n_steps": 1,
+      "rotation_tolerance": 8.153276074542412e-11,
+      "target_time": 0.032041848417387504,
+      "lambda_hartree": 31.209185780223283,
+      "bound_policy_sha256": "7643edf360507f59a894f6e7ed235ac89fb57a74b80754fd1884ffefdcffe943"
+    },
+    {
+      "case_id": "standard_Be2_JW16",
+      "n_qubits": 16,
+      "n_steps": 1,
+      "rotation_tolerance": 3.1933001780897403e-10,
+      "target_time": 0.06441132743656572,
+      "lambda_hartree": 15.525219550626886,
+      "bound_policy_sha256": "430b367819086b32ae21a1250e110412eacfcb2dafaac0a8f8184a62ca2af854"
+    },
+    {
+      "case_id": "standard_C2_JW16",
+      "n_qubits": 16,
+      "n_steps": 1,
+      "rotation_tolerance": 2.1767153854319103e-10,
+      "target_time": 0.04606992318282756,
+      "lambda_hartree": 21.70613560677148,
+      "bound_policy_sha256": "0bd8380c92995036cf406b2d06c0f0d9a479a0ad383cafd0d12b56f8c35334fd"
+    },
+    {
+      "case_id": "standard_F2_JW16",
+      "n_qubits": 16,
+      "n_steps": 1,
+      "rotation_tolerance": 7.126471413048235e-11,
+      "target_time": 0.015329935402455362,
+      "lambda_hartree": 65.23184695480401,
+      "bound_policy_sha256": "c3ac84a9e711eb640f5bee793202bbf5b5dac92000e540fe890b4573fa455c26"
+    },
+    {
+      "case_id": "standard_HF_JW16",
+      "n_qubits": 16,
+      "n_steps": 3,
+      "rotation_tolerance": 1.628003570430457e-11,
+      "target_time": 0.02082102700721143,
+      "lambda_hartree": 48.02837053396294,
+      "bound_policy_sha256": "d84f6b984c8c6642e8b50dba38fc9dd4a2620206bf8f3f3981f67b4d8c10f3f5"
+    },
+    {
+      "case_id": "standard_N2_JW16",
+      "n_qubits": 16,
+      "n_steps": 1,
+      "rotation_tolerance": 1.3398410361633404e-10,
+      "target_time": 0.028667402226310666,
+      "lambda_hartree": 34.88282586980308,
+      "bound_policy_sha256": "cda74a812bfe4eb8f05dee9180031247cfb12dfe44243bc1a5c1a34f5a79632c"
+    },
+    {
+      "case_id": "standard_O2_JW16",
+      "n_qubits": 16,
+      "n_steps": 1,
+      "rotation_tolerance": 9.147159029606906e-11,
+      "target_time": 0.019611171626014376,
+      "lambda_hartree": 50.991344070106045,
+      "bound_policy_sha256": "1f3744c89129c94264dad2a1d0ce21001d16fd96e36571ce21050d69f1baa332"
+    },
+    {
+      "case_id": "standard_OH_JW16",
+      "n_qubits": 16,
+      "n_steps": 2,
+      "rotation_tolerance": 4.0278086187044305e-11,
+      "target_time": 0.02693864823538703,
+      "lambda_hartree": 37.121387504751794,
+      "bound_policy_sha256": "c3828167d0f3bdadc21a3ef00fa3686263e8d088be6d6617cd2d70bd87a8dcd6"
+    }
+  ]
+}

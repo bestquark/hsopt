@@ -201,8 +201,9 @@ def plot(summary, output):
         columnspacing=2.0,
     )
     output.mkdir(parents=True, exist_ok=True)
+    stem = f"elote_trajectories_four_seeds_{summary['iterations'][-1]}"
     for ext in ("png", "pdf"):
-        fig.savefig(output / ("elote_trajectories_four_seeds_60." + ext), dpi=300)
+        fig.savefig(output / (stem + "." + ext), dpi=300)
     plt.close(fig)
 
 
@@ -210,7 +211,7 @@ def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--input", type=Path, required=True)
     parser.add_argument("--output", type=Path, required=True)
-    parser.add_argument("--last-iteration", type=int, default=60)
+    parser.add_argument("--last-iteration", type=int, default=70)
     args = parser.parse_args()
     if args.last_iteration < 1:
         parser.error("--last-iteration must be positive")
@@ -219,10 +220,9 @@ def main():
     summary["input_sha256"] = hashlib.sha256(raw).hexdigest()
     summary["plot_script_sha256"] = hashlib.sha256(Path(__file__).read_bytes()).hexdigest()
     plot(summary, args.output)
+    stem = f"elote_trajectories_four_seeds_{args.last_iteration}"
     summary["output_sha256"] = {
-        ext: hashlib.sha256(
-            (args.output / ("elote_trajectories_four_seeds_60." + ext)).read_bytes()
-        ).hexdigest()
+        ext: hashlib.sha256((args.output / (stem + "." + ext)).read_bytes()).hexdigest()
         for ext in ("png", "pdf")
     }
     (args.output / "statistics.json").write_text(json.dumps(summary, indent=2) + "\n")

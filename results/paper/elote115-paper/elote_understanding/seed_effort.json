@@ -54,7 +54,12 @@
       "cache_read_mean_per_complete_round": 0,
       "cache_write_observed_total": 0,
       "cache_write_observed_per_completed_round_lower_bound": 0.0,
-      "cache_write_mean_per_complete_round": 0
+      "cache_write_mean_per_complete_round": 0,
+      "input_std_per_complete_round": 242310.18709337834,
+      "output_std_per_complete_round": 16619.261093608042,
+      "reasoning_std_per_complete_round": 0.0,
+      "cache_read_std_per_complete_round": 0.0,
+      "cache_write_std_per_complete_round": 0.0
     },
     {
       "seed": "seed-02",
@@ -101,7 +106,12 @@
       "cache_read_mean_per_complete_round": 0,
       "cache_write_observed_total": 0,
       "cache_write_observed_per_completed_round_lower_bound": 0.0,
-      "cache_write_mean_per_complete_round": 0
+      "cache_write_mean_per_complete_round": 0,
+      "input_std_per_complete_round": 218413.39530854757,
+      "output_std_per_complete_round": 12687.038330615103,
+      "reasoning_std_per_complete_round": 0.0,
+      "cache_read_std_per_complete_round": 0.0,
+      "cache_write_std_per_complete_round": 0.0
     },
     {
       "seed": "seed-03",
@@ -147,7 +157,12 @@
       "cache_read_mean_per_complete_round": 0,
       "cache_write_observed_total": 0,
       "cache_write_observed_per_completed_round_lower_bound": 0.0,
-      "cache_write_mean_per_complete_round": 0
+      "cache_write_mean_per_complete_round": 0,
+      "input_std_per_complete_round": 222239.95676194204,
+      "output_std_per_complete_round": 11540.063893550456,
+      "reasoning_std_per_complete_round": 0.0,
+      "cache_read_std_per_complete_round": 0.0,
+      "cache_write_std_per_complete_round": 0.0
     },
     {
       "seed": "seed-04",
@@ -193,7 +208,12 @@
       "cache_read_mean_per_complete_round": 0,
       "cache_write_observed_total": 0,
       "cache_write_observed_per_completed_round_lower_bound": 0.0,
-      "cache_write_mean_per_complete_round": 0
+      "cache_write_mean_per_complete_round": 0,
+      "input_std_per_complete_round": 187707.70152015926,
+      "output_std_per_complete_round": 10489.99635209441,
+      "reasoning_std_per_complete_round": 0.0,
+      "cache_read_std_per_complete_round": 0.0,
+      "cache_write_std_per_complete_round": 0.0
     },
     {
       "seed": "seed-05",
@@ -239,7 +259,12 @@
       "cache_read_mean_per_complete_round": 0,
       "cache_write_observed_total": 0,
       "cache_write_observed_per_completed_round_lower_bound": 0.0,
-      "cache_write_mean_per_complete_round": 0
+      "cache_write_mean_per_complete_round": 0,
+      "input_std_per_complete_round": 228281.21356991425,
+      "output_std_per_complete_round": 12292.334923429618,
+      "reasoning_std_per_complete_round": 0.0,
+      "cache_read_std_per_complete_round": 0.0,
+      "cache_write_std_per_complete_round": 0.0
     }
   ],
   "rounds": [
@@ -35512,5 +35537,10 @@
     "5": "seed-05"
   },
   "canonical_campaign": "/home/lmantilla/projects/autoresearch/hsopt_workdir/runs/elote115_abs_tight",
-  "reporting_wrapper_sha256": "69a3d4d8181444b0999b2fb48346967331583169f9c26c358c4f7a454d05e91a"
+  "reporting_wrapper_sha256": "69a3d4d8181444b0999b2fb48346967331583169f9c26c358c4f7a454d05e91a",
+  "replayed_from": {
+    "path": "/Users/lmantilla/Desktop/Internship/autoresearch/hsopt_workdir/hsopt/experiments/abs_protocol/results/elote115-paper/elote_understanding/seed_effort.json",
+    "sha256": "96ffe10b26c79973ac31dc397256c65cca0947398dd1b5357567570880d63c87"
+  },
+  "token_standard_deviation": "Sample SD across fully logged rounds (ddof=1), including retries within each round."
 }

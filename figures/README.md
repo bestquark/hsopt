@@ -13,7 +13,7 @@ that manuscript.
 | 3: five-search progress and energy accuracy | `plot_elote_search_and_energy.py` | `elote115_search_and_energy.pdf` |
 | 4: reaction cost and energy errors | `plot_reaction_elote_delta_radial.py`, `plot_reaction_elote_delta_energy_bars.py` | Radial cost panel, grouped energy-error bars, and `reaction_elote_delta_legend.pdf` |
 | 5: HamLib census | `plot_hamlib_molecular_dataset_active_spaces.py` | `hamlib_molecular_dataset_active_spaces.pdf` |
-| 6: baseline initialization | `plot_baseline_initialization_vs_qubits.py` | `baseline_initialization_vs_qubits.pdf` |
+| 6: actual training baselines | `plot_baseline_initialization_vs_qubits.py` | `baseline_initialization_vs_qubits.pdf` |
 
 ## Rebuild without Overleaf or a GPU
 
@@ -117,3 +117,16 @@ Only the seven figure generators listed above, their two shared Python helpers,
 coefficient-histogram generator and original LaTeX banner assembly. Numerical
 test support lives under `tests/helpers/figure_numerics/`, outside this folder;
 it does not add any manuscript figures.
+
+## Figure 6 training baselines
+
+The generator reads iteration 0 directly from the frozen 115-Hamiltonian
+trajectories. It checks agreement of the bound policies, repetition counts,
+uniform synthesis tolerances and physical times across all five seeds.
+Every displayed baseline passed its saved compiled-energy evaluation and uses
+physical time 1/lambda. The left panel shows individual repetition counts with horizontal offsets
+for visibility. The right panel shows tolerance distributions as violins on a
+logarithmic axis. Diamonds show medians and bars show the interquartile range.
+Each Hamiltonian contributes once.
+The old 121-case fixed-time analytical diagnostic is retained as historical
+data and no longer supplies Figure 6.

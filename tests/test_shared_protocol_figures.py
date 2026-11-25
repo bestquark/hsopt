@@ -49,6 +49,10 @@ def snapshot():
 
 def test_five_seed_mean_and_sd_use_matched_rounds_not_future_values():
     data = module.aggregate(snapshot())
+    assert data["min_relative_t95"] == pytest.approx([1, 0.7])
+    assert data["max_relative_t95"] == pytest.approx([1, 1])
+    assert data["min_energy_error_mha"] == pytest.approx([0.2, 0.1])
+    assert data["max_energy_error_mha"] == pytest.approx([0.2, 0.5])
     assert data["common_round"] == 1
     assert data["iterations"] == [0, 1]
     assert data["molecule_mean_relative_t95"] == [[1, 0.9], [1, 0.8]]
@@ -225,9 +229,9 @@ def test_latex_scatter_has_one_unjittered_mean_per_measured_iteration():
         assert values == [3]
         offsets = np.concatenate([collection.get_offsets() for collection in ax.collections])
         assert offsets.tolist() == [[1, 3]]
-        assert ax.collections[0].get_label() == "means with failures"
-        # Hollow white face indicates the missing T95; the red edge flags the failure.
-        assert ax.collections[0].get_facecolors()[0][:3] == pytest.approx([1, 1, 1])
+        assert ax.collections[0].get_label() == "Rejected"
+        # One red cross represents rejection; coverage remains in exported data.
+        assert len(ax.collections) == 1
         assert ax.collections[0].get_edgecolors()[0][:3] == pytest.approx(
             [179 / 255, 38 / 255, 30 / 255]
         )
@@ -270,3 +274,21 @@ def test_explicit_per_seed_training_sets_use_observed_coverage_without_zero_fill
     data["generalization"]["training_ids_by_seed"]["seed-1"] = ["a", "b"]
     with pytest.raises(ValueError, match="sealed training sets"):
         module.aggregate(data)
+
+
+def test_energy_axis_keeps_large_rejected_means_and_zero_in_a_single_square_panel():
+    import matplotlib.pyplot as plt
+
+    data = module.aggregate(snapshot())
+    data["proposal_trials"] = rejected_trials()
+    data["proposal_trials"][1]["energy_error_mha"][1] = 10000
+    expected_mean = (0.4 + (10000 + 0.8) / 2) / 2
+    assert module.energy_display_limit(data) > expected_mean
+    fig, ax, context = module.trajectory_axes(plt, data, "energy_error_mha")
+    try:
+        assert context is None
+        assert len(fig.axes) == 1
+        assert fig.get_figwidth() == fig.get_figheight()
+        assert ax.collections
+    finally:
+        plt.close(fig)

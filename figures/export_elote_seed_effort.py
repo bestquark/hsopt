@@ -277,6 +277,7 @@ def collect(campaign):
                 row[name + "_observed"] for row in covered if row[name + "_observed"] is not None
             ]
             entry[name + "_mean_per_complete_round"] = statistics.mean(values) if values else None
+            entry[name + "_std_per_complete_round"] = statistics.stdev(values) if len(values) > 1 else None
         summary.append(entry)
         rounds.extend(seed_rounds)
         attempts.extend(seed_attempts)
@@ -307,7 +308,31 @@ def mean_tokens(value):
     return rf"{amount:.4f}\,\mathrm{{{suffix}}}"
 
 
+def add_token_standard_deviations(result):
+    """Use sample SD across the same fully logged rounds as each token mean."""
+    for seed in result["seeds"]:
+        covered = [row for row in result["rounds"]
+                   if row["seed"] == seed["seed"] and row["token_usage_complete"]]
+        assert len(covered) == seed["token_complete_rounds"]
+        for name in ("input", "output", "reasoning", "cache_read", "cache_write"):
+            values = [row[name + "_observed"] for row in covered
+                      if row[name + "_observed"] is not None]
+            if values:
+                assert statistics.mean(values) == seed[name + "_mean_per_complete_round"]
+            seed[name + "_std_per_complete_round"] = statistics.stdev(values) if len(values) > 1 else None
+    result["token_standard_deviation"] = "Sample SD across fully logged rounds (ddof=1), including retries within each round."
+
+
+def mean_sd_tokens(mean, std):
+    """Format both statistics with a shared M/B unit."""
+    scale, suffix = (Decimal("1000000000"), "B") if max(mean, std) >= 1e9 else (Decimal("1000000"), "M")
+    values = [(Decimal(str(value)) / scale).quantize(Decimal("0.0001"), rounding=ROUND_HALF_UP)
+              for value in (mean, std)]
+    return rf"({values[0]:.4f} \pm {values[1]:.4f})\,\mathrm{{{suffix}}}"
+
+
 def write_outputs(result, output):
+    add_token_standard_deviations(result)
     output.mkdir(parents=True, exist_ok=True)
     (output / "seed_effort.json").write_text(json.dumps(result, indent=2) + "\n")
     for name, rows in (
@@ -338,11 +363,11 @@ def write_outputs(result, output):
         raise ValueError("Paper labels must map one-to-one onto the reported original runs")
     for row in result["seeds"]:
         a, b = row["input_mean_per_complete_round"], row["output_mean_per_complete_round"]
-        input_tokens = rf"${mean_tokens(a)}$" if a is not None else "---"
-        output_tokens = rf"${mean_tokens(b)}$" if b is not None else "---"
+        input_tokens = rf"${mean_sd_tokens(a, row['input_std_per_complete_round'])}$" if a is not None and row["input_std_per_complete_round"] is not None else "---"
+        output_tokens = rf"${mean_sd_tokens(b, row['output_std_per_complete_round'])}$" if b is not None and row["output_std_per_complete_round"] is not None else "---"
         label = labels.get(row["seed"], int(row["seed"][-2:]))
         table.append(
-            f"{label} & {row['completed_rounds']} & {row['accepted_percent']:.1f} & {row['not_retained_percent']:.1f} & {row['uncertified_decisions']} & {input_tokens} & {output_tokens} "
+            f"{label} & {row['completed_rounds']} & {row['accepted_percent']:.1f} & {row['not_retained_percent']:.1f} & {input_tokens} & {output_tokens} "
             + r"\\"
         )
     (output / "table_body.tex").write_text("\n".join(table) + "\n")

@@ -4,6 +4,7 @@ import gzip
 import hashlib
 import json
 from pathlib import Path
+from dataclasses import asdict
 
 import numpy as np
 
@@ -46,6 +47,11 @@ def audit():
         data_path(name)
     for row in manifest["figures"].values():
         assert hashlib.sha256((ROOT / row["path"]).read_bytes()).hexdigest() == row["sha256"]
+    from plot_baseline_initialization_vs_qubits import load_records, DEFAULT_DATA
+    baseline_parameters = load_records(DEFAULT_DATA)
+    baseline_export = json.loads(data_path("data/elote115_baseline_initialization.json").read_text())
+    assert baseline_export["records"] == [asdict(row) for row in baseline_parameters]
+    assert baseline_export["source_sha256"] == hashlib.sha256(DEFAULT_DATA.read_bytes()).hexdigest()
     source = json.loads(data_path("data/elote115_search_and_energy.json").read_text())
     t = source["trajectory"]
     _, mh, molecular = read_campaign(ROOT / manifest["scientific_trajectories"]["molecular"])
@@ -121,6 +127,7 @@ def audit():
                 np.max(np.abs(molecule_means - t["molecule_mean_relative_t95"])),
             )
         ),
+        "figure6_verified_starting_hamiltonians": len(baseline_parameters),
         "released_figure_assets": len(manifest["figures"]),
         "all_asset_and_data_hashes_match": True,
     }
